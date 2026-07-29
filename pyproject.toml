@@ -33,6 +33,7 @@ select = ["E", "F", "I", "B", "UP"]
 
 [tool.pytest.ini_options]
 addopts = "-q --import-mode=importlib"
+asyncio_default_fixture_loop_scope = "function"
 pythonpath = [
   "apps/api/src",
   "apps/worker/src",
