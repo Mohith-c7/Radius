@@ -1,6 +1,7 @@
 """FastAPI entrypoint for Radius."""
 
 from fastapi import FastAPI
+from radius_shared.logging import configure_logging
 
 from radius_api.config import get_api_settings
 from radius_api.routes.health import router as health_router
@@ -10,6 +11,7 @@ def create_app() -> FastAPI:
     """Create and configure the Radius API application."""
 
     settings = get_api_settings()
+    configure_logging(settings.log_level)
     app = FastAPI(
         title="Radius API",
         version="0.1.0",

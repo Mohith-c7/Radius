@@ -4,6 +4,7 @@ from typing import Literal
 
 from fastapi import APIRouter
 from pydantic import BaseModel
+from radius_shared.dto import ApiResponse, success_response
 
 from radius_api.config import get_api_settings
 
@@ -18,13 +19,15 @@ class HealthResponse(BaseModel):
     environment: str
 
 
-@router.get("/health", response_model=HealthResponse)
-def get_health() -> HealthResponse:
+@router.get("/health", response_model=ApiResponse[HealthResponse])
+def get_health() -> ApiResponse[HealthResponse]:
     """Return service health metadata."""
 
     settings = get_api_settings()
-    return HealthResponse(
-        status="ok",
-        service=settings.service_name,
-        environment=settings.environment,
+    return success_response(
+        HealthResponse(
+            status="ok",
+            service=settings.service_name,
+            environment=str(settings.environment),
+        )
     )
