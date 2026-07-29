@@ -127,65 +127,91 @@ Merge
 
 # Branch Strategy
 
-Radius uses trunk-based development with short-lived branches.
+Radius uses an enterprise promotion flow.
+
+```text
+feature/* -> develop -> dev -> main
+```
 
 ## Main
 
-`main` is the protected integration and release branch.
+`main` is the release branch.
 
-All completed work merges back into `main` through pull requests.
+Only release-ready code should reach `main`.
 
-Direct commits to `main` should be reserved for repository setup or explicitly approved maintenance work.
+Direct commits to `main` should be reserved for repository setup, approved maintenance, or emergency release repair.
+
+---
+
+## Dev
+
+`dev` is the UAT branch.
+
+Only work promoted from `develop` should merge into `dev`.
+
+Feature branches must not merge directly into `dev`.
+
+---
+
+## Develop
+
+`develop` is the active development integration branch.
+
+Feature branches merge into `develop` after review and automated checks.
+
+`develop` may contain work that is ready for internal integration but not yet ready for UAT.
 
 ---
 
 ## Feature Branches
 
-Feature branches use the `codex/feature/` prefix.
+Feature branches use the `feature/` prefix.
 
 Naming convention:
 
 ```text
-codex/feature/<area>-<summary>
+feature/<area>-<summary>
 
 Examples
 
-codex/feature/repository-github-app
+feature/repository-github-app
 
-codex/feature/parser-symbol-extraction
+feature/parser-symbol-extraction
 
-codex/feature/analysis-blast-radius
+feature/analysis-blast-radius
 ```
 
 ---
 
 ## Bug Fixes
 
-Bug fixes use the `codex/fix/` prefix.
+Bug fixes use the `fix/` prefix and normally merge into `develop`.
 
 ```text
-codex/fix/<area>-<summary>
+fix/<area>-<summary>
 ```
 
 ---
 
 ## Documentation
 
-Documentation-only work uses the `codex/docs/` prefix.
+Documentation-only work uses the `docs/` prefix and normally merges into `develop`.
 
 ```text
-codex/docs/<summary>
+docs/<summary>
 ```
 
 ---
 
 ## Releases
 
-Release stabilization branches are created only when needed.
+Release stabilization branches are optional and created only for named release preparation.
 
 ```text
 release/<version>
 ```
+
+Release branches may be created from `dev` when UAT is complete but final release stabilization is needed before `main`.
 
 ---
 
@@ -197,7 +223,7 @@ Urgent production fixes use:
 hotfix/<summary>
 ```
 
-Hotfixes merge back into `main`.
+Hotfixes start from `main`, then merge back into `main`, `dev`, and `develop`.
 
 ---
 

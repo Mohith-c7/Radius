@@ -42,13 +42,17 @@ The diff step may run before parsing to limit work, but deterministic parsing an
 
 ## DEC-005: Branching model
 
-Radius uses trunk-based development:
+Radius uses an enterprise promotion flow:
 
-- `main` is the protected integration and release branch.
-- `codex/feature/<area>-<summary>` is used for new work.
-- `codex/fix/<area>-<summary>` is used for bug fixes.
-- `codex/docs/<summary>` is used for documentation-only changes.
-- `release/<version>` is used only when release stabilization is needed.
-- `hotfix/<summary>` is used for urgent production fixes.
+```text
+feature/* -> develop -> dev -> main
+```
 
-Long-lived `develop` branches are avoided so integration remains frequent and visible.
+- `feature/*` branches are short-lived branches for isolated implementation work.
+- `develop` is the active development integration branch.
+- `dev` is the UAT branch. Feature branches must not merge directly into `dev`.
+- `main` is the release branch and contains only release-ready code.
+- `release/*` branches are optional and used only for named release stabilization.
+- `hotfix/*` branches start from `main`, then merge back into `main`, `dev`, and `develop`.
+
+This gives Radius a controlled promotion path while keeping feature work isolated before UAT.

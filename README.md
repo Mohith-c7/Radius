@@ -116,14 +116,18 @@ The primary docs are in `docs/`.
 
 ## Branch Strategy
 
-Development follows trunk-based branching:
+Development follows an enterprise promotion flow:
 
-- `main` is the protected integration and release branch.
-- Feature work uses short-lived branches named `codex/feature/<area>-<summary>`.
-- Fixes use `codex/fix/<area>-<summary>`.
-- Documentation-only changes use `codex/docs/<summary>`.
-- Release stabilization, when needed, uses `release/<version>`.
-- Hotfixes use `hotfix/<summary>` and merge back to `main`.
+```text
+feature/* -> develop -> dev -> main
+```
+
+- `feature/*` branches isolate individual features, fixes, or docs work.
+- `develop` is the active development integration branch.
+- `dev` is the UAT branch and receives promoted, internally verified work from `develop`.
+- `main` is the release branch and must contain only release-ready code.
+- `release/*` branches are optional and used only for named release stabilization.
+- `hotfix/*` branches start from `main`, then merge back into `main`, `dev`, and `develop`.
 
 Pull requests should be small, reviewable, and aligned to one domain or workflow whenever possible.
 
