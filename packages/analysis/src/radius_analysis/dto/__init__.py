@@ -2,6 +2,8 @@
 
 from radius_analysis.dto.commands import (
     AnalysisListQuery,
+    AnalyzeDiffCommand,
+    AnalyzeRepositoryDiffCommand,
     ChangedFileInput,
     RecordChangedFilesCommand,
     RerunAnalysisCommand,
@@ -12,6 +14,7 @@ from radius_analysis.dto.responses import (
     AnalysisDetailResponse,
     AnalysisResponse,
     BlastRadiusResponse,
+    ChangeAnalysisResponse,
     ChangedFileResponse,
 )
 
@@ -19,7 +22,10 @@ __all__ = [
     "AnalysisDetailResponse",
     "AnalysisListQuery",
     "AnalysisResponse",
+    "AnalyzeDiffCommand",
+    "AnalyzeRepositoryDiffCommand",
     "BlastRadiusResponse",
+    "ChangeAnalysisResponse",
     "ChangedFileInput",
     "ChangedFileResponse",
     "RecordChangedFilesCommand",

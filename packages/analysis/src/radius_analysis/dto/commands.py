@@ -57,3 +57,21 @@ class SaveBlastRadiusCommand:
     affected_modules: int = 0
     affected_tests: int = 0
     dependency_depth: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class AnalyzeDiffCommand:
+    """Command to parse raw git diff text into changed-file evidence."""
+
+    analysis_id: UUID
+    diff_text: str
+
+
+@dataclass(frozen=True, slots=True)
+class AnalyzeRepositoryDiffCommand:
+    """Command to collect and parse a repository diff."""
+
+    analysis_id: UUID
+    repository_path: str
+    base_ref: str
+    head_ref: str

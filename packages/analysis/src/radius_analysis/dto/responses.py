@@ -33,6 +33,14 @@ class ChangedFileResponse:
 
 
 @dataclass(frozen=True, slots=True)
+class ChangeAnalysisResponse:
+    """Change analysis response DTO."""
+
+    analysis_id: UUID
+    changed_files: tuple[ChangedFileResponse, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class AnalysisResponse:
     """Analysis response DTO."""
 

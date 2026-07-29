@@ -1,5 +1,6 @@
 """Analysis application service."""
 
+from pathlib import Path
 from uuid import UUID
 
 from radius_shared.errors import NotFoundError, ValidationError
@@ -9,6 +10,8 @@ from radius_analysis.domain.enums import AnalysisStatus, ChangedFileType
 from radius_analysis.domain.value_objects import CommitSha, FilePath
 from radius_analysis.dto.commands import (
     AnalysisListQuery,
+    AnalyzeDiffCommand,
+    AnalyzeRepositoryDiffCommand,
     RecordChangedFilesCommand,
     RerunAnalysisCommand,
     SaveBlastRadiusCommand,
@@ -18,9 +21,14 @@ from radius_analysis.dto.responses import (
     AnalysisDetailResponse,
     AnalysisResponse,
     BlastRadiusResponse,
+    ChangeAnalysisResponse,
     ChangedFileResponse,
 )
 from radius_analysis.interfaces.analysis_store import AnalysisStore
+from radius_analysis.interfaces.change_analyzer import (
+    GitChangeAnalyzer,
+    GitDiffProvider,
+)
 from radius_analysis.interfaces.pipeline import AnalysisPipeline
 
 
@@ -31,9 +39,13 @@ class AnalysisApplicationService:
         self,
         store: AnalysisStore,
         pipeline: AnalysisPipeline | None = None,
+        change_analyzer: GitChangeAnalyzer | None = None,
+        diff_provider: GitDiffProvider | None = None,
     ) -> None:
         self._store = store
         self._pipeline = pipeline
+        self._change_analyzer = change_analyzer
+        self._diff_provider = diff_provider
 
     def start_analysis(
         self,
@@ -141,6 +153,47 @@ class AnalysisApplicationService:
             changed_files,
         )
         return tuple(ChangedFileResponse.from_entity(item) for item in saved)
+
+    def analyze_diff(self, command: AnalyzeDiffCommand) -> ChangeAnalysisResponse:
+        """Parse raw diff text and record changed-file evidence."""
+
+        if self._change_analyzer is None:
+            msg = "Git change analyzer is not configured."
+            raise ValidationError(msg)
+
+        changed_files = self._change_analyzer.analyze_diff(command.diff_text)
+        responses = self.record_changed_files(
+            RecordChangedFilesCommand(
+                analysis_id=command.analysis_id,
+                changed_files=changed_files,
+            )
+        )
+        return ChangeAnalysisResponse(
+            analysis_id=command.analysis_id,
+            changed_files=responses,
+        )
+
+    def analyze_repository_diff(
+        self,
+        command: AnalyzeRepositoryDiffCommand,
+    ) -> ChangeAnalysisResponse:
+        """Collect a repository diff and record changed-file evidence."""
+
+        if self._diff_provider is None:
+            msg = "Git diff provider is not configured."
+            raise ValidationError(msg)
+
+        diff_text = self._diff_provider.get_diff(
+            Path(command.repository_path),
+            command.base_ref,
+            command.head_ref,
+        )
+        return self.analyze_diff(
+            AnalyzeDiffCommand(
+                analysis_id=command.analysis_id,
+                diff_text=diff_text,
+            )
+        )
 
     def save_blast_radius(
         self,
