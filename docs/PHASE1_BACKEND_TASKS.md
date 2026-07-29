@@ -18,30 +18,33 @@ the `develop` branch. Frontend implementation is tracked separately in
 - Repository domain contracts, DTOs, application service, SQLAlchemy store, and tests.
 - Analysis lifecycle contracts, changed-file evidence, blast-radius storage, SQLAlchemy store, and tests.
 - Parser foundation with source discovery, language detection, parser registry, parse service, and tests.
+- Dependency graph foundation with deterministic graph builder, in-memory store/traversal, and tests.
+- Git change analyzer foundation with unified diff parsing, git diff provider, analysis service integration, and tests.
+- Blast-radius computation over graph reverse dependencies with persisted summary integration.
+- Testing foundation with conventional discovery, path-based selection, structured run planning, and tests.
+- Confidence foundation with deterministic scoring, evidence, recommendations, in-memory store, and tests.
 
 ## In Progress
 
-- 30% to 50% foundation:
-  - Dependency graph domain contracts and graph builder service.
-  - Git change analyzer for deterministic changed-file extraction.
-  - Full validation of all backend slices built so far.
+- API and worker orchestration planning for the final Phase 1 backend spine.
 
 ## Pending
 
 - Repository local clone/checkout adapter and GitHub webhook/API integration.
-- Blast-radius computation engine over graph output.
-- Test discovery, selection, execution summaries, and coverage contracts.
-- Confidence scoring domain, evidence aggregation, and report persistence.
+- SQLAlchemy adapters for graph artifacts/test selections/confidence evidence if persistence schema expands.
 - API routes for repositories, analyses, blast radius, tests, and confidence.
 - Worker orchestration for queued analysis execution.
 - End-to-end backend flow from webhook/manual trigger to persisted confidence report.
 
 ## Current Completion Estimate
 
-Phase 1 backend foundation is roughly 30% complete after the parser foundation
-slice lands: the workspace, shared primitives, persistence schema, repository
-contracts, analysis lifecycle, and parser contracts form the first executable
-spine for the rest of the deterministic pipeline.
+Phase 1 backend foundation is roughly 80% complete for the deterministic core:
+workspace, shared primitives, persistence schema, repository contracts, analysis
+lifecycle, parser contracts, graph construction, git change extraction,
+blast-radius computation, test discovery/selection, and confidence scoring are
+implemented and validated. Remaining work is mostly orchestration and exposure:
+GitHub/local clone integration, API routes, worker pipeline wiring, and
+end-to-end backend flow tests.
 
 ## 30% to 50% Completion Plan
 
@@ -69,14 +72,25 @@ and git diffs into deterministic graph/change evidence:
    - Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
    - Review implemented docs versus code and fix any mismatch before pushing.
 
-## 50% to 80% Draft Plan
+## 50% to 80% Implementation Plan
 
-After the 50% milestone is validated, the next phase should connect evidence
-into an executable deterministic pipeline:
+After the 50% milestone, the next phase connects evidence into an executable
+deterministic pipeline:
 
-1. Implement blast-radius computation over the graph package.
+1. Implement blast-radius computation over graph reverse dependencies.
+   - Map changed files to graph file nodes.
+   - Traverse reverse dependencies.
+   - Compute affected files, symbols/modules, tests placeholder count, and
+     dependency depth.
+   - Persist the result through existing analysis blast-radius storage.
 2. Implement test discovery and deterministic test selection contracts.
+   - Discover tests by conventional paths and filename patterns.
+   - Map tests to affected files/modules without executing shell commands yet.
+   - Keep execution behind an interface for a later worker slice.
 3. Implement confidence scoring and evidence aggregation contracts.
+   - Score deterministically from blast radius and test summaries.
+   - Produce explainable evidence and risk level.
+   - Persist final report through the existing database table in a later adapter.
 4. Add worker orchestration for queued analysis execution.
 5. Add backend API routes for repository, analysis, graph, blast-radius, tests,
    and confidence responses.

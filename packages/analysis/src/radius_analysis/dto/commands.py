@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from uuid import UUID
 
+from radius_graph.domain.entities import GraphSnapshot
+
 
 @dataclass(frozen=True, slots=True)
 class StartAnalysisCommand:
@@ -75,3 +77,12 @@ class AnalyzeRepositoryDiffCommand:
     repository_path: str
     base_ref: str
     head_ref: str
+
+
+@dataclass(frozen=True, slots=True)
+class ComputeBlastRadiusCommand:
+    """Command to compute blast radius from graph and changed files."""
+
+    analysis_id: UUID
+    graph_snapshot: GraphSnapshot
+    changed_file_paths: tuple[str, ...]

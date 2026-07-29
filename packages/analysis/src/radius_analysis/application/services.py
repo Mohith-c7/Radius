@@ -3,6 +3,9 @@
 from pathlib import Path
 from uuid import UUID
 
+from radius_graph.domain.entities import GraphEdge, GraphSnapshot
+from radius_graph.domain.enums import GraphNodeType
+from radius_graph.domain.value_objects import GraphNodeId
 from radius_shared.errors import NotFoundError, ValidationError
 
 from radius_analysis.domain.entities import Analysis, BlastRadius, ChangedFile
@@ -12,6 +15,7 @@ from radius_analysis.dto.commands import (
     AnalysisListQuery,
     AnalyzeDiffCommand,
     AnalyzeRepositoryDiffCommand,
+    ComputeBlastRadiusCommand,
     RecordChangedFilesCommand,
     RerunAnalysisCommand,
     SaveBlastRadiusCommand,
@@ -230,6 +234,45 @@ class AnalysisApplicationService:
             raise NotFoundError(msg)
         return BlastRadiusResponse.from_entity(blast_radius)
 
+    def compute_blast_radius(
+        self,
+        command: ComputeBlastRadiusCommand,
+    ) -> BlastRadiusResponse:
+        """Compute and persist blast radius from graph reverse dependencies."""
+
+        if self._store.get_by_id(command.analysis_id) is None:
+            msg = f"Analysis {command.analysis_id} was not found."
+            raise NotFoundError(msg)
+
+        affected_ids, dependency_depth = self._traverse_reverse_dependencies(
+            command.graph_snapshot,
+            {
+                GraphNodeId(f"file:{self._normalize_graph_path(path)}")
+                for path in command.changed_file_paths
+            },
+        )
+        affected_nodes = [
+            node
+            for node in command.graph_snapshot.graph.nodes
+            if node.id in affected_ids
+        ]
+        return self.save_blast_radius(
+            SaveBlastRadiusCommand(
+                analysis_id=command.analysis_id,
+                affected_files=sum(
+                    node.node_type == GraphNodeType.FILE for node in affected_nodes
+                ),
+                affected_symbols=sum(
+                    node.node_type == GraphNodeType.SYMBOL for node in affected_nodes
+                ),
+                affected_modules=sum(
+                    node.node_type == GraphNodeType.MODULE for node in affected_nodes
+                ),
+                affected_tests=0,
+                dependency_depth=dependency_depth,
+            )
+        )
+
     def _get_required(self, analysis_id: UUID) -> Analysis:
         analysis = self._store.get_by_id(analysis_id)
         if analysis is None:
@@ -254,3 +297,43 @@ class AnalysisApplicationService:
         except ValueError as exc:
             msg = f"Unsupported changed file type: {change_type}."
             raise ValidationError(msg) from exc
+
+    @staticmethod
+    def _traverse_reverse_dependencies(
+        graph_snapshot: GraphSnapshot,
+        start_ids: set[GraphNodeId],
+    ) -> tuple[set[GraphNodeId], int]:
+        existing_ids = graph_snapshot.graph.node_ids()
+        affected = {node_id for node_id in start_ids if node_id in existing_ids}
+        frontier = set(affected)
+        max_depth = 0
+        depth = 0
+        while frontier:
+            depth += 1
+            next_frontier: set[GraphNodeId] = set()
+            for edge in graph_snapshot.graph.edges:
+                AnalysisApplicationService._collect_reverse_dependency(
+                    edge,
+                    frontier,
+                    affected,
+                    next_frontier,
+                )
+            if next_frontier:
+                max_depth = depth
+            frontier = next_frontier
+        return affected, max_depth
+
+    @staticmethod
+    def _normalize_graph_path(path: str) -> str:
+        return path.replace("\\", "/")
+
+    @staticmethod
+    def _collect_reverse_dependency(
+        edge: GraphEdge,
+        frontier: set[GraphNodeId],
+        affected: set[GraphNodeId],
+        next_frontier: set[GraphNodeId],
+    ) -> None:
+        if edge.target_id in frontier and edge.source_id not in affected:
+            affected.add(edge.source_id)
+            next_frontier.add(edge.source_id)
