@@ -7,7 +7,7 @@ from radius_shared.errors import NotFoundError, RadiusError, ValidationError
 from radius_shared.logging import configure_logging
 
 from radius_api.config import get_api_settings
-from radius_api.dependencies import AppContainer
+from radius_api.dependencies import AppContainer, configure_sql_storage
 from radius_api.routes.analyses import router as analyses_router
 from radius_api.routes.confidence import router as confidence_router
 from radius_api.routes.graph import router as graph_router
@@ -48,6 +48,8 @@ def create_app() -> FastAPI:
     )
     app.state.settings = settings
     app.state.container = AppContainer()
+    if settings.storage_backend == "sql":
+        configure_sql_storage(app.state.container, settings)
     app.add_exception_handler(RadiusError, radius_error_handler)
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(repositories_router, prefix="/api/v1")

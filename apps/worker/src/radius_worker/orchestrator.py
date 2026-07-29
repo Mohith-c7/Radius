@@ -24,6 +24,7 @@ from radius_parser.dto import ParseRepositoryCommand
 from radius_testing.application import TestingApplicationService
 from radius_testing.dto import (
     DiscoverTestsCommand,
+    ExecuteTestRunCommand,
     PlanTestRunCommand,
     SelectTestsCommand,
 )
@@ -110,6 +111,12 @@ class Phase1AnalysisOrchestrator:
             )
         )
         self._testing.plan_test_run(PlanTestRunCommand(command.analysis_id))
+        test_result = self._testing.execute_test_run(
+            ExecuteTestRunCommand(
+                analysis_id=command.analysis_id,
+                repository_path=command.repository_path,
+            )
+        )
         blast_radius = self._analysis.compute_blast_radius(
             ComputeBlastRadiusCommand(
                 analysis_id=command.analysis_id,
@@ -131,11 +138,15 @@ class Phase1AnalysisOrchestrator:
                     dependency_depth=blast_radius.dependency_depth,
                 ),
                 tests=TestEvidence(
-                    total_tests=selection.selected_count,
-                    passed=selection.selected_count,
-                    failed=0,
-                    skipped=0,
-                    coverage_percent=CoveragePercent(0),
+                    total_tests=test_result.total_tests,
+                    passed=test_result.passed,
+                    failed=test_result.failed,
+                    skipped=test_result.skipped,
+                    coverage_percent=(
+                        CoveragePercent(test_result.coverage_percent)
+                        if test_result.coverage_percent is not None
+                        else None
+                    ),
                 ),
             )
         )

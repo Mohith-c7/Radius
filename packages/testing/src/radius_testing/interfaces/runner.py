@@ -1,8 +1,9 @@
 """Test runner interfaces."""
 
+from pathlib import Path
 from typing import Protocol
 
-from radius_testing.domain.entities import TestCase, TestRunPlan
+from radius_testing.domain.entities import TestCase, TestRunPlan, TestRunResult
 
 
 class TestCommandPlanner(Protocol):
@@ -15,5 +16,5 @@ class TestCommandPlanner(Protocol):
 class TestRunner(Protocol):
     """Future test execution contract."""
 
-    def run(self, plan: TestRunPlan) -> None:
+    def run(self, plan: TestRunPlan, repository_path: Path) -> TestRunResult:
         """Execute a structured test run plan."""

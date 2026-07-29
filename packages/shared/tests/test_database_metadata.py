@@ -15,6 +15,14 @@ EXPECTED_TABLES = {
     "blast_radius",
     "test_runs",
     "confidence_reports",
+    "analysis_jobs",
+    "confidence_evidence",
+    "graph_edges",
+    "graph_nodes",
+    "selected_tests",
+    "test_cases",
+    "test_run_plans",
+    "test_selections",
 }
 
 
@@ -39,8 +47,17 @@ def test_required_indexes_exist() -> None:
     assert "ix_analyses_commit_sha" in indexes_by_table["analyses"]
     assert "ix_changed_files_analysis_id" in indexes_by_table["changed_files"]
     assert "ix_test_runs_analysis_id" in indexes_by_table["test_runs"]
+    assert "ix_analysis_jobs_status_created_at" in indexes_by_table["analysis_jobs"]
+    assert "ix_graph_nodes_snapshot_id" in indexes_by_table["graph_nodes"]
+    assert "ix_graph_edges_snapshot_id" in indexes_by_table["graph_edges"]
+    assert "ix_test_selections_analysis_id" in indexes_by_table["test_selections"]
+    assert "ix_test_run_plans_analysis_id" in indexes_by_table["test_run_plans"]
     assert (
         "ix_confidence_reports_analysis_id" in indexes_by_table["confidence_reports"]
+    )
+    assert (
+        "ix_confidence_evidence_report_id"
+        in indexes_by_table["confidence_evidence"]
     )
 
 

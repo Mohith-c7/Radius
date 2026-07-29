@@ -83,7 +83,7 @@ def test_static_planner_returns_structured_pytest_plan() -> None:
 
     assert plan.analysis_id == analysis_id
     assert plan.status.value == "pending"
-    assert plan.command_plan == (("pytest", ("tests/test_app.py",)),)
+    assert plan.command_plan == (("python", ("-m", "pytest", "tests/test_app.py")),)
 
 
 def test_static_planner_groups_javascript_test_frameworks() -> None:

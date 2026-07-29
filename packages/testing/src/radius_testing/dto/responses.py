@@ -8,6 +8,7 @@ from radius_testing.domain.entities import (
     SelectedTest,
     TestCase,
     TestRunPlan,
+    TestRunResult,
     TestSelection,
 )
 
@@ -108,4 +109,37 @@ class TestRunPlanResponse:
             status=plan.status.value,
             selected_count=len(plan.selected_tests),
             command_plan=plan.command_plan,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class TestRunResultResponse:
+    """Executed test run summary response."""
+
+    id: UUID
+    analysis_id: UUID
+    status: str
+    total_tests: int
+    passed: int
+    failed: int
+    skipped: int
+    duration_ms: int
+    coverage_percent: float | None
+    output: str
+
+    @classmethod
+    def from_entity(cls, result: TestRunResult) -> "TestRunResultResponse":
+        """Create a response DTO from a test run result."""
+
+        return cls(
+            id=result.id,
+            analysis_id=result.analysis_id,
+            status=result.status.value,
+            total_tests=result.total_tests,
+            passed=result.passed,
+            failed=result.failed,
+            skipped=result.skipped,
+            duration_ms=result.duration_ms,
+            coverage_percent=result.coverage_percent,
+            output=result.output,
         )

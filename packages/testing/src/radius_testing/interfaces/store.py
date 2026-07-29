@@ -3,7 +3,12 @@
 from typing import Protocol
 from uuid import UUID
 
-from radius_testing.domain.entities import TestCase, TestRunPlan, TestSelection
+from radius_testing.domain.entities import (
+    TestCase,
+    TestRunPlan,
+    TestRunResult,
+    TestSelection,
+)
 
 
 class TestStore(Protocol):
@@ -26,3 +31,9 @@ class TestStore(Protocol):
 
     def get_run_plan(self, analysis_id: UUID) -> TestRunPlan | None:
         """Return test run plan for an analysis."""
+
+    def save_run_result(self, result: TestRunResult) -> TestRunResult:
+        """Persist test execution result."""
+
+    def get_run_result(self, analysis_id: UUID) -> TestRunResult | None:
+        """Return test execution result."""

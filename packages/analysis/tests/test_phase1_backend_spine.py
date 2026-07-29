@@ -197,8 +197,10 @@ def test_phase1_backend_spine_from_diff_to_confidence(tmp_path: Path) -> None:
     assert selection.selected_count == 3
     assert plan.command_plan == (
         (
-            "pytest",
+            "python",
             (
+                "-m",
+                "pytest",
                 "tests/test_api.py",
                 "tests/test_core.py",
                 "tests/test_service.py",

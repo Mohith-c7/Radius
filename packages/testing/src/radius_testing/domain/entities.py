@@ -70,3 +70,19 @@ class TestRunPlan:
             selected_tests=selected_tests,
             command_plan=command_plan,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class TestRunResult:
+    """Executed test run summary."""
+
+    id: UUID
+    analysis_id: UUID
+    status: TestRunStatus
+    total_tests: int
+    passed: int
+    failed: int
+    skipped: int
+    duration_ms: int
+    coverage_percent: float | None = None
+    output: str = ""

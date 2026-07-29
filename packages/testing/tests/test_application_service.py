@@ -36,7 +36,7 @@ def test_testing_service_discovers_selects_and_plans_tests(tmp_path: Path) -> No
 
     assert discovery.test_count == 1
     assert selection.selected_count == 1
-    assert plan.command_plan == (("pytest", ("tests/test_app.py",)),)
+    assert plan.command_plan == (("python", ("-m", "pytest", "tests/test_app.py")),)
 
 
 def test_testing_service_raises_when_selection_missing() -> None:

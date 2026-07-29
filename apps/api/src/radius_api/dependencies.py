@@ -1,26 +1,41 @@
 """FastAPI dependency wiring for Radius services."""
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from fastapi import Request
 from radius_analysis.application import AnalysisApplicationService
-from radius_analysis.infrastructure import InMemoryAnalysisStore
+from radius_analysis.infrastructure import (
+    InMemoryAnalysisStore,
+    SqlAlchemyAnalysisJobQueue,
+    SqlAlchemyAnalysisStore,
+)
 from radius_confidence.application import ConfidenceApplicationService
 from radius_confidence.infrastructure import (
     DeterministicConfidenceScorer,
     InMemoryConfidenceStore,
+    SqlAlchemyConfidenceStore,
 )
-from radius_graph.infrastructure import InMemoryGraphStore
+from radius_graph.infrastructure import InMemoryGraphStore, SqlAlchemyGraphStore
 from radius_repository.application import RepositoryApplicationService
-from radius_repository.infrastructure import InMemoryRepositoryStore
+from radius_repository.infrastructure import (
+    InMemoryRepositoryStore,
+    SqlAlchemyRepositoryStore,
+)
+from radius_shared.database.session import (
+    create_database_engine,
+    create_session_factory,
+)
 from radius_testing.application import TestingApplicationService
 from radius_testing.infrastructure import (
     ConventionalTestDiscoverer,
     InMemoryTestStore,
     PathBasedTestSelector,
+    SqlAlchemyTestStore,
     StaticTestCommandPlanner,
 )
 from radius_worker.queue import InMemoryAnalysisQueue
+from sqlalchemy.orm import Session, sessionmaker
 
 
 @dataclass(slots=True)
@@ -37,6 +52,7 @@ class AppContainer:
     confidence_store: InMemoryConfidenceStore = field(
         default_factory=InMemoryConfidenceStore
     )
+    session_factory: sessionmaker[Session] | None = None
 
     def repository_service(self) -> RepositoryApplicationService:
         """Return repository application service."""
@@ -76,25 +92,116 @@ def get_container(request: Request) -> AppContainer:
     return request.app.state.container
 
 
-def get_repository_service(request: Request) -> RepositoryApplicationService:
+def configure_sql_storage(container: AppContainer, settings: Any) -> None:
+    """Configure SQL-backed stores for production runtime."""
+
+    engine = create_database_engine(settings)
+    container.session_factory = create_session_factory(engine)
+
+
+def _new_session(container: AppContainer) -> Session:
+    if container.session_factory is None:
+        msg = "SQL storage is not configured."
+        raise RuntimeError(msg)
+    return container.session_factory()
+
+
+def get_repository_service(request: Request):
     """Return repository application service."""
 
-    return get_container(request).repository_service()
+    container = get_container(request)
+    if container.session_factory is None:
+        yield container.repository_service()
+        return
+    session = _new_session(container)
+    try:
+        yield RepositoryApplicationService(SqlAlchemyRepositoryStore(session))
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
 
-def get_analysis_service(request: Request) -> AnalysisApplicationService:
+def get_analysis_service(request: Request):
     """Return analysis application service."""
 
-    return get_container(request).analysis_service()
+    container = get_container(request)
+    if container.session_factory is None:
+        yield container.analysis_service()
+        return
+    session = _new_session(container)
+    try:
+        yield AnalysisApplicationService(
+            SqlAlchemyAnalysisStore(session),
+            pipeline=SqlAlchemyAnalysisJobQueue(session),
+        )
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
 
-def get_testing_service(request: Request) -> TestingApplicationService:
+def get_testing_service(request: Request):
     """Return testing application service."""
 
-    return get_container(request).testing_service()
+    container = get_container(request)
+    if container.session_factory is None:
+        yield container.testing_service()
+        return
+    session = _new_session(container)
+    try:
+        yield TestingApplicationService(
+            discoverer=ConventionalTestDiscoverer(),
+            selector=PathBasedTestSelector(),
+            store=SqlAlchemyTestStore(session),
+            planner=StaticTestCommandPlanner(),
+        )
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
 
-def get_confidence_service(request: Request) -> ConfidenceApplicationService:
+def get_confidence_service(request: Request):
     """Return confidence application service."""
 
-    return get_container(request).confidence_service()
+    container = get_container(request)
+    if container.session_factory is None:
+        yield container.confidence_service()
+        return
+    session = _new_session(container)
+    try:
+        yield ConfidenceApplicationService(
+            scorer=DeterministicConfidenceScorer(),
+            store=SqlAlchemyConfidenceStore(session),
+        )
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+def get_graph_store(request: Request):
+    """Return graph store."""
+
+    container = get_container(request)
+    if container.session_factory is None:
+        yield container.graph_store
+        return
+    session = _new_session(container)
+    try:
+        yield SqlAlchemyGraphStore(session)
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()

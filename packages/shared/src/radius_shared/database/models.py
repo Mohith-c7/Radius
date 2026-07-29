@@ -4,6 +4,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import (
+    JSON,
     BigInteger,
     DateTime,
     Enum,
@@ -19,6 +20,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from radius_shared.database.base import Base, TimestampMixin, UuidPrimaryKeyMixin
 from radius_shared.database.enums import (
+    AnalysisJobStatus,
     AnalysisStatus,
     ChangedFileType,
     PullRequestStatus,
@@ -233,6 +235,10 @@ class Analysis(UuidPrimaryKeyMixin, Base):
         back_populates="analysis",
         uselist=False,
     )
+    analysis_job: Mapped["AnalysisJob | None"] = relationship(
+        back_populates="analysis",
+        uselist=False,
+    )
 
     __table_args__ = (
         Index("ix_analyses_repository_id", "repository_id"),
@@ -287,6 +293,57 @@ class GraphSnapshot(UuidPrimaryKeyMixin, Base):
 
     repository: Mapped[Repository] = relationship(back_populates="graph_snapshots")
     analysis: Mapped[Analysis] = relationship(back_populates="graph_snapshot")
+    nodes: Mapped[list["GraphNode"]] = relationship(back_populates="snapshot")
+    edges: Mapped[list["GraphEdge"]] = relationship(back_populates="snapshot")
+
+
+class GraphNode(UuidPrimaryKeyMixin, Base):
+    """Persisted graph node artifact."""
+
+    __tablename__ = "graph_nodes"
+
+    snapshot_id: Mapped[UUID] = mapped_column(
+        ForeignKey("graph_snapshots.id"),
+        nullable=False,
+    )
+    node_key: Mapped[str] = mapped_column(Text, nullable=False)
+    node_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    label: Mapped[str] = mapped_column(Text, nullable=False)
+    path: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    snapshot: Mapped[GraphSnapshot] = relationship(back_populates="nodes")
+
+    __table_args__ = (
+        UniqueConstraint("snapshot_id", "node_key", name="uq_graph_nodes_snapshot_key"),
+        Index("ix_graph_nodes_snapshot_id", "snapshot_id"),
+    )
+
+
+class GraphEdge(UuidPrimaryKeyMixin, Base):
+    """Persisted graph edge artifact."""
+
+    __tablename__ = "graph_edges"
+
+    snapshot_id: Mapped[UUID] = mapped_column(
+        ForeignKey("graph_snapshots.id"),
+        nullable=False,
+    )
+    source_key: Mapped[str] = mapped_column(Text, nullable=False)
+    target_key: Mapped[str] = mapped_column(Text, nullable=False)
+    edge_type: Mapped[str] = mapped_column(String(100), nullable=False)
+
+    snapshot: Mapped[GraphSnapshot] = relationship(back_populates="edges")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "snapshot_id",
+            "source_key",
+            "target_key",
+            "edge_type",
+            name="uq_graph_edges_snapshot_edge",
+        ),
+        Index("ix_graph_edges_snapshot_id", "snapshot_id"),
+    )
 
 
 class BlastRadius(UuidPrimaryKeyMixin, Base):
@@ -330,6 +387,94 @@ class TestRun(UuidPrimaryKeyMixin, Base):
     __table_args__ = (Index("ix_test_runs_analysis_id", "analysis_id"),)
 
 
+class TestCase(UuidPrimaryKeyMixin, Base):
+    """Discovered test case artifact."""
+
+    __tablename__ = "test_cases"
+
+    path: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    framework: Mapped[str] = mapped_column(String(100), nullable=False)
+    test_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    target_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    test_metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    selections: Mapped[list["SelectedTest"]] = relationship(back_populates="test_case")
+
+    __table_args__ = (Index("ix_test_cases_path", "path"),)
+
+
+class TestSelection(UuidPrimaryKeyMixin, Base):
+    """Selected tests for one analysis."""
+
+    __tablename__ = "test_selections"
+
+    analysis_id: Mapped[UUID] = mapped_column(
+        ForeignKey("analyses.id"),
+        unique=True,
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    selected_tests: Mapped[list["SelectedTest"]] = relationship(
+        back_populates="selection"
+    )
+
+    __table_args__ = (Index("ix_test_selections_analysis_id", "analysis_id"),)
+
+
+class SelectedTest(UuidPrimaryKeyMixin, Base):
+    """One selected test and reason."""
+
+    __tablename__ = "selected_tests"
+
+    selection_id: Mapped[UUID] = mapped_column(
+        ForeignKey("test_selections.id"),
+        nullable=False,
+    )
+    test_case_id: Mapped[UUID] = mapped_column(
+        ForeignKey("test_cases.id"),
+        nullable=False,
+    )
+    reason: Mapped[str] = mapped_column(String(100), nullable=False)
+
+    selection: Mapped[TestSelection] = relationship(back_populates="selected_tests")
+    test_case: Mapped[TestCase] = relationship(back_populates="selections")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "selection_id",
+            "test_case_id",
+            name="uq_selected_tests_selection_case",
+        ),
+        Index("ix_selected_tests_selection_id", "selection_id"),
+    )
+
+
+class TestRunPlan(UuidPrimaryKeyMixin, Base):
+    """Structured test command plan."""
+
+    __tablename__ = "test_run_plans"
+
+    analysis_id: Mapped[UUID] = mapped_column(
+        ForeignKey("analyses.id"),
+        unique=True,
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(String(100), nullable=False)
+    selected_test_paths: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    command_plan: Mapped[list] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    __table_args__ = (Index("ix_test_run_plans_analysis_id", "analysis_id"),)
+
+
 class ConfidenceReport(UuidPrimaryKeyMixin, Base):
     """Final verification confidence report."""
 
@@ -346,11 +491,65 @@ class ConfidenceReport(UuidPrimaryKeyMixin, Base):
         nullable=False,
     )
     summary: Mapped[str] = mapped_column(Text, nullable=False)
+    recommendations: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     generated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
     )
 
     analysis: Mapped[Analysis] = relationship(back_populates="confidence_report")
+    evidence_items: Mapped[list["ConfidenceEvidence"]] = relationship(
+        back_populates="report"
+    )
 
     __table_args__ = (Index("ix_confidence_reports_analysis_id", "analysis_id"),)
+
+
+class ConfidenceEvidence(UuidPrimaryKeyMixin, Base):
+    """Persisted confidence evidence item."""
+
+    __tablename__ = "confidence_evidence"
+
+    report_id: Mapped[UUID] = mapped_column(
+        ForeignKey("confidence_reports.id"),
+        nullable=False,
+    )
+    category: Mapped[str] = mapped_column(String(100), nullable=False)
+    label: Mapped[str] = mapped_column(Text, nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    impact: Mapped[str] = mapped_column(String(100), nullable=False)
+    value: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
+
+    report: Mapped[ConfidenceReport] = relationship(back_populates="evidence_items")
+
+    __table_args__ = (Index("ix_confidence_evidence_report_id", "report_id"),)
+
+
+class AnalysisJob(UuidPrimaryKeyMixin, TimestampMixin, Base):
+    """Durable queue entry for one analysis execution."""
+
+    __tablename__ = "analysis_jobs"
+
+    analysis_id: Mapped[UUID] = mapped_column(
+        ForeignKey("analyses.id"),
+        unique=True,
+        nullable=False,
+    )
+    status: Mapped[AnalysisJobStatus] = mapped_column(
+        Enum(AnalysisJobStatus, values_callable=enum_values),
+        default=AnalysisJobStatus.PENDING,
+        nullable=False,
+    )
+    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    locked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    analysis: Mapped[Analysis] = relationship(back_populates="analysis_job")
+
+    __table_args__ = (
+        Index("ix_analysis_jobs_status_created_at", "status", "created_at"),
+        Index("ix_analysis_jobs_analysis_id", "analysis_id"),
+    )

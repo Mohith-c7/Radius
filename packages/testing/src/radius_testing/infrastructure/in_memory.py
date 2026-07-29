@@ -2,7 +2,12 @@
 
 from uuid import UUID
 
-from radius_testing.domain.entities import TestCase, TestRunPlan, TestSelection
+from radius_testing.domain.entities import (
+    TestCase,
+    TestRunPlan,
+    TestRunResult,
+    TestSelection,
+)
 
 
 class InMemoryTestStore:
@@ -12,6 +17,7 @@ class InMemoryTestStore:
         self._tests: dict[str, TestCase] = {}
         self._selections: dict[UUID, TestSelection] = {}
         self._plans: dict[UUID, TestRunPlan] = {}
+        self._results: dict[UUID, TestRunResult] = {}
 
     def save_test_cases(self, tests: tuple[TestCase, ...]) -> tuple[TestCase, ...]:
         """Persist discovered test cases."""
@@ -46,3 +52,14 @@ class InMemoryTestStore:
         """Return test run plan for an analysis."""
 
         return self._plans.get(analysis_id)
+
+    def save_run_result(self, result: TestRunResult) -> TestRunResult:
+        """Persist executed test run result."""
+
+        self._results[result.analysis_id] = result
+        return result
+
+    def get_run_result(self, analysis_id: UUID) -> TestRunResult | None:
+        """Return executed test run result."""
+
+        return self._results.get(analysis_id)

@@ -27,6 +27,7 @@ from radius_testing.infrastructure import (
     InMemoryTestStore,
     PathBasedTestSelector,
     StaticTestCommandPlanner,
+    SubprocessTestRunner,
 )
 from radius_worker.orchestrator import (
     ExecuteAnalysisCommand,
@@ -63,6 +64,7 @@ def test_phase1_orchestrator_executes_backend_spine(tmp_path: Path) -> None:
             selector=PathBasedTestSelector(),
             store=InMemoryTestStore(),
             planner=StaticTestCommandPlanner(),
+            runner=SubprocessTestRunner(),
         ),
         confidence_service=ConfidenceApplicationService(
             scorer=DeterministicConfidenceScorer(),

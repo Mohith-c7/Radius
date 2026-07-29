@@ -1,5 +1,8 @@
 """Worker runtime shell."""
 
+import time
+from collections.abc import Callable
+
 from radius_analysis.application import AnalysisApplicationService
 from radius_analysis.infrastructure import (
     InMemoryAnalysisStore,
@@ -23,9 +26,13 @@ from radius_testing.infrastructure import (
     InMemoryTestStore,
     PathBasedTestSelector,
     StaticTestCommandPlanner,
+    SubprocessTestRunner,
 )
 
-from radius_worker.orchestrator import Phase1AnalysisOrchestrator
+from radius_worker.orchestrator import (
+    ExecuteAnalysisCommand,
+    Phase1AnalysisOrchestrator,
+)
 from radius_worker.queue import InMemoryAnalysisQueue
 
 
@@ -37,6 +44,55 @@ def run_worker() -> None:
     """
 
     print("Radius worker ready")
+
+
+def run_worker_once(
+    *,
+    queue,
+    orchestrator: Phase1AnalysisOrchestrator,
+    command_loader: Callable[[object], ExecuteAnalysisCommand],
+) -> bool:
+    """Claim, execute, and acknowledge one analysis job."""
+
+    job = queue.claim_next()
+    if job is None:
+        return False
+    analysis_id = job.analysis_id if hasattr(job, "analysis_id") else job
+    try:
+        orchestrator.execute(command_loader(job))
+    except Exception as exc:
+        if hasattr(queue, "fail"):
+            queue.fail(analysis_id, str(exc))
+        raise
+    if hasattr(queue, "complete"):
+        queue.complete(analysis_id)
+    return True
+
+
+def run_worker_loop(
+    *,
+    queue,
+    orchestrator: Phase1AnalysisOrchestrator,
+    command_loader: Callable[[object], ExecuteAnalysisCommand],
+    poll_interval_seconds: float = 2.0,
+    stop_after_idle_cycles: int | None = None,
+) -> None:
+    """Run a polling worker loop with optional bounded idle cycles for tests."""
+
+    idle_cycles = 0
+    while True:
+        processed = run_worker_once(
+            queue=queue,
+            orchestrator=orchestrator,
+            command_loader=command_loader,
+        )
+        if processed:
+            idle_cycles = 0
+            continue
+        idle_cycles += 1
+        if stop_after_idle_cycles is not None and idle_cycles >= stop_after_idle_cycles:
+            return
+        time.sleep(poll_interval_seconds)
 
 
 def create_local_orchestrator(
@@ -63,6 +119,7 @@ def create_local_orchestrator(
             selector=PathBasedTestSelector(),
             store=InMemoryTestStore(),
             planner=StaticTestCommandPlanner(),
+            runner=SubprocessTestRunner(),
         ),
         confidence_service=ConfidenceApplicationService(
             scorer=DeterministicConfidenceScorer(),

@@ -23,7 +23,7 @@ class StaticTestCommandPlanner:
         )
         command_plan: list[tuple[str, tuple[str, ...]]] = []
         if pytest_paths:
-            command_plan.append(("pytest", pytest_paths))
+            command_plan.append(("python", ("-m", "pytest", *pytest_paths)))
         if jest_paths:
             command_plan.append(("jest", jest_paths))
         if vitest_paths:

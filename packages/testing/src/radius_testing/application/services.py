@@ -4,6 +4,7 @@ from radius_shared.errors import NotFoundError, ValidationError
 
 from radius_testing.dto.commands import (
     DiscoverTestsCommand,
+    ExecuteTestRunCommand,
     PlanTestRunCommand,
     SelectTestsCommand,
 )
@@ -11,10 +12,11 @@ from radius_testing.dto.responses import (
     TestCaseResponse,
     TestDiscoveryResponse,
     TestRunPlanResponse,
+    TestRunResultResponse,
     TestSelectionResponse,
 )
 from radius_testing.interfaces.discovery import TestDiscoverer
-from radius_testing.interfaces.runner import TestCommandPlanner
+from radius_testing.interfaces.runner import TestCommandPlanner, TestRunner
 from radius_testing.interfaces.selection import TestSelector
 from radius_testing.interfaces.store import TestStore
 
@@ -28,11 +30,13 @@ class TestingApplicationService:
         selector: TestSelector,
         store: TestStore,
         planner: TestCommandPlanner,
+        runner: TestRunner | None = None,
     ) -> None:
         self._discoverer = discoverer
         self._selector = selector
         self._store = store
         self._planner = planner
+        self._runner = runner
 
     def discover_tests(
         self,
@@ -85,3 +89,28 @@ class TestingApplicationService:
             msg = f"Test selection for analysis {analysis_id} was not found."
             raise NotFoundError(msg)
         return TestSelectionResponse.from_entity(selection)
+
+    def execute_test_run(
+        self,
+        command: ExecuteTestRunCommand,
+    ) -> TestRunResultResponse:
+        """Execute a saved test run plan and persist result."""
+
+        if self._runner is None:
+            msg = "Test runner is not configured."
+            raise ValidationError(msg)
+        plan = self._store.get_run_plan(command.analysis_id)
+        if plan is None:
+            msg = f"Test run plan for analysis {command.analysis_id} was not found."
+            raise NotFoundError(msg)
+        result = self._runner.run(plan, command.repository_path)
+        return TestRunResultResponse.from_entity(self._store.save_run_result(result))
+
+    def get_run_result(self, analysis_id) -> TestRunResultResponse:
+        """Return saved test run result."""
+
+        result = self._store.get_run_result(analysis_id)
+        if result is None:
+            msg = f"Test run result for analysis {analysis_id} was not found."
+            raise NotFoundError(msg)
+        return TestRunResultResponse.from_entity(result)

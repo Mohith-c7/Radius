@@ -26,3 +26,11 @@ class PlanTestRunCommand:
     """Command to create a structured test run plan."""
 
     analysis_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class ExecuteTestRunCommand:
+    """Command to execute a planned test run."""
+
+    analysis_id: UUID
+    repository_path: Path

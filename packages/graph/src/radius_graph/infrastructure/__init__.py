@@ -5,5 +5,11 @@ from radius_graph.infrastructure.in_memory import (
     InMemoryGraphTraversal,
 )
 from radius_graph.infrastructure.module_resolver import ModuleResolver
+from radius_graph.infrastructure.sqlalchemy_store import SqlAlchemyGraphStore
 
-__all__ = ["InMemoryGraphStore", "InMemoryGraphTraversal", "ModuleResolver"]
+__all__ = [
+    "InMemoryGraphStore",
+    "InMemoryGraphTraversal",
+    "ModuleResolver",
+    "SqlAlchemyGraphStore",
+]

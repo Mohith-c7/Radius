@@ -29,29 +29,35 @@ the `develop` branch. Frontend implementation is tracked separately in
 - Local Git clone/fetch/checkout adapter for repository ingestion.
 - Worker Phase 1 orchestration for diff analysis, parsing, graph build, blast radius, test selection/planning, and confidence generation.
 - API routes for repositories, analyses, blast radius, graph artifacts, selected tests, and confidence reports.
+- Durable Phase 1 artifact schema for graph nodes/edges, test selections, run plans, confidence evidence, and analysis jobs.
+- SQLAlchemy stores for graph snapshots, test selections/run plans/results, confidence reports/evidence, and analysis jobs.
+- Subprocess-backed test runner with timeout, output capture, and confidence input based on actual execution result.
+- Worker claim/execute/complete/fail runtime helpers for queued jobs.
+- SQL-selectable API storage wiring through `STORAGE_BACKEND=sql`.
 
 ## In Progress
 
-- Durable persistence for graph artifacts, selected tests, run plans, confidence reports, and analysis jobs.
+- GitHub webhook/API integration and production authentication/authorization.
 
 ## Pending
 
 - GitHub webhook/API integration.
-- DB-backed analysis job queue for restart-safe worker execution.
-- SQLAlchemy adapters for graph artifacts, selected tests, test run plans, and confidence evidence.
-- Actual test command execution and result capture behind the testing runner interface.
+- Tenant-aware API authorization for organizations, repositories, and analyses.
+- Idempotency-key persistence for manual analysis/rerun requests.
+- Worker command loading from persisted repository/PR context without test-only local command injection.
 - End-to-end backend flow from webhook/manual trigger to fully persisted confidence report.
 
 ## Current Completion Estimate
 
-Phase 1 backend foundation is roughly 85% complete for the deterministic core:
+Phase 1 backend foundation is roughly 90% complete for the deterministic core:
 workspace, shared primitives, persistence schema, repository contracts, analysis
 lifecycle, parser contracts, graph construction, git change extraction,
 blast-radius computation, test discovery/selection, and confidence scoring are
-implemented and validated. API exposure and worker orchestration now exist for
-the local deterministic flow. Remaining work is mostly durability and external
-integration: GitHub webhooks/provider calls, DB-backed job/artifact persistence,
-actual test execution, and fully persisted webhook-to-confidence flow tests.
+implemented and validated. API exposure, worker orchestration, durable queue
+state, durable artifact stores, and subprocess test execution now exist.
+Remaining work is mostly external and security hardening: GitHub webhooks/provider
+calls, tenant-aware authorization, idempotency-key persistence, and fully
+persisted webhook-to-confidence flow tests.
 
 ## 30% to 50% Completion Plan
 

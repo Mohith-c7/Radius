@@ -2,13 +2,14 @@
 
 from functools import lru_cache
 
-from radius_shared.config import RadiusBaseSettings
+from radius_shared.database.session import DatabaseSettings
 
 
-class ApiSettings(RadiusBaseSettings):
+class ApiSettings(DatabaseSettings):
     """Runtime settings loaded from environment variables."""
 
     service_name: str = "radius-api"
+    storage_backend: str = "memory"
 
 
 @lru_cache
