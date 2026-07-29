@@ -39,28 +39,32 @@ the `develop` branch. Frontend implementation is tracked separately in
 - Idempotency-key persistence and replay for repository connect, manual analysis start, rerun, and GitHub webhook delivery handling.
 - Repository pull request metadata upsert support in memory and SQLAlchemy stores.
 - Signed GitHub webhook endpoint for ping, push branch metadata, and pull request analysis triggers.
+- Request-scoped SQL unit-of-work handling across API dependencies.
+- SQL-backed worker runtime with persisted analysis context loading from repository and pull request rows.
+- End-to-end persisted webhook-to-confidence execution test using a real git checkout and durable stores.
 
 ## In Progress
 
-- Worker command loading from persisted repository/PR context without test-only local command injection.
-- End-to-end persisted webhook-to-confidence execution test.
+- Phase 1 production hardening review and release-readiness cleanup.
 
 ## Pending
 
-- Worker command loading from persisted repository/PR context without test-only local command injection.
-- End-to-end backend flow from webhook/manual trigger to fully persisted confidence report.
+- GitHub App installation token support for private repository clones.
+- Deployment-grade operational concerns: worker concurrency tuning, retry policy limits, and observability dashboards.
 
 ## Current Completion Estimate
 
-Phase 1 backend foundation is roughly 93% complete for the deterministic core:
+Phase 1 backend foundation is roughly 97% complete for the deterministic core:
 workspace, shared primitives, persistence schema, repository contracts, analysis
 lifecycle, parser contracts, graph construction, git change extraction,
 blast-radius computation, test discovery/selection, and confidence scoring are
 implemented and validated. API exposure, worker orchestration, durable queue
 state, durable artifact stores, subprocess test execution, tenant-scoped API
 guards, idempotency replay, pull request upsert, and signed GitHub webhook
-ingress now exist. Remaining work is concentrated in production worker context
-resolution and full persisted webhook-to-confidence flow validation.
+ingress now exist. The worker can now load persisted repository/PR context and
+the signed webhook-to-confidence path is validated against durable stores.
+Remaining work is concentrated in deployment hardening around private GitHub App
+clone credentials, observability, and production retry/concurrency tuning.
 
 ## 30% to 50% Completion Plan
 

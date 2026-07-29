@@ -114,6 +114,36 @@ def _new_session(container: AppContainer) -> Session:
     return container.session_factory()
 
 
+def _acquire_request_session(request: Request, container: AppContainer) -> Session:
+    session = getattr(request.state, "radius_db_session", None)
+    if session is None:
+        session = _new_session(container)
+        request.state.radius_db_session = session
+        request.state.radius_db_session_depth = 0
+        request.state.radius_db_session_failed = False
+    request.state.radius_db_session_depth += 1
+    return session
+
+
+def _release_request_session(request: Request, *, failed: bool) -> None:
+    request.state.radius_db_session_failed = (
+        request.state.radius_db_session_failed or failed
+    )
+    request.state.radius_db_session_depth -= 1
+    if request.state.radius_db_session_depth > 0:
+        return
+
+    session = request.state.radius_db_session
+    try:
+        if request.state.radius_db_session_failed:
+            session.rollback()
+        else:
+            session.commit()
+    finally:
+        session.close()
+        request.state.radius_db_session = None
+
+
 def get_repository_service(request: Request):
     """Return repository application service."""
 
@@ -121,15 +151,15 @@ def get_repository_service(request: Request):
     if container.session_factory is None:
         yield container.repository_service()
         return
-    session = _new_session(container)
+    session = _acquire_request_session(request, container)
+    failed = False
     try:
         yield RepositoryApplicationService(SqlAlchemyRepositoryStore(session))
-        session.commit()
     except Exception:
-        session.rollback()
+        failed = True
         raise
     finally:
-        session.close()
+        _release_request_session(request, failed=failed)
 
 
 def get_analysis_service(request: Request):
@@ -139,18 +169,18 @@ def get_analysis_service(request: Request):
     if container.session_factory is None:
         yield container.analysis_service()
         return
-    session = _new_session(container)
+    session = _acquire_request_session(request, container)
+    failed = False
     try:
         yield AnalysisApplicationService(
             SqlAlchemyAnalysisStore(session),
             pipeline=SqlAlchemyAnalysisJobQueue(session),
         )
-        session.commit()
     except Exception:
-        session.rollback()
+        failed = True
         raise
     finally:
-        session.close()
+        _release_request_session(request, failed=failed)
 
 
 def get_testing_service(request: Request):
@@ -160,7 +190,8 @@ def get_testing_service(request: Request):
     if container.session_factory is None:
         yield container.testing_service()
         return
-    session = _new_session(container)
+    session = _acquire_request_session(request, container)
+    failed = False
     try:
         yield TestingApplicationService(
             discoverer=ConventionalTestDiscoverer(),
@@ -168,12 +199,11 @@ def get_testing_service(request: Request):
             store=SqlAlchemyTestStore(session),
             planner=StaticTestCommandPlanner(),
         )
-        session.commit()
     except Exception:
-        session.rollback()
+        failed = True
         raise
     finally:
-        session.close()
+        _release_request_session(request, failed=failed)
 
 
 def get_confidence_service(request: Request):
@@ -183,18 +213,18 @@ def get_confidence_service(request: Request):
     if container.session_factory is None:
         yield container.confidence_service()
         return
-    session = _new_session(container)
+    session = _acquire_request_session(request, container)
+    failed = False
     try:
         yield ConfidenceApplicationService(
             scorer=DeterministicConfidenceScorer(),
             store=SqlAlchemyConfidenceStore(session),
         )
-        session.commit()
     except Exception:
-        session.rollback()
+        failed = True
         raise
     finally:
-        session.close()
+        _release_request_session(request, failed=failed)
 
 
 def get_graph_store(request: Request):
@@ -204,15 +234,15 @@ def get_graph_store(request: Request):
     if container.session_factory is None:
         yield container.graph_store
         return
-    session = _new_session(container)
+    session = _acquire_request_session(request, container)
+    failed = False
     try:
         yield SqlAlchemyGraphStore(session)
-        session.commit()
     except Exception:
-        session.rollback()
+        failed = True
         raise
     finally:
-        session.close()
+        _release_request_session(request, failed=failed)
 
 
 def get_idempotency_store(request: Request):
@@ -222,12 +252,12 @@ def get_idempotency_store(request: Request):
     if container.session_factory is None:
         yield container.idempotency_store
         return
-    session = _new_session(container)
+    session = _acquire_request_session(request, container)
+    failed = False
     try:
         yield SqlAlchemyIdempotencyStore(session)
-        session.commit()
     except Exception:
-        session.rollback()
+        failed = True
         raise
     finally:
-        session.close()
+        _release_request_session(request, failed=failed)
