@@ -5,7 +5,7 @@ from uuid import NAMESPACE_URL, uuid5
 
 from radius_testing.domain.entities import TestCase
 from radius_testing.domain.enums import TestFramework, TestType
-from radius_testing.domain.value_objects import TestName, TestPath
+from radius_testing.domain.value_objects import SourcePath, TestName, TestPath
 
 IGNORED_DIRECTORIES = {
     ".git",
@@ -39,6 +39,7 @@ class ConventionalTestDiscoverer:
                     path=TestPath(relative),
                     framework=self._framework(relative),
                     test_type=TestType.UNIT,
+                    target_path=self._target_path(relative),
                 )
             )
         return tuple(tests)
@@ -60,9 +61,37 @@ class ConventionalTestDiscoverer:
 
     @staticmethod
     def _framework(path: str) -> TestFramework:
-        suffix = Path(path).suffix
-        if suffix == ".py":
+        suffixes = Path(path).suffixes
+        if suffixes[-1:] == [".py"]:
             return TestFramework.PYTEST
-        if suffix in {".ts", ".tsx", ".js", ".jsx"}:
-            return TestFramework.UNKNOWN
+        if suffixes[-1:] in ([".ts"], [".tsx"]):
+            return TestFramework.VITEST
+        if suffixes[-1:] in ([".js"], [".jsx"]):
+            return TestFramework.JEST
         return TestFramework.UNKNOWN
+
+    @staticmethod
+    def _target_path(path: str) -> SourcePath | None:
+        candidate = ConventionalTestDiscoverer._target_candidate(path)
+        return SourcePath(candidate) if candidate is not None else None
+
+    @staticmethod
+    def _target_candidate(path: str) -> str | None:
+        relative = Path(path)
+        name = relative.name
+        parent = relative.parent.as_posix()
+        if name.startswith("test_") and name.endswith(".py"):
+            stem = name.removeprefix("test_").removesuffix(".py")
+            if parent == "tests":
+                return f"src/{stem}.py"
+            if "/tests" in parent:
+                return f"{parent.replace('/tests', '')}/{stem}.py"
+            return f"{parent}/{stem}.py"
+        if name.endswith("_test.py"):
+            return f"{parent}/{name.removesuffix('_test.py')}.py"
+        for marker in (".test.", ".spec."):
+            if marker in name:
+                stem, suffix = name.split(marker, maxsplit=1)
+                extension = suffix.rsplit(".", maxsplit=1)[-1]
+                return f"{parent}/{stem}.{extension}"
+        return None

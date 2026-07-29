@@ -38,7 +38,10 @@ def test_conventional_discoverer_finds_tests_and_ignores_vendor_dirs(
         "src/app.test.ts",
         "tests/test_app.py",
     ]
+    assert tests[0].framework == RadiusTestFramework.VITEST
+    assert tests[0].target_path.value == "src/app.ts"
     assert tests[1].framework == RadiusTestFramework.PYTEST
+    assert tests[1].target_path.value == "src/app.py"
 
 
 def test_path_based_selector_selects_changed_and_conventional_tests() -> None:
@@ -46,7 +49,11 @@ def test_path_based_selector_selects_changed_and_conventional_tests() -> None:
     tests = (
         _test("tests/test_app.py"),
         _test("src/service/test_core.py"),
-        _test("src/app.test.ts", framework=RadiusTestFramework.UNKNOWN),
+        _test(
+            "src/app.test.ts",
+            framework=RadiusTestFramework.VITEST,
+            target_path="src/app.py",
+        ),
     )
 
     selection = PathBasedTestSelector().select(
@@ -60,7 +67,11 @@ def test_path_based_selector_selects_changed_and_conventional_tests() -> None:
         "src/service/test_core.py",
         "tests/test_app.py",
     ]
-    assert all(item.reason.value == "convention" for item in selection.selected_tests)
+    assert [item.reason.value for item in selection.selected_tests] == [
+        "affected_file",
+        "convention",
+        "convention",
+    ]
 
 
 def test_static_planner_returns_structured_pytest_plan() -> None:
@@ -75,13 +86,33 @@ def test_static_planner_returns_structured_pytest_plan() -> None:
     assert plan.command_plan == (("pytest", ("tests/test_app.py",)),)
 
 
+def test_static_planner_groups_javascript_test_frameworks() -> None:
+    analysis_id = uuid4()
+    plan = StaticTestCommandPlanner().plan(
+        analysis_id,
+        (
+            _test("src/app.test.ts", framework=RadiusTestFramework.VITEST),
+            _test("src/app.test.js", framework=RadiusTestFramework.JEST),
+        ),
+    )
+
+    assert plan.command_plan == (
+        ("jest", ("src/app.test.js",)),
+        ("vitest", ("src/app.test.ts",)),
+    )
+
+
 def _test(
     path: str,
     framework: RadiusTestFramework = RadiusTestFramework.PYTEST,
+    target_path: str | None = None,
 ) -> RadiusTestCase:
+    from radius_testing.domain import SourcePath as RadiusSourcePath
+
     return RadiusTestCase(
         id=uuid4(),
         name=RadiusTestName(Path(path).stem),
         path=RadiusTestPath(path),
         framework=framework,
+        target_path=RadiusSourcePath(target_path) if target_path else None,
     )

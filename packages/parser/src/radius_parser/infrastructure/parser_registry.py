@@ -16,3 +16,23 @@ class StaticLanguageParserRegistry:
         """Return a parser for a language when registered."""
 
         return self._parsers.get(language)
+
+
+def default_language_parser_registry() -> StaticLanguageParserRegistry:
+    """Return the default Phase 1 parser registry."""
+
+    from radius_parser.infrastructure.ecmascript_parser import (  # noqa: PLC0415
+        JavaScriptParser,
+        TypeScriptParser,
+    )
+    from radius_parser.infrastructure.python_parser import (
+        PythonAstParser,  # noqa: PLC0415
+    )
+
+    return StaticLanguageParserRegistry(
+        (
+            PythonAstParser(),
+            JavaScriptParser(),
+            TypeScriptParser(),
+        )
+    )

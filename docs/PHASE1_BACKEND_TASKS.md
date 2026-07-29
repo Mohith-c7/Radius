@@ -23,28 +23,35 @@ the `develop` branch. Frontend implementation is tracked separately in
 - Blast-radius computation over graph reverse dependencies with persisted summary integration.
 - Testing foundation with conventional discovery, path-based selection, structured run planning, and tests.
 - Confidence foundation with deterministic scoring, evidence, recommendations, in-memory store, and tests.
+- Real Python AST parser plus lightweight JavaScript/TypeScript parser adapters for imports, symbols, and exports.
+- Repository-local module resolver for Python and JS/TS import-to-file dependency edges.
+- Improved blast-radius summary counting for affected symbols, modules, and selected tests.
+- Local Git clone/fetch/checkout adapter for repository ingestion.
+- Worker Phase 1 orchestration for diff analysis, parsing, graph build, blast radius, test selection/planning, and confidence generation.
+- API routes for repositories, analyses, blast radius, graph artifacts, selected tests, and confidence reports.
 
 ## In Progress
 
-- API and worker orchestration planning for the final Phase 1 backend spine.
+- Durable persistence for graph artifacts, selected tests, run plans, confidence reports, and analysis jobs.
 
 ## Pending
 
-- Repository local clone/checkout adapter and GitHub webhook/API integration.
-- SQLAlchemy adapters for graph artifacts/test selections/confidence evidence if persistence schema expands.
-- API routes for repositories, analyses, blast radius, tests, and confidence.
-- Worker orchestration for queued analysis execution.
-- End-to-end backend flow from webhook/manual trigger to persisted confidence report.
+- GitHub webhook/API integration.
+- DB-backed analysis job queue for restart-safe worker execution.
+- SQLAlchemy adapters for graph artifacts, selected tests, test run plans, and confidence evidence.
+- Actual test command execution and result capture behind the testing runner interface.
+- End-to-end backend flow from webhook/manual trigger to fully persisted confidence report.
 
 ## Current Completion Estimate
 
-Phase 1 backend foundation is roughly 80% complete for the deterministic core:
+Phase 1 backend foundation is roughly 85% complete for the deterministic core:
 workspace, shared primitives, persistence schema, repository contracts, analysis
 lifecycle, parser contracts, graph construction, git change extraction,
 blast-radius computation, test discovery/selection, and confidence scoring are
-implemented and validated. Remaining work is mostly orchestration and exposure:
-GitHub/local clone integration, API routes, worker pipeline wiring, and
-end-to-end backend flow tests.
+implemented and validated. API exposure and worker orchestration now exist for
+the local deterministic flow. Remaining work is mostly durability and external
+integration: GitHub webhooks/provider calls, DB-backed job/artifact persistence,
+actual test execution, and fully persisted webhook-to-confidence flow tests.
 
 ## 30% to 50% Completion Plan
 

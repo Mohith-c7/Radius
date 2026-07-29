@@ -1,7 +1,5 @@
 """Graph application service."""
 
-from pathlib import Path
-
 from radius_parser.domain.entities import ParsedSourceFile
 
 from radius_graph.domain.entities import (
@@ -14,6 +12,7 @@ from radius_graph.domain.enums import GraphEdgeType, GraphNodeType
 from radius_graph.domain.value_objects import GraphNodeId, GraphVersion
 from radius_graph.dto.commands import BuildGraphCommand
 from radius_graph.dto.responses import GraphSnapshotResponse
+from radius_graph.infrastructure.module_resolver import ModuleResolver
 from radius_graph.interfaces.graph_store import GraphStore
 
 
@@ -28,10 +27,10 @@ class GraphApplicationService:
 
         nodes: dict[GraphNodeId, GraphNode] = {}
         edges: set[GraphEdge] = set()
-        module_index = self._module_index(command.parse_result.parsed_files)
+        module_resolver = ModuleResolver(command.parse_result.parsed_files)
 
         for parsed_file in command.parse_result.parsed_files:
-            self._add_parsed_file(parsed_file, nodes, edges, module_index)
+            self._add_parsed_file(parsed_file, nodes, edges, module_resolver)
 
         graph = DependencyGraph(
             nodes=tuple(nodes.values()),
@@ -54,7 +53,7 @@ class GraphApplicationService:
         parsed_file: ParsedSourceFile,
         nodes: dict[GraphNodeId, GraphNode],
         edges: set[GraphEdge],
-        module_index: dict[str, GraphNodeId],
+        module_resolver: ModuleResolver,
     ) -> None:
         file_path = parsed_file.source_file.path.value
         file_id = self.file_node_id(file_path)
@@ -112,11 +111,12 @@ class GraphApplicationService:
                     edge_type=GraphEdgeType.DEPENDS_ON,
                 )
             )
-            if item.source in module_index and module_index[item.source] != file_id:
+            resolved_file_id = module_resolver.resolve(file_path, item.source)
+            if resolved_file_id is not None and resolved_file_id != file_id:
                 edges.add(
                     GraphEdge(
                         source_id=file_id,
-                        target_id=module_index[item.source],
+                        target_id=resolved_file_id,
                         edge_type=GraphEdgeType.DEPENDS_ON,
                     )
                 )
@@ -166,22 +166,6 @@ class GraphApplicationService:
         """Return the stable node id for an imported module."""
 
         return GraphNodeId(f"module:{source}")
-
-    @classmethod
-    def _module_index(
-        cls,
-        parsed_files: tuple[ParsedSourceFile, ...],
-    ) -> dict[str, GraphNodeId]:
-        index: dict[str, GraphNodeId] = {}
-        for parsed_file in parsed_files:
-            path = parsed_file.source_file.path.value
-            file_id = cls.file_node_id(path)
-            normalized = Path(path).with_suffix("").as_posix()
-            dotted = normalized.replace("/", ".")
-            index[normalized] = file_id
-            index[dotted] = file_id
-            index[Path(normalized).name] = file_id
-        return index
 
     @staticmethod
     def _edge_sort_key(edge: GraphEdge) -> tuple[str, str, str]:

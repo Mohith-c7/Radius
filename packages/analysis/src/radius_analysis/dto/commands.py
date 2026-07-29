@@ -86,3 +86,4 @@ class ComputeBlastRadiusCommand:
     analysis_id: UUID
     graph_snapshot: GraphSnapshot
     changed_file_paths: tuple[str, ...]
+    affected_test_paths: tuple[str, ...] = ()

@@ -28,6 +28,16 @@ class ParserApplicationService:
     ) -> RepositoryParseResponse:
         """Parse a repository snapshot into normalized source metadata."""
 
+        return RepositoryParseResponse.from_entity(
+            self.parse_repository_result(command)
+        )
+
+    def parse_repository_result(
+        self,
+        command: ParseRepositoryCommand,
+    ) -> RepositoryParseResult:
+        """Parse a repository snapshot into a domain result."""
+
         repository_path = command.repository_path
         if not repository_path.exists() or not repository_path.is_dir():
             msg = f"Repository path does not exist: {repository_path}."
@@ -49,7 +59,7 @@ class ParserApplicationService:
             source_files=tuple(source_files),
             parsed_files=tuple(parsed_files),
         )
-        return RepositoryParseResponse.from_entity(result)
+        return result
 
     @staticmethod
     def _filter_changed_paths(

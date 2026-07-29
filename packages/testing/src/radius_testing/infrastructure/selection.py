@@ -20,6 +20,11 @@ class PathBasedTestSelector:
         """Return selected tests in stable path order."""
 
         by_path = {test.path.value: test for test in tests}
+        by_target = {
+            test.target_path.value: test
+            for test in tests
+            if test.target_path is not None
+        }
         selected: dict[str, SelectedTest] = {}
 
         for path in changed_file_paths:
@@ -29,6 +34,12 @@ class PathBasedTestSelector:
                     by_path[normalized],
                     TestSelectionReason.CHANGED_FILE,
                 )
+            if normalized in by_target:
+                test = by_target[normalized]
+                selected[test.path.value] = SelectedTest(
+                    test,
+                    TestSelectionReason.AFFECTED_FILE,
+                )
             self._select_conventional(
                 normalized,
                 by_path,
@@ -37,8 +48,15 @@ class PathBasedTestSelector:
             )
 
         for path in affected_file_paths:
+            normalized = self._normalize(path)
+            if normalized in by_target:
+                test = by_target[normalized]
+                selected[test.path.value] = SelectedTest(
+                    test,
+                    TestSelectionReason.AFFECTED_FILE,
+                )
             self._select_conventional(
-                self._normalize(path),
+                normalized,
                 by_path,
                 selected,
                 TestSelectionReason.AFFECTED_FILE,

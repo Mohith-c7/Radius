@@ -4,7 +4,7 @@ from pathlib import Path
 from uuid import UUID
 
 from radius_graph.domain.entities import GraphEdge, GraphSnapshot
-from radius_graph.domain.enums import GraphNodeType
+from radius_graph.domain.enums import GraphEdgeType, GraphNodeType
 from radius_graph.domain.value_objects import GraphNodeId
 from radius_shared.errors import NotFoundError, ValidationError
 
@@ -256,19 +256,26 @@ class AnalysisApplicationService:
             for node in command.graph_snapshot.graph.nodes
             if node.id in affected_ids
         ]
+        affected_file_paths = {
+            node.path
+            for node in affected_nodes
+            if node.node_type == GraphNodeType.FILE and node.path is not None
+        }
         return self.save_blast_radius(
             SaveBlastRadiusCommand(
                 analysis_id=command.analysis_id,
                 affected_files=sum(
                     node.node_type == GraphNodeType.FILE for node in affected_nodes
                 ),
-                affected_symbols=sum(
-                    node.node_type == GraphNodeType.SYMBOL for node in affected_nodes
+                affected_symbols=self._count_symbols_for_files(
+                    command.graph_snapshot,
+                    affected_file_paths,
                 ),
-                affected_modules=sum(
-                    node.node_type == GraphNodeType.MODULE for node in affected_nodes
+                affected_modules=self._count_modules_for_files(
+                    command.graph_snapshot,
+                    affected_ids,
                 ),
-                affected_tests=0,
+                affected_tests=len(set(command.affected_test_paths)),
                 dependency_depth=dependency_depth,
             )
         )
@@ -326,6 +333,38 @@ class AnalysisApplicationService:
     @staticmethod
     def _normalize_graph_path(path: str) -> str:
         return path.replace("\\", "/")
+
+    @staticmethod
+    def _count_symbols_for_files(
+        graph_snapshot: GraphSnapshot,
+        affected_file_paths: set[str],
+    ) -> int:
+        return sum(
+            node.node_type == GraphNodeType.SYMBOL and node.path in affected_file_paths
+            for node in graph_snapshot.graph.nodes
+        )
+
+    @staticmethod
+    def _count_modules_for_files(
+        graph_snapshot: GraphSnapshot,
+        affected_file_ids: set[GraphNodeId],
+    ) -> int:
+        import_ids = {
+            edge.target_id
+            for edge in graph_snapshot.graph.edges
+            if edge.source_id in affected_file_ids
+            and edge.edge_type == GraphEdgeType.IMPORTS
+        }
+        module_ids = {
+            edge.target_id
+            for edge in graph_snapshot.graph.edges
+            if edge.source_id in import_ids
+            and edge.edge_type == GraphEdgeType.DEPENDS_ON
+        }
+        return sum(
+            node.node_type == GraphNodeType.MODULE and node.id in module_ids
+            for node in graph_snapshot.graph.nodes
+        )
 
     @staticmethod
     def _collect_reverse_dependency(

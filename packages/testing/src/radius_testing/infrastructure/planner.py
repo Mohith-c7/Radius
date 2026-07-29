@@ -15,9 +15,19 @@ class StaticTestCommandPlanner:
         pytest_paths = tuple(
             test.path.value for test in tests if test.framework == TestFramework.PYTEST
         )
+        jest_paths = tuple(
+            test.path.value for test in tests if test.framework == TestFramework.JEST
+        )
+        vitest_paths = tuple(
+            test.path.value for test in tests if test.framework == TestFramework.VITEST
+        )
         command_plan: list[tuple[str, tuple[str, ...]]] = []
         if pytest_paths:
             command_plan.append(("pytest", pytest_paths))
+        if jest_paths:
+            command_plan.append(("jest", jest_paths))
+        if vitest_paths:
+            command_plan.append(("vitest", vitest_paths))
         return TestRunPlan.pending(
             analysis_id=analysis_id,
             selected_tests=tests,
