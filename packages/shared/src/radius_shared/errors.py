@@ -44,3 +44,10 @@ class AccessDeniedError(RadiusError):
 
     code = "ACCESS_DENIED"
     message = "Access denied."
+
+
+class ConflictError(RadiusError):
+    """Raised when a request conflicts with current resource state."""
+
+    code = "CONFLICT"
+    message = "The request conflicts with the current resource state."

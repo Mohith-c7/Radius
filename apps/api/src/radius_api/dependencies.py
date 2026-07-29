@@ -37,6 +37,11 @@ from radius_testing.infrastructure import (
 from radius_worker.queue import InMemoryAnalysisQueue
 from sqlalchemy.orm import Session, sessionmaker
 
+from radius_api.idempotency import (
+    InMemoryIdempotencyStore,
+    SqlAlchemyIdempotencyStore,
+)
+
 
 @dataclass(slots=True)
 class AppContainer:
@@ -51,6 +56,9 @@ class AppContainer:
     test_store: InMemoryTestStore = field(default_factory=InMemoryTestStore)
     confidence_store: InMemoryConfidenceStore = field(
         default_factory=InMemoryConfidenceStore
+    )
+    idempotency_store: InMemoryIdempotencyStore = field(
+        default_factory=InMemoryIdempotencyStore
     )
     session_factory: sessionmaker[Session] | None = None
 
@@ -199,6 +207,24 @@ def get_graph_store(request: Request):
     session = _new_session(container)
     try:
         yield SqlAlchemyGraphStore(session)
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+def get_idempotency_store(request: Request):
+    """Return idempotency store."""
+
+    container = get_container(request)
+    if container.session_factory is None:
+        yield container.idempotency_store
+        return
+    session = _new_session(container)
+    try:
+        yield SqlAlchemyIdempotencyStore(session)
         session.commit()
     except Exception:
         session.rollback()

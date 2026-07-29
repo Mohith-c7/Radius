@@ -1,10 +1,14 @@
 """SQLAlchemy repository store tests."""
 
 
+from datetime import UTC, datetime
+
 from radius_repository.domain import (
     Branch,
     BranchName,
     CommitHash,
+    PullRequest,
+    PullRequestStatus,
     Repository,
     RepositoryStatus,
     RepositoryVisibility,
@@ -87,6 +91,25 @@ def test_sqlalchemy_store_upserts_branch_metadata() -> None:
         assert loaded.branches[0].latest_commit.value == "b" * 40
 
 
+def test_sqlalchemy_store_upserts_pull_request_metadata() -> None:
+    with _session() as session:
+        organization_id = _create_organization(session)
+        store = SqlAlchemyRepositoryStore(session)
+        repository = store.save(_repository(organization_id=organization_id))
+
+        created = store.upsert_pull_request(
+            _pull_request(repository.id, title="Initial title")
+        )
+        updated = store.upsert_pull_request(
+            _pull_request(repository.id, title="Updated title")
+        )
+        loaded = store.get_pull_request_by_repository_and_number(repository.id, 12)
+
+        assert created.id == updated.id
+        assert loaded.id == created.id
+        assert loaded.title == "Updated title"
+
+
 def _session() -> Session:
     engine = create_engine("sqlite+pysqlite:///:memory:")
     Base.metadata.create_all(engine)
@@ -116,4 +139,18 @@ def _repository(
         default_branch=BranchName("main"),
         clone_url=f"https://github.com/acme/{name}.git",
         visibility=visibility,
+    )
+
+
+def _pull_request(repository_id, title: str) -> PullRequest:
+    return PullRequest(
+        id=None,
+        repository_id=repository_id,
+        github_pr_number=12,
+        title=title,
+        source_branch=BranchName("feature"),
+        target_branch=BranchName("main"),
+        author="octocat",
+        status=PullRequestStatus.OPEN,
+        opened_at=datetime.now(UTC),
     )

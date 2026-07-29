@@ -4,16 +4,22 @@ from uuid import UUID
 
 from radius_shared.errors import NotFoundError, ValidationError
 
-from radius_repository.domain.entities import Branch, Repository
-from radius_repository.domain.enums import RepositoryStatus, RepositoryVisibility
+from radius_repository.domain.entities import Branch, PullRequest, Repository
+from radius_repository.domain.enums import (
+    PullRequestStatus,
+    RepositoryStatus,
+    RepositoryVisibility,
+)
 from radius_repository.domain.value_objects import BranchName, CommitHash
 from radius_repository.dto.commands import (
     ConnectRepositoryCommand,
     RepositoryListQuery,
     UpsertBranchCommand,
+    UpsertPullRequestCommand,
 )
 from radius_repository.dto.responses import (
     BranchResponse,
+    PullRequestResponse,
     RepositoryDetailResponse,
     RepositoryResponse,
 )
@@ -114,6 +120,51 @@ class RepositoryApplicationService:
         saved = self._store.upsert_branch(branch)
         return BranchResponse.from_entity(saved)
 
+    def upsert_pull_request(
+        self,
+        command: UpsertPullRequestCommand,
+    ) -> PullRequestResponse:
+        """Create or update pull request metadata for a repository."""
+
+        repository = self._store.get_by_id(command.repository_id)
+        if repository is None:
+            msg = f"Repository {command.repository_id} was not found."
+            raise NotFoundError(msg)
+
+        pull_request = PullRequest(
+            id=None,
+            repository_id=command.repository_id,
+            github_pr_number=command.github_pr_number,
+            title=command.title,
+            source_branch=BranchName(command.source_branch),
+            target_branch=BranchName(command.target_branch),
+            author=command.author,
+            status=self._parse_pull_request_status(command.status),
+            opened_at=command.opened_at,
+            merged_at=command.merged_at,
+        )
+        saved = self._store.upsert_pull_request(pull_request)
+        return PullRequestResponse.from_entity(saved)
+
+    def get_pull_request_by_repository_and_number(
+        self,
+        repository_id: UUID,
+        github_pr_number: int,
+    ) -> PullRequestResponse:
+        """Return one pull request by repository and GitHub PR number."""
+
+        pull_request = self._store.get_pull_request_by_repository_and_number(
+            repository_id,
+            github_pr_number,
+        )
+        if pull_request is None:
+            msg = (
+                f"Pull request {github_pr_number} for repository "
+                f"{repository_id} was not found."
+            )
+            raise NotFoundError(msg)
+        return PullRequestResponse.from_entity(pull_request)
+
     @staticmethod
     def _parse_status(status: str | None) -> RepositoryStatus | None:
         if status is None:
@@ -132,4 +183,12 @@ class RepositoryApplicationService:
             return RepositoryVisibility(visibility)
         except ValueError as exc:
             msg = f"Unsupported repository visibility: {visibility}."
+            raise ValidationError(msg) from exc
+
+    @staticmethod
+    def _parse_pull_request_status(status: str) -> PullRequestStatus:
+        try:
+            return PullRequestStatus(status)
+        except ValueError as exc:
+            msg = f"Unsupported pull request status: {status}."
             raise ValidationError(msg) from exc

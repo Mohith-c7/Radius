@@ -5,6 +5,7 @@ from datetime import datetime
 from uuid import UUID
 
 from radius_repository.domain.enums import (
+    PullRequestStatus,
     RepositoryProvider,
     RepositoryStatus,
     RepositoryVisibility,
@@ -58,3 +59,19 @@ class Repository:
         """Return `owner/name`."""
 
         return f"{self.owner}/{self.name}"
+
+
+@dataclass(slots=True)
+class PullRequest:
+    """GitHub pull request tracked by Radius."""
+
+    id: UUID | None
+    repository_id: UUID
+    github_pr_number: int
+    title: str
+    source_branch: BranchName
+    target_branch: BranchName
+    author: str
+    status: PullRequestStatus
+    opened_at: datetime
+    merged_at: datetime | None = None

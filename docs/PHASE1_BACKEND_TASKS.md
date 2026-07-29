@@ -34,30 +34,33 @@ the `develop` branch. Frontend implementation is tracked separately in
 - Subprocess-backed test runner with timeout, output capture, and confidence input based on actual execution result.
 - Worker claim/execute/complete/fail runtime helpers for queued jobs.
 - SQL-selectable API storage wiring through `STORAGE_BACKEND=sql`.
+- Tenant-scoped API request context for repositories, analyses, graph artifacts, selected tests, and confidence reports.
+- API-key enforcement path for production deployments with development-friendly local header context.
+- Idempotency-key persistence and replay for repository connect, manual analysis start, rerun, and GitHub webhook delivery handling.
+- Repository pull request metadata upsert support in memory and SQLAlchemy stores.
+- Signed GitHub webhook endpoint for ping, push branch metadata, and pull request analysis triggers.
 
 ## In Progress
 
-- GitHub webhook/API integration and production authentication/authorization.
+- Worker command loading from persisted repository/PR context without test-only local command injection.
+- End-to-end persisted webhook-to-confidence execution test.
 
 ## Pending
 
-- GitHub webhook/API integration.
-- Tenant-aware API authorization for organizations, repositories, and analyses.
-- Idempotency-key persistence for manual analysis/rerun requests.
 - Worker command loading from persisted repository/PR context without test-only local command injection.
 - End-to-end backend flow from webhook/manual trigger to fully persisted confidence report.
 
 ## Current Completion Estimate
 
-Phase 1 backend foundation is roughly 90% complete for the deterministic core:
+Phase 1 backend foundation is roughly 93% complete for the deterministic core:
 workspace, shared primitives, persistence schema, repository contracts, analysis
 lifecycle, parser contracts, graph construction, git change extraction,
 blast-radius computation, test discovery/selection, and confidence scoring are
 implemented and validated. API exposure, worker orchestration, durable queue
-state, durable artifact stores, and subprocess test execution now exist.
-Remaining work is mostly external and security hardening: GitHub webhooks/provider
-calls, tenant-aware authorization, idempotency-key persistence, and fully
-persisted webhook-to-confidence flow tests.
+state, durable artifact stores, subprocess test execution, tenant-scoped API
+guards, idempotency replay, pull request upsert, and signed GitHub webhook
+ingress now exist. Remaining work is concentrated in production worker context
+resolution and full persisted webhook-to-confidence flow validation.
 
 ## 30% to 50% Completion Plan
 

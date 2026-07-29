@@ -3,13 +3,20 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from radius_shared.dto import error_response
-from radius_shared.errors import NotFoundError, RadiusError, ValidationError
+from radius_shared.errors import (
+    AccessDeniedError,
+    ConflictError,
+    NotFoundError,
+    RadiusError,
+    ValidationError,
+)
 from radius_shared.logging import configure_logging
 
 from radius_api.config import get_api_settings
 from radius_api.dependencies import AppContainer, configure_sql_storage
 from radius_api.routes.analyses import router as analyses_router
 from radius_api.routes.confidence import router as confidence_router
+from radius_api.routes.github_webhooks import router as github_webhooks_router
 from radius_api.routes.graph import router as graph_router
 from radius_api.routes.health import router as health_router
 from radius_api.routes.repositories import router as repositories_router
@@ -23,7 +30,11 @@ async def radius_error_handler(
     """Convert expected application errors into API envelopes."""
 
     status_code = 400
-    if isinstance(exc, NotFoundError):
+    if isinstance(exc, AccessDeniedError):
+        status_code = 403
+    elif isinstance(exc, ConflictError):
+        status_code = 409
+    elif isinstance(exc, NotFoundError):
         status_code = 404
     elif isinstance(exc, ValidationError):
         status_code = 422
@@ -57,6 +68,7 @@ def create_app() -> FastAPI:
     app.include_router(graph_router, prefix="/api/v1")
     app.include_router(tests_router, prefix="/api/v1")
     app.include_router(confidence_router, prefix="/api/v1")
+    app.include_router(github_webhooks_router, prefix="/api/v1")
     return app
 
 

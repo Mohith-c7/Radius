@@ -8,8 +8,9 @@ from radius_shared.errors import NotFoundError
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from radius_repository.domain.entities import Branch, Repository
+from radius_repository.domain.entities import Branch, PullRequest, Repository
 from radius_repository.domain.enums import (
+    PullRequestStatus,
     RepositoryProvider,
     RepositoryStatus,
     RepositoryVisibility,
@@ -149,6 +150,50 @@ class SqlAlchemyRepositoryStore:
         self._session.refresh(row)
         return self._branch_to_domain(row)
 
+    def get_pull_request_by_repository_and_number(
+        self,
+        repository_id: UUID,
+        github_pr_number: int,
+    ) -> PullRequest | None:
+        """Return one pull request by repository and provider number."""
+
+        row = self._session.scalar(
+            select(db_models.PullRequest).where(
+                db_models.PullRequest.repository_id == repository_id,
+                db_models.PullRequest.github_pr_number == github_pr_number,
+            )
+        )
+        return self._pull_request_to_domain(row) if row is not None else None
+
+    def upsert_pull_request(self, pull_request: PullRequest) -> PullRequest:
+        """Create or update pull request metadata."""
+
+        row = self._session.scalar(
+            select(db_models.PullRequest).where(
+                db_models.PullRequest.repository_id == pull_request.repository_id,
+                db_models.PullRequest.github_pr_number
+                == pull_request.github_pr_number,
+            )
+        )
+        if row is None:
+            row = db_models.PullRequest(
+                repository_id=pull_request.repository_id,
+                github_pr_number=pull_request.github_pr_number,
+            )
+            self._session.add(row)
+
+        row.title = pull_request.title
+        row.source_branch = pull_request.source_branch.value
+        row.target_branch = pull_request.target_branch.value
+        row.author = pull_request.author
+        row.status = db_enums.PullRequestStatus(pull_request.status.value)
+        row.opened_at = pull_request.opened_at
+        row.merged_at = pull_request.merged_at
+
+        self._session.flush()
+        self._session.refresh(row)
+        return self._pull_request_to_domain(row)
+
     @staticmethod
     def _repository_query():
         return select(db_models.Repository).options(
@@ -186,4 +231,19 @@ class SqlAlchemyRepositoryStore:
             repository_id=row.repository_id,
             name=BranchName(row.name),
             latest_commit=latest_commit,
+        )
+
+    @staticmethod
+    def _pull_request_to_domain(row: db_models.PullRequest) -> PullRequest:
+        return PullRequest(
+            id=row.id,
+            repository_id=row.repository_id,
+            github_pr_number=row.github_pr_number,
+            title=row.title,
+            source_branch=BranchName(row.source_branch),
+            target_branch=BranchName(row.target_branch),
+            author=row.author,
+            status=PullRequestStatus(row.status.value),
+            opened_at=row.opened_at,
+            merged_at=row.merged_at,
         )

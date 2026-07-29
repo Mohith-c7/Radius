@@ -3,7 +3,7 @@
 from typing import Protocol
 from uuid import UUID
 
-from radius_repository.domain.entities import Branch, Repository
+from radius_repository.domain.entities import Branch, PullRequest, Repository
 from radius_repository.domain.enums import RepositoryStatus, RepositoryVisibility
 
 
@@ -39,3 +39,13 @@ class RepositoryStore(Protocol):
 
     def upsert_branch(self, branch: Branch) -> Branch:
         """Create or update branch metadata."""
+
+    def get_pull_request_by_repository_and_number(
+        self,
+        repository_id: UUID,
+        github_pr_number: int,
+    ) -> PullRequest | None:
+        """Return one pull request by repository and provider number."""
+
+    def upsert_pull_request(self, pull_request: PullRequest) -> PullRequest:
+        """Create or update pull request metadata."""

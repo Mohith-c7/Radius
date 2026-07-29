@@ -24,3 +24,11 @@ class RepositoryStatus(StrEnum):
     SYNCHRONIZING = "synchronizing"
     FAILED = "failed"
     DISCONNECTED = "disconnected"
+
+
+class PullRequestStatus(StrEnum):
+    """Pull request lifecycle state."""
+
+    OPEN = "open"
+    MERGED = "merged"
+    CLOSED = "closed"

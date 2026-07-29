@@ -23,6 +23,7 @@ EXPECTED_TABLES = {
     "test_cases",
     "test_run_plans",
     "test_selections",
+    "idempotency_keys",
 }
 
 
@@ -58,6 +59,10 @@ def test_required_indexes_exist() -> None:
     assert (
         "ix_confidence_evidence_report_id"
         in indexes_by_table["confidence_evidence"]
+    )
+    assert (
+        "ix_idempotency_keys_organization_id"
+        in indexes_by_table["idempotency_keys"]
     )
 
 

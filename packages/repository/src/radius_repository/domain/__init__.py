@@ -1,7 +1,8 @@
 """Pure business concepts for the repository domain."""
 
-from radius_repository.domain.entities import Branch, Commit, Repository
+from radius_repository.domain.entities import Branch, Commit, PullRequest, Repository
 from radius_repository.domain.enums import (
+    PullRequestStatus,
     RepositoryProvider,
     RepositoryStatus,
     RepositoryVisibility,
@@ -25,6 +26,8 @@ __all__ = [
     "Commit",
     "CommitHash",
     "OrganizationId",
+    "PullRequest",
+    "PullRequestStatus",
     "Repository",
     "RepositoryConnected",
     "RepositoryFullName",

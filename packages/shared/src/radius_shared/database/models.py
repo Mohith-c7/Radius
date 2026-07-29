@@ -553,3 +553,33 @@ class AnalysisJob(UuidPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_analysis_jobs_status_created_at", "status", "created_at"),
         Index("ix_analysis_jobs_analysis_id", "analysis_id"),
     )
+
+
+class IdempotencyKey(UuidPrimaryKeyMixin, Base):
+    """Stored response for one idempotent API request."""
+
+    __tablename__ = "idempotency_keys"
+
+    organization_id: Mapped[UUID] = mapped_column(
+        ForeignKey("organizations.id"),
+        nullable=False,
+    )
+    key: Mapped[str] = mapped_column(String(255), nullable=False)
+    scope: Mapped[str] = mapped_column(String(255), nullable=False)
+    request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    status_code: Mapped[int] = mapped_column(Integer, nullable=False)
+    response_body: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "key",
+            "scope",
+            name="uq_idempotency_keys_org_key_scope",
+        ),
+        Index("ix_idempotency_keys_organization_id", "organization_id"),
+    )

@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from uuid import UUID
 
-from radius_repository.domain.entities import Branch, Repository
+from radius_repository.domain.entities import Branch, PullRequest, Repository
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,4 +90,33 @@ class RepositoryDetailResponse(RepositoryResponse):
             branches=tuple(
                 BranchResponse.from_entity(branch) for branch in repository.branches
             ),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class PullRequestResponse:
+    """Pull request response DTO."""
+
+    id: UUID | None
+    repository_id: UUID
+    github_pr_number: int
+    title: str
+    source_branch: str
+    target_branch: str
+    author: str
+    status: str
+
+    @classmethod
+    def from_entity(cls, pull_request: PullRequest) -> "PullRequestResponse":
+        """Create a response DTO from a pull request entity."""
+
+        return cls(
+            id=pull_request.id,
+            repository_id=pull_request.repository_id,
+            github_pr_number=pull_request.github_pr_number,
+            title=pull_request.title,
+            source_branch=pull_request.source_branch.value,
+            target_branch=pull_request.target_branch.value,
+            author=pull_request.author,
+            status=pull_request.status.value,
         )

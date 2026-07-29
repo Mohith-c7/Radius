@@ -2,7 +2,7 @@
 
 from uuid import UUID, uuid4
 
-from radius_repository.domain.entities import Branch, Repository
+from radius_repository.domain.entities import Branch, PullRequest, Repository
 from radius_repository.domain.enums import RepositoryStatus, RepositoryVisibility
 
 
@@ -12,6 +12,7 @@ class InMemoryRepositoryStore:
     def __init__(self) -> None:
         self._repositories: dict[UUID, Repository] = {}
         self._github_index: dict[int, UUID] = {}
+        self._pull_requests: dict[tuple[UUID, int], PullRequest] = {}
 
     def get_by_id(self, repository_id: UUID) -> Repository | None:
         """Return one repository by id."""
@@ -97,4 +98,33 @@ class InMemoryRepositoryStore:
             latest_commit=branch.latest_commit,
         )
         repository.branches.append(saved)
+        return saved
+
+    def get_pull_request_by_repository_and_number(
+        self,
+        repository_id: UUID,
+        github_pr_number: int,
+    ) -> PullRequest | None:
+        """Return one pull request by repository and provider number."""
+
+        return self._pull_requests.get((repository_id, github_pr_number))
+
+    def upsert_pull_request(self, pull_request: PullRequest) -> PullRequest:
+        """Create or update pull request metadata."""
+
+        key = (pull_request.repository_id, pull_request.github_pr_number)
+        existing = self._pull_requests.get(key)
+        saved = PullRequest(
+            id=existing.id if existing is not None else uuid4(),
+            repository_id=pull_request.repository_id,
+            github_pr_number=pull_request.github_pr_number,
+            title=pull_request.title,
+            source_branch=pull_request.source_branch,
+            target_branch=pull_request.target_branch,
+            author=pull_request.author,
+            status=pull_request.status,
+            opened_at=pull_request.opened_at,
+            merged_at=pull_request.merged_at,
+        )
+        self._pull_requests[key] = saved
         return saved

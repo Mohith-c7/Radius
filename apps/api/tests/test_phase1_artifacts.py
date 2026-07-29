@@ -1,6 +1,6 @@
 """Phase 1 artifact API tests."""
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 from radius_api.main import create_app
@@ -45,8 +45,34 @@ from radius_testing.domain import (
 def test_phase1_artifact_endpoints_return_graph_tests_and_confidence() -> None:
     app = create_app()
     client = TestClient(app)
-    analysis_id = uuid4()
-    repository_id = uuid4()
+    organization_id = str(uuid4())
+    headers = {"X-Radius-Organization-Id": organization_id}
+    repository = client.post(
+        "/api/v1/repositories",
+        headers=headers,
+        json={
+            "organizationId": organization_id,
+            "repositoryId": 303,
+            "name": "radius",
+            "owner": "acme",
+            "defaultBranch": "main",
+            "cloneUrl": "https://github.com/acme/radius.git",
+            "visibility": "private",
+        },
+    )
+    repository_id = repository.json()["data"]["id"]
+    analysis = client.post(
+        "/api/v1/analyses",
+        headers=headers,
+        json={
+            "repositoryId": repository_id,
+            "pullRequestId": str(uuid4()),
+            "commitSha": "c" * 40,
+        },
+    )
+    analysis_id = analysis.json()["data"]["id"]
+    repository_uuid = UUID(repository_id)
+    analysis_uuid = UUID(analysis_id)
     test_case = RadiusTestCase(
         id=uuid4(),
         name=RadiusTestName("test_core"),
@@ -55,8 +81,8 @@ def test_phase1_artifact_endpoints_return_graph_tests_and_confidence() -> None:
     )
     app.state.container.graph_store.save_snapshot(
         GraphSnapshot(
-            repository_id=repository_id,
-            analysis_id=analysis_id,
+            repository_id=repository_uuid,
+            analysis_id=analysis_uuid,
             graph=DependencyGraph(
                 nodes=(
                     GraphNode(
@@ -71,7 +97,7 @@ def test_phase1_artifact_endpoints_return_graph_tests_and_confidence() -> None:
     )
     app.state.container.test_store.save_selection(
         RadiusTestSelection(
-            analysis_id=analysis_id,
+            analysis_id=analysis_uuid,
             selected_tests=(
                 SelectedTest(test_case, RadiusTestSelectionReason.AFFECTED_FILE),
             ),
@@ -79,7 +105,7 @@ def test_phase1_artifact_endpoints_return_graph_tests_and_confidence() -> None:
     )
     app.state.container.confidence_service().generate_report(
         GenerateConfidenceReportCommand(
-            analysis_id=analysis_id,
+            analysis_id=analysis_uuid,
             impact=ImpactEvidence(
                 affected_files=1,
                 affected_symbols=1,
@@ -97,9 +123,12 @@ def test_phase1_artifact_endpoints_return_graph_tests_and_confidence() -> None:
         )
     )
 
-    graph = client.get(f"/api/v1/analyses/{analysis_id}/graph")
-    tests = client.get(f"/api/v1/analyses/{analysis_id}/tests")
-    confidence = client.get(f"/api/v1/analyses/{analysis_id}/confidence")
+    graph = client.get(f"/api/v1/analyses/{analysis_id}/graph", headers=headers)
+    tests = client.get(f"/api/v1/analyses/{analysis_id}/tests", headers=headers)
+    confidence = client.get(
+        f"/api/v1/analyses/{analysis_id}/confidence",
+        headers=headers,
+    )
 
     assert graph.status_code == 200
     assert graph.json()["data"]["node_count"] == 1
@@ -111,8 +140,9 @@ def test_phase1_artifact_endpoints_return_graph_tests_and_confidence() -> None:
 
 def test_missing_graph_artifact_uses_not_found_envelope() -> None:
     client = TestClient(create_app())
+    headers = {"X-Radius-Organization-Id": str(uuid4())}
 
-    response = client.get(f"/api/v1/analyses/{uuid4()}/graph")
+    response = client.get(f"/api/v1/analyses/{uuid4()}/graph", headers=headers)
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "NOT_FOUND"
