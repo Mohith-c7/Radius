@@ -1,0 +1,663 @@
+# 05_Module_Architecture.md
+
+# Module Architecture
+
+Project: Radius
+
+Version: 1.0
+
+---
+
+# Overview
+
+Radius is composed of independent modules.
+
+Each module owns a single business capability.
+
+Modules communicate through contracts rather than implementation details.
+
+A module may depend on shared abstractions but should never directly depend on another module's internal implementation.
+
+This architecture allows the platform to evolve without tightly coupling different parts of the system.
+
+---
+
+# Module Hierarchy
+
+Radius consists of the following domains.
+
+Repository Domain
+
+↓
+
+Parser Domain
+
+↓
+
+Graph Domain
+
+↓
+
+Analysis Domain
+
+↓
+
+Testing Domain
+
+↓
+
+Confidence Domain
+
+↓
+
+Presentation Domain
+
+Each domain contains one or more modules.
+
+---
+
+# Repository Domain
+
+## Purpose
+
+The Repository Domain is responsible for interacting with source code repositories.
+
+It acts as the gateway between GitHub and the internal Radius pipeline.
+
+No business logic should exist inside this domain.
+
+---
+
+## Responsibilities
+
+Receive GitHub webhooks
+
+Clone repositories
+
+Fetch updates
+
+Checkout branches
+
+Manage repository cache
+
+Provide repository snapshots
+
+---
+
+## Inputs
+
+GitHub Events
+
+Repository URLs
+
+Authentication Tokens
+
+---
+
+## Outputs
+
+Repository Snapshot
+
+Commit Information
+
+Pull Request Information
+
+Repository Metadata
+
+---
+
+## Modules
+
+github
+
+repository
+
+git
+
+---
+
+## Non Responsibilities
+
+Repository analysis
+
+Dependency computation
+
+Parsing
+
+Testing
+
+Confidence scoring
+
+---
+
+# Parser Domain
+
+## Purpose
+
+Convert source code into structured semantic information.
+
+The parser should understand code but never interpret business meaning.
+
+---
+
+## Responsibilities
+
+Parse source files
+
+Extract symbols
+
+Extract imports
+
+Extract exports
+
+Extract functions
+
+Extract classes
+
+Extract interfaces
+
+Extract methods
+
+Extract annotations
+
+Generate normalized metadata
+
+---
+
+## Inputs
+
+Repository Snapshot
+
+Changed Files
+
+---
+
+## Outputs
+
+AST
+
+Symbol Table
+
+Import Table
+
+Export Table
+
+Metadata
+
+---
+
+## Internal Modules
+
+parser
+
+language
+
+ast
+
+metadata
+
+---
+
+## Non Responsibilities
+
+Dependency analysis
+
+Graph traversal
+
+Blast radius
+
+Testing
+
+---
+
+# Graph Domain
+
+## Purpose
+
+Represent repository relationships.
+
+The graph becomes the knowledge base of Radius.
+
+---
+
+## Responsibilities
+
+Create graph
+
+Update graph
+
+Delete graph nodes
+
+Resolve dependencies
+
+Resolve references
+
+Reverse lookup
+
+Traversal
+
+---
+
+## Graph Types
+
+File Graph
+
+Module Graph
+
+Package Graph
+
+Symbol Graph
+
+Future
+
+Service Graph
+
+API Graph
+
+Database Graph
+
+---
+
+## Inputs
+
+Repository Metadata
+
+Parser Output
+
+---
+
+## Outputs
+
+Repository Graph
+
+Dependency Graph
+
+Relationship Graph
+
+---
+
+## Internal Modules
+
+graph
+
+resolver
+
+traversal
+
+storage
+
+---
+
+## Non Responsibilities
+
+Parsing
+
+Testing
+
+Confidence
+
+Git operations
+
+---
+
+# Analysis Domain
+
+Purpose
+
+Understand software changes.
+
+---
+
+Modules
+
+Git Change Analyzer
+
+Blast Radius Engine
+
+Risk Engine
+
+---
+
+Responsibilities
+
+Read git diff
+
+Compute changed symbols
+
+Compute impacted nodes
+
+Compute dependency depth
+
+Compute affected modules
+
+Generate impact report
+
+---
+
+Inputs
+
+Git Changes
+
+Repository Graph
+
+---
+
+Outputs
+
+Blast Radius
+
+Impact Report
+
+Risk Factors
+
+---
+
+Non Responsibilities
+
+Execute tests
+
+Generate reports
+
+Dashboard
+
+---
+
+# Testing Domain
+
+Purpose
+
+Validate repository changes.
+
+---
+
+Modules
+
+Test Discovery
+
+Test Selection
+
+Test Runner
+
+Coverage Collector
+
+---
+
+Responsibilities
+
+Discover tests
+
+Map tests
+
+Execute tests
+
+Collect coverage
+
+Generate execution report
+
+---
+
+Outputs
+
+Test Results
+
+Coverage
+
+Logs
+
+Metrics
+
+---
+
+Future
+
+AI Test Generation
+
+Mutation Testing
+
+Benchmark Testing
+
+Security Testing
+
+---
+
+# Confidence Domain
+
+Purpose
+
+Transform engineering evidence into an explainable confidence report.
+
+---
+
+Inputs
+
+Blast Radius
+
+Coverage
+
+Test Results
+
+Repository Metrics
+
+---
+
+Outputs
+
+Confidence Score
+
+Risk Summary
+
+Evidence
+
+Recommendations
+
+---
+
+Responsibilities
+
+Aggregate evidence
+
+Calculate confidence
+
+Explain confidence
+
+Generate report
+
+---
+
+Future
+
+Historical learning
+
+Predictive confidence
+
+Adaptive scoring
+
+---
+
+# Presentation Domain
+
+Purpose
+
+Present Radius intelligence to developers.
+
+---
+
+Modules
+
+Dashboard
+
+REST API
+
+GitHub Check
+
+Notifications
+
+---
+
+Responsibilities
+
+Display reports
+
+Display graphs
+
+Display history
+
+Display recommendations
+
+Manage repositories
+
+---
+
+Non Responsibilities
+
+Analysis
+
+Parsing
+
+Testing
+
+Confidence calculation
+
+---
+
+# Shared Domain
+
+Purpose
+
+Reusable utilities shared across all domains.
+
+---
+
+Modules
+
+shared
+
+logging
+
+configuration
+
+events
+
+database
+
+auth
+
+cache
+
+types
+
+errors
+
+constants
+
+utils
+
+---
+
+Responsibilities
+
+Configuration
+
+Logging
+
+Authentication
+
+Validation
+
+Error handling
+
+Common interfaces
+
+Shared DTOs
+
+---
+
+# Domain Dependencies
+
+Repository
+
+↓
+
+Parser
+
+↓
+
+Graph
+
+↓
+
+Analysis
+
+↓
+
+Testing
+
+↓
+
+Confidence
+
+↓
+
+Presentation
+
+Only downward dependencies are allowed.
+
+No module may create circular dependencies.
+
+---
+
+# Communication Rules
+
+Modules communicate using interfaces.
+
+Modules never access another module's database tables directly.
+
+Modules should expose services rather than implementation.
+
+Shared types belong only inside the shared package.
+
+---
+
+# Extension Strategy
+
+Future modules should be added without changing existing ones.
+
+Examples
+
+AI Test Generator
+
+Security Scanner
+
+CodeQL Analyzer
+
+MCP Server
+
+VS Code Extension
+
+CLI
+
+Slack Integration
+
+All future capabilities should integrate through contracts.
+
+---
+
+# Module Ownership
+
+Every module should satisfy one rule.
+
+One module.
+
+One responsibility.
+
+One public interface.
+
+This keeps Radius maintainable as the platform grows.
+
+---
+
+# Summary
+
+The module architecture separates repository management, parsing, graph construction, analysis, testing, confidence evaluation, and presentation into independent domains.
+
+This separation ensures maintainability, scalability, and extensibility while providing clear ownership boundaries for every component within Radius.

@@ -1,306 +1,136 @@
-<div align="center">
+# Radius
 
-# ShipSafe
+> The confidence layer for modern software development.
 
-### The confidence layer for AI-written code.
+Radius is an AI-native software verification platform that helps engineering teams understand whether a pull request is safe to merge.
 
-Analyze code changes, predict regression risks, generate targeted tests, and help engineering teams ship AI-generated code with confidence.
+Radius does not replace existing test frameworks, CI/CD systems, source hosts, or code editors. It sits between code changes and production deployment, analyzes the repository as an interconnected system, and produces explainable verification evidence before merge.
 
-![Status](https://img.shields.io/badge/status-active%20development-orange)
-![Python](https://img.shields.io/badge/backend-FastAPI-blue)
-![Next.js](https://img.shields.io/badge/frontend-Next.js-black)
-![License](https://img.shields.io/badge/license-All%20Rights%20Reserved-red)
+## Core Question
 
-</div>
-
----
-
-## Overview
-
-Modern software is increasingly written with the help of AI coding assistants such as Cursor, Claude Code, GitHub Copilot, Gemini CLI, and Codex.
-
-While AI accelerates development, it also introduces a new challenge:
-
-> **How do you know AI-written code is actually safe to merge?**
-
-Traditional testing tools only execute existing tests. They don't understand the impact of a change, predict what might break, or intelligently generate new tests where coverage is missing.
-
-ShipSafe aims to solve that problem.
-
-It acts as an intelligent verification layer between AI-generated code and production deployments.
-
----
-
-# Why ShipSafe?
-
-Instead of simply asking
-
-> "Did the tests pass?"
-
-ShipSafe asks
-
-- What changed?
-- Which modules are affected?
-- What is the blast radius?
-- Which existing tests should run?
-- Which new tests should be generated?
-- Did the behavior change unexpectedly?
-- How confident are we that this PR is safe?
-
-The result is a single explainable confidence report before every merge.
-
----
-
-# Core Features
-
-- Repository analysis
-- Dependency graph generation
-- Blast radius computation
-- Intelligent regression detection
-- AI-powered test generation
-- Behavior snapshot comparison
-- Confidence scoring
-- GitHub Pull Request integration
-- Explainable AI reports
-- Security-aware validation (planned)
-
----
-
-# Example Workflow
+Every subsystem in Radius contributes to one question:
 
 ```text
-Developer / AI Agent
-
-        │
-        ▼
-
-Push Commit / Open PR
-
-        │
-        ▼
-
-Repository Analysis
-
-        │
-        ▼
-
-Dependency Graph
-
-        │
-        ▼
-
-Blast Radius Analysis
-
-        │
-        ▼
-
-Run Existing Tests
-
-        │
-        ▼
-
-Generate Missing Tests
-
-        │
-        ▼
-
-Regression Detection
-
-        │
-        ▼
-
-Confidence Report
-
-        │
-        ▼
-
-Safe to Merge ✅
+Can this Pull Request be merged safely?
 ```
 
----
+## Product Direction
 
-# Project Structure
+Phase 1 is deterministic first. Radius must understand repositories before AI is allowed to influence engineering decisions.
+
+The Phase 1 workflow is:
 
 ```text
-shipsafe/
+GitHub event or manual trigger
+Repository synchronization
+Git diff and changed-file detection
+Parser and symbol extraction
+Dependency graph update
+Blast radius computation
+Relevant test selection and execution
+Explainable confidence report
+Dashboard and GitHub Check output
+```
 
+AI-assisted capabilities such as test generation, risk summarization, security intelligence, and historical learning are future enhancements. They should integrate through stable contracts after the deterministic foundation is reliable.
+
+## Target Users
+
+- Software engineers reviewing pull requests
+- Technical leads assessing merge risk
+- DevOps and platform teams improving release confidence
+- Organization admins managing GitHub integrations and repositories
+- Teams adopting AI-assisted software development
+
+## Phase 1 Scope
+
+Radius Phase 1 focuses on:
+
+- GitHub App integration
+- Repository synchronization
+- Source parsing with Tree-sitter
+- Symbol, import, and export extraction
+- Dependency graph generation with NetworkX
+- Git change analysis
+- Blast radius computation
+- Relevant existing test execution
+- Explainable confidence scoring
+- FastAPI REST API
+- Next.js dashboard
+
+## Repository Structure
+
+```text
+radius/
 apps/
-├── api/                 # FastAPI backend
-├── dashboard/           # Next.js dashboard
-├── worker/              # Background workers
+  api/          FastAPI application
+  dashboard/    Next.js dashboard
+  worker/       Background analysis worker
 
 packages/
-├── ai/                  # AI providers & prompt orchestration
-├── analyzer/            # Blast radius engine
-├── confidence/          # Confidence scoring engine
-├── database/            # Database models
-├── github/              # GitHub App integration
-├── graph/               # Dependency graph
-├── parser/              # AST & repository parsing
-├── shared/              # Shared utilities
-└── ui/                  # Shared frontend components
+  repository/   GitHub, Git, repository snapshots
+  parser/       Source parsing and semantic extraction
+  graph/        Dependency graph construction and traversal
+  analysis/     Git diff, changed symbols, blast radius
+  testing/      Test discovery, selection, execution, coverage
+  confidence/   Evidence aggregation and confidence reports
+  shared/       Config, logging, events, auth, errors, shared types
 
-docs/
-├── architecture.md
-├── roadmap.md
-├── api.md
-├── decisions.md
-└── milestones.md
-
-scripts/
-infra/
-.github/
+docs/           Product, architecture, API, database, and workflow docs
+infra/          Infrastructure configuration
+scripts/        Development and automation scripts
+.github/        GitHub workflows and templates
 ```
 
----
+## Technology Stack
 
-# Technology Stack
+- Frontend: Next.js, React, TypeScript, Tailwind CSS, shadcn/ui
+- Backend: FastAPI, Python 3.12+, Pydantic, SQLAlchemy, Alembic
+- Database: PostgreSQL
+- Parsing: Tree-sitter
+- Graph: NetworkX
+- Git: GitPython
+- Authentication: GitHub OAuth and GitHub App
+- Tooling: pnpm, TurboRepo, Docker, Ruff, Black, Pytest, ESLint, Prettier
 
-## Frontend
+## Documentation
 
-- Next.js
-- React
-- TypeScript
-- Tailwind CSS
-- shadcn/ui
+The primary docs are in `docs/`.
 
-## Backend
+- `PROJECT_OVERVIEW.md`
+- `PRODUCT_VISION.md`
+- `PHASE1_SPECIFICATION.md`
+- `SYSTEM_ARCHITECTURE.md`
+- `MODULE_ARCHITECTURE.md`
+- `DOMAIN_MODEL.md`
+- `FOLDER_STRUCTURE.md`
+- `DATABASE_DESIGN.md`
+- `API_CONTRACTS.md`
+- `USE_CASES.md`
+- `DEVELOPMENT_GUIDE.md`
+- `roadmap.md`
+- `AI_CONTEXT.md`
+- `decisions.md`
 
-- FastAPI
-- Python
+`AI_CONTEXT.md` is required reading before any implementation work.
 
-## AI
+## Branch Strategy
 
-- Gemini
-- OpenAI
-- Anthropic (planned)
+Development follows trunk-based branching:
 
-## Code Analysis
+- `main` is the protected integration and release branch.
+- Feature work uses short-lived branches named `codex/feature/<area>-<summary>`.
+- Fixes use `codex/fix/<area>-<summary>`.
+- Documentation-only changes use `codex/docs/<summary>`.
+- Release stabilization, when needed, uses `release/<version>`.
+- Hotfixes use `hotfix/<summary>` and merge back to `main`.
 
-- Tree-sitter
-- NetworkX
-- Neo4j (planned)
+Pull requests should be small, reviewable, and aligned to one domain or workflow whenever possible.
 
-## Database
+## Development Status
 
-- PostgreSQL
+Radius is at the foundation stage. The repository currently contains the monorepo scaffold and product/architecture documentation. Implementation should proceed from the documented Phase 1 contracts and domain boundaries.
 
-## Infrastructure
-
-- Docker
-- Turborepo
-- pnpm
-
----
-
-# MVP Scope
-
-The initial version focuses on solving one problem well.
-
-- Parse repositories
-- Build dependency graph
-- Detect affected components
-- Run relevant tests
-- Generate missing regression tests
-- Produce an explainable confidence report
-
----
-
-# Roadmap
-
-## Phase 1
-
-- Repository parsing
-- Dependency graph
-- Blast radius analysis
-- GitHub App
-- Confidence report
-
-## Phase 2
-
-- AI-generated tests
-- Coverage analysis
-- Mutation testing
-- Behavior snapshots
-
-## Phase 3
-
-- Security analysis
-- CodeQL integration
-- Security-aware test generation
-
-## Phase 4
-
-- Learning confidence engine
-- Historical release intelligence
-- Multi-repository analysis
-
----
-
-# Repository Status
-
-| Module | Status |
-|---------|--------|
-| Monorepo | ✅ |
-| Dashboard | 🚧 |
-| Backend API | 🚧 |
-| Repository Parser | ⏳ |
-| Dependency Graph | ⏳ |
-| Blast Radius Engine | ⏳ |
-| Regression Engine | ⏳ |
-| AI Test Generator | ⏳ |
-| GitHub App | ⏳ |
-
----
-
-# Development
-
-Clone the repository
-
-```bash
-git clone https://github.com/your-org/shipsafe.git
-```
-
-Install dependencies
-
-```bash
-pnpm install
-```
-
-Run development servers
-
-```bash
-pnpm dev
-```
-
----
-
-# Vision
-
-Our goal is to become the verification layer for AI software engineering.
-
-As AI writes more code, developers need more than code generation—they need confidence that every change is safe.
-
-ShipSafe aims to provide that confidence.
-
----
-
-# Contributing
-
-The project is currently in active development and is not accepting external contributions.
-
----
-
-# License
+## License
 
 This project is currently proprietary.
-
-No license has been granted for redistribution or commercial use.
-
----
-
-<div align="center">
-
-**Built for developers who ship with AI.**
-
-</div>
