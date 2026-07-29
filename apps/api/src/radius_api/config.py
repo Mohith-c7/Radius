@@ -2,22 +2,13 @@
 
 from functools import lru_cache
 
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from radius_shared.config import RadiusBaseSettings
 
 
-class ApiSettings(BaseSettings):
+class ApiSettings(RadiusBaseSettings):
     """Runtime settings loaded from environment variables."""
 
-    environment: str = Field(default="development", alias="RADIUS_ENV")
     service_name: str = "radius-api"
-    log_level: str = Field(default="INFO", alias="RADIUS_LOG_LEVEL")
-
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
 
 
 @lru_cache

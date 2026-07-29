@@ -9,7 +9,12 @@ def test_health_endpoint_returns_service_metadata() -> None:
 
     assert response.status_code == 200
     assert response.json() == {
-        "status": "ok",
-        "service": "radius-api",
-        "environment": "development",
+        "success": True,
+        "data": {
+            "status": "ok",
+            "service": "radius-api",
+            "environment": "development",
+        },
+        "error": None,
+        "meta": {},
     }
