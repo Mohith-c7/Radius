@@ -1,0 +1,11 @@
+{
+  "name": "radius",
+  "private": true,
+  "packageManager": "npm@10.9.2",
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "dev": "npm run dev --workspace=@radius/dashboard",
+    "build": "npm run build --workspace=@radius/dashboard",
+    "lint": "npm run lint --workspace=@radius/dashboard"
+  }
+}
