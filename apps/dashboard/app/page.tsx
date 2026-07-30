@@ -1,119 +1,178 @@
 import Link from "next/link";
+import { FolderGit2, GitPullRequest, Plus } from "lucide-react";
 
-const analyses = [
-  {
-    repository: "radius/api",
-    pullRequest: "#12",
-    status: "Completed",
-    confidence: "92%",
-    risk: "low"
-  },
-  {
-    repository: "radius/parser",
-    pullRequest: "#9",
-    status: "Running",
-    confidence: "Pending",
-    risk: "medium"
-  },
-  {
-    repository: "radius/graph",
-    pullRequest: "#7",
-    status: "Review",
-    confidence: "68%",
-    risk: "high"
-  }
-];
+import { AppLayout } from "../components/layout";
+import { ConfidenceRing, OpenLink, PageHeading, Status } from "../components/ui";
+import { analyses, repositories } from "../lib/data";
 
-export default function DashboardPage() {
+export default function OverviewPage() {
   return (
-    <div className="app-shell">
-      <aside className="sidebar" aria-label="Primary navigation">
-        <div className="brand">
-          <strong>Radius</strong>
-          <span>Verification platform</span>
-        </div>
-        <nav className="nav-list">
-          <Link className="nav-item active" href="/">
-            Dashboard
-          </Link>
-          <Link className="nav-item" href="/">
-            Repositories
-          </Link>
-          <Link className="nav-item" href="/">
-            Analyses
-          </Link>
-          <Link className="nav-item" href="/">
-            Confidence
-          </Link>
-        </nav>
-      </aside>
+    <AppLayout>
+      <div className="page">
+        <PageHeading
+          title="Good morning, Sanjith"
+          description="Here's the verification health across your engineering workspace."
+          action={
+            <Link href="/repositories" className="button">
+              <Plus size={16} />
+              Connect repository
+            </Link>
+          }
+        />
 
-      <main className="main">
-        <header className="topbar">
-          <div>
-            <h1>Repository verification</h1>
-            <p>Track pull request impact, validation, and merge confidence.</p>
-          </div>
-          <button className="primary-action" type="button">
-            Connect repository
-          </button>
-        </header>
-
-        <section className="metrics-grid" aria-label="Repository metrics">
+        <section className="metric-grid">
           <div className="metric-card">
-            <div className="metric-label">Connected repositories</div>
-            <div className="metric-value">0</div>
+            <dt>Connected repositories</dt>
+            <dd>12</dd>
+            <small>
+              <span className="trend">+2</span> since last month
+            </small>
           </div>
           <div className="metric-card">
-            <div className="metric-label">Active analyses</div>
-            <div className="metric-value">0</div>
+            <dt>Analyses this week</dt>
+            <dd>86</dd>
+            <small>
+              <span className="trend">up 14%</span> from last week
+            </small>
           </div>
           <div className="metric-card">
-            <div className="metric-label">Average confidence</div>
-            <div className="metric-value">--</div>
+            <dt>Average confidence</dt>
+            <dd>
+              89<span style={{ fontSize: 16 }}>/100</span>
+            </dd>
+            <small>
+              <span className="trend">up 3 points</span> from last week
+            </small>
           </div>
           <div className="metric-card">
-            <div className="metric-label">Recent failures</div>
-            <div className="metric-value">0</div>
+            <dt>Attention needed</dt>
+            <dd>3</dd>
+            <small>Across 2 repositories</small>
           </div>
         </section>
 
-        <section className="panel" aria-labelledby="recent-analyses">
-          <div className="panel-header">
-            <div>
-              <div className="section-label">Phase 1 foundation</div>
-              <h2 id="recent-analyses">Recent analyses</h2>
+        <div className="content-grid">
+          <section className="card">
+            <div className="card-heading">
+              <div>
+                <h2>Recent analyses</h2>
+                <p>Latest pull request verification runs</p>
+              </div>
+              <OpenLink href="/analyses">View all</OpenLink>
             </div>
-            <span className="table-caption">Sample data</span>
-          </div>
-          <table className="analysis-table">
-            <thead>
-              <tr>
-                <th>Repository</th>
-                <th>Pull request</th>
-                <th>Status</th>
-                <th>Confidence</th>
-                <th>Risk</th>
-              </tr>
-            </thead>
-            <tbody>
-              {analyses.map((analysis) => (
-                <tr key={`${analysis.repository}-${analysis.pullRequest}`}>
-                  <td>{analysis.repository}</td>
-                  <td>{analysis.pullRequest}</td>
-                  <td>{analysis.status}</td>
-                  <td>{analysis.confidence}</td>
-                  <td>
-                    <span className={`status ${analysis.risk}`}>
-                      {analysis.risk}
-                    </span>
-                  </td>
-                </tr>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Pull request</th>
+                    <th>Status</th>
+                    <th>Confidence</th>
+                    <th>Tests</th>
+                    <th>Completed</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {analyses.slice(0, 3).map((analysis) => (
+                    <tr key={analysis.id}>
+                      <td>
+                        <strong>{analysis.pullRequest}</strong>
+                        <div className="subtext">
+                          {analysis.repository} / {analysis.branch}
+                        </div>
+                      </td>
+                      <td>
+                        <Status status={analysis.status} />
+                      </td>
+                      <td>
+                        {analysis.confidence ? (
+                          <b>{analysis.confidence}/100</b>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                      <td>{analysis.tests}</td>
+                      <td className="subtext">{analysis.time}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <aside className="card">
+            <div className="card-heading">
+              <div>
+                <h2>Workspace confidence</h2>
+                <p>Evidence from recent analyses</p>
+              </div>
+            </div>
+            <div className="confidence-summary">
+              <ConfidenceRing score={89} />
+              <div>
+                <h3>High confidence</h3>
+                <p>
+                  Verification evidence remains strong across active
+                  repositories.
+                </p>
+              </div>
+            </div>
+            <div className="repo-list">
+              {repositories.map((repository) => (
+                <div className="repo-row" key={repository.id}>
+                  <span className="repo-icon">
+                    <FolderGit2 size={17} />
+                  </span>
+                  <span>
+                    <strong>{repository.name}</strong>
+                    <small>{repository.pullRequests} active pull requests</small>
+                  </span>
+                  <span className="repo-score">{repository.confidence}</span>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+          </aside>
+        </div>
+
+        <section className="card wide-card">
+          <div className="card-heading">
+            <div>
+              <h2>Repository activity</h2>
+              <p>Latest events from your connected repositories</p>
+            </div>
+            <OpenLink href="/repositories">Open repositories</OpenLink>
+          </div>
+          <div className="activity">
+            <strong>
+              <GitPullRequest
+                size={14}
+                style={{
+                  color: "#19815c",
+                  marginRight: 7,
+                  verticalAlign: "-2px",
+                }}
+              />
+              Pull request #482 was verified in radius/api
+            </strong>
+            <p>42 targeted tests passed. No public API changes detected.</p>
+            <time>8 minutes ago</time>
+          </div>
+          <div className="activity">
+            <strong>
+              <FolderGit2
+                size={14}
+                style={{
+                  color: "#19815c",
+                  marginRight: 7,
+                  verticalAlign: "-2px",
+                }}
+              />
+              radius/web synchronized successfully
+            </strong>
+            <p>Repository graph updated with 18 changed dependencies.</p>
+            <time>42 minutes ago</time>
+          </div>
         </section>
-      </main>
-    </div>
+      </div>
+    </AppLayout>
   );
 }
