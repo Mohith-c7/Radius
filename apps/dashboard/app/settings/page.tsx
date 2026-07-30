@@ -1,4 +1,12 @@
 import { AppLayout } from "../../components/layout";
-import { PageHeading } from "../../components/ui";
+import { SettingsData } from "../../components/data-panels";
 
-export default function SettingsPage(){return <AppLayout><div className="page"><PageHeading title="Settings" description="Manage your organization, GitHub connection, and notifications."/><div className="detail-grid"><section className="card detail-card"><h2>GitHub App</h2><p className="muted">Radius is connected to GitHub and can receive repository and pull request events.</p><button className="button secondary" style={{marginTop:18}}>Manage installation</button></section><section className="card detail-card"><h2>Notifications</h2><div className="stat-list"><div><span>Analysis completed</span><strong>Enabled</strong></div><div><span>Attention required</span><strong>Enabled</strong></div></div></section></div></div></AppLayout>}
+export default function SettingsPage() {
+  return (
+    <AppLayout>
+      <div className="page">
+        <SettingsData />
+      </div>
+    </AppLayout>
+  );
+}

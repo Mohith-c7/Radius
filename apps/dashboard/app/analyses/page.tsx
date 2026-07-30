@@ -1,6 +1,18 @@
 import { AppLayout } from "../../components/layout";
-import { PageHeading, Status } from "../../components/ui";
-import { analyses } from "../../lib/data";
-import { ChevronDown } from "lucide-react";
+import { AnalysesData } from "../../components/data-panels";
+import { PageHeading } from "../../components/ui";
 
-export default function AnalysesPage(){return <AppLayout><div className="page"><PageHeading eyebrow="Verification history" title="Analyses" description="Every completed and active pull request verification run."/><div className="filters"><button className="filter">All repositories <ChevronDown size={14}/></button><button className="filter">All statuses <ChevronDown size={14}/></button><button className="filter">Last 30 days <ChevronDown size={14}/></button></div><section className="card"><div className="table-wrap"><table><thead><tr><th>Pull request</th><th>Repository</th><th>Status</th><th>Confidence</th><th>Impact</th><th>Tests</th><th>Duration</th></tr></thead><tbody>{analyses.map(a=><tr key={a.id}><td><a href={`/analyses/${a.id}`} style={{color:"inherit",fontWeight:700,textDecoration:"none"}}>{a.pullRequest}</a><div className="subtext">{a.branch}</div></td><td>{a.repository}</td><td><Status status={a.status}/></td><td>{a.confidence ? <b>{a.confidence}/100</b> : "Calculating"}</td><td>{a.files} files</td><td>{a.tests}</td><td className="subtext">{a.duration}</td></tr>)}</tbody></table></div></section></div></AppLayout>}
+export default function AnalysesPage() {
+  return (
+    <AppLayout>
+      <div className="page">
+        <PageHeading
+          eyebrow="Verification history"
+          title="Analyses"
+          description="Every completed and active pull request verification run."
+        />
+        <AnalysesData />
+      </div>
+    </AppLayout>
+  );
+}
