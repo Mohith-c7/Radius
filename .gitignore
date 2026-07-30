@@ -1,4 +1,43 @@
+# Dependencies
 node_modules/
+.pnpm-store/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+
+# Next.js
 .next/
+out/
+
+# Build cache
+.turbo/
 *.tsbuildinfo
-.env*.local
+
+# Coverage
+coverage/
+.coverage
+htmlcov/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Logs
+*.log
+pnpm-debug.log*

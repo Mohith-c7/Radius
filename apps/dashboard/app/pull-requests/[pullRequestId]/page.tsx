@@ -1,4 +1,75 @@
+import Link from "next/link";
+import { ExternalLink, GitBranch, Play } from "lucide-react";
+
 import { AppLayout } from "../../../components/layout";
 import { ConfidenceRing, PageHeading, Status } from "../../../components/ui";
-import { GitBranch, Play, ExternalLink } from "lucide-react";
-export default function PullRequestPage(){return <AppLayout><div className="page"><PageHeading eyebrow="radius/api / Pull request #482" title="Add OAuth token rotation" description="Open · authored by Maya Chen · updated 8 minutes ago" action={<button className="button"><Play size={15}/>Run analysis</button>}/><div className="detail-grid"><section className="card detail-card"><div className="status positive">Open</div><h2 style={{marginTop:16}}>Pull request details</h2><div className="stat-list"><div><span>Source branch</span><strong><GitBranch size={13}/> feat/token-rotation</strong></div><div><span>Target branch</span><strong>main</strong></div><div><span>Changed files</span><strong>12</strong></div><div><span>Latest commit</span><strong>c6e9b12</strong></div></div><a className="text-link" style={{marginTop:20}} href="#github">Open on GitHub <ExternalLink size={14}/></a></section><section className="card detail-card"><h2>Latest verification</h2><div style={{alignItems:'center',display:'flex',gap:18}}><ConfidenceRing score={94}/><div><Status status="Verified"/><p className="muted" style={{fontSize:12,marginTop:9}}>42 targeted tests passed. No high-risk public API changes.</p></div></div><a className="button secondary" style={{marginTop:20}} href="/analyses/an-482">View full analysis</a></section></div></div></AppLayout>}
+
+export default function PullRequestPage() {
+  return (
+    <AppLayout>
+      <div className="page">
+        <PageHeading
+          eyebrow="radius/api / Pull request #482"
+          title="Add OAuth token rotation"
+          description="Open / authored by Maya Chen / updated 8 minutes ago"
+          action={
+            <button className="button" type="button">
+              <Play size={15} />
+              Run analysis
+            </button>
+          }
+        />
+
+        <div className="detail-grid">
+          <section className="card detail-card">
+            <div className="status positive">Open</div>
+            <h2 style={{ marginTop: 16 }}>Pull request details</h2>
+            <div className="stat-list">
+              <div>
+                <span>Source branch</span>
+                <strong>
+                  <GitBranch size={13} /> feat/token-rotation
+                </strong>
+              </div>
+              <div>
+                <span>Target branch</span>
+                <strong>main</strong>
+              </div>
+              <div>
+                <span>Changed files</span>
+                <strong>12</strong>
+              </div>
+              <div>
+                <span>Latest commit</span>
+                <strong>c6e9b12</strong>
+              </div>
+            </div>
+            <a className="text-link" style={{ marginTop: 20 }} href="#github">
+              Open on GitHub <ExternalLink size={14} />
+            </a>
+          </section>
+
+          <section className="card detail-card">
+            <h2>Latest verification</h2>
+            <div style={{ alignItems: "center", display: "flex", gap: 18 }}>
+              <ConfidenceRing score={94} />
+              <div>
+                <Status status="Verified" />
+                <p className="muted" style={{ fontSize: 12, marginTop: 9 }}>
+                  42 targeted tests passed. No high-risk public API changes.
+                </p>
+              </div>
+            </div>
+            <Link
+              className="button secondary"
+              style={{ marginTop: 20 }}
+              href="/analyses/an-482"
+            >
+              View full analysis
+            </Link>
+          </section>
+        </div>
+      </div>
+    </AppLayout>
+  );
+}
