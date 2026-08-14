@@ -1,6 +1,7 @@
 """FastAPI entrypoint for Radius."""
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from radius_shared.dto import error_response
 from radius_shared.errors import (
@@ -56,6 +57,18 @@ def create_app() -> FastAPI:
         title="Radius API",
         version="0.1.0",
         description="Software verification API for Radius.",
+    )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "http://localhost:3001",
+            "http://127.0.0.1:3001",
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
     app.state.settings = settings
     app.state.container = AppContainer()

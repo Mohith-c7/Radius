@@ -9,5 +9,24 @@ The dashboard presents Radius intelligence. It must not contain domain business 
 Set these public runtime variables before running the dashboard:
 
 - `NEXT_PUBLIC_RADIUS_API_BASE_URL` defaults to `http://localhost:8000`.
-- `NEXT_PUBLIC_RADIUS_ORGANIZATION_ID` is required and is sent as `X-Radius-Organization-Id`.
+- `NEXT_PUBLIC_RADIUS_ORGANIZATION_ID` is required, must be a valid UUID, and is sent as `X-Radius-Organization-Id`.
 - `NEXT_PUBLIC_RADIUS_API_KEY` is optional and is sent as `X-Radius-API-Key`.
+
+For local development, copy the root `.env.example` to `.env` and keep the
+default local organization id unless you have a real organization id to test:
+
+```env
+NEXT_PUBLIC_RADIUS_API_BASE_URL=http://localhost:8000
+NEXT_PUBLIC_RADIUS_ORGANIZATION_ID=00000000-0000-4000-8000-000000000001
+NEXT_PUBLIC_RADIUS_API_KEY=
+```
+
+Run the API and dashboard together:
+
+```powershell
+pnpm --filter @radius/api dev
+pnpm --filter @radius/dashboard dev
+```
+
+The API allows browser requests from the local dashboard origins
+`http://localhost:3000` and `http://localhost:3001`.
