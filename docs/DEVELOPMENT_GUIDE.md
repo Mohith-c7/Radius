@@ -130,7 +130,7 @@ Merge
 Radius uses an enterprise promotion flow.
 
 ```text
-feature/* -> develop -> dev -> main
+feature/* -> develop -> uat -> main
 ```
 
 ## Main
@@ -143,13 +143,13 @@ Direct commits to `main` should be reserved for repository setup, approved maint
 
 ---
 
-## Dev
+## UAT
 
-`dev` is the UAT branch.
+`uat` is the UAT branch.
 
-Only work promoted from `develop` should merge into `dev`.
+Only work promoted from `develop` should merge into `uat`.
 
-Feature branches must not merge directly into `dev`.
+Feature branches must not merge directly into `uat`.
 
 ---
 
@@ -211,7 +211,7 @@ Release stabilization branches are optional and created only for named release p
 release/<version>
 ```
 
-Release branches may be created from `dev` when UAT is complete but final release stabilization is needed before `main`.
+Release branches may be created from `uat` when UAT is complete but final release stabilization is needed before `main`.
 
 ---
 
@@ -222,34 +222,6 @@ Urgent production fixes use:
 ```text
 hotfix/<summary>
 ```
-
-Hotfixes start from `main`, then merge back into `main`, `dev`, and `develop`.
-
----
-
-# Commit Convention
-
-Follow Conventional Commits.
-
-Examples:
-
-```text
-feat(repository): add GitHub repository sync
-
-feat(parser): implement AST extraction
-
-fix(graph): resolve circular dependency traversal
-
-refactor(testing): simplify test discovery
-
-docs(api): update analysis endpoints
-
-test(confidence): add confidence engine tests
-```
-
----
-
-# Pull Request Checklist
 
 Every Pull Request must:
 

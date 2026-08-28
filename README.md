@@ -119,15 +119,15 @@ The primary docs are in `docs/`.
 Development follows an enterprise promotion flow:
 
 ```text
-feature/* -> develop -> dev -> main
+feature/* -> develop -> uat -> main
 ```
 
 - `feature/*` branches isolate individual features, fixes, or docs work.
 - `develop` is the active development integration branch.
-- `dev` is the UAT branch and receives promoted, internally verified work from `develop`.
+- `uat` is the UAT branch and receives promoted, internally verified work from `develop`.
 - `main` is the release branch and must contain only release-ready code.
 - `release/*` branches are optional and used only for named release stabilization.
-- `hotfix/*` branches start from `main`, then merge back into `main`, `dev`, and `develop`.
+- `hotfix/*` branches start from `main`, then merge back into `main`, `uat`, and `develop`.
 
 Pull requests should be small, reviewable, and aligned to one domain or workflow whenever possible.
 

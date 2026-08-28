@@ -1,0 +1,1 @@
+"""Shared external interface helpers."""

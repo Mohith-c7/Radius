@@ -1,0 +1,58 @@
+[project]
+name = "radius"
+version = "0.1.0"
+description = "AI-native software verification platform."
+requires-python = ">=3.12"
+dependencies = [
+  "alembic>=1.14.0",
+  "fastapi>=0.115.0",
+  "pydantic>=2.10.0",
+  "pydantic-settings>=2.7.0",
+  "psycopg[binary]>=3.2.0",
+  "sqlalchemy>=2.0.36",
+  "uvicorn[standard]>=0.34.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "black>=24.10.0",
+  "pytest>=8.3.0",
+  "ruff>=0.8.0",
+]
+
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+addopts = "-q --import-mode=importlib"
+asyncio_default_fixture_loop_scope = "function"
+pythonpath = [
+  "apps/api/src",
+  "apps/worker/src",
+  "packages/analysis/src",
+  "packages/confidence/src",
+  "packages/graph/src",
+  "packages/parser/src",
+  "packages/repository/src",
+  "packages/shared/src",
+  "packages/testing/src",
+]
+testpaths = [
+  "apps/api/tests",
+  "apps/worker/tests",
+  "packages/analysis/tests",
+  "packages/confidence/tests",
+  "packages/graph/tests",
+  "packages/parser/tests",
+  "packages/repository/tests",
+  "packages/shared/tests",
+  "packages/testing/tests",
+]
