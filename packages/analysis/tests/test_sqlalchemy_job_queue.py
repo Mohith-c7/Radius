@@ -59,6 +59,24 @@ def test_sqlalchemy_job_queue_recovers_stale_running_jobs() -> None:
         assert queue.get_by_analysis_id(analysis_id).status == "pending"
 
 
+def test_sqlalchemy_job_queue_requeues_until_max_attempts() -> None:
+    with _session() as session:
+        analysis_id = _create_analysis(session)
+        queue = SqlAlchemyAnalysisJobQueue(session, max_attempts=2)
+        queue.enqueue(analysis_id)
+        first = queue.claim_next()
+
+        queue.requeue(analysis_id, "temporary")
+        second = queue.claim_next()
+        queue.requeue(analysis_id, "permanent")
+
+        job = queue.get_by_analysis_id(analysis_id)
+        assert first.attempts == 1
+        assert second.attempts == 2
+        assert job.status == "failed"
+        assert queue.claim_next() is None
+
+
 def _session() -> Session:
     engine = create_engine("sqlite+pysqlite:///:memory:")
     Base.metadata.create_all(engine)

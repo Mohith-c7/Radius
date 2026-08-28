@@ -11,18 +11,32 @@ from radius_shared.errors import ValidationError
 class LocalGitRepositoryClient:
     """Clone, fetch, and checkout repositories using the Git CLI."""
 
-    def clone_or_fetch(self, clone_url: str, destination: Path) -> Path:
+    def clone_or_fetch(
+        self,
+        clone_url: str,
+        destination: Path,
+        *,
+        extra_headers: tuple[str, ...] = (),
+    ) -> Path:
         """Clone a repository or fetch updates when it already exists."""
 
         if destination.exists():
             if not (destination / ".git").exists():
                 msg = f"Destination is not a Git repository: {destination}."
                 raise ValidationError(msg)
-            self._run(("git", "fetch", "--all", "--prune"), cwd=destination)
+            self._run(
+                ("git", "fetch", "--all", "--prune"),
+                cwd=destination,
+                extra_headers=extra_headers,
+            )
             return destination
 
         destination.parent.mkdir(parents=True, exist_ok=True)
-        self._run(("git", "clone", clone_url, str(destination)), cwd=None)
+        self._run(
+            ("git", "clone", clone_url, str(destination)),
+            cwd=None,
+            extra_headers=extra_headers,
+        )
         return destination
 
     def checkout(self, repository_path: Path, branch_name: str) -> None:
@@ -34,10 +48,16 @@ class LocalGitRepositoryClient:
         self._run(("git", "checkout", branch_name), cwd=repository_path)
 
     @staticmethod
-    def _run(command: tuple[str, ...], cwd: Path | None) -> None:
+    def _run(
+        command: tuple[str, ...],
+        cwd: Path | None,
+        *,
+        extra_headers: tuple[str, ...] = (),
+    ) -> None:
+        git_command = _with_extra_headers(command, extra_headers)
         try:
             subprocess.run(
-                command,
+                git_command,
                 cwd=cwd,
                 check=True,
                 capture_output=True,
@@ -46,3 +66,17 @@ class LocalGitRepositoryClient:
         except subprocess.CalledProcessError as exc:
             message = exc.stderr.strip() or exc.stdout.strip() or str(exc)
             raise ValidationError(message) from exc
+
+
+def _with_extra_headers(
+    command: tuple[str, ...],
+    extra_headers: tuple[str, ...],
+) -> tuple[str, ...]:
+    if not extra_headers or command[0] != "git":
+        return command
+    options = tuple(
+        item
+        for header in extra_headers
+        for item in ("-c", f"http.extraHeader={header}")
+    )
+    return ("git", *options, *command[1:])

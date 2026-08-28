@@ -21,6 +21,7 @@ from radius_repository.dto import (
     UpsertPullRequestCommand,
 )
 from radius_shared.config import RuntimeEnvironment
+from radius_shared.database import models as db_models
 from radius_shared.dto import success_response
 from radius_shared.errors import AccessDeniedError, ValidationError
 
@@ -80,6 +81,7 @@ async def handle_github_webhook(
         )
 
     payload = json.loads(body)
+    _record_installation_id(request, payload)
     result = _handle_payload(
         request,
         event,
@@ -285,3 +287,18 @@ def _pull_request_status(payload: GitHubPullRequestPayload) -> str:
     if payload.state == "closed":
         return "closed"
     return "open"
+
+
+def _record_installation_id(request: Request, payload: dict[str, Any]) -> None:
+    installation = payload.get("installation")
+    if not isinstance(installation, dict) or installation.get("id") is None:
+        return
+    session = getattr(request.state, "radius_db_session", None)
+    if session is None:
+        return
+    organization = session.get(
+        db_models.Organization,
+        _webhook_organization_id(request),
+    )
+    if organization is not None:
+        organization.github_installation_id = int(installation["id"])

@@ -7,6 +7,8 @@ from typing import Any
 
 from radius_shared.config import LogLevel
 
+_STANDARD_RECORD_KEYS = set(logging.makeLogRecord({}).__dict__)
+
 
 class JsonFormatter(logging.Formatter):
     """Format log records as compact JSON objects."""
@@ -21,6 +23,9 @@ class JsonFormatter(logging.Formatter):
 
         if record.exc_info:
             payload["exception"] = self.formatException(record.exc_info)
+        for key, value in record.__dict__.items():
+            if key not in _STANDARD_RECORD_KEYS and not key.startswith("_"):
+                payload[key] = value
 
         return json.dumps(payload, separators=(",", ":"), default=str)
 

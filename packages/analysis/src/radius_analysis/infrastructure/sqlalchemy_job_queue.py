@@ -32,9 +32,11 @@ class SqlAlchemyAnalysisJobQueue:
         session: Session,
         *,
         stale_after: timedelta = timedelta(minutes=30),
+        max_attempts: int = 3,
     ) -> None:
         self._session = session
         self._stale_after = stale_after
+        self._max_attempts = max_attempts
 
     def enqueue(self, analysis_id: UUID) -> None:
         """Create a pending job idempotently for an analysis."""
@@ -64,7 +66,10 @@ class SqlAlchemyAnalysisJobQueue:
         self.recover_stale_jobs()
         row = self._session.scalar(
             select(db_models.AnalysisJob)
-            .where(db_models.AnalysisJob.status == db_enums.AnalysisJobStatus.PENDING)
+            .where(
+                db_models.AnalysisJob.status == db_enums.AnalysisJobStatus.PENDING,
+                db_models.AnalysisJob.attempts < self._max_attempts,
+            )
             .order_by(db_models.AnalysisJob.created_at)
             .limit(1)
         )
@@ -94,6 +99,18 @@ class SqlAlchemyAnalysisJobQueue:
         row.locked_at = None
         self._session.flush()
 
+    def requeue(self, analysis_id: UUID, error: str) -> None:
+        """Return a failed attempt to pending for another try."""
+
+        row = self._require_job(analysis_id)
+        if row.attempts >= self._max_attempts:
+            row.status = db_enums.AnalysisJobStatus.FAILED
+        else:
+            row.status = db_enums.AnalysisJobStatus.PENDING
+        row.last_error = error
+        row.locked_at = None
+        self._session.flush()
+
     def recover_stale_jobs(self) -> int:
         """Return stale running jobs back to pending."""
 
@@ -105,9 +122,13 @@ class SqlAlchemyAnalysisJobQueue:
             )
         ).all()
         for row in rows:
-            row.status = db_enums.AnalysisJobStatus.PENDING
             row.locked_at = None
-            row.last_error = "Recovered stale running job."
+            if row.attempts >= self._max_attempts:
+                row.status = db_enums.AnalysisJobStatus.FAILED
+                row.last_error = "Job exceeded maximum retry attempts."
+            else:
+                row.status = db_enums.AnalysisJobStatus.PENDING
+                row.last_error = "Recovered stale running job."
         self._session.flush()
         return len(rows)
 

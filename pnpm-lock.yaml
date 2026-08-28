@@ -60,6 +60,8 @@ importers:
 
   packages/confidence: {}
 
+  packages/github: {}
+
   packages/graph: {}
 
   packages/parser: {}

@@ -1,0 +1,103 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: radius
+      POSTGRES_USER: radius
+      POSTGRES_PASSWORD: radius
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U radius -d radius"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    ports:
+      - "5432:5432"
+    volumes:
+      - radius-postgres-data:/var/lib/postgresql/data
+
+  migrations:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://radius:radius@postgres:5432/radius
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+    environment:
+      RADIUS_ENV: production
+      RADIUS_LOG_LEVEL: INFO
+      STORAGE_BACKEND: sql
+      DATABASE_URL: postgresql+psycopg://radius:radius@postgres:5432/radius
+      API_KEYS: ${API_KEYS:-}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-}
+      GITHUB_DEFAULT_ORGANIZATION_ID: ${GITHUB_DEFAULT_ORGANIZATION_ID:-}
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/ready', timeout=2)\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+    environment:
+      RADIUS_ENV: production
+      RADIUS_LOG_LEVEL: INFO
+      DATABASE_URL: postgresql+psycopg://radius:radius@postgres:5432/radius
+      REPOSITORY_CACHE_DIR: /var/lib/radius/repositories
+      WORKER_POLL_INTERVAL_SECONDS: ${WORKER_POLL_INTERVAL_SECONDS:-2}
+      WORKER_JOB_STALE_AFTER_SECONDS: ${WORKER_JOB_STALE_AFTER_SECONDS:-1800}
+      WORKER_JOB_MAX_ATTEMPTS: ${WORKER_JOB_MAX_ATTEMPTS:-3}
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
+      GITHUB_INSTALLATION_ID: ${GITHUB_INSTALLATION_ID:-}
+      GITHUB_PUBLISH_RESULTS: ${GITHUB_PUBLISH_RESULTS:-true}
+      GITHUB_API_BASE_URL: ${GITHUB_API_BASE_URL:-https://api.github.com}
+      GITHUB_API_VERSION: ${GITHUB_API_VERSION:-2026-03-10}
+      GITHUB_TIMEOUT_SECONDS: ${GITHUB_TIMEOUT_SECONDS:-10}
+      DASHBOARD_BASE_URL: ${DASHBOARD_BASE_URL:-http://localhost:3000}
+    volumes:
+      - radius-repository-cache:/var/lib/radius/repositories
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      NEXT_PUBLIC_RADIUS_API_BASE_URL: ${NEXT_PUBLIC_RADIUS_API_BASE_URL:-http://localhost:8000}
+      NEXT_PUBLIC_RADIUS_ORGANIZATION_ID: ${NEXT_PUBLIC_RADIUS_ORGANIZATION_ID:-}
+      NEXT_PUBLIC_RADIUS_API_KEY: ${NEXT_PUBLIC_RADIUS_API_KEY:-}
+    ports:
+      - "3000:3000"
+
+volumes:
+  radius-postgres-data:
+  radius-repository-cache:

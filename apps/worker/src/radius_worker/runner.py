@@ -3,6 +3,7 @@
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import timedelta
 from pathlib import Path
 
 from radius_analysis.application import AnalysisApplicationService
@@ -19,6 +20,8 @@ from radius_confidence.infrastructure import (
     InMemoryConfidenceStore,
     SqlAlchemyConfidenceStore,
 )
+from radius_github import GitHubAnalysisPublisher, GitHubAppClient, GitHubAppSettings
+from radius_github.publisher import GitHubAnalysisReport
 from radius_graph.application import GraphApplicationService
 from radius_graph.infrastructure import InMemoryGraphStore, SqlAlchemyGraphStore
 from radius_parser.application import ParserApplicationService
@@ -32,7 +35,8 @@ from radius_shared.database.session import (
     create_database_engine,
     create_session_factory,
 )
-from radius_shared.errors import NotFoundError
+from radius_shared.errors import NotFoundError, ValidationError
+from radius_shared.logging import configure_logging, get_logger
 from radius_testing.application import TestingApplicationService
 from radius_testing.infrastructure import (
     ConventionalTestDiscoverer,
@@ -51,11 +55,14 @@ from radius_worker.orchestrator import (
 )
 from radius_worker.queue import InMemoryAnalysisQueue
 
+LOGGER = get_logger(__name__)
+
 
 def run_worker() -> None:
     """Start the SQL-backed worker process."""
 
     settings = WorkerSettings()
+    configure_logging(settings.log_level)
     runtime = create_sql_worker_runtime(settings)
     print("Radius worker ready")
     runtime.run_loop(poll_interval_seconds=settings.poll_interval_seconds)
@@ -68,6 +75,8 @@ class SqlAlchemyWorkerRuntime:
     session_factory: sessionmaker[Session]
     repository_cache_dir: Path
     git_client: LocalGitRepositoryClient
+    settings: WorkerSettings
+    github_client: GitHubAppClient
 
     def run_once(self) -> bool:
         """Claim and execute one durable analysis job."""
@@ -78,18 +87,39 @@ class SqlAlchemyWorkerRuntime:
         try:
             with self.session_factory() as session:
                 orchestrator = _create_sql_orchestrator(session)
+                clone_headers = _github_clone_headers(
+                    session=session,
+                    analysis_id=job.analysis_id,
+                    settings=self.settings,
+                    github_client=self.github_client,
+                )
                 command = load_persisted_analysis_command(
                     session=session,
                     analysis_id=job.analysis_id,
                     repository_cache_dir=self.repository_cache_dir,
                     git_client=self.git_client,
+                    extra_headers=clone_headers,
                 )
                 orchestrator.execute(command)
-                SqlAlchemyAnalysisJobQueue(session).complete(job.analysis_id)
+                _publish_github_result(
+                    session=session,
+                    analysis_id=job.analysis_id,
+                    settings=self.settings,
+                    github_client=self.github_client,
+                )
+                self._queue(session).complete(job.analysis_id)
                 session.commit()
         except Exception as exc:
+            LOGGER.exception(
+                "Analysis job failed",
+                extra={"analysis_id": str(job.analysis_id)},
+            )
             with self.session_factory() as session:
-                SqlAlchemyAnalysisJobQueue(session).fail(job.analysis_id, str(exc))
+                queue = self._queue(session)
+                if job.attempts >= self.settings.job_max_attempts:
+                    queue.fail(job.analysis_id, str(exc))
+                else:
+                    queue.requeue(job.analysis_id, str(exc))
                 session.commit()
             raise
         return True
@@ -118,10 +148,17 @@ class SqlAlchemyWorkerRuntime:
 
     def _claim_job(self):
         with self.session_factory() as session:
-            queue = SqlAlchemyAnalysisJobQueue(session)
+            queue = self._queue(session)
             job = queue.claim_next()
             session.commit()
             return job
+
+    def _queue(self, session: Session) -> SqlAlchemyAnalysisJobQueue:
+        return SqlAlchemyAnalysisJobQueue(
+            session,
+            stale_after=timedelta(seconds=self.settings.job_stale_after_seconds),
+            max_attempts=self.settings.job_max_attempts,
+        )
 
 
 def create_sql_worker_runtime(settings: WorkerSettings) -> SqlAlchemyWorkerRuntime:
@@ -132,6 +169,8 @@ def create_sql_worker_runtime(settings: WorkerSettings) -> SqlAlchemyWorkerRunti
         session_factory=create_session_factory(engine),
         repository_cache_dir=settings.repository_cache_dir,
         git_client=LocalGitRepositoryClient(),
+        settings=settings,
+        github_client=GitHubAppClient(_github_settings(settings)),
     )
 
 
@@ -223,6 +262,7 @@ def load_persisted_analysis_command(
     analysis_id,
     repository_cache_dir: Path,
     git_client: LocalGitRepositoryClient,
+    extra_headers: tuple[str, ...] = (),
 ) -> ExecuteAnalysisCommand:
     """Resolve an analysis row into an executable worker command."""
 
@@ -240,7 +280,11 @@ def load_persisted_analysis_command(
         raise NotFoundError(msg)
 
     destination = _repository_cache_path(repository_cache_dir, repository)
-    repository_path = git_client.clone_or_fetch(repository.clone_url, destination)
+    repository_path = git_client.clone_or_fetch(
+        repository.clone_url,
+        destination,
+        extra_headers=extra_headers,
+    )
     git_client.checkout(repository_path, analysis.commit_sha)
     return ExecuteAnalysisCommand(
         analysis_id=analysis.id,
@@ -292,4 +336,117 @@ def _safe_path_segment(value: str) -> str:
     return "".join(
         char if char.isalnum() or char in {"-", "_", "."} else "-"
         for char in value
+    )
+
+
+def _github_settings(settings: WorkerSettings) -> GitHubAppSettings:
+    return GitHubAppSettings(
+        RADIUS_ENV=settings.environment,
+        RADIUS_LOG_LEVEL=settings.log_level,
+        GITHUB_APP_ID=settings.github_app_id,
+        GITHUB_APP_PRIVATE_KEY=settings.github_app_private_key,
+        GITHUB_INSTALLATION_ID=settings.github_installation_id,
+        GITHUB_API_BASE_URL=settings.github_api_base_url,
+        GITHUB_API_VERSION=settings.github_api_version,
+        GITHUB_TIMEOUT_SECONDS=settings.github_timeout_seconds,
+    )
+
+
+def _github_clone_headers(
+    *,
+    session: Session,
+    analysis_id,
+    settings: WorkerSettings,
+    github_client: GitHubAppClient,
+) -> tuple[str, ...]:
+    github_settings = _github_settings(settings)
+    if not github_settings.enabled:
+        return ()
+    installation_id = _github_installation_id(
+        session=session,
+        analysis_id=analysis_id,
+        settings=settings,
+    )
+    token = github_client.create_installation_token(installation_id).token
+    return (f"Authorization: Bearer {token}",)
+
+
+def _publish_github_result(
+    *,
+    session: Session,
+    analysis_id,
+    settings: WorkerSettings,
+    github_client: GitHubAppClient,
+) -> None:
+    github_settings = _github_settings(settings)
+    if not settings.github_publish_results or not github_settings.enabled:
+        return
+    installation_id = _github_installation_id(
+        session=session,
+        analysis_id=analysis_id,
+        settings=settings,
+    )
+    report = _github_report(session, analysis_id, settings)
+    GitHubAnalysisPublisher(github_client).publish(
+        installation_id=installation_id,
+        report=report,
+    )
+
+
+def _github_installation_id(
+    *,
+    session: Session,
+    analysis_id,
+    settings: WorkerSettings,
+) -> int:
+    if settings.github_installation_id is not None:
+        return settings.github_installation_id
+    analysis = session.get(db_models.Analysis, analysis_id)
+    if analysis is None:
+        msg = f"Analysis {analysis_id} was not found."
+        raise NotFoundError(msg)
+    repository = session.get(db_models.Repository, analysis.repository_id)
+    if repository is None:
+        msg = f"Repository {analysis.repository_id} was not found."
+        raise NotFoundError(msg)
+    organization = session.get(db_models.Organization, repository.organization_id)
+    if organization and organization.github_installation_id is not None:
+        return organization.github_installation_id
+    msg = "GITHUB_INSTALLATION_ID or organization.github_installation_id is required."
+    raise ValidationError(msg)
+
+
+def _github_report(
+    session: Session,
+    analysis_id,
+    settings: WorkerSettings,
+) -> GitHubAnalysisReport:
+    analysis = session.get(db_models.Analysis, analysis_id)
+    if analysis is None:
+        msg = f"Analysis {analysis_id} was not found."
+        raise NotFoundError(msg)
+    repository = session.get(db_models.Repository, analysis.repository_id)
+    pull_request = session.get(db_models.PullRequest, analysis.pull_request_id)
+    confidence = session.query(db_models.ConfidenceReport).filter_by(
+        analysis_id=analysis_id
+    ).one_or_none()
+    if repository is None or pull_request is None or confidence is None:
+        msg = f"GitHub publishing artifacts for analysis {analysis_id} are incomplete."
+        raise NotFoundError(msg)
+    dashboard_url = (
+        f"{settings.dashboard_base_url.rstrip('/')}/analyses/{analysis_id}"
+        if settings.dashboard_base_url
+        else None
+    )
+    return GitHubAnalysisReport(
+        analysis_id=analysis.id,
+        owner=repository.owner,
+        repository_name=repository.name,
+        pull_request_number=pull_request.github_pr_number,
+        head_sha=analysis.commit_sha,
+        confidence_score=float(confidence.confidence_score),
+        risk_level=confidence.risk_level.value,
+        summary=confidence.summary,
+        recommendations=tuple(confidence.recommendations),
+        dashboard_url=dashboard_url,
     )
