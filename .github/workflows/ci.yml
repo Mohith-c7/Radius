@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - develop
+      - uat
+      - main
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: radius
+          POSTGRES_USER: radius
+          POSTGRES_PASSWORD: radius
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U radius -d radius"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      DATABASE_URL: postgresql+psycopg://radius:radius@localhost:5432/radius
+      RADIUS_ENV: test
+      STORAGE_BACKEND: sql
+      NEXT_PUBLIC_RADIUS_API_BASE_URL: http://localhost:8000
+      NEXT_PUBLIC_RADIUS_ORGANIZATION_ID: 00000000-0000-0000-0000-000000000000
+      PYTHONPATH: apps/api/src:apps/worker/src:packages/analysis/src:packages/confidence/src:packages/graph/src:packages/parser/src:packages/repository/src:packages/shared/src:packages/testing/src:packages/github/src
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install Node dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Migration sanity
+        run: alembic upgrade head

@@ -42,29 +42,37 @@ the `develop` branch. Frontend implementation is tracked separately in
 - Request-scoped SQL unit-of-work handling across API dependencies.
 - SQL-backed worker runtime with persisted analysis context loading from repository and pull request rows.
 - End-to-end persisted webhook-to-confidence execution test using a real git checkout and durable stores.
+- GitHub App installation token support for private repository clone/fetch.
+- GitHub Check Run and pull request comment publishing with create-or-update behavior.
+- Worker retry limits, stale job recovery settings, and structured job failure logging.
+- API readiness endpoint for SQL-backed deployments.
+- Dockerfiles, Docker Compose, CI workflow, deployment guide, and E2E validation checklist.
+- Dashboard API client tests replacing the previous placeholder test command.
 
 ## In Progress
 
-- Phase 1 production hardening review and release-readiness cleanup.
+- Live GitHub App smoke validation after production credentials are provided.
 
 ## Pending
 
-- GitHub App installation token support for private repository clones.
-- Deployment-grade operational concerns: worker concurrency tuning, retry policy limits, and observability dashboards.
+- Manual GitHub App configuration and installation in the target organization.
+- Live Docker image build and smoke test after Docker Desktop or a Linux build runner is available.
+- Optional observability dashboard integration in the hosting platform.
 
 ## Current Completion Estimate
 
-Phase 1 backend foundation is roughly 97% complete for the deterministic core:
+Phase 1 backend foundation is complete for the deterministic core:
 workspace, shared primitives, persistence schema, repository contracts, analysis
 lifecycle, parser contracts, graph construction, git change extraction,
 blast-radius computation, test discovery/selection, and confidence scoring are
 implemented and validated. API exposure, worker orchestration, durable queue
 state, durable artifact stores, subprocess test execution, tenant-scoped API
 guards, idempotency replay, pull request upsert, and signed GitHub webhook
-ingress now exist. The worker can now load persisted repository/PR context and
-the signed webhook-to-confidence path is validated against durable stores.
-Remaining work is concentrated in deployment hardening around private GitHub App
-clone credentials, observability, and production retry/concurrency tuning.
+ingress now exist. The worker can load persisted repository/PR context, clone
+private GitHub repositories with installation tokens, run the deterministic
+pipeline, publish GitHub feedback, and persist confidence artifacts. Remaining
+work is manual environment validation with real GitHub App credentials and the
+target deployment platform.
 
 ## 30% to 50% Completion Plan
 
