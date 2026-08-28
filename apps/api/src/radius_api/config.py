@@ -14,6 +14,7 @@ class ApiSettings(DatabaseSettings):
     api_keys: str = ""
     github_webhook_secret: str = ""
     github_default_organization_id: UUID | None = None
+    cors_origins: str = ""
 
 
 @lru_cache
