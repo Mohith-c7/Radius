@@ -114,6 +114,14 @@ def _handle_payload(
     action = payload.get("action")
     if event == "ping":
         return GitHubWebhookResult(deliveryId=delivery_id, event=event, action=action)
+    if event in ("installation", "installation_repositories"):
+        return _handle_installation_sync(
+            request,
+            event,
+            delivery_id,
+            payload,
+            repository_service,
+        )
     if event == "push":
         return _handle_push(
             request,
@@ -135,6 +143,41 @@ def _handle_payload(
         action=action,
         ignored=True,
     )
+
+
+def _handle_installation_sync(
+    request: Request,
+    event: str,
+    delivery_id: str,
+    payload: dict[str, Any],
+    repository_service: RepositoryApplicationService,
+) -> GitHubWebhookResult:
+    action = payload.get("action")
+    repos = []
+    if event == "installation" and action == "created":
+        repos = payload.get("repositories", [])
+    elif event == "installation_repositories" and action == "added":
+        repos = payload.get("repositories_added", [])
+        
+    for repo in repos:
+        full_name = repo.get("full_name", "")
+        owner_login = full_name.split("/")[0] if "/" in full_name else ""
+        repo_payload = {
+            "id": repo.get("id"),
+            "name": repo.get("name", ""),
+            "full_name": full_name,
+            "owner": {"login": owner_login},
+            "private": repo.get("private", False),
+            "html_url": f"https://github.com/{full_name}",
+            "default_branch": "main",
+            "clone_url": f"https://github.com/{full_name}.git",
+        }
+        _connect_repository(
+            request,
+            GitHubRepositoryPayload.model_validate(repo_payload),
+            repository_service,
+        )
+    return GitHubWebhookResult(deliveryId=delivery_id, event=event, action=action)
 
 
 def _handle_push(
