@@ -406,25 +406,27 @@ export function ConnectRepositoryForm() {
         description="Create a backend repository record Radius can synchronize and analyze."
       />
       
-      <div className="card" style={{ marginBottom: "2rem", padding: "2rem", display: "flex", flexDirection: "column", alignItems: "center", border: "2px dashed var(--border-color)" }}>
-        <h2 style={{ marginBottom: "0.5rem" }}>The Automated Way (Recommended)</h2>
+      <div className="card" style={{ marginBottom: "2rem", padding: "2rem", display: "flex", flexDirection: "column", alignItems: "center", border: "1px solid var(--border-color)" }}>
+        <h2 style={{ marginBottom: "0.5rem" }}>Install GitHub App</h2>
         <p className="muted" style={{ marginBottom: "1.5rem", textAlign: "center", maxWidth: "600px" }}>
-          Clicking this button will take you to GitHub to install the Radius App on your repository. 
-          Once installed, your repository will be automatically connected and analyzed on every push!
+          Install the Radius GitHub App to automatically synchronize repositories and trigger verification pipelines on push.
         </p>
         <a 
           href={process.env.NEXT_PUBLIC_GITHUB_APP_URL || "https://github.com/apps/radius-verification/installations/new"} 
           target="_blank" 
           rel="noreferrer" 
           className="button primary"
-          style={{ padding: "0.75rem 1.5rem", fontSize: "1rem" }}
+          style={{ padding: "0.75rem 1.5rem", fontSize: "1rem", display: "flex", alignItems: "center", gap: "0.5rem" }}
         >
           <Plus size={18} />
-          Connect via GitHub
+          Install App
         </a>
       </div>
 
-      <h3 style={{ marginBottom: "1rem", color: "var(--muted-color)" }}>Fallback: Manual Connection (For Local Testing)</h3>
+      <h3 style={{ marginBottom: "1rem", marginTop: "2rem", color: "var(--text-color)", fontSize: "1.1rem", fontWeight: 600 }}>Manual configuration</h3>
+      <p className="muted" style={{ marginBottom: "1.5rem" }}>
+        Manually register a repository for local testing or custom CI/CD integrations.
+      </p>
       <div className="detail-grid">
         <form className="card detail-card form-grid" onSubmit={submit}>
           <label>
