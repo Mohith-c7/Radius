@@ -33,7 +33,12 @@ class ResetPassword(BaseModel):
     token: str = Field(min_length=20, max_length=512)
     password: str = Field(min_length=8, max_length=256)
 
-    _password_strength = field_validator("password")(Credentials.password_strength)
+    @field_validator("password")
+    @classmethod
+    def password_strength(cls, value: str) -> str:
+        if not PASSWORD_PATTERN.match(value):
+            raise ValueError("Password must be at least 8 characters and include uppercase, lowercase, and a number.")
+        return value
 
 
 class VerifyToken(BaseModel):

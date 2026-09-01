@@ -7,7 +7,16 @@ from .routes_auth import router as auth_router
 
 settings = get_settings()
 app = FastAPI(title="Radius API", version="0.1.0")
-app.add_middleware(CORSMiddleware, allow_origins=[settings.frontend_origin], allow_credentials=True, allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["Content-Type", "X-CSRF-Token"])
+
+allowed_origins = list(set([settings.frontend_origin, "http://localhost:3000", "http://127.0.0.1:3000"]))
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "X-CSRF-Token"],
+)
 app.include_router(auth_router)
 
 

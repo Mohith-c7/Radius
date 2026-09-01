@@ -1,6 +1,7 @@
 """FastAPI entrypoint for Radius."""
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from radius_shared.dto import error_response
 from radius_shared.errors import (
@@ -21,6 +22,13 @@ from radius_api.routes.graph import router as graph_router
 from radius_api.routes.health import router as health_router
 from radius_api.routes.repositories import router as repositories_router
 from radius_api.routes.tests import router as tests_router
+
+# Authentication remains implemented in the existing application auth module.
+# Register it on this package-managed entrypoint so the dashboard and the
+# development command use the same auth system and persistent token store.
+from app.database import Base as AuthBase
+from app.database import engine as auth_engine
+from app.routes_auth import router as auth_router
 
 
 async def radius_error_handler(
@@ -61,6 +69,16 @@ def create_app() -> FastAPI:
     app.state.container = AppContainer()
     if settings.storage_backend == "sql":
         configure_sql_storage(app.state.container, settings)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+        ],
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Content-Type", "X-CSRF-Token"],
+    )
     app.add_exception_handler(RadiusError, radius_error_handler)
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(repositories_router, prefix="/api/v1")
@@ -69,6 +87,14 @@ def create_app() -> FastAPI:
     app.include_router(tests_router, prefix="/api/v1")
     app.include_router(confidence_router, prefix="/api/v1")
     app.include_router(github_webhooks_router, prefix="/api/v1")
+    app.include_router(auth_router)
+
+    @app.on_event("startup")
+    def initialize_auth_database() -> None:
+        """Create the tables used by the shared authentication implementation."""
+
+        AuthBase.metadata.create_all(bind=auth_engine)
+
     return app
 
 
