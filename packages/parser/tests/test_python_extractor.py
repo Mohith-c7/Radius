@@ -30,7 +30,7 @@ def get_user():
     assert symbols[0].start_line == 2
     
     # Check Method extraction
-    assert symbols[1].name == "query"
+    assert symbols[1].name == "Database.query"
     assert symbols[1].type == "function"
     assert symbols[1].start_line == 3
     assert symbols[1].end_line == 4

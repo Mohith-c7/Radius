@@ -90,6 +90,14 @@ class Phase1AnalysisOrchestrator:
     def _execute(self, command: ExecuteAnalysisCommand) -> AnalysisExecutionResult:
         changes = self._analyze_changes(command)
         changed_paths = tuple(item.path for item in changes.changed_files)
+        
+        # --- PHASE 2 POC INTEGRATION ---
+        pruned_files = set()
+        try:
+            pruned_files = self._run_semantic_cpg_poc(command.repository_path, changed_paths, command.diff_text)
+        except Exception as e:
+            print(f"[PHASE 2 POC] Error running semantic cpg pipeline: {e}")
+            
         parse_result = self._parser.parse_repository_result(
             ParseRepositoryCommand(repository_path=command.repository_path)
         )
@@ -102,6 +110,11 @@ class Phase1AnalysisOrchestrator:
         )
         graph_snapshot = self._require_graph_snapshot(command.analysis_id)
         affected_paths = self._affected_file_paths(graph_snapshot, changed_paths)
+        
+        # [NEW] Actually apply the AI pruning to the pipeline so the UI receives the filtered results!
+        if pruned_files:
+            affected_paths = tuple(p for p in affected_paths if p.replace("\\", "/") not in pruned_files)
+            
         self._testing.discover_tests(DiscoverTestsCommand(command.repository_path))
         selection = self._testing.select_tests(
             SelectTestsCommand(
@@ -160,6 +173,73 @@ class Phase1AnalysisOrchestrator:
             confidence_score=confidence.confidence_score,
             risk_level=confidence.risk_level,
         )
+
+    def _run_semantic_cpg_poc(self, repo_path: Path, changed_paths: tuple[str, ...], diff_text: str | None) -> set[str]:
+        import os
+        from radius_parser.core import ParserEngine
+        from radius_parser.extractors.python import PythonExtractor
+        from radius_graph.cpg import CodePropertyGraph
+        from radius_graph.slicer import GraphSlicer
+        from radius_analysis.ai.pruner import SemanticPruner
+        
+        print(f"\n[PHASE 2 POC] Starting Semantic CPG Engine on cloned repo: {repo_path}")
+        engine = ParserEngine()
+        extractor = PythonExtractor()
+        cpg = CodePropertyGraph()
+        
+        # 1. Parse all python files dynamically
+        for root, _, files in os.walk(repo_path):
+            for file in files:
+                if file.endswith(".py"):
+                    filepath = os.path.join(root, file)
+                    try:
+                        with open(filepath, "r", encoding="utf-8") as f:
+                            code = f.read()
+                        tree = engine.parse_python(code)
+                        # Ensure rel_path matches standard path format
+                        rel_path = os.path.relpath(filepath, repo_path).replace("\\", "/")
+                        symbols = extractor.extract_symbols(tree.root_node, rel_path, code)
+                        for sym in symbols:
+                            cpg.add_symbol(sym)
+                            sym_tree = engine.parse_python(sym.source_code)
+                            calls = extractor.extract_calls(sym_tree.root_node, sym.id, sym.source_code)
+                            for call in calls:
+                                cpg.add_reference(call)
+                    except Exception:
+                        pass
+                        
+        print(f"[PHASE 2 POC] CPG Built successfully. Total Nodes: {len(cpg.nodes)}")
+        
+        slicer = GraphSlicer(cpg)
+        api_key = os.environ.get("GEMINI_API_KEY", "")
+        pruner = SemanticPruner(api_key=api_key)
+        
+        pruned_files = set()
+        
+        # 2. Extract Blast Radius for changes
+        for path in changed_paths:
+            path_norm = path.replace("\\", "/")
+            if not path_norm.endswith(".py"): 
+                continue
+            
+            print(f"[PHASE 2 POC] Analyzing changed file: {path_norm}")
+            for node_id, node in cpg.nodes.items():
+                if node.symbol.file_path == path_norm:
+                    slice_nodes = slicer.extract_caller_slice(node_id)
+                    if slice_nodes:
+                        print(f"[PHASE 2 POC] Target '{node_id}' has {len(slice_nodes)} dependent callers.")
+                        for caller in slice_nodes:
+                            if api_key:
+                                is_impacted = pruner.evaluate_impact(caller.symbol.source_code, str(diff_text))
+                                if not is_impacted:
+                                    print(f"[PHASE 2 POC] -> Caller {caller.symbol.id}: PRUNE (Benign)")
+                                    pruned_files.add(caller.symbol.file_path)
+                                else:
+                                    print(f"[PHASE 2 POC] -> Caller {caller.symbol.id}: KEEP (Breaking)")
+                            else:
+                                print(f"[PHASE 2 POC] -> Caller {caller.symbol.id}: Skipped AI Eval (No API Key)")
+                                
+        return pruned_files
 
     def _analyze_changes(self, command: ExecuteAnalysisCommand):
         if command.diff_text is not None:
