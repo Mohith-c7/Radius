@@ -1,0 +1,5 @@
+
+> @radius/confidence@0.1.0 lint D:\Radius\packages\confidence
+> python -m ruff check src tests
+
+All checks passed!

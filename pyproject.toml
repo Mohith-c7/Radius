@@ -16,6 +16,10 @@ dependencies = [
   "PyJWT[crypto]>=2.10.0",
   "sqlalchemy>=2.0.36",
   "uvicorn[standard]>=0.34.0",
+  "tree-sitter>=0.23.2",
+  "tree-sitter-python>=0.23.2",
+  "tree-sitter-typescript>=0.23.2",
+  "google-generativeai>=0.8.3",
 ]
 
 [project.optional-dependencies]

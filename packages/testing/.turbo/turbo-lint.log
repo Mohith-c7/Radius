@@ -1,0 +1,5 @@
+
+> @radius/testing@0.1.0 lint D:\Radius\packages\testing
+> python -m ruff check src tests
+
+All checks passed!
