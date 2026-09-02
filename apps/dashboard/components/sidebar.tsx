@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Boxes, CircleHelp, FolderGit2, GitCompareArrows, GitPullRequest, Search, Settings, Users } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { BarChart3, Boxes, CircleHelp, FolderGit2, GitCompareArrows, GitPullRequest, LogOut, Search, Settings, Users } from "lucide-react";
+import { useAuth } from "./auth-provider";
 
 const navigation = [
   { href: "/", label: "Overview", icon: BarChart3 },
@@ -15,6 +17,8 @@ const navigation = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { signOut, user } = useAuth();
   const isActive = (href: string) => href === "/" ? pathname === href : pathname.startsWith(href);
 
   return <aside className="sidebar">
@@ -23,8 +27,9 @@ export function Sidebar() {
     <div className="sidebar-bottom">
       <Link className={`nav-link${isActive("/settings") ? " active" : ""}`} href="/settings"><Settings size={18}/>Settings</Link>
       <Link className={`nav-link${isActive("/organization") ? " active" : ""}`} href="/organization"><Users size={18}/>Organization</Link>
-      <Link className={`profile${isActive("/profile") ? " active" : ""}`} href="/profile"><span className="avatar">SM</span><span><strong>Sanjith M.</strong><small>Developer</small></span></Link>
+      <Link className={`profile${isActive("/profile") ? " active" : ""}`} href="/profile"><span className="avatar">{user?.name.split(" ").map((part) => part[0]).slice(0, 2).join("") ?? "R"}</span><span><strong>{user?.name ?? "Radius user"}</strong><small>{user?.role ?? "Developer"}</small></span></Link>
       <Link className={`help${isActive("/help") ? " active" : ""}`} href="/help"><CircleHelp size={17}/>Help & support</Link>
+      <button className="logout" onClick={async () => { await signOut(); router.replace("/login"); }}><LogOut size={17}/>Log out</button>
     </div>
   </aside>;
 }
