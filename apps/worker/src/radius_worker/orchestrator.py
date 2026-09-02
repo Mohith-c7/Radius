@@ -192,6 +192,14 @@ class Phase1AnalysisOrchestrator:
             for file in files:
                 if file.endswith(".py"):
                     filepath = os.path.join(root, file)
+                    
+                    # [SECURITY] Mitigate Symlink Traversal / Arbitrary File Read
+                    resolved_path = os.path.realpath(filepath)
+                    resolved_repo = os.path.realpath(repo_path)
+                    if not resolved_path.startswith(resolved_repo):
+                        print(f"[SECURITY WARNING] Blocked arbitrary file read attempt via symlink: {filepath}")
+                        continue
+                        
                     try:
                         with open(filepath, "r", encoding="utf-8") as f:
                             code = f.read()
