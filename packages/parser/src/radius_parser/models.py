@@ -17,3 +17,12 @@ class Reference:
     source_symbol_id: str
     target_name: str
     reference_type: str  # e.g., 'CALLS', 'IMPORTS'
+
+@dataclass
+class Import:
+    """Represents an imported symbol from a module."""
+    source_file: str
+    imported_name: str
+    module_path: str
+    alias: str | None = None
+

@@ -183,6 +183,7 @@ class Phase1AnalysisOrchestrator:
         from radius_graph.cpg import CodePropertyGraph
         from radius_graph.slicer import GraphSlicer
         from radius_analysis.ai.pruner import SemanticPruner
+        from radius_analysis.diff_hunks import parse_diff_modified_lines
         
         print(f"\n[PHASE 2 POC] Starting Semantic CPG Engine on cloned repo: {repo_path}")
         engine = ParserEngine()
@@ -216,6 +217,8 @@ class Phase1AnalysisOrchestrator:
                     rel_path = os.path.relpath(filepath, repo_path).replace("\\", "/")
                     if is_py:
                         tree = engine.parse_python(code)
+                        for imp in py_extractor.extract_imports(tree.root_node, rel_path, code):
+                            cpg.add_import(imp)
                         symbols = py_extractor.extract_symbols(tree.root_node, rel_path, code)
                         for sym in symbols:
                             cpg.add_symbol(sym)
@@ -225,6 +228,8 @@ class Phase1AnalysisOrchestrator:
                                 cpg.add_reference(call)
                     elif is_ts:
                         tree = engine.parse_typescript(code)
+                        for imp in ts_extractor.extract_imports(tree.root_node, rel_path, code):
+                            cpg.add_import(imp)
                         symbols = ts_extractor.extract_symbols(tree.root_node, rel_path, code)
                         for sym in symbols:
                             cpg.add_symbol(sym)
@@ -232,6 +237,7 @@ class Phase1AnalysisOrchestrator:
                             calls = ts_extractor.extract_calls(sym_tree.root_node, sym.id, sym.source_code)
                             for call in calls:
                                 cpg.add_reference(call)
+
                 except Exception:
                     pass
                         
@@ -243,6 +249,7 @@ class Phase1AnalysisOrchestrator:
         pruner = SemanticPruner(api_key=api_key)
         
         pruned_files = set()
+        modified_lines_by_file = parse_diff_modified_lines(diff_text) if diff_text else {}
         
         # 2. Extract Blast Radius for changes
         for path in changed_paths:
@@ -253,6 +260,14 @@ class Phase1AnalysisOrchestrator:
             print(f"[PHASE 2 POC] Analyzing changed file: {path_norm}")
             for node_id, node in cpg.nodes.items():
                 if node.symbol.file_path == path_norm:
+                    if path_norm in modified_lines_by_file and modified_lines_by_file[path_norm]:
+                        mod_lines = modified_lines_by_file[path_norm]
+                        sym = node.symbol
+                        overlaps = any(sym.start_line <= line <= sym.end_line for line in mod_lines)
+                        if not overlaps:
+                            print(f"[PHASE 2 POC] Skipping untouched symbol '{node_id}' ({sym.start_line}-{sym.end_line})")
+                            continue
+
                     slice_nodes = slicer.extract_caller_slice(node_id)
                     if slice_nodes:
                         print(f"[PHASE 2 POC] Target '{node_id}' has {len(slice_nodes)} dependent callers.")

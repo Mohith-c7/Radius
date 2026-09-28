@@ -1,5 +1,5 @@
 from tree_sitter import Node
-from radius_parser.models import Symbol, Reference
+from radius_parser.models import Symbol, Reference, Import
 
 class TypeScriptExtractor:
     """Extracts symbols and references from a TypeScript/JavaScript AST."""
@@ -79,3 +79,61 @@ class TypeScriptExtractor:
 
         traverse(root_node)
         return references
+
+    def extract_imports(self, root_node: Node, file_path: str, source_code: str) -> list[Import]:
+        """Traverses the TS AST to find import statements and extracts imported symbols."""
+        imports = []
+        source_bytes = source_code.encode("utf8")
+
+        def traverse(node: Node):
+            if node.type == 'import_statement':
+                source_node = node.child_by_field_name('source')
+                if not source_node:
+                    return
+                raw_source = source_bytes[source_node.start_byte:source_node.end_byte].decode("utf8")
+                module_path = raw_source.strip("'\"`")
+
+                for child in node.children:
+                    if child.type == 'import_clause':
+                        for ic_child in child.children:
+                            if ic_child.type == 'identifier':
+                                default_name = source_bytes[ic_child.start_byte:ic_child.end_byte].decode("utf8")
+                                imports.append(Import(
+                                    source_file=file_path,
+                                    imported_name=default_name,
+                                    module_path=module_path,
+                                    alias=None
+                                ))
+                            elif ic_child.type == 'namespace_import':
+                                alias = None
+                                for ns_c in ic_child.children:
+                                    if ns_c.type == 'identifier':
+                                        alias = source_bytes[ns_c.start_byte:ns_c.end_byte].decode("utf8")
+                                        break
+                                imports.append(Import(
+                                    source_file=file_path,
+                                    imported_name="*",
+                                    module_path=module_path,
+                                    alias=alias
+                                ))
+                            elif ic_child.type == 'named_imports':
+                                for spec in ic_child.children:
+                                    if spec.type == 'import_specifier':
+                                        name_node = spec.child_by_field_name('name')
+                                        alias_node = spec.child_by_field_name('alias')
+                                        name = source_bytes[name_node.start_byte:name_node.end_byte].decode("utf8") if name_node else ""
+                                        alias = source_bytes[alias_node.start_byte:alias_node.end_byte].decode("utf8") if alias_node else None
+                                        imports.append(Import(
+                                            source_file=file_path,
+                                            imported_name=name,
+                                            module_path=module_path,
+                                            alias=alias
+                                        ))
+                return
+
+            for child in node.children:
+                traverse(child)
+
+        traverse(root_node)
+        return imports
+

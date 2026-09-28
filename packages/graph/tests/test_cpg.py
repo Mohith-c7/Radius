@@ -1,5 +1,5 @@
 import pytest
-from radius_parser.models import Symbol, Reference
+from radius_parser.models import Symbol, Reference, Import
 from radius_graph.cpg import CodePropertyGraph
 from radius_graph.slicer import GraphSlicer
 
@@ -46,3 +46,64 @@ def test_cpg_build_and_slice():
     
     assert len(affected_ids_b) == 1
     assert "file:A" in affected_ids_b
+
+
+def test_import_symbol_resolution():
+    # Two files (db.py and search.py) both have a function named query
+    db_query = Symbol(
+        id="db.py:query",
+        name="query",
+        type="function",
+        file_path="db.py",
+        start_line=1,
+        end_line=2,
+        source_code="def query(): pass",
+    )
+    search_query = Symbol(
+        id="search.py:query",
+        name="query",
+        type="function",
+        file_path="search.py",
+        start_line=1,
+        end_line=2,
+        source_code="def query(): pass",
+    )
+    service_func = Symbol(
+        id="service.py:fetch_data",
+        name="fetch_data",
+        type="function",
+        file_path="service.py",
+        start_line=1,
+        end_line=3,
+        source_code="def fetch_data(): query()",
+    )
+
+    cpg = CodePropertyGraph()
+    cpg.add_symbol(db_query)
+    cpg.add_symbol(search_query)
+    cpg.add_symbol(service_func)
+
+    # service.py imports query from db
+    cpg.add_import(Import(
+        source_file="service.py",
+        imported_name="query",
+        module_path="db",
+    ))
+
+    # service.py calls query
+    cpg.add_reference(Reference(
+        source_symbol_id="service.py:fetch_data",
+        target_name="query",
+        reference_type="CALLS",
+    ))
+
+    service_node = cpg.nodes["service.py:fetch_data"]
+    db_node = cpg.nodes["db.py:query"]
+    search_node = cpg.nodes["search.py:query"]
+
+    # Verify that the call resolves to db.py:query and NOT search.py:query
+    assert "db.py:query" in service_node.calls
+    assert "search.py:query" not in service_node.calls
+    assert "service.py:fetch_data" in db_node.called_by
+    assert "service.py:fetch_data" not in search_node.called_by
+

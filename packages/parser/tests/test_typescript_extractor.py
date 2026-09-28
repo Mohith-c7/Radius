@@ -215,3 +215,66 @@ def test_constructor_new_expression_calls(parser_setup):
     assert "Database" in call_names
     assert "Client" in call_names
     assert "connect" in call_names
+
+
+def test_extract_imports(parser_setup):
+    engine, extractor = parser_setup
+    code = """
+import { x } from './y';
+import { a, b as c } from './z';
+import defaultService from './service';
+import * as utils from './utils';
+import def, { specific, other as renamed } from './combined';
+import './side-effect';
+"""
+    file_path = "src/main.ts"
+    tree = engine.parse_typescript(code)
+    imports = extractor.extract_imports(tree.root_node, file_path, code)
+
+    assert len(imports) == 8
+
+    # 1. named import: import { x } from './y'
+    assert imports[0].source_file == file_path
+    assert imports[0].imported_name == "x"
+    assert imports[0].module_path == "./y"
+    assert imports[0].alias is None
+
+    # 2. named imports: import { a, b as c } from './z'
+    assert imports[1].source_file == file_path
+    assert imports[1].imported_name == "a"
+    assert imports[1].module_path == "./z"
+    assert imports[1].alias is None
+
+    assert imports[2].source_file == file_path
+    assert imports[2].imported_name == "b"
+    assert imports[2].module_path == "./z"
+    assert imports[2].alias == "c"
+
+    # 3. default import: import defaultService from './service'
+    assert imports[3].source_file == file_path
+    assert imports[3].imported_name == "defaultService"
+    assert imports[3].module_path == "./service"
+    assert imports[3].alias is None
+
+    # 4. namespace import: import * as utils from './utils'
+    assert imports[4].source_file == file_path
+    assert imports[4].imported_name == "*"
+    assert imports[4].module_path == "./utils"
+    assert imports[4].alias == "utils"
+
+    # 5. combined import: import def, { specific, other as renamed } from './combined'
+    assert imports[5].source_file == file_path
+    assert imports[5].imported_name == "def"
+    assert imports[5].module_path == "./combined"
+    assert imports[5].alias is None
+
+    assert imports[6].source_file == file_path
+    assert imports[6].imported_name == "specific"
+    assert imports[6].module_path == "./combined"
+    assert imports[6].alias is None
+
+    assert imports[7].source_file == file_path
+    assert imports[7].imported_name == "other"
+    assert imports[7].module_path == "./combined"
+    assert imports[7].alias == "renamed"
+
