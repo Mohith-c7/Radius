@@ -439,6 +439,31 @@ def _github_report(
         if settings.dashboard_base_url
         else None
     )
+
+    test_selection = (
+        session.query(db_models.TestSelection)
+        .filter_by(analysis_id=analysis_id)
+        .one_or_none()
+    )
+    selected_tests_count = (
+        len(test_selection.selected_tests) if test_selection else 0
+    )
+
+    test_runs = (
+        session.query(db_models.TestRun)
+        .filter_by(analysis_id=analysis_id)
+        .all()
+    )
+    skipped_tests_count = sum(tr.skipped for tr in test_runs)
+    total_tests = sum(tr.total_tests for tr in test_runs)
+    time_saved_percent = (
+        round((skipped_tests_count / total_tests) * 100, 1)
+        if total_tests > 0
+        else 0.0
+    )
+
+    affected_files = tuple(cf.path for cf in (analysis.changed_files or ()))
+
     return GitHubAnalysisReport(
         analysis_id=analysis.id,
         owner=repository.owner,
@@ -450,4 +475,8 @@ def _github_report(
         summary=confidence.summary,
         recommendations=tuple(confidence.recommendations),
         dashboard_url=dashboard_url,
+        selected_tests_count=selected_tests_count,
+        skipped_tests_count=skipped_tests_count,
+        time_saved_percent=time_saved_percent,
+        affected_files=affected_files,
     )
