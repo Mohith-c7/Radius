@@ -62,11 +62,20 @@ class PathBasedTestSelector:
                 TestSelectionReason.AFFECTED_FILE,
             )
 
+        selected_tests = tuple(
+            selected[path] for path in sorted(selected)
+        )
+        selected_paths = set(selected.keys())
+        skipped_tests = tuple(
+            test
+            for test in sorted(tests, key=lambda item: item.path.value)
+            if test.path.value not in selected_paths
+        )
         return TestSelection(
             analysis_id=analysis_id,
-            selected_tests=tuple(
-                selected[path] for path in sorted(selected)
-            ),
+            selected_tests=selected_tests,
+            skipped_tests=skipped_tests,
+            total_discovered_count=len(tests),
         )
 
     def _select_conventional(
@@ -86,12 +95,18 @@ class PathBasedTestSelector:
         stem = path.stem
         parent = path.parent.as_posix()
         return (
-            f"tests/{parent}/test_{stem}.py",
             f"tests/test_{stem}.py",
+            f"tests/{parent}/test_{stem}.py",
             f"{parent}/test_{stem}.py",
             f"{parent}/{stem}_test.py",
+            f"test_{stem}.py",
+            f"{stem}_test.py",
+            f"tests/{stem}.test.ts",
+            f"tests/{stem}.spec.ts",
             f"{parent}/{stem}.test.ts",
             f"{parent}/{stem}.spec.ts",
+            f"{parent}/{stem}.test.tsx",
+            f"{parent}/__tests__/{stem}.test.ts",
         )
 
     @staticmethod

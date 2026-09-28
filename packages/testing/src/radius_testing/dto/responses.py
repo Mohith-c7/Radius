@@ -71,7 +71,12 @@ class TestSelectionResponse:
 
     analysis_id: UUID
     selected_count: int
+    skipped_count: int
+    total_count: int
+    time_saved_percent: float
+    cli_args: str
     selected_tests: tuple[SelectedTestResponse, ...]
+    skipped_tests: tuple[TestCaseResponse, ...]
     created_at: datetime
 
     @classmethod
@@ -80,10 +85,18 @@ class TestSelectionResponse:
 
         return cls(
             analysis_id=selection.analysis_id,
-            selected_count=len(selection.selected_tests),
+            selected_count=selection.selected_count,
+            skipped_count=selection.skipped_count,
+            total_count=selection.total_discovered_count,
+            time_saved_percent=selection.time_saved_percent,
+            cli_args=selection.cli_args,
             selected_tests=tuple(
                 SelectedTestResponse.from_entity(item)
                 for item in selection.selected_tests
+            ),
+            skipped_tests=tuple(
+                TestCaseResponse.from_entity(t)
+                for t in selection.skipped_tests
             ),
             created_at=selection.created_at,
         )

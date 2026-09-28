@@ -166,8 +166,13 @@ class Phase1AnalysisOrchestrator:
                         else None
                     ),
                 ),
-            )
+            ),
         )
+        print(
+            f"[TEST SELECTION] Selected {selection.selected_count}/{selection.total_count} "
+            f"tests ({selection.skipped_count} skipped, {selection.time_saved_percent}% time saved)"
+        )
+        print(f"[TEST SELECTION] CLI args: {selection.cli_args}")
         return AnalysisExecutionResult(
             analysis_id=command.analysis_id,
             changed_file_count=len(changes.changed_files),
