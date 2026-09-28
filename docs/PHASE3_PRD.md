@@ -1,82 +1,89 @@
 # Product Requirements Document (PRD)
 **Project:** Radius - AI-Native Software Verification Platform  
-**Phase:** 3 - Dynamic Test Intelligence, CI Optimization & Rich PR Verification  
-**Status:** PROPOSED  
+**Phase:** 3 - Predictive Test Selection, CI Ingestion & Rich PR Verification  
+**Status:** APPROVED  
 **Date:** September 2026  
 
 ---
 
-## 1. Executive Summary
-Phase 1 established the foundation (infrastructure, database, GitHub webhooks, API, worker, and dashboard). Phase 2 pioneered the **Semantic Code Property Graph (CPG) & AI Pruning Engine**, enabling Radius to deterministically trace symbol-level reverse call graphs across Python and TypeScript and prune false-positive blast radiuses with Gemini.
+## 1. Executive Summary & Problem Statement
 
-**Phase 3 connects the intelligence engine to actual execution and developer workflows:**
-Instead of developers guessing which tests to run or waiting 45 minutes for full CI suites, Radius will **dynamically discover, map, and execute only the tests within the sliced blast radius**, aggregate real execution evidence into explainable confidence scores, and **publish actionable, interactive reports directly into GitHub Pull Requests (Check Runs + PR Comments)**.
+### The Problem
+Modern CI/CD pipelines run entire test suites on every pull request, taking 30–60 minutes and costing thousands of dollars in cloud compute. 
+Conversely, running arbitrary repository test suites inside the Radius backend worker is fundamentally broken and insecure:
+1. **Missing Dependencies:** A background worker container does not have the target repository's virtualenv, npm dependencies, compiled binaries, or system runtimes.
+2. **Security Risk (RCE):** Executing untrusted code from arbitrary PRs on the worker host creates critical Remote Code Execution vulnerabilities.
 
----
-
-## 2. Objectives & Key Results (OKRs)
-
-* **Objective 1 (Targeted Test Execution):** Automatically map sliced CPG symbols to test suites and run only the relevant tests via native test runners (`pytest` for Python, `vitest`/`jest` for TypeScript).
-* **Objective 2 (CI Acceleration):** Demonstrate > 60% reduction in test execution time on benchmark repositories by skipping unaffected test suites safely.
-* **Objective 3 (Actionable GitHub Bot):** Publish high-visibility GitHub Check Runs and rich Markdown PR summary comments detailing confidence score, blast radius tables, skipped tests, and AI explanations.
-* **Objective 4 (Persistent Graph Cache):** Persist CPG nodes and edges into PostgreSQL for incremental repository updates without reparsing the full codebase on every push.
-
----
-
-## 3. Scope & Deliverables
-
-### In Scope for Phase 3:
-1. **Symbol-to-Test Mapping Engine (`packages/testing`)**:
-   - Heuristic & structural mapper connecting source symbols to test files (e.g. `api.py:get_user` -> `tests/test_api.py::test_get_user`).
-   - Dynamic runner integration: executes targeted test commands (`pytest tests/test_api.py` or `pnpm test tests/handler.test.ts`).
-   - Parsing test runner JSON / JUnit XML output into discrete `TestResult` records (passed, failed, skipped, duration).
-2. **Enhanced Evidence & Confidence Aggregator (`packages/confidence`)**:
-   - Synthesizes Impact Evidence (blast radius depth, pruned symbols) with real Test Evidence (test pass rate, execution duration).
-   - Dynamic Risk Classification:
-     - `LOW` (Score >= 80): All sliced tests passed, blast radius contained.
-     - `MEDIUM` (Score 60-79): Sliced tests passed, but high dependency depth or unverified callers.
-     - `HIGH` / `CRITICAL` (Score < 60): One or more sliced tests failed or unhandled breaking changes detected.
-3. **Rich GitHub PR Reporter (`packages/github`)**:
-   - Visual PR Comment formatting with collapsible blast radius details, test savings metrics, and AI pruning explanations.
-   - GitHub Check Run integration with deep link back to Radius dashboard (`/analyses/[id]/blast-radius`).
-4. **Persistent CPG Graph Store (`packages/graph` & `packages/shared`)**:
-   - PostgreSQL schema for `cpg_nodes` and `cpg_edges`.
-   - Incremental graph update service: re-parse only changed files and update affected graph edges.
-
-### Out of Scope (Deferred to Phase 4 & 5):
-- Ephemeral microVM sandboxes (e.g. AWS Firecracker).
-- Autonomous AI-generated test synthesis.
-- Multi-organization enterprise billing (Stripe).
+### The Solution: Predictive Test Selection & CI Intelligence
+Industry-leading verification platforms (Launchable, Nx, Turborepo, Codecov) operate as an **intelligence and selection service**, not a monolithic runner:
+* **Radius computes the intelligence:** Slices the CPG to find the exact tests covering affected symbols.
+* **The user's CI runs the tests:** In their existing GitHub Actions environment where dependencies are already installed.
+* **Radius ingests the results:** Collects standard JUnit XML / JSON reports, computes the Confidence Score, and publishes rich PR Check Runs and Comments directly to GitHub.
 
 ---
 
-## 4. Technical Architecture & Data Flow
+## 2. Core Workflows & Architecture
 
 ```
 [ GitHub PR Webhook ]
         │
         ▼
-[ Worker: Git Clone & Checkout ]
+[ Radius Worker: CPG Slicing & AI Pruner ] ──► Computes Blast Radius & Impacted Symbols
         │
         ▼
-[ Phase 2: CPG Slicing & AI Pruner ] ──► Extracts Affected Symbols & Files
+[ Radius Test Selection Engine ] ────────────► Identifies EXACT Tests Covering Slice
         │
         ▼
-[ Phase 3: Test Mapping Engine ] ─────► Maps Sliced Symbols to Relevant Tests
+[ GitHub PR Bot: Initial Check Run ] ────────► Posts "Radius Verification: In Progress"
+                                                + "Recommended Tests: 4 | Skipped: 85"
+        │
+        ▼ (User's GitHub Actions runs: pytest $(radius select))
+        │
+[ API: POST /analyses/{id}/tests/results ] ──► Ingests JUnit XML / JSON Test Report
         │
         ▼
-[ Dynamic Test Runner ] ──────────────► Executes ONLY Selected Tests (pytest/vitest)
+[ Confidence Engine ] ───────────────────────► Evaluates Real Pass/Fail + Blast Radius
         │
         ▼
-[ Confidence Aggregator ] ────────────► Combines Impact + Test Evidence into Score
-        │
-        ▼
-[ GitHub PR Publisher ] ──────────────► Updates Check Run & Posts Rich PR Comment
+[ GitHub PR Bot: Final Report ] ─────────────► Updates Check Run (Success/Failure)
+                                                + Posts Rich PR Comment with Badges & Savings
 ```
 
 ---
 
-## 5. Success Metrics
-* **Precision:** 0 false-negative skips (no breaking change goes unverified).
-* **Speed:** Test selection and execution overhead < 5 seconds + test runtime.
-* **Developer Feedback:** Clear, explainable PR comment providing immediate merge confidence.
+## 3. Scope & Deliverables
+
+### Sprint 3.1: Precision Test Selection & Sliced Symbol Mapping
+* **CPG-to-Test Mapping (`packages/testing`)**:
+  * Maps sliced symbols and affected files to exact test files using convention matching (`api.py` -> `test_api.py`, `handler.ts` -> `handler.test.ts`) and AST import/call analysis.
+  * Computes optimization metrics: `total_tests_discovered`, `selected_tests_count`, `skipped_tests_count`, and `estimated_time_saved_percent`.
+* **Test Selection API (`apps/api`)**:
+  * `GET /api/v1/analyses/{id}/tests`: returns selected test paths (JSON, space-separated, and list format) for CI integration.
+
+### Sprint 3.2: CI Test Results Ingestion & Dynamic Confidence
+* **JUnit XML & JSON Ingestor (`packages/testing`)**:
+  * Ingests universal JUnit XML reports (generated by pytest, Vitest, Jest, Go test, etc.) or Radius JSON.
+  * Extracts passed, failed, skipped, and duration.
+* **Test Results API (`apps/api`)**:
+  * `POST /api/v1/analyses/{id}/tests/results`: accepts test reports and updates persistent `TestRunResult`.
+* **Dynamic Confidence Scoring (`packages/confidence`)**:
+  * Synthesizes real test results with blast radius depth to calculate final 0–100% confidence score.
+
+### Sprint 3.3: Rich GitHub PR Comment Bot & Check Runs
+* **Rich Markdown PR Comment Template (`packages/github`)**:
+  * Visual Confidence Badge (`🟢 95/100 (LOW RISK)` or `🔴 35/100 (FAILED)`).
+  * CI Time Savings Summary (`⚡ 82% Tests Skipped: 4 run, 18 skipped`).
+  * Collapsible Blast Radius Table (Impacted files, affected symbols, depth).
+  * Explainable AI Pruning Rationale (why benign changes were safe).
+  * Direct deep-link to the Radius Dashboard analysis view.
+* **GitHub Check Run Lifecycle**:
+  * Creates `Radius Verification` check run upon webhook receipt.
+  * Updates conclusion (`success` / `failure` / `neutral`) with final score and link.
+
+---
+
+## 4. Success Criteria
+* **Accuracy:** 100% precision in test selection mapping; no relevant test is skipped.
+* **Compatibility:** Ingests standard JUnit XML from any CI provider (GitHub Actions, GitLab CI, CircleCI).
+* **Security:** Zero untrusted code execution on Radius worker hosts.
+* **Developer UX:** PR comment provides immediate, actionable clarity on merge safety.
