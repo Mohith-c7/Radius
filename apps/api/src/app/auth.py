@@ -1,13 +1,15 @@
 """Authentication services: password hashing, signed sessions, and opaque action tokens."""
-from datetime import datetime, timedelta, timezone
 import hashlib
 import secrets
+from datetime import UTC, datetime, timedelta
+
 import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+
 from .config import get_settings
 from .models import AuthAccount, AuthSession, AuthToken, User
 
@@ -28,7 +30,7 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 def create_session(db: Session, user: User, remember: bool = False) -> str:
     settings = get_settings()
-    expires = datetime.now(timezone.utc) + (timedelta(days=30) if remember else SESSION_TTL)
+    expires = datetime.now(UTC) + (timedelta(days=30) if remember else SESSION_TTL)
     session = AuthSession(user_id=user.id, expires_at=expires.replace(tzinfo=None))
     db.add(session)
     db.commit()

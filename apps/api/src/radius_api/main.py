@@ -1,5 +1,11 @@
 """FastAPI entrypoint for Radius."""
 
+# Authentication remains implemented in the existing application auth module.
+# Register it on this package-managed entrypoint so the dashboard and the
+# development command use the same auth system and persistent token store.
+from app.database import Base as AuthBase
+from app.database import engine as auth_engine
+from app.routes_auth import router as auth_router
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -22,13 +28,6 @@ from radius_api.routes.graph import router as graph_router
 from radius_api.routes.health import router as health_router
 from radius_api.routes.repositories import router as repositories_router
 from radius_api.routes.tests import router as tests_router
-
-# Authentication remains implemented in the existing application auth module.
-# Register it on this package-managed entrypoint so the dashboard and the
-# development command use the same auth system and persistent token store.
-from app.database import Base as AuthBase
-from app.database import engine as auth_engine
-from app.routes_auth import router as auth_router
 
 
 async def radius_error_handler(

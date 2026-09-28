@@ -1,22 +1,37 @@
 """HTTP boundary for Radius authentication. Sessions are HTTP-only cookies."""
-from datetime import datetime, timedelta, timezone
-import base64
-import hashlib
 import secrets
 import smtplib
+from datetime import UTC, datetime, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from urllib.parse import urlencode
+
 import httpx
 import jwt
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from .auth import consume_action_token, create_action_token, create_session, decode_session, hash_password, user_from_provider, verify_password
+
+from .auth import (
+    consume_action_token,
+    create_action_token,
+    create_session,
+    decode_session,
+    hash_password,
+    user_from_provider,
+    verify_password,
+)
 from .config import get_settings
 from .database import get_db
 from .models import AuthSession, User
-from .schemas import ForgotPassword, Login, ResetPassword, Signup, UserResponse, VerifyToken
+from .schemas import (
+    ForgotPassword,
+    Login,
+    ResetPassword,
+    Signup,
+    UserResponse,
+    VerifyToken,
+)
 
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 SESSION_COOKIE = "radius_session"
@@ -230,7 +245,7 @@ def oauth_start(provider: str, response: Response):
         raise HTTPException(status_code=404, detail="Authentication provider not found.")
     client_id, _, callback, authorization_url, _, _ = oauth_config(provider)
     nonce = secrets.token_urlsafe(24)
-    state = jwt.encode({"provider": provider, "nonce": nonce, "exp": datetime.now(timezone.utc) + timedelta(minutes=10)}, get_settings().session_secret, algorithm="HS256")
+    state = jwt.encode({"provider": provider, "nonce": nonce, "exp": datetime.now(UTC) + timedelta(minutes=10)}, get_settings().session_secret, algorithm="HS256")
     params = {"client_id": client_id, "redirect_uri": callback, "response_type": "code", "state": state}
     if provider == "google":
         params.update({"scope": "openid email profile", "nonce": nonce})

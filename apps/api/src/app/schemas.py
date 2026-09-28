@@ -1,5 +1,6 @@
 """Typed request and response models for authentication endpoints."""
 import re
+
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 PASSWORD_PATTERN = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$")

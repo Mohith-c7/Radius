@@ -1,6 +1,7 @@
 """Radius FastAPI application entrypoint."""
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from .config import get_settings
 from .database import Base, engine
 from .routes_auth import router as auth_router
