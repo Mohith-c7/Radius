@@ -20,6 +20,10 @@ dependencies = [
   "tree-sitter-python>=0.23.2",
   "tree-sitter-typescript>=0.23.2",
   "google-generativeai>=0.8.3",
+  "argon2-cffi>=23.1.0",
+  "Authlib>=1.4.1",
+  "httpx>=0.28.1",
+  "email-validator>=2.0.0",
 ]
 
 [project.optional-dependencies]

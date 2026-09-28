@@ -399,7 +399,7 @@ def _github_installation_id(
     analysis_id,
     settings: WorkerSettings,
 ) -> int:
-    if settings.github_installation_id is not None:
+    if settings.github_installation_id:
         return settings.github_installation_id
     analysis = session.get(db_models.Analysis, analysis_id)
     if analysis is None:

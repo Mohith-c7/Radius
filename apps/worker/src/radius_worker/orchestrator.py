@@ -21,6 +21,7 @@ from radius_graph.dto import BuildGraphCommand
 from radius_graph.interfaces.graph_store import GraphStore
 from radius_parser.application import ParserApplicationService
 from radius_parser.dto import ParseRepositoryCommand
+from radius_parser.extractors.typescript import TypeScriptExtractor
 from radius_testing.application import TestingApplicationService
 from radius_testing.dto import (
     DiscoverTestsCommand,
@@ -178,45 +179,64 @@ class Phase1AnalysisOrchestrator:
         import os
         from radius_parser.core import ParserEngine
         from radius_parser.extractors.python import PythonExtractor
+        from radius_parser.extractors.typescript import TypeScriptExtractor
         from radius_graph.cpg import CodePropertyGraph
         from radius_graph.slicer import GraphSlicer
         from radius_analysis.ai.pruner import SemanticPruner
         
         print(f"\n[PHASE 2 POC] Starting Semantic CPG Engine on cloned repo: {repo_path}")
         engine = ParserEngine()
-        extractor = PythonExtractor()
+        py_extractor = PythonExtractor()
+        ts_extractor = TypeScriptExtractor()
         cpg = CodePropertyGraph()
+
+        py_extensions = (".py",)
+        ts_extensions = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
         
-        # 1. Parse all python files dynamically
+        # 1. Parse all files dynamically
         for root, _, files in os.walk(repo_path):
             for file in files:
-                if file.endswith(".py"):
-                    filepath = os.path.join(root, file)
+                is_py = file.endswith(py_extensions)
+                is_ts = file.endswith(ts_extensions)
+                if not (is_py or is_ts):
+                    continue
+
+                filepath = os.path.join(root, file)
+                
+                # [SECURITY] Mitigate Symlink Traversal / Arbitrary File Read
+                resolved_path = os.path.realpath(filepath)
+                resolved_repo = os.path.realpath(repo_path)
+                if not resolved_path.startswith(resolved_repo):
+                    print(f"[SECURITY WARNING] Blocked arbitrary file read attempt via symlink: {filepath}")
+                    continue
                     
-                    # [SECURITY] Mitigate Symlink Traversal / Arbitrary File Read
-                    resolved_path = os.path.realpath(filepath)
-                    resolved_repo = os.path.realpath(repo_path)
-                    if not resolved_path.startswith(resolved_repo):
-                        print(f"[SECURITY WARNING] Blocked arbitrary file read attempt via symlink: {filepath}")
-                        continue
-                        
-                    try:
-                        with open(filepath, "r", encoding="utf-8") as f:
-                            code = f.read()
+                try:
+                    with open(filepath, "r", encoding="utf-8") as f:
+                        code = f.read()
+                    rel_path = os.path.relpath(filepath, repo_path).replace("\\", "/")
+                    if is_py:
                         tree = engine.parse_python(code)
-                        # Ensure rel_path matches standard path format
-                        rel_path = os.path.relpath(filepath, repo_path).replace("\\", "/")
-                        symbols = extractor.extract_symbols(tree.root_node, rel_path, code)
+                        symbols = py_extractor.extract_symbols(tree.root_node, rel_path, code)
                         for sym in symbols:
                             cpg.add_symbol(sym)
                             sym_tree = engine.parse_python(sym.source_code)
-                            calls = extractor.extract_calls(sym_tree.root_node, sym.id, sym.source_code)
+                            calls = py_extractor.extract_calls(sym_tree.root_node, sym.id, sym.source_code)
                             for call in calls:
                                 cpg.add_reference(call)
-                    except Exception:
-                        pass
+                    elif is_ts:
+                        tree = engine.parse_typescript(code)
+                        symbols = ts_extractor.extract_symbols(tree.root_node, rel_path, code)
+                        for sym in symbols:
+                            cpg.add_symbol(sym)
+                            sym_tree = engine.parse_typescript(sym.source_code)
+                            calls = ts_extractor.extract_calls(sym_tree.root_node, sym.id, sym.source_code)
+                            for call in calls:
+                                cpg.add_reference(call)
+                except Exception:
+                    pass
                         
         print(f"[PHASE 2 POC] CPG Built successfully. Total Nodes: {len(cpg.nodes)}")
+        self._last_cpg = cpg
         
         slicer = GraphSlicer(cpg)
         api_key = os.environ.get("GEMINI_API_KEY", "")
@@ -227,7 +247,7 @@ class Phase1AnalysisOrchestrator:
         # 2. Extract Blast Radius for changes
         for path in changed_paths:
             path_norm = path.replace("\\", "/")
-            if not path_norm.endswith(".py"): 
+            if not path_norm.endswith((".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")): 
                 continue
             
             print(f"[PHASE 2 POC] Analyzing changed file: {path_norm}")
