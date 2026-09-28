@@ -29,6 +29,9 @@ def main():
             
         tree = engine.parse_python(code)
         symbols = extractor.extract_symbols(tree.root_node, filename, code)
+        for imp in extractor.extract_imports(tree.root_node, filename, code):
+            cpg.add_import(imp)
+
         for sym in symbols:
             print(f"Extracted Symbol: {sym.id} ({sym.type})")
             cpg.add_symbol(sym)
@@ -54,9 +57,9 @@ def main():
 +           return {'id': id, 'data': 'sensitive'}
     """
     
-    print("Target Node Modified: db.py:query")
+    print("Target Node Modified: db.py:Database.query")
     slicer = GraphSlicer(cpg)
-    slice_nodes = slicer.extract_caller_slice("db.py:query")
+    slice_nodes = slicer.extract_caller_slice("db.py:Database.query")
     
     print("\n--- 4. CPG SLICER OUTPUT ---")
     for node in slice_nodes:
