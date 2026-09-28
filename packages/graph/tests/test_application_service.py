@@ -98,10 +98,7 @@ def test_build_graph_resolves_repository_local_imports_to_file_dependencies() ->
         "file:src/service.py",
         "file:src/core.py",
         "depends_on",
-    ) in {
-        (edge.source_id, edge.target_id, edge.edge_type)
-        for edge in response.edges
-    }
+    ) in {(edge.source_id, edge.target_id, edge.edge_type) for edge in response.edges}
 
 
 def _parse_result() -> RepositoryParseResult:

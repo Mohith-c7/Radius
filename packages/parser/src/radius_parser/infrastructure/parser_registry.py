@@ -8,9 +8,7 @@ class StaticLanguageParserRegistry:
     """Registry backed by a fixed parser collection."""
 
     def __init__(self, parsers: tuple[LanguageParser, ...] = ()) -> None:
-        self._parsers = {
-            parser.supported_language: parser for parser in parsers
-        }
+        self._parsers = {parser.supported_language: parser for parser in parsers}
 
     def get_parser(self, language: SourceLanguage) -> LanguageParser | None:
         """Return a parser for a language when registered."""

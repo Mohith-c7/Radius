@@ -96,11 +96,14 @@ def _webhook_body(source_repo: Path, head_sha: str) -> bytes:
 
 
 def _github_headers(body: bytes, delivery_id: str, secret: str) -> dict[str, str]:
-    signature = "sha256=" + hmac.new(
-        secret.encode(),
-        body,
-        hashlib.sha256,
-    ).hexdigest()
+    signature = (
+        "sha256="
+        + hmac.new(
+            secret.encode(),
+            body,
+            hashlib.sha256,
+        ).hexdigest()
+    )
     return {
         "X-GitHub-Event": "pull_request",
         "X-GitHub-Delivery": delivery_id,

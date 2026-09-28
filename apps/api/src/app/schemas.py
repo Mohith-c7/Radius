@@ -1,4 +1,5 @@
 """Typed request and response models for authentication endpoints."""
+
 import re
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -14,7 +15,9 @@ class Credentials(BaseModel):
     @classmethod
     def password_strength(cls, value: str) -> str:
         if not PASSWORD_PATTERN.match(value):
-            raise ValueError("Password must be at least 8 characters and include uppercase, lowercase, and a number.")
+            raise ValueError(
+                "Password must be at least 8 characters and include uppercase, lowercase, and a number."
+            )
         return value
 
 
@@ -38,7 +41,9 @@ class ResetPassword(BaseModel):
     @classmethod
     def password_strength(cls, value: str) -> str:
         if not PASSWORD_PATTERN.match(value):
-            raise ValueError("Password must be at least 8 characters and include uppercase, lowercase, and a number.")
+            raise ValueError(
+                "Password must be at least 8 characters and include uppercase, lowercase, and a number."
+            )
         return value
 
 
@@ -52,3 +57,4 @@ class UserResponse(BaseModel):
     email: EmailStr
     email_verified: bool
     role: str
+    organization_id: str | None = None

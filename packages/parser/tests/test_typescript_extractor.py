@@ -14,10 +14,10 @@ def test_standard_function_declaration(parser_setup):
     engine, extractor = parser_setup
     code = "function calculateTotal(a: number, b: number) { return add(a, b); }"
     file_path = "src/calculator.ts"
-    
+
     tree = engine.parse_typescript(code)
     symbols = extractor.extract_symbols(tree.root_node, file_path, code)
-    
+
     assert len(symbols) == 1
     func_sym = symbols[0]
     assert func_sym.id == f"{file_path}:calculateTotal"
@@ -27,10 +27,12 @@ def test_standard_function_declaration(parser_setup):
     assert func_sym.start_line == 1
     assert func_sym.end_line == 1
     assert func_sym.source_code == code
-    
+
     func_tree = engine.parse_typescript(func_sym.source_code)
-    calls = extractor.extract_calls(func_tree.root_node, func_sym.id, func_sym.source_code)
-    
+    calls = extractor.extract_calls(
+        func_tree.root_node, func_sym.id, func_sym.source_code
+    )
+
     call_names = [c.target_name for c in calls]
     assert "add" in call_names
     assert len(calls) == 1
@@ -46,12 +48,12 @@ def test_class_declaration_and_methods(parser_setup):
     }
 }"""
     file_path = "src/services/user.ts"
-    
+
     tree = engine.parse_typescript(code)
     symbols = extractor.extract_symbols(tree.root_node, file_path, code)
-    
+
     assert len(symbols) == 2
-    
+
     class_sym = symbols[0]
     assert class_sym.id == f"{file_path}:UserService"
     assert class_sym.name == "UserService"
@@ -59,7 +61,7 @@ def test_class_declaration_and_methods(parser_setup):
     assert class_sym.file_path == file_path
     assert class_sym.start_line == 1
     assert class_sym.end_line == 5
-    
+
     method_sym = symbols[1]
     assert method_sym.id == f"{file_path}:UserService.getUser"
     assert method_sym.name == "UserService.getUser"
@@ -67,10 +69,12 @@ def test_class_declaration_and_methods(parser_setup):
     assert method_sym.file_path == file_path
     assert method_sym.start_line == 2
     assert method_sym.end_line == 4
-    
+
     method_tree = engine.parse_typescript(method_sym.source_code)
-    calls = extractor.extract_calls(method_tree.root_node, method_sym.id, method_sym.source_code)
-    
+    calls = extractor.extract_calls(
+        method_tree.root_node, method_sym.id, method_sym.source_code
+    )
+
     call_names = [c.target_name for c in calls]
     assert "query" in call_names
     assert "getUser" not in call_names
@@ -80,10 +84,10 @@ def test_arrow_function_assigned_to_const(parser_setup):
     engine, extractor = parser_setup
     code = "const processItem = (item: any) => { return transform(item); };"
     file_path = "src/utils.ts"
-    
+
     tree = engine.parse_typescript(code)
     symbols = extractor.extract_symbols(tree.root_node, file_path, code)
-    
+
     assert len(symbols) == 1
     arrow_sym = symbols[0]
     assert arrow_sym.id == f"{file_path}:processItem"
@@ -92,10 +96,12 @@ def test_arrow_function_assigned_to_const(parser_setup):
     assert arrow_sym.file_path == file_path
     assert arrow_sym.start_line == 1
     assert arrow_sym.end_line == 1
-    
+
     arrow_tree = engine.parse_typescript(arrow_sym.source_code)
-    calls = extractor.extract_calls(arrow_tree.root_node, arrow_sym.id, arrow_sym.source_code)
-    
+    calls = extractor.extract_calls(
+        arrow_tree.root_node, arrow_sym.id, arrow_sym.source_code
+    )
+
     call_names = [c.target_name for c in calls]
     assert "transform" in call_names
     assert len(calls) == 1
@@ -108,16 +114,16 @@ def test_member_and_identifier_call_extraction(parser_setup):
     doSomething();
 }"""
     file_path = "src/handler.ts"
-    
+
     tree = engine.parse_typescript(code)
     symbols = extractor.extract_symbols(tree.root_node, file_path, code)
-    
+
     assert len(symbols) == 1
     handler_sym = symbols[0]
-    
+
     calls = extractor.extract_calls(tree.root_node, handler_sym.id, code)
     call_names = [c.target_name for c in calls]
-    
+
     assert "fetchData" in call_names
     assert "doSomething" in call_names
     assert len(calls) == 2
@@ -140,19 +146,19 @@ class OuterService {
     file_path = "src/nested.ts"
     tree = engine.parse_typescript(code)
     symbols = extractor.extract_symbols(tree.root_node, file_path, code)
-    
+
     names = [s.name for s in symbols]
     assert "OuterService" in names
     assert "OuterService.calculate" in names
     assert "OuterService.calculate.InnerHelper" in names
     assert "OuterService.calculate.InnerHelper.run" in names
-    
+
     sym_map = {s.name: s for s in symbols}
     assert sym_map["OuterService"].type == "class"
     assert sym_map["OuterService.calculate"].type == "function"
     assert sym_map["OuterService.calculate.InnerHelper"].type == "class"
     assert sym_map["OuterService.calculate.InnerHelper.run"].type == "function"
-    
+
     assert sym_map["OuterService.calculate"].start_line == 3
     assert sym_map["OuterService.calculate"].end_line == 10
     assert sym_map["OuterService.calculate.InnerHelper"].start_line == 4
@@ -181,13 +187,13 @@ export const helper = () => {
     file_path = "src/api.ts"
     tree = engine.parse_typescript(code)
     symbols = extractor.extract_symbols(tree.root_node, file_path, code)
-    
+
     names = [s.name for s in symbols]
     assert "exportedFunction" in names
     assert "ApiClient" in names
     assert "ApiClient.fetchData" in names
     assert "helper" in names
-    
+
     sym_map = {s.name: s for s in symbols}
     assert sym_map["exportedFunction"].type == "function"
     assert sym_map["ApiClient"].type == "class"
@@ -205,13 +211,13 @@ def test_constructor_new_expression_calls(parser_setup):
     file_path = "src/init.ts"
     tree = engine.parse_typescript(code)
     symbols = extractor.extract_symbols(tree.root_node, file_path, code)
-    
+
     assert len(symbols) == 1
     init_sym = symbols[0]
-    
+
     calls = extractor.extract_calls(tree.root_node, init_sym.id, code)
     call_names = [c.target_name for c in calls]
-    
+
     assert "Database" in call_names
     assert "Client" in call_names
     assert "connect" in call_names
@@ -277,4 +283,3 @@ import './side-effect';
     assert imports[7].imported_name == "other"
     assert imports[7].module_path == "./combined"
     assert imports[7].alias == "renamed"
-

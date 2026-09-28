@@ -111,5 +111,7 @@ def test_hunk_header_without_counts() -> None:
 def test_empty_or_non_diff_strings_returning_empty_dict() -> None:
     assert parse_diff_modified_lines("") == {}
     assert parse_diff_modified_lines("   \n\t  ") == {}
-    assert parse_diff_modified_lines("This is just regular text\nnot a diff at all") == {}
+    assert (
+        parse_diff_modified_lines("This is just regular text\nnot a diff at all") == {}
+    )
     assert parse_diff_modified_lines(None) == {}  # type: ignore[arg-type]

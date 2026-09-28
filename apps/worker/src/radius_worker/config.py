@@ -41,6 +41,7 @@ class WorkerSettings(DatabaseSettings):
         if v is None or v == "" or v == 0 or v == "0":
             return None
         return int(v)
+
     github_api_base_url: str = Field(
         default="https://api.github.com",
         alias="GITHUB_API_BASE_URL",

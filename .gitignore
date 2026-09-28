@@ -19,6 +19,7 @@ build/
 out/
 
 # Build cache
+**/.turbo/
 .turbo/
 *.tsbuildinfo
 

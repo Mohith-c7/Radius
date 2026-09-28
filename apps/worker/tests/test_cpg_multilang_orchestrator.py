@@ -12,25 +12,20 @@ def _create_test_repository(repo_path: Path) -> None:
     # Python files: service.py calling db.py
     db_py = repo_path / "db.py"
     db_py.write_text(
-        "def query():\n"
-        "    return 'database result'\n",
+        "def query():\n" "    return 'database result'\n",
         encoding="utf-8",
     )
 
     service_py = repo_path / "service.py"
     service_py.write_text(
-        "from db import query\n\n"
-        "def handle_request():\n"
-        "    return query()\n",
+        "from db import query\n\n" "def handle_request():\n" "    return query()\n",
         encoding="utf-8",
     )
 
     # TypeScript files: handler.ts calling utils.ts
     utils_ts = repo_path / "utils.ts"
     utils_ts.write_text(
-        "export function formatData(): string {\n"
-        "    return 'formatted';\n"
-        "}\n",
+        "export function formatData(): string {\n" "    return 'formatted';\n" "}\n",
         encoding="utf-8",
     )
 
@@ -88,13 +83,17 @@ def test_multilang_cpg_nodes_extracted_and_slices_computed(tmp_path: Path) -> No
     assert ts_callers[0].symbol.name == "processEvent"
 
 
-def test_multilang_cpg_prunes_benign_callers_with_ai(tmp_path: Path, monkeypatch) -> None:
+def test_multilang_cpg_prunes_benign_callers_with_ai(
+    tmp_path: Path, monkeypatch
+) -> None:
     _create_test_repository(tmp_path)
     orchestrator = _create_orchestrator()
 
     monkeypatch.setenv("GEMINI_API_KEY", "mock-gemini-key")
 
-    with patch("radius_analysis.ai.pruner.SemanticPruner.evaluate_impact", return_value=False):
+    with patch(
+        "radius_analysis.ai.pruner.SemanticPruner.evaluate_impact", return_value=False
+    ):
         changed_paths = ("db.py", "utils.ts")
         pruned_files = orchestrator._run_semantic_cpg_poc(
             tmp_path, changed_paths, diff_text="sample diff"
@@ -105,29 +104,24 @@ def test_multilang_cpg_prunes_benign_callers_with_ai(tmp_path: Path, monkeypatch
     assert "handler.ts" in pruned_files
 
 
-def test_diff_hunk_precision_only_slices_modified_symbol(tmp_path: Path, monkeypatch) -> None:
+def test_diff_hunk_precision_only_slices_modified_symbol(
+    tmp_path: Path, monkeypatch
+) -> None:
     source_py = tmp_path / "source.py"
     source_py.write_text(
-        "def foo():\n"
-        "    return 'foo'\n\n"
-        "def bar():\n"
-        "    return 'bar'\n",
+        "def foo():\n" "    return 'foo'\n\n" "def bar():\n" "    return 'bar'\n",
         encoding="utf-8",
     )
 
     caller_foo_py = tmp_path / "caller_foo.py"
     caller_foo_py.write_text(
-        "from source import foo\n\n"
-        "def use_foo():\n"
-        "    return foo()\n",
+        "from source import foo\n\n" "def use_foo():\n" "    return foo()\n",
         encoding="utf-8",
     )
 
     caller_bar_py = tmp_path / "caller_bar.py"
     caller_bar_py.write_text(
-        "from source import bar\n\n"
-        "def use_bar():\n"
-        "    return bar()\n",
+        "from source import bar\n\n" "def use_bar():\n" "    return bar()\n",
         encoding="utf-8",
     )
 
@@ -153,8 +147,15 @@ def test_diff_hunk_precision_only_slices_modified_symbol(tmp_path: Path, monkeyp
         return original_extract(self, target_node_id)
 
     monkeypatch.setenv("GEMINI_API_KEY", "mock-gemini-key")
-    with patch("radius_analysis.ai.pruner.SemanticPruner.evaluate_impact", return_value=False):
-        with patch.object(GraphSlicer, "extract_caller_slice", side_effect=spy_extract_caller_slice, autospec=True):
+    with patch(
+        "radius_analysis.ai.pruner.SemanticPruner.evaluate_impact", return_value=False
+    ):
+        with patch.object(
+            GraphSlicer,
+            "extract_caller_slice",
+            side_effect=spy_extract_caller_slice,
+            autospec=True,
+        ):
             pruned_files = orchestrator._run_semantic_cpg_poc(
                 tmp_path, ("source.py",), diff_text=diff_text
             )
@@ -166,4 +167,3 @@ def test_diff_hunk_precision_only_slices_modified_symbol(tmp_path: Path, monkeyp
     # caller_foo.py was sliced and pruned, while caller_bar.py was untouched
     assert "caller_foo.py" in pruned_files
     assert "caller_bar.py" not in pruned_files
-

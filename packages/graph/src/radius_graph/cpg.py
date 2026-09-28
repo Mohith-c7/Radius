@@ -1,9 +1,13 @@
 import posixpath
+
+from radius_parser.models import Import, Reference, Symbol
+
 from radius_graph.models import Node
-from radius_parser.models import Symbol, Reference, Import
 
 
-def _file_matches_module(file_path: str, module_path: str, source_file: str | None = None) -> bool:
+def _file_matches_module(
+    file_path: str, module_path: str, source_file: str | None = None
+) -> bool:
     """Checks whether a symbol's file_path matches an import module_path."""
     fp = file_path.replace("\\", "/").rstrip("/")
     mp = module_path.replace("\\", "/").rstrip("/")
@@ -11,12 +15,12 @@ def _file_matches_module(file_path: str, module_path: str, source_file: str | No
     # Strip known code file extensions from both
     for ext in (".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"):
         if fp.endswith(ext):
-            fp = fp[:-len(ext)]
+            fp = fp[: -len(ext)]
             break
 
     for ext in (".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"):
         if mp.endswith(ext):
-            mp = mp[:-len(ext)]
+            mp = mp[: -len(ext)]
             break
 
     # Handle python relative dot notation: .db -> ./db, ..db -> ../db
@@ -114,11 +118,17 @@ class CodePropertyGraph:
                 break
 
         if matched_import:
-            lookup_name = matched_import.imported_name if matched_import.imported_name != "*" else target_name
+            lookup_name = (
+                matched_import.imported_name
+                if matched_import.imported_name != "*"
+                else target_name
+            )
             # Exact match
             for node_id, node in self.nodes.items():
                 if (
-                    _file_matches_module(node.symbol.file_path, matched_import.module_path, source_file)
+                    _file_matches_module(
+                        node.symbol.file_path, matched_import.module_path, source_file
+                    )
                     and node.symbol.name == lookup_name
                 ):
                     target_id = node_id
@@ -126,22 +136,27 @@ class CodePropertyGraph:
             # Scoped match (e.g., Class.method)
             if not target_id:
                 for node_id, node in self.nodes.items():
-                    if (
-                        _file_matches_module(node.symbol.file_path, matched_import.module_path, source_file)
-                        and node.symbol.name.endswith("." + lookup_name)
-                    ):
+                    if _file_matches_module(
+                        node.symbol.file_path, matched_import.module_path, source_file
+                    ) and node.symbol.name.endswith("." + lookup_name):
                         target_id = node_id
                         break
         else:
             # 2. If not found in imports, check if target symbol is declared in the same source_file
             if source_file:
                 for node_id, node in self.nodes.items():
-                    if node.symbol.file_path == source_file and node.symbol.name == target_name:
+                    if (
+                        node.symbol.file_path == source_file
+                        and node.symbol.name == target_name
+                    ):
                         target_id = node_id
                         break
                 if not target_id:
                     for node_id, node in self.nodes.items():
-                        if node.symbol.file_path == source_file and node.symbol.name.endswith("." + target_name):
+                        if (
+                            node.symbol.file_path == source_file
+                            and node.symbol.name.endswith("." + target_name)
+                        ):
                             target_id = node_id
                             break
 
@@ -172,4 +187,3 @@ class CodePropertyGraph:
         """Resolves a reference and creates bidirectional edges."""
         if not self._resolve_reference(reference):
             self._unresolved_references.append(reference)
-

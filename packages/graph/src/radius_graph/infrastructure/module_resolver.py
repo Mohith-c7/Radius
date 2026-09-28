@@ -93,9 +93,7 @@ class ModuleResolver:
         if level > 1:
             parent_count = level - 1
             base_parts = (
-                base_parts[:-parent_count]
-                if parent_count <= len(base_parts)
-                else []
+                base_parts[:-parent_count] if parent_count <= len(base_parts) else []
             )
         if module:
             base_parts.extend(part for part in module.split(".") if part)

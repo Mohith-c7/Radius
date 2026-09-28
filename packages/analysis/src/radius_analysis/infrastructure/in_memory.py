@@ -41,9 +41,7 @@ class InMemoryAnalysisStore:
                 if analysis.pull_request_id == pull_request_id
             ]
         if status is not None:
-            analyses = [
-                analysis for analysis in analyses if analysis.status == status
-            ]
+            analyses = [analysis for analysis in analyses if analysis.status == status]
         return analyses
 
     def save(self, analysis: Analysis) -> Analysis:

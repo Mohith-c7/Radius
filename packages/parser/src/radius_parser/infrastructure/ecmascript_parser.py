@@ -19,15 +19,13 @@ IMPORT_RE = re.compile(
 )
 REQUIRE_RE = re.compile(r"""require\(["'](?P<source>[^"']+)["']\)""")
 CLASS_RE = re.compile(
-    r"""^\s*(?:export\s+)?(?:abstract\s+)?class\s+"""
-    r"""(?P<name>[A-Za-z_$][\w$]*)""",
+    r"""^\s*(?:export\s+)?(?:abstract\s+)?class\s+""" r"""(?P<name>[A-Za-z_$][\w$]*)""",
 )
 INTERFACE_RE = re.compile(
     r"""^\s*(?:export\s+)?interface\s+(?P<name>[A-Za-z_$][\w$]*)""",
 )
 FUNCTION_RE = re.compile(
-    r"""^\s*(?:export\s+)?(?:async\s+)?function\s+"""
-    r"""(?P<name>[A-Za-z_$][\w$]*)""",
+    r"""^\s*(?:export\s+)?(?:async\s+)?function\s+""" r"""(?P<name>[A-Za-z_$][\w$]*)""",
 )
 CONST_FN_RE = re.compile(
     r"""^\s*(?:export\s+)?(?:const|let|var)\s+"""

@@ -55,7 +55,11 @@ def parse_diff_modified_lines(diff_text: str) -> dict[str, set[int]]:
             if m:
                 old_raw = m.group(1).strip()
                 new_raw = m.group(2).strip()
-                old_file = _normalize_path(old_raw) if old_raw not in ("/dev/null", "dev/null") else None
+                old_file = (
+                    _normalize_path(old_raw)
+                    if old_raw not in ("/dev/null", "dev/null")
+                    else None
+                )
                 new_p = _normalize_path(new_raw)
                 current_file = new_p if new_p else old_file
             else:

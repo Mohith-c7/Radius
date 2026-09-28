@@ -9,6 +9,7 @@ from app.routes_auth import router as auth_router
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from radius_shared.database.base import Base as DomainBase
 from radius_shared.dto import error_response
 from radius_shared.errors import (
     AccessDeniedError,
@@ -71,7 +72,9 @@ def create_app() -> FastAPI:
         "http://127.0.0.1:3001",
     ]
     if settings.cors_origins:
-        allow_origins.extend([o.strip() for o in settings.cors_origins.split(",") if o.strip()])
+        allow_origins.extend(
+            [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+        )
 
     app.add_middleware(
         CORSMiddleware,
@@ -96,8 +99,9 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     def initialize_auth_database() -> None:
-        """Create the tables used by the shared authentication implementation."""
+        """Create the tables used by the shared authentication and domain models."""
 
+        DomainBase.metadata.create_all(bind=auth_engine)
         AuthBase.metadata.create_all(bind=auth_engine)
 
     return app

@@ -129,9 +129,7 @@ class SqlAlchemyAnalysisStore:
             db_models.ChangedFile(
                 analysis_id=analysis_id,
                 path=changed_file.path.value,
-                change_type=db_enums.ChangedFileType(
-                    changed_file.change_type.value
-                ),
+                change_type=db_enums.ChangedFileType(changed_file.change_type.value),
                 additions=changed_file.additions,
                 deletions=changed_file.deletions,
             )

@@ -334,8 +334,7 @@ def _repository_cache_path(
 
 def _safe_path_segment(value: str) -> str:
     return "".join(
-        char if char.isalnum() or char in {"-", "_", "."} else "-"
-        for char in value
+        char if char.isalnum() or char in {"-", "_", "."} else "-" for char in value
     )
 
 
@@ -427,9 +426,11 @@ def _github_report(
         raise NotFoundError(msg)
     repository = session.get(db_models.Repository, analysis.repository_id)
     pull_request = session.get(db_models.PullRequest, analysis.pull_request_id)
-    confidence = session.query(db_models.ConfidenceReport).filter_by(
-        analysis_id=analysis_id
-    ).one_or_none()
+    confidence = (
+        session.query(db_models.ConfidenceReport)
+        .filter_by(analysis_id=analysis_id)
+        .one_or_none()
+    )
     if repository is None or pull_request is None or confidence is None:
         msg = f"GitHub publishing artifacts for analysis {analysis_id} are incomplete."
         raise NotFoundError(msg)
