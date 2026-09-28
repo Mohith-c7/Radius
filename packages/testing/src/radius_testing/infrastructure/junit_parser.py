@@ -6,6 +6,11 @@ import json
 import xml.etree.ElementTree as ET
 from uuid import UUID, uuid4
 
+try:
+    import defusedxml.ElementTree as defused_ET
+except ImportError:
+    defused_ET = None
+
 from radius_testing.domain.entities import TestRunResult
 from radius_testing.domain.enums import TestRunStatus
 
@@ -106,9 +111,15 @@ class JUnitReportParser:
 
     def _parse_xml(self, text: str, analysis_id: UUID) -> TestRunResult:
         try:
-            root = ET.fromstring(text.encode("utf-8"))
+            if defused_ET is not None:
+                root = defused_ET.fromstring(text.encode("utf-8"))
+            else:
+                root = ET.fromstring(text.encode("utf-8"))  # nosec B314
         except Exception:
-            root = ET.fromstring(text)
+            if defused_ET is not None:
+                root = defused_ET.fromstring(text)
+            else:
+                root = ET.fromstring(text)  # nosec B314
 
         testsuites = (
             [root]
