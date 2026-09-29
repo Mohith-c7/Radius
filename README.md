@@ -1,140 +1,116 @@
 # Radius
 
-> The confidence layer for modern software development.
+> The AI-native confidence layer for modern software development.
 
 Radius is an AI-native software verification platform that helps engineering teams understand whether a pull request is safe to merge.
 
-Radius does not replace existing test frameworks, CI/CD systems, source hosts, or code editors. It sits between code changes and production deployment, analyzes the repository as an interconnected system, and produces explainable verification evidence before merge.
+Radius does not replace existing test frameworks, CI/CD systems, or code editors. It sits between code changes and production deployment, analyzes the repository as an interconnected system, and produces explainable verification evidence before merge.
 
-## Core Question
+---
 
-Every subsystem in Radius contributes to one question:
+## The Core Question
+
+Every subsystem in Radius contributes to one fundamental question:
 
 ```text
 Can this Pull Request be merged safely?
 ```
 
-## Product Direction
+---
 
-Phase 1 is deterministic first. Radius must understand repositories before AI is allowed to influence engineering decisions.
+## Key Capabilities
 
-The Phase 1 workflow is:
+1. **Multi-Language Code Property Graph (CPG)**:
+   - Tree-Sitter AST extraction for **Python** and **TypeScript / JavaScript**.
+   - Resolves cross-file symbol references and import statements into a directed dependency graph.
+2. **Diff-Hunk Line Precision**:
+   - Parses unified git diff hunks to identify exact modified line numbers.
+   - Slices only symbols directly affected by modified lines, skipping untouched sibling functions in edited files.
+3. **Gemini 2.0 Flash Semantic AI Pruner**:
+   - Evaluates call-site impact to separate benign changes (docstrings, internal refactorings) from true behavioral changes, minimizing CI noise.
+   - Built with fail-safe fallback (`impacted=True`) on missing credentials or API exceptions.
+4. **Predictive Test Selection**:
+   - Maps sliced symbols to exact impacted test files across frameworks (`pytest`, `vitest`, `jest`).
+   - Cuts test run times by up to **80%** while executing only tests relevant to the pull request.
+   - Generates multi-framework CLI strings directly executable in local or CI runners.
+5. **Universal CI Ingestion & Dynamic Confidence Engine**:
+   - Ingests standard **JUnit XML** and **JSON** test execution reports from any CI runner.
+   - Dynamically recalculates merge Confidence Scores and Risk Levels (`low`, `medium`, `high`, `critical`) based on live test outcomes.
+6. **Rich GitHub App Integration**:
+   - Publishes `Radius confidence` Check Runs with `in_progress` status on webhook arrival and `completed` status upon verification.
+   - Formats visual GitHub PR comments with status badges (`🟢`/`🟡`/`🟠`/`🔴`), CI time savings, and collapsible blast radius tables.
+7. **Interactive Next.js Dashboard**:
+   - Interactive SVG Graph Visualizer with layered DAG layout, pan/zoom, filter pills, and symbol inspector drawer.
+   - Test Selection Hub with 1-click CLI runner command copy.
+   - Ingestion modal for pasting or uploading JUnit XML and JSON test reports with live confidence refreshes.
 
-```text
-GitHub event or manual trigger
-Repository synchronization
-Git diff and changed-file detection
-Parser and symbol extraction
-Dependency graph update
-Blast radius computation
-Relevant test selection and execution
-Explainable confidence report
-Dashboard and GitHub Check output
-```
+---
 
-AI-assisted capabilities such as test generation, risk summarization, security intelligence, and historical learning are future enhancements. They should integrate through stable contracts after the deterministic foundation is reliable.
-
-## Target Users
-
-- Software engineers reviewing pull requests
-- Technical leads assessing merge risk
-- DevOps and platform teams improving release confidence
-- Organization admins managing GitHub integrations and repositories
-- Teams adopting AI-assisted software development
-
-## Phase 1 Scope
-
-Radius Phase 1 focuses on:
-
-- GitHub App integration
-- Repository synchronization
-- Source parsing with Tree-sitter
-- Symbol, import, and export extraction
-- Dependency graph generation with NetworkX
-- Git change analysis
-- Blast radius computation
-- Relevant existing test execution
-- Explainable confidence scoring
-- FastAPI REST API
-- Next.js dashboard
-
-## Repository Structure
+## Monorepo Architecture
 
 ```text
 radius/
-apps/
-  api/          FastAPI application
-  dashboard/    Next.js dashboard
-  worker/       Background analysis worker
-
-packages/
-  repository/   GitHub, Git, repository snapshots
-  parser/       Source parsing and semantic extraction
-  graph/        Dependency graph construction and traversal
-  analysis/     Git diff, changed symbols, blast radius
-  testing/      Test discovery, selection, execution, coverage
-  confidence/   Evidence aggregation and confidence reports
-  shared/       Config, logging, events, auth, errors, shared types
-
-docs/           Product, architecture, API, database, and workflow docs
-infra/          Infrastructure configuration
-scripts/        Development and automation scripts
-.github/        GitHub workflows and templates
+├── apps/
+│   ├── api/            FastAPI REST API (Python 3.12, Uvicorn)
+│   ├── dashboard/      Next.js 15.5 React/TypeScript Web Console
+│   └── worker/         Durable Analysis Worker (AST, CPG, AI Pruning)
+│
+├── packages/
+│   ├── analysis/       Diff hunk parser, change detection, AI semantic pruner
+│   ├── confidence/     Deterministic & dynamic confidence scoring engine
+│   ├── github/         GitHub App client, Check Runs & PR publisher
+│   ├── graph/          Code Property Graph (CPG), graph slicer, module resolver
+│   ├── parser/         Tree-Sitter multi-language AST symbol & import extractors
+│   ├── repository/     Git repository clones, branch tracking, and snapshots
+│   ├── shared/         Database models, auth tokens, configuration, events
+│   └── testing/        Predictive test selector, JUnit XML parser, planners
+│
+├── docs/               Deployment, CI integration, architecture, and API docs
+├── infra/              Alembic database migrations and docker configurations
+└── tests/              End-to-end multi-language target verification test suite
 ```
 
-## Technology Stack
+---
 
-- Frontend: Next.js, React, TypeScript, Tailwind CSS, shadcn/ui
-- Backend: FastAPI, Python 3.12+, Pydantic, SQLAlchemy, Alembic
-- Database: PostgreSQL
-- Parsing: Tree-sitter
-- Graph: NetworkX
-- Git: GitPython
-- Authentication: GitHub OAuth and GitHub App
-- Tooling: pnpm, TurboRepo, Docker, Ruff, Black, Pytest, ESLint, Prettier
+## Quickstart: Docker Compose
+
+Spin up the entire Radius production stack with PostgreSQL, Redis, API, Worker, and Next.js Dashboard:
+
+```bash
+# Clone the repository
+git clone https://github.com/Mohith-c7/Radius.git
+cd Radius
+
+# Configure environment
+cp .env.example .env.production
+
+# Run all services
+docker compose --env-file .env.production up -d --build
+```
+
+- **Next.js Dashboard**: `http://localhost:3000`
+- **FastAPI API**: `http://localhost:8000/api/v1/health`
+- **API Documentation**: `http://localhost:8000/docs`
+
+---
+
+## Local Development & Testing
+
+```bash
+# Install Python dependencies and run full test suite (217 tests)
+python -m pytest
+
+# Install frontend dependencies and run dashboard tests (11 tests)
+pnpm --filter dashboard run test
+
+# Typecheck and compile production Next.js build
+pnpm --filter dashboard run build
+```
+
+---
 
 ## Documentation
 
-The primary docs are in `docs/`.
-
-- `PROJECT_OVERVIEW.md`
-- `PRODUCT_VISION.md`
-- `PHASE1_SPECIFICATION.md`
-- `SYSTEM_ARCHITECTURE.md`
-- `MODULE_ARCHITECTURE.md`
-- `DOMAIN_MODEL.md`
-- `FOLDER_STRUCTURE.md`
-- `DATABASE_DESIGN.md`
-- `API_CONTRACTS.md`
-- `USE_CASES.md`
-- `DEVELOPMENT_GUIDE.md`
-- `roadmap.md`
-- `AI_CONTEXT.md`
-- `decisions.md`
-
-`AI_CONTEXT.md` is required reading before any implementation work.
-
-## Branch Strategy
-
-Development follows an enterprise promotion flow:
-
-```text
-feature/* -> develop -> uat -> main
-```
-
-- `feature/*` branches isolate individual features, fixes, or docs work.
-- `develop` is the active development integration branch.
-- `uat` is the UAT branch and receives promoted, internally verified work from `develop`.
-- `main` is the release branch and must contain only release-ready code.
-- `release/*` branches are optional and used only for named release stabilization.
-- `hotfix/*` branches start from `main`, then merge back into `main`, `uat`, and `develop`.
-
-Pull requests should be small, reviewable, and aligned to one domain or workflow whenever possible.
-
-## Development Status
-
-Radius is at the foundation stage. The repository currently contains the monorepo scaffold and product/architecture documentation. Implementation should proceed from the documented Phase 1 contracts and domain boundaries.
-
-## License
-
-This project is currently proprietary.
+- **[Production Deployment Guide](docs/DEPLOYMENT.md)**: Full production runtime configuration, Docker orchestration, and security.
+- **[CI/CD Integration Guide](docs/CI_INTEGRATION_GUIDE.md)**: Integrating predictive test selection into GitHub Actions and uploading JUnit XML reports.
+- **[System Architecture](docs/SYSTEM_ARCHITECTURE.md)**: In-depth technical architecture and data flow.
