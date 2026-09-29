@@ -96,18 +96,32 @@ class PathBasedTestSelector:
         parent = path.parent.as_posix()
         return (
             f"tests/test_{stem}.py",
+            f"test/test_{stem}.py",
             f"tests/{parent}/test_{stem}.py",
+            f"test/{parent}/test_{stem}.py",
             f"{parent}/test_{stem}.py",
             f"{parent}/{stem}_test.py",
             f"test_{stem}.py",
             f"{stem}_test.py",
             f"tests/{stem}.test.ts",
             f"tests/{stem}.spec.ts",
+            f"test/{stem}.test.ts",
+            f"test/{stem}.spec.ts",
             f"{parent}/{stem}.test.ts",
             f"{parent}/{stem}.spec.ts",
             f"{parent}/{stem}.test.tsx",
             f"{parent}/__tests__/{stem}.test.ts",
+            f"test/{stem}.js",
+            f"tests/{stem}.js",
+            f"test/{stem}.test.js",
+            f"tests/{stem}.test.js",
+            "test/index.js",
+            "test/index.ts",
+            "tests/index.js",
+            "tests/index.ts",
         )
+
+
 
     @staticmethod
     def _normalize(path: str) -> str:

@@ -44,3 +44,6 @@ Thumbs.db
 pnpm-debug.log*
 package-lock.json
 *.db
+bandit_report.json
+test_e2e.py
+ui-audit.md

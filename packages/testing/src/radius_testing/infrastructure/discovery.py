@@ -50,14 +50,21 @@ class ConventionalTestDiscoverer:
 
     @staticmethod
     def _is_test_path(path: str) -> bool:
-        name = Path(path).name
-        return (
+        p = Path(path)
+        name = p.name
+        is_conventional_name = (
             name.startswith("test_")
             and name.endswith(".py")
             or name.endswith("_test.py")
             or ".test." in name
             or ".spec." in name
         )
+        if is_conventional_name:
+            return True
+        parts = p.parts
+        in_test_dir = any(part in {"test", "tests", "__tests__"} for part in parts[:-1])
+        is_code_file = name.endswith((".py", ".ts", ".tsx", ".js", ".jsx", ".mjs"))
+        return in_test_dir and is_code_file and not name.startswith(("_", "."))
 
     @staticmethod
     def _framework(path: str) -> TestFramework:
@@ -82,13 +89,16 @@ class ConventionalTestDiscoverer:
         parent = relative.parent.as_posix()
         if name.startswith("test_") and name.endswith(".py"):
             stem = name.removeprefix("test_").removesuffix(".py")
-            if parent == "tests":
+            if parent in {"tests", "test"}:
                 return f"src/{stem}.py"
             if "/tests" in parent:
                 return f"{parent.replace('/tests', '')}/{stem}.py"
+            if "/test" in parent:
+                return f"{parent.replace('/test', '')}/{stem}.py"
             return f"{parent}/{stem}.py"
         if name.endswith("_test.py"):
             return f"{parent}/{name.removesuffix('_test.py')}.py"
+
         for marker in (".test.", ".spec."):
             if marker in name:
                 stem, suffix = name.split(marker, maxsplit=1)
