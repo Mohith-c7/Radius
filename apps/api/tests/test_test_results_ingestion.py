@@ -170,3 +170,38 @@ def test_ingest_test_results_organization_authorization() -> None:
     )
 
     assert response.status_code == 403
+
+
+def test_get_test_run_results_endpoint() -> None:
+    app = create_app()
+    client = TestClient(app)
+    org_id = str(uuid4())
+    headers = {"X-Radius-Organization-Id": org_id}
+    _, analysis_id = _setup_analysis(client, headers)
+
+    # Before ingestion: should be 404
+    not_found_res = client.get(
+        f"/api/v1/analyses/{analysis_id}/tests/results",
+        headers=headers,
+    )
+    assert not_found_res.status_code == 404
+
+    # Ingest results
+    client.post(
+        f"/api/v1/analyses/{analysis_id}/tests/results",
+        headers={**headers, "Content-Type": "application/json"},
+        json={"total": 8, "passed": 7, "failed": 1, "skipped": 0, "duration_ms": 450},
+    )
+
+    # After ingestion: should return 200 with result data
+    res = client.get(
+        f"/api/v1/analyses/{analysis_id}/tests/results",
+        headers=headers,
+    )
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["total_tests"] == 8
+    assert data["passed"] == 7
+    assert data["failed"] == 1
+    assert data["duration_ms"] == 450
+

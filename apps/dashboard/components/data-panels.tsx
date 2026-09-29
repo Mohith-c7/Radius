@@ -4,6 +4,9 @@ import Link from "next/link";
 import {
   AlertCircle,
   ArrowRight,
+  Check,
+  CheckCircle2,
+  Copy,
   FileCode2,
   FolderGit2,
   Loader2,
@@ -11,8 +14,12 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Sparkles,
   TestTube2,
   Trash2,
+  UploadCloud,
+  XCircle,
+  Zap,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
@@ -23,6 +30,7 @@ import {
   ConnectRepositoryPayload,
   GraphSnapshot,
   Repository,
+  TestRunResult,
   TestSelection,
   connectRepository,
   disconnectRepository,
@@ -31,11 +39,13 @@ import {
   getConfidence,
   getGraph,
   getRepository,
+  getTestRunResult,
   getTests,
   listAnalyses,
   listRepositories,
   radiusConfig,
   rerunAnalysis,
+  uploadTestResults,
 } from "../lib/api";
 import { ConfidenceRing, OpenLink, PageHeading, Status } from "./ui";
 
@@ -618,11 +628,12 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
       getAnalysis(analysisId),
       listRepositories(),
     ]);
-    const [blast, confidence, tests, graph] = await Promise.allSettled([
+    const [blast, confidence, tests, graph, testResult] = await Promise.allSettled([
       getBlastRadius(analysisId),
       getConfidence(analysisId),
       getTests(analysisId),
       getGraph(analysisId),
+      getTestRunResult(analysisId),
     ]);
     return {
       analysis,
@@ -631,6 +642,7 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
       confidence: settledValue(confidence),
       tests: settledValue(tests),
       graph: settledValue(graph),
+      testResult: settledValue(testResult),
     };
   }, [analysisId, refreshKey]);
 
@@ -647,7 +659,7 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
   if (state.status === "loading") return <LoadingState label="Loading analysis" />;
   if (state.status === "error") return <ErrorState message={state.error} />;
 
-  const { analysis, repositories, blast, confidence, tests, graph } = state.data;
+  const { analysis, repositories, blast, confidence, tests, graph, testResult } = state.data;
   const repo = repositoryName(repositories, analysis.repository_id);
 
   return (
@@ -678,8 +690,7 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
       <nav className="analysis-tabs">
         <a href="#summary">Summary</a>
         <a href="#impact">Blast radius</a>
-        <a href="#tests">Tests</a>
-        <a href="#graph">Dependencies</a>
+        <a href="#tests">Tests & CI</a>
       </nav>
       <div className="detail-grid" id="summary">
         <ConfidenceEvidenceCard confidence={confidence} />
@@ -691,7 +702,19 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
           </p>
         </aside>
       </div>
-      <AnalysisArtifacts blast={blast} tests={tests} graph={graph} />
+
+      <div id="impact" style={{ marginTop: "24px" }}>
+        <BlastRadiusVisualizerCard blast={blast} graph={graph} analysisId={analysisId} />
+      </div>
+
+      <div id="tests" style={{ marginTop: "24px", display: "grid", gap: "20px" }}>
+        <CiTestResultsCard
+          testResult={testResult}
+          analysisId={analysisId}
+          onRefresh={() => setRefreshKey((k) => k + 1)}
+        />
+        <TestSelectionHub tests={tests} analysisId={analysisId} />
+      </div>
     </>
   );
 }
@@ -705,7 +728,10 @@ function ConfidenceEvidenceCard({
     <section className="card">
       <div className="card-heading">
         <div>
-          <h2>Confidence evidence</h2>
+          <h2>
+            <Sparkles size={16} className="inline-icon" />
+            Confidence evidence
+          </h2>
           <p>
             {confidence
               ? `Why Radius scored this ${score(confidence)}/100`
@@ -715,15 +741,20 @@ function ConfidenceEvidenceCard({
       </div>
       <div className="evidence">
         {confidence?.evidence.length ? (
-          confidence.evidence.map((item) => (
-            <div className="evidence-row" key={`${item.category}-${item.label}`}>
-              <div>
-                <strong>{item.label}</strong>
-                <p>{item.message}</p>
+          confidence.evidence.map((item) => {
+            const isPositive = item.impact.toLowerCase() === "positive";
+            return (
+              <div className="evidence-row" key={`${item.category}-${item.label}`}>
+                <div>
+                  <strong>{item.label}</strong>
+                  <p>{item.message}</p>
+                </div>
+                <span style={{ color: isPositive ? "var(--green)" : "var(--amber)" }}>
+                  {item.impact}
+                </span>
               </div>
-              <span>{item.impact}</span>
-            </div>
-          ))
+            );
+          })
         ) : (
           <p className="muted">Confidence evidence will appear after worker execution.</p>
         )}
@@ -732,75 +763,456 @@ function ConfidenceEvidenceCard({
   );
 }
 
-function AnalysisArtifacts({
+function BlastRadiusVisualizerCard({
   blast,
-  tests,
   graph,
+  analysisId,
 }: {
   blast: BlastRadius | null;
-  tests: TestSelection | null;
   graph: GraphSnapshot | null;
+  analysisId: string;
 }) {
   return (
-    <div className="detail-grid wide-card" id="impact">
-      <section className="card detail-card">
-        <h2>
-          <FileCode2 className="inline-icon" size={17} />
-          Blast radius
-        </h2>
-        <div className="stat-list">
-          <div>
-            <span>Changed or affected files</span>
-            <strong>{blast?.affected_files ?? "-"}</strong>
-          </div>
-          <div>
-            <span>Affected symbols</span>
-            <strong>{blast?.affected_symbols ?? "-"}</strong>
-          </div>
-          <div>
-            <span>Affected modules</span>
-            <strong>{blast?.affected_modules ?? "-"}</strong>
-          </div>
-          <div>
-            <span>Dependency depth</span>
-            <strong>{blast ? `${blast.dependency_depth} hops` : "-"}</strong>
-          </div>
+    <section className="card detail-card">
+      <div className="test-hub-header">
+        <div>
+          <h2 style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <FileCode2 size={18} style={{ color: "var(--green)" }} />
+            Blast Radius & Dependency Slice
+          </h2>
+          <p className="muted">
+            Transitive callers and impacted modules sliced from modified code property graphs.
+          </p>
         </div>
         {blast && (
-          <Link href={`/analyses/${blast.analysis_id}/blast-radius`} className="text-link">
+          <Link href={`/analyses/${analysisId}/blast-radius`} className="text-link">
             Explore blast radius <ArrowRight size={14} />
           </Link>
         )}
-      </section>
-      <section className="card detail-card" id="tests">
-        <h2>
-          <TestTube2 className="inline-icon" size={17} />
-          Targeted validation
-        </h2>
-        <div className="stat-list">
-          <div>
-            <span>Selected tests</span>
-            <strong>{tests?.selected_count ?? "-"}</strong>
+      </div>
+
+      <div className="stat-list">
+        <div>
+          <span>Changed or affected files</span>
+          <strong>{blast?.affected_files ?? "-"}</strong>
+        </div>
+        <div>
+          <span>Affected symbols</span>
+          <strong>{blast?.affected_symbols ?? "-"}</strong>
+        </div>
+        <div>
+          <span>Affected modules</span>
+          <strong>{blast?.affected_modules ?? "-"}</strong>
+        </div>
+        <div>
+          <span>Dependency depth</span>
+          <strong>{blast ? `${blast.dependency_depth} hops` : "-"}</strong>
+        </div>
+      </div>
+
+      {graph && graph.nodes.length > 0 && (
+        <div className="cpg-slice-card">
+          <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "8px", color: "var(--muted)" }}>
+            CPG Dependency Slice Nodes ({graph.node_count} nodes, {graph.edge_count} edges)
           </div>
-          <div>
-            <span>Graph nodes</span>
-            <strong>{graph?.node_count ?? "-"}</strong>
-          </div>
-          <div>
-            <span>Graph edges</span>
-            <strong>{graph?.edge_count ?? "-"}</strong>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+            {graph.nodes.slice(0, 16).map((node) => {
+              const isFile = node.node_type === "FILE" || node.node_type === "file";
+              const isTest = node.label.includes("test") || (node.path && node.path.includes("test"));
+              return (
+                <span
+                  key={node.id}
+                  className={`cpg-node-chip ${isTest ? "test" : isFile ? "caller" : "modified"}`}
+                  title={`${node.id} (${node.node_type})`}
+                >
+                  {node.label}
+                </span>
+              );
+            })}
+            {graph.nodes.length > 16 && (
+              <span className="subtext" style={{ alignSelf: "center", marginLeft: "6px" }}>
+                + {graph.nodes.length - 16} more nodes
+              </span>
+            )}
           </div>
         </div>
-      </section>
+      )}
+    </section>
+  );
+}
+
+function CiTestResultsCard({
+  testResult,
+  analysisId,
+  onRefresh,
+}: {
+  testResult: TestRunResult | null;
+  analysisId: string;
+  onRefresh: () => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [xmlInput, setXmlInput] = useState("");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  async function handleUpload(payload: string, isXml: boolean) {
+    setUploading(true);
+    setErrorMsg(null);
+    try {
+      await uploadTestResults(analysisId, payload, isXml);
+      setShowModal(false);
+      setXmlInput("");
+      onRefresh();
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      const isXml = file.name.endsWith(".xml") || content.trim().startsWith("<");
+      void handleUpload(content, isXml);
+    };
+    reader.readAsText(file);
+  }
+
+  const isPassed = testResult?.status?.toLowerCase() === "passed" || (testResult && testResult.failed === 0);
+
+  return (
+    <div className="card detail-card">
+      <div className="test-hub-header">
+        <div>
+          <h2 style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <TestTube2 size={18} style={{ color: "var(--green)" }} />
+            CI Test Execution Evidence
+          </h2>
+          <p className="muted">
+            Ingested test execution reports from CI/CD runners (pytest, vitest, jest).
+          </p>
+        </div>
+        <button
+          className="button secondary"
+          onClick={() => setShowModal(true)}
+          type="button"
+          style={{ fontSize: "12px", padding: "8px 12px" }}
+        >
+          <UploadCloud size={14} />
+          Upload JUnit XML
+        </button>
+      </div>
+
+      {testResult ? (
+        <>
+          <div style={{ display: "flex", alignItems: "center", gap: "14px", margin: "14px 0" }}>
+            <div className={`ci-status-badge ${isPassed ? "passed" : "failed"}`}>
+              {isPassed ? <CheckCircle2 size={16} /> : <XCircle size={16} />}
+              {testResult.status.toUpperCase()}
+            </div>
+            <span className="muted" style={{ fontSize: "13px" }}>
+              Executed in <strong>{testResult.duration_ms} ms</strong>
+            </span>
+          </div>
+
+          <div className="metric-grid" style={{ marginBottom: "16px" }}>
+            <Metric label="Total tests run" value={testResult.total_tests} />
+            <Metric label="Passed" value={testResult.passed} />
+            <Metric label="Failed" value={testResult.failed} />
+            <Metric label="Skipped" value={testResult.skipped} />
+          </div>
+
+          {testResult.output && (
+            <div style={{ marginTop: "14px" }}>
+              <h3 style={{ fontSize: "13px", fontWeight: 700, margin: "0 0 6px" }}>
+                Execution Trace & Failure Details
+              </h3>
+              <pre className="trace-box">{testResult.output}</pre>
+            </div>
+          )}
+        </>
+      ) : (
+        <div style={{ padding: "18px 0", textAlign: "center" }}>
+          <p className="muted" style={{ marginBottom: "12px" }}>
+            No test run results ingested yet for this analysis.
+          </p>
+          <button
+            className="button"
+            onClick={() => setShowModal(true)}
+            type="button"
+            style={{ fontSize: "12px", padding: "8px 14px" }}
+          >
+            <UploadCloud size={14} />
+            Ingest CI JUnit Report
+          </button>
+        </div>
+      )}
+
+      {showModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            className="card"
+            style={{
+              width: "540px",
+              maxWidth: "92vw",
+              padding: "24px",
+              boxShadow: "0 20px 40px rgba(0,0,0,0.3)",
+            }}
+          >
+            <h2 style={{ marginTop: 0 }}>Upload Test Results</h2>
+            <p className="muted" style={{ fontSize: "12px", marginBottom: "14px" }}>
+              Upload or paste a standard JUnit XML or JSON report to update the confidence score dynamically.
+            </p>
+
+            <label style={{ display: "block", marginBottom: "12px" }}>
+              <span style={{ fontSize: "12px", fontWeight: 600 }}>Choose file (JUnit XML or JSON)</span>
+              <input
+                type="file"
+                accept=".xml,.json"
+                onChange={onFileChange}
+                style={{ display: "block", marginTop: "6px" }}
+                disabled={uploading}
+              />
+            </label>
+
+            <div style={{ textAlign: "center", margin: "10px 0", color: "var(--muted)", fontSize: "11px" }}>
+              — OR PASTE XML / JSON CONTENT —
+            </div>
+
+            <textarea
+              rows={6}
+              value={xmlInput}
+              onChange={(e) => setXmlInput(e.target.value)}
+              placeholder="<testsuite tests='3' failures='0'>..."
+              style={{
+                width: "100%",
+                padding: "8px",
+                fontFamily: "monospace",
+                fontSize: "12px",
+                borderRadius: "6px",
+                border: "1px solid var(--line)",
+                marginBottom: "12px",
+              }}
+              disabled={uploading}
+            />
+
+            {errorMsg && (
+              <p style={{ color: "#D33D22", fontSize: "12px", marginBottom: "12px" }}>
+                {errorMsg}
+              </p>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              <button
+                className="button secondary"
+                onClick={() => setShowModal(false)}
+                type="button"
+                disabled={uploading}
+              >
+                Cancel
+              </button>
+              <button
+                className="button"
+                onClick={() => {
+                  const isXml = xmlInput.trim().startsWith("<");
+                  void handleUpload(xmlInput, isXml);
+                }}
+                disabled={uploading || !xmlInput.trim()}
+                type="button"
+              >
+                {uploading ? <Loader2 size={14} className="spin" /> : "Submit Report"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TestSelectionHub({
+  tests,
+  analysisId,
+}: {
+  tests: TestSelection | null;
+  analysisId: string;
+}) {
+  const [activeTab, setActiveTab] = useState<"pytest" | "vitest" | "jest">("pytest");
+  const [copied, setCopied] = useState(false);
+
+  const apiBase = radiusConfig.apiBaseUrl.replace(/\/$/, "");
+  const cliUrl = `${apiBase}/api/v1/analyses/${analysisId}/tests?format=cli`;
+
+  const commands = {
+    pytest: `pytest $(curl -s "${cliUrl}")`,
+    vitest: `vitest run $(curl -s "${cliUrl}")`,
+    jest: `jest $(curl -s "${cliUrl}")`,
+  };
+
+  function copyCommand() {
+    navigator.clipboard.writeText(commands[activeTab]);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  const timeSaved = tests?.time_saved_percent ?? 0;
+  const selectedCount = tests?.selected_count ?? 0;
+  const skippedCount = tests?.skipped_count ?? 0;
+  const totalCount = tests?.total_count ?? (selectedCount + skippedCount);
+
+  return (
+    <div className="card detail-card">
+      <div className="test-hub-header">
+        <div>
+          <h2 style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <Zap size={18} style={{ color: "var(--green)" }} />
+            Predictive Test Selection
+          </h2>
+          <p className="muted">
+            Targeted test execution derived from sliced AST and CPG dependencies.
+          </p>
+        </div>
+        {timeSaved > 0 && (
+          <span className="savings-pill">
+            <Zap size={14} />
+            {timeSaved}% CI Time Saved
+          </span>
+        )}
+      </div>
+
+      <div className="metric-grid" style={{ marginBottom: "16px" }}>
+        <Metric label="Selected for run" value={selectedCount} />
+        <Metric label="Skipped (Optimized)" value={skippedCount} />
+        <Metric label="Discovered in repo" value={totalCount} />
+        <Metric label="Savings ratio" value={timeSaved > 0 ? `${timeSaved}%` : "0%"} />
+      </div>
+
+      <div className="cli-box">
+        <div className="cli-box-header">
+          <div className="cli-tabs">
+            {(["pytest", "vitest", "jest"] as const).map((tab) => (
+              <button
+                key={tab}
+                className={`cli-tab ${activeTab === tab ? "active" : ""}`}
+                onClick={() => setActiveTab(tab)}
+                type="button"
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+          <button className="copy-btn" onClick={copyCommand} type="button">
+            {copied ? <Check size={13} style={{ color: "#64C89D" }} /> : <Copy size={13} />}
+            {copied ? "Copied!" : "Copy command"}
+          </button>
+        </div>
+        <pre className="cli-command">
+          <code>{commands[activeTab]}</code>
+        </pre>
+      </div>
+
+      <h3 style={{ fontSize: "14px", margin: "16px 0 8px" }}>
+        Selected Tests ({selectedCount})
+      </h3>
+      {tests?.selected_tests && tests.selected_tests.length > 0 ? (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Test file</th>
+                <th>Framework</th>
+                <th>Selection rationale</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tests.selected_tests.map((item, idx) => (
+                <tr key={idx}>
+                  <td>
+                    <strong>{item.test.name}</strong>
+                    <div className="subtext">{item.test.path}</div>
+                  </td>
+                  <td>
+                    <code>{item.test.framework}</code>
+                  </td>
+                  <td>
+                    <span className="reason-tag">{item.reason}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="muted" style={{ padding: "8px 0" }}>
+          No tests selected for this analysis.
+        </p>
+      )}
+
+      {tests?.skipped_tests && tests.skipped_tests.length > 0 && (
+        <details style={{ marginTop: "16px", cursor: "pointer" }}>
+          <summary style={{ fontSize: "13px", fontWeight: 700, color: "var(--muted)" }}>
+            View {tests.skipped_tests.length} Skipped Tests (Optimized out)
+          </summary>
+          <div className="table-wrap" style={{ marginTop: "10px" }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Skipped test path</th>
+                  <th>Framework</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tests.skipped_tests.map((test, idx) => (
+                  <tr key={idx}>
+                    <td>
+                      <code>{test.path}</code>
+                    </td>
+                    <td>{test.framework}</td>
+                    <td>
+                      <span className="reason-tag skipped">Skipped (Benign)</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
     </div>
   );
 }
 
 export function BlastRadiusData({ analysisId }: { analysisId: string }) {
-  const state = useRadiusData(() => getBlastRadius(analysisId), [analysisId]);
+  const state = useRadiusData(async () => {
+    const [blast, graph, analysis] = await Promise.all([
+      getBlastRadius(analysisId),
+      getGraph(analysisId).catch(() => null),
+      getAnalysis(analysisId).catch(() => null),
+    ]);
+    return { blast, graph, analysis };
+  }, [analysisId]);
+
   if (state.status === "loading") return <LoadingState label="Loading blast radius" />;
   if (state.status === "error") return <ErrorState message={state.error} />;
-  const blast = state.data;
+  const { blast, graph, analysis } = state.data;
   const rows = [
     ["Affected files", blast.affected_files],
     ["Affected symbols", blast.affected_symbols],
@@ -812,15 +1224,82 @@ export function BlastRadiusData({ analysisId }: { analysisId: string }) {
     <>
       <PageHeading
         eyebrow={`Analysis / ${analysisId}`}
-        title="Blast radius"
-        description="Deterministic dependency traversal from backend analysis artifacts."
+        title="Blast radius & CPG slice"
+        description="Deterministic dependency traversal and AST semantic impact."
       />
       <section className="metric-grid">
         {rows.slice(0, 4).map(([label, value]) => (
           <Metric key={label} label={String(label)} value={String(value)} />
         ))}
       </section>
+
+      {analysis?.changed_files && analysis.changed_files.length > 0 && (
+        <section className="card" style={{ marginBottom: "24px" }}>
+          <div className="card-heading">
+            <div>
+              <h2>Directly Modified Files ({analysis.changed_files.length})</h2>
+              <p>Git diff hunks identified in Pull Request</p>
+            </div>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>File path</th>
+                  <th>Change type</th>
+                  <th>Additions</th>
+                  <th>Deletions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analysis.changed_files.map((file) => (
+                  <tr key={file.path}>
+                    <td>
+                      <code>{file.path}</code>
+                    </td>
+                    <td>
+                      <span className="reason-tag">{file.change_type}</span>
+                    </td>
+                    <td style={{ color: "var(--green)", fontWeight: 700 }}>+{file.additions}</td>
+                    <td style={{ color: "var(--amber)", fontWeight: 700 }}>-{file.deletions}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {graph && graph.nodes.length > 0 && (
+        <section className="card" style={{ marginBottom: "24px", padding: "20px" }}>
+          <div className="card-heading" style={{ padding: 0, marginBottom: "14px" }}>
+            <div>
+              <h2>CPG Sliced Symbol & Dependency Nodes ({graph.node_count})</h2>
+              <p>Reachable AST symbols and caller slices</p>
+            </div>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+            {graph.nodes.map((node) => {
+              const isFile = node.node_type === "FILE" || node.node_type === "file";
+              const isTest = node.label.includes("test") || (node.path && node.path.includes("test"));
+              return (
+                <span
+                  key={node.id}
+                  className={`cpg-node-chip ${isTest ? "test" : isFile ? "caller" : "modified"}`}
+                  title={`${node.id} (${node.node_type})\nPath: ${node.path ?? "-"}`}
+                >
+                  {node.label}
+                </span>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       <section className="card">
+        <div className="card-heading">
+          <h2>Blast Radius Signal Breakdown</h2>
+        </div>
         <div className="table-wrap">
           <table>
             <thead>

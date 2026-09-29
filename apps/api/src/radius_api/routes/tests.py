@@ -71,3 +71,20 @@ async def ingest_test_results(
     confidence_service.recalculate_from_test_results(analysis_id, test_result)
     return success_response(test_result)
 
+
+@router.get("/results")
+def get_test_run_result(
+    analysis_id: UUID,
+    service: Annotated[TestingApplicationService, Depends(get_testing_service)],
+    analysis_service: Annotated[AnalysisApplicationService, Depends(get_analysis_service)],
+    repository_service: Annotated[RepositoryApplicationService, Depends(get_repository_service)],
+    principal: Annotated[ApiPrincipal, Depends(get_api_principal)],
+):
+    """Return saved test run result for an analysis."""
+
+    analysis = analysis_service.get_analysis(analysis_id)
+    repository = repository_service.get_repository(analysis.repository_id)
+    ensure_same_organization(principal, repository.organization_id)
+    return success_response(service.get_run_result(analysis_id))
+
+
