@@ -48,6 +48,7 @@ import {
   uploadTestResults,
 } from "../lib/api";
 import { ConfidenceRing, OpenLink, PageHeading, Status } from "./ui";
+import { InteractiveGraphViewer, AiPruningInsightsCard } from "./interactive-graph";
 
 type LoadState<T> =
   | { status: "loading" }
@@ -703,9 +704,20 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
         </aside>
       </div>
 
-      <div id="impact" style={{ marginTop: "24px" }}>
+      <div id="impact" style={{ marginTop: "24px", display: "grid", gap: "20px" }}>
         <BlastRadiusVisualizerCard blast={blast} graph={graph} analysisId={analysisId} />
+        {graph && graph.nodes.length > 0 && (
+          <InteractiveGraphViewer
+            nodes={graph.nodes}
+            edges={graph.edges}
+            title={`Interactive CPG Slice & Dependency Visualizer (${graph.node_count} nodes, ${graph.edge_count} edges)`}
+            subtitle="Explore directly modified entrypoints, caller traversal, and targeted tests."
+            height={520}
+          />
+        )}
+        <AiPruningInsightsCard />
       </div>
+
 
       <div id="tests" style={{ marginTop: "24px", display: "grid", gap: "20px" }}>
         <CiTestResultsCard
@@ -1270,31 +1282,20 @@ export function BlastRadiusData({ analysisId }: { analysisId: string }) {
         </section>
       )}
 
-      {graph && graph.nodes.length > 0 && (
-        <section className="card" style={{ marginBottom: "24px", padding: "20px" }}>
-          <div className="card-heading" style={{ padding: 0, marginBottom: "14px" }}>
-            <div>
-              <h2>CPG Sliced Symbol & Dependency Nodes ({graph.node_count})</h2>
-              <p>Reachable AST symbols and caller slices</p>
-            </div>
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-            {graph.nodes.map((node) => {
-              const isFile = node.node_type === "FILE" || node.node_type === "file";
-              const isTest = node.label.includes("test") || (node.path && node.path.includes("test"));
-              return (
-                <span
-                  key={node.id}
-                  className={`cpg-node-chip ${isTest ? "test" : isFile ? "caller" : "modified"}`}
-                  title={`${node.id} (${node.node_type})\nPath: ${node.path ?? "-"}`}
-                >
-                  {node.label}
-                </span>
-              );
-            })}
-          </div>
+      {graph && graph.nodes.length > 0 ? (
+        <section style={{ marginBottom: "24px" }}>
+          <InteractiveGraphViewer
+            nodes={graph.nodes}
+            edges={graph.edges}
+            title={`Interactive CPG Slice & Dependency Visualizer (${graph.node_count} nodes, ${graph.edge_count} edges)`}
+            subtitle="Explore directly modified entrypoints, caller traversal, and targeted tests."
+            height={580}
+          />
         </section>
-      )}
+      ) : null}
+
+      <AiPruningInsightsCard />
+
 
       <section className="card">
         <div className="card-heading">
@@ -1346,44 +1347,17 @@ export function GraphOverviewData() {
 }
 
 function GraphCard({ graph }: { graph: GraphSnapshot }) {
-  const visibleNodes = graph.nodes.slice(0, 8);
   return (
-    <section className="card">
-      <div className="card-heading">
-        <div>
-          <h2>Module relationships</h2>
-          <p>
-            Version {graph.graph_version} / created {formatDate(graph.created_at)}
-          </p>
-        </div>
-        <span className="status positive">
-          {graph.node_count} nodes / {graph.edge_count} edges
-        </span>
-      </div>
-      <div className="graph-canvas">
-        {visibleNodes.map((node, index) => (
-          <div
-            className={`node ${index === 0 ? "active" : ""}`}
-            key={node.id}
-            style={{
-              left: `${40 + (index % 4) * 190}px`,
-              top: `${80 + Math.floor(index / 4) * 150}px`,
-            }}
-          >
-            {node.label}
-          </div>
-        ))}
-      </div>
-      <div className="graph-legend">
-        <span>
-          <i className="legend-dot" />
-          Backend graph snapshot
-        </span>
-        <span>Edges are available from the graph API response.</span>
-      </div>
-    </section>
+    <InteractiveGraphViewer
+      nodes={graph.nodes}
+      edges={graph.edges}
+      title="Dependency Graph & Module Relationships"
+      subtitle={`Snapshot version ${graph.graph_version} / created ${formatDate(graph.created_at)} (${graph.node_count} nodes, ${graph.edge_count} edges)`}
+      height={600}
+    />
   );
 }
+
 
 export function SearchData() {
   const [query, setQuery] = useState("");
