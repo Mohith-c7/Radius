@@ -69,6 +69,7 @@ pythonpath = [
   "packages/testing/src",
 ]
 testpaths = [
+  "tests",
   "apps/api/tests",
   "apps/worker/tests",
   "packages/analysis/tests",
@@ -80,3 +81,4 @@ testpaths = [
   "packages/shared/tests",
   "packages/testing/tests",
 ]
+
