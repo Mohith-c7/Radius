@@ -19,10 +19,19 @@ class DatabaseSettings(RadiusBaseSettings):
     )
 
 
+def normalize_database_url(url: str) -> str:
+    """Normalize PostgreSQL scheme to psycopg driver."""
+    if url.startswith("postgres://"):
+        return url.replace("postgres://", "postgresql+psycopg://", 1)
+    if url.startswith("postgresql://") and not url.startswith("postgresql+"):
+        return url.replace("postgresql://", "postgresql+psycopg://", 1)
+    return url
+
+
 def create_database_engine(settings: DatabaseSettings) -> Engine:
     """Create a SQLAlchemy engine from settings."""
 
-    return create_engine(settings.database_url, pool_pre_ping=True)
+    return create_engine(normalize_database_url(settings.database_url), pool_pre_ping=True)
 
 
 def create_session_factory(engine: Engine) -> sessionmaker[Session]:
