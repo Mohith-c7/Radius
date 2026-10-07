@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { computeGraphLayout, classifyNode } from "../lib/graph-layout.ts";
+import { computeGraphLayout } from "../lib/graph-layout.ts";
 
 describe("end-to-end target graph layout verification", () => {
   it("processes multi-language target repository CPG slice and computes interactive SVG layout", () => {

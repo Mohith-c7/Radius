@@ -1,5 +1,7 @@
 import json
 
+from pydantic import BaseModel
+
 try:
     from google import genai
 
@@ -10,6 +12,13 @@ except ImportError:
     _USE_GENAI = False
 
 from .prompts import SEMANTIC_PRUNER_PROMPT
+
+
+class PrunerDecision(BaseModel):
+    impacted: bool
+    reason: str
+    confidence: float = 1.0
+    category: str = "general"
 
 
 class SemanticPruner:
@@ -28,16 +37,19 @@ class SemanticPruner:
             # Using Flash as it is lightning fast for small context JSON tasks
             self.model = genai.GenerativeModel("gemini-1.5-flash")
 
-    def evaluate_impact(self, caller_source: str, callee_diff: str) -> bool:
+    def evaluate_impact_detailed(self, caller_source: str, callee_diff: str) -> PrunerDecision:
         """
-        Returns True if the caller is semantically impacted by the callee diff.
-        Returns False if the change is benign (pruning it from the blast radius).
+        Returns a detailed PrunerDecision evaluating if the caller is semantically impacted.
         """
         if not self.api_key or (_USE_GENAI and not self.client) or (not _USE_GENAI and not self.model):
-            return True
+            return PrunerDecision(impacted=True, reason="Missing API key or model initialization")
+
+        # Cleanly escape/delimit code content to defend against prompt injection
+        caller_source_clean = caller_source.replace("</source>", "<\\/source>")
+        callee_diff_clean = callee_diff.replace("</diff>", "<\\/diff>")
 
         prompt = SEMANTIC_PRUNER_PROMPT.format(
-            caller_source=caller_source, callee_diff=callee_diff
+            caller_source=caller_source_clean, callee_diff=callee_diff_clean
         )
 
         try:
@@ -45,17 +57,29 @@ class SemanticPruner:
                 response = self.client.models.generate_content(
                     model="gemini-2.0-flash",
                     contents=prompt,
-                    config={"response_mime_type": "application/json"},
+                    config={
+                        "response_mime_type": "application/json",
+                        "response_schema": PrunerDecision,
+                    },
                 )
             else:
                 response = self.model.generate_content(
                     prompt, generation_config={"response_mime_type": "application/json"}
                 )
+            # Use Pydantic to parse and validate the JSON response
             data = json.loads(response.text)
-            return bool(data.get("impacted", True))
+            return PrunerDecision(**data)
         except Exception as e:
             # Fallback for safety: if LLM parsing fails, we assume it IS impacted
             # This ensures we never accidentally drop a breaking change.
             print(f"LLM parsing failed: {e}")
-            return True
+            return PrunerDecision(impacted=True, reason=f"Fallback due to error: {e}")
+
+    def evaluate_impact(self, caller_source: str, callee_diff: str) -> bool:
+        """
+        Returns True if the caller is semantically impacted by the callee diff.
+        Returns False if the change is benign (pruning it from the blast radius).
+        """
+        decision = self.evaluate_impact_detailed(caller_source, callee_diff)
+        return decision.impacted
 

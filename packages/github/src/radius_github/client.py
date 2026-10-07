@@ -242,6 +242,24 @@ class GitHubAppClient:
         )
         return response if isinstance(response, list) else []
 
+    def list_pull_requests(
+        self,
+        *,
+        token: str,
+        owner: str,
+        repo: str,
+        state: str = "open",
+    ) -> list[dict[str, Any]]:
+        """Return pull requests for a repository from GitHub."""
+
+        query = urllib.parse.urlencode({"state": state, "per_page": 100})
+        response = self._request(
+            "GET",
+            f"/repos/{owner}/{repo}/pulls?{query}",
+            token=token,
+        )
+        return response if isinstance(response, list) else []
+
     def _jwt(self) -> str:
         issued_at = int(self._clock()) - 60
         expires_at = issued_at + 9 * 60

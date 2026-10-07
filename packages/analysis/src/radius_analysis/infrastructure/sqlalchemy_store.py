@@ -63,8 +63,8 @@ class SqlAlchemyAnalysisStore:
         if analysis.id is not None:
             row = self._session.get(db_models.Analysis, analysis.id)
             if row is None:
-                msg = f"Analysis {analysis.id} was not found."
-                raise NotFoundError(msg)
+                row = db_models.Analysis(id=analysis.id)
+                self._session.add(row)
         else:
             row = db_models.Analysis()
             self._session.add(row)

@@ -47,3 +47,4 @@ package-lock.json
 bandit_report.json
 test_e2e.py
 ui-audit.md
+tmp/

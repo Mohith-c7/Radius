@@ -112,12 +112,14 @@ def current_user(
     user_id, session_id = decode_session(radius_session)
     session = db.get(AuthSession, session_id)
     user = db.get(User, user_id)
+    now = datetime.now(UTC)
+    expires_at = session.expires_at if session.expires_at.tzinfo is not None else session.expires_at.replace(tzinfo=UTC)
     if (
         not user
         or not session
         or session.user_id != user.id
         or session.revoked_at is not None
-        or session.expires_at < datetime.utcnow()
+        or expires_at < now
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -194,7 +196,7 @@ def logout(
             _, session_id = decode_session(radius_session)
             session = db.get(AuthSession, session_id)
             if session:
-                session.revoked_at = datetime.utcnow()
+                session.revoked_at = datetime.now(UTC)
                 db.commit()
         except HTTPException:
             pass

@@ -36,7 +36,9 @@ class ConfidenceApplicationService:
     ) -> ConfidenceReportResponse:
         """Generate and persist a confidence report."""
 
-        score, evidence = self._scorer.score(command.impact, command.tests)
+        result = self._scorer.score(command.impact, command.tests)
+        score, evidence = result[0], result[1]
+        metrics = result.metrics
         report = ConfidenceReport(
             id=None,
             analysis_id=command.analysis_id,
@@ -45,6 +47,10 @@ class ConfidenceApplicationService:
             summary=f"Confidence score is {score.value:.1f}.",
             evidence=evidence,
             recommendations=self._recommendations(score.value),
+            change_risk=metrics["change_risk"],
+            verification_confidence=metrics["verification_confidence"],
+            analysis_completeness=metrics["analysis_completeness"],
+            verification_status=metrics["verification_status"],
         )
         return ConfidenceReportResponse.from_entity(self._store.save_report(report))
 
@@ -85,7 +91,9 @@ class ConfidenceApplicationService:
                 else None
             ),
         )
-        score, evidence = self._scorer.score(impact, test_evidence)
+        result = self._scorer.score(impact, test_evidence)
+        score, evidence = result[0], result[1]
+        metrics = result.metrics
         report = ConfidenceReport(
             id=None,
             analysis_id=analysis_id,
@@ -94,6 +102,10 @@ class ConfidenceApplicationService:
             summary=f"Confidence score updated from CI test run: {score.value:.1f}.",
             evidence=evidence,
             recommendations=self._recommendations(score.value),
+            change_risk=metrics["change_risk"],
+            verification_confidence=metrics["verification_confidence"],
+            analysis_completeness=metrics["analysis_completeness"],
+            verification_status=metrics["verification_status"],
         )
         if existing is not None and hasattr(self._store, "_reports"):
             self._store._reports.pop(analysis_id, None)

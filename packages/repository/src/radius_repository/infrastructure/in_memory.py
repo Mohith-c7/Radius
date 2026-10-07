@@ -4,6 +4,7 @@ from uuid import UUID, uuid4
 
 from radius_repository.domain.entities import Branch, PullRequest, Repository
 from radius_repository.domain.enums import RepositoryStatus, RepositoryVisibility
+from radius_repository.domain.value_objects import BranchName
 
 
 class InMemoryRepositoryStore:
@@ -76,6 +77,17 @@ class InMemoryRepositoryStore:
         repository.status = status
         return repository
 
+    def update_default_branch(
+        self,
+        repository_id: UUID,
+        default_branch: str,
+    ) -> Repository:
+        """Update repository default branch."""
+
+        repository = self._repositories[repository_id]
+        repository.default_branch = BranchName(default_branch)
+        return repository
+
     def upsert_branch(self, branch: Branch) -> Branch:
         """Create or update a branch."""
 
@@ -108,6 +120,15 @@ class InMemoryRepositoryStore:
         """Return one pull request by repository and provider number."""
 
         return self._pull_requests.get((repository_id, github_pr_number))
+
+    def list_pull_requests(self, repository_id: UUID) -> list[PullRequest]:
+        """Return all pull requests for a repository."""
+
+        return [
+            pr
+            for (r_id, _), pr in self._pull_requests.items()
+            if r_id == repository_id
+        ]
 
     def upsert_pull_request(self, pull_request: PullRequest) -> PullRequest:
         """Create or update pull request metadata."""

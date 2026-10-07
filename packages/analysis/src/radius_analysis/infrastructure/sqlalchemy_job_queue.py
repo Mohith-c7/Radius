@@ -64,7 +64,7 @@ class SqlAlchemyAnalysisJobQueue:
         """Claim the next pending or stale running job."""
 
         self.recover_stale_jobs()
-        row = self._session.scalar(
+        query = (
             select(db_models.AnalysisJob)
             .where(
                 db_models.AnalysisJob.status == db_enums.AnalysisJobStatus.PENDING,
@@ -73,6 +73,11 @@ class SqlAlchemyAnalysisJobQueue:
             .order_by(db_models.AnalysisJob.created_at)
             .limit(1)
         )
+        bind = self._session.get_bind()
+        if bind is not None and getattr(bind.dialect, "name", None) == "postgresql":
+            query = query.with_for_update(skip_locked=True)
+
+        row = self._session.scalar(query)
         if row is None:
             return None
         row.status = db_enums.AnalysisJobStatus.RUNNING

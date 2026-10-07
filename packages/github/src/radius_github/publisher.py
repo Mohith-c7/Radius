@@ -33,6 +33,9 @@ class GitHubAnalysisReport:
     affected_symbols: tuple[str, ...] = ()
     ai_pruned_count: int = 0
     ai_pruning_notes: tuple[str, ...] = ()
+    change_risk: str | None = None
+    verification_status: str | None = None
+    analysis_completeness: float | None = None
 
 
 _RISK_BADGES: dict[str, str] = {
@@ -176,14 +179,31 @@ def _check_conclusion(risk_level: str) -> str:
 
 def _markdown_report(report: GitHubAnalysisReport) -> str:
     badge = _risk_badge(report.risk_level)
-    risk_label = report.risk_level.capitalize()
+    
+    rows = [
+        f"| **Confidence Score** | {badge} {report.confidence_score:.0f}/100 |",
+    ]
+    if report.verification_status:
+        status_icon = "🟢" if report.verification_status.upper() == "VERIFIED" else "🔴" if report.verification_status.upper() == "FAILED" else "🟡"
+        rows.append(f"| **Verification Status** | {status_icon} {report.verification_status.upper()} |")
+    if report.change_risk:
+        risk_icon = _risk_badge(report.change_risk)
+        rows.append(f"| **Change Risk** | {risk_icon} {report.change_risk.capitalize()} |")
+    if report.analysis_completeness is not None:
+        pct = float(report.analysis_completeness)
+        if pct <= 1.0:
+            pct *= 100.0
+        rows.append(f"| **Analysis Completeness** | {round(pct)}% |")
+    rows.append(
+        f"| **Predictive Test Selection** | {report.time_saved_percent}% time saved "
+        f"({report.selected_tests_count} selected, {report.skipped_tests_count} skipped) |"
+    )
+    rows.append(f"| **AI Impact Pruning** | {report.ai_pruned_count} pruned |")
+
     metrics_table = (
         "| Metric | Result |\n"
         "| --- | --- |\n"
-        f"| **Confidence Score** | {badge} {report.confidence_score:.0f}/100 ({risk_label}) |\n"
-        f"| **Predictive Test Selection** | {report.time_saved_percent}% time saved "
-        f"({report.selected_tests_count} selected, {report.skipped_tests_count} skipped) |\n"
-        f"| **AI Impact Pruning** | {report.ai_pruned_count} pruned |"
+        + "\n".join(rows)
     )
 
     blast_radius_section = ""

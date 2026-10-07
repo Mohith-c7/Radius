@@ -19,6 +19,9 @@ dependencies = [
   "tree-sitter>=0.23.2",
   "tree-sitter-python>=0.23.2",
   "tree-sitter-typescript>=0.23.2",
+  "tree-sitter-go>=0.25.0",
+  "tree-sitter-java>=0.23.5",
+  "tree-sitter-rust>=0.24.2",
   "google-genai>=0.1.0",
   "google-generativeai>=0.8.3",
   "argon2-cffi>=23.1.0",
@@ -45,6 +48,13 @@ target-version = ["py312"]
 [tool.ruff]
 line-length = 88
 target-version = "py312"
+exclude = [
+  "tmp",
+  ".docker-smoke",
+  ".docker-pip-smoke",
+  "audit_script.py",
+  "scripts",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]

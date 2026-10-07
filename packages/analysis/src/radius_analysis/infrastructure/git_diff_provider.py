@@ -29,6 +29,21 @@ class SubprocessGitDiffProvider:
             check=False,
             text=True,
         )
+        if result.returncode != 0 and base_ref.startswith("origin/"):
+            fallback_base = base_ref.removeprefix("origin/")
+            result = subprocess.run(
+                [
+                    "git",
+                    "diff",
+                    "--find-renames",
+                    "--find-copies",
+                    f"{fallback_base}...{head_ref}",
+                ],
+                cwd=repository_path,
+                capture_output=True,
+                check=False,
+                text=True,
+            )
         if result.returncode != 0:
             msg = result.stderr.strip() or "Unable to collect git diff."
             raise ValidationError(msg)

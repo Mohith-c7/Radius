@@ -3,12 +3,14 @@ Generate the Capstone Project Diary (.docx) for Radius matching the VIT-AP forma
 """
 
 import os
+
 from docx import Document
-from docx.shared import Inches, Pt, RGBColor
+from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
 from docx.oxml import OxmlElement, parse_xml
 from docx.oxml.ns import nsdecls, qn
+from docx.shared import Inches, Pt, RGBColor
+
 
 def set_cell_margins(cell, top=100, bottom=100, left=150, right=150):
     """Set cell padding in twips (1/20th of a point)."""
@@ -33,7 +35,7 @@ def set_cell_border(cell, **kwargs):
     for edge in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'):
         edge_data = kwargs.get(edge)
         if edge_data:
-            tag = 'w:{}'.format(edge)
+            tag = f'w:{edge}'
             element = OxmlElement(tag)
             element.set(qn('w:val'), edge_data.get('val', 'single'))
             element.set(qn('w:sz'), str(edge_data.get('sz', 4)))

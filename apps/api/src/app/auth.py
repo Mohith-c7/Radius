@@ -80,7 +80,7 @@ def create_action_token(
             user_id=user_id,
             purpose=purpose,
             token_hash=hashlib.sha256(raw_token.encode()).hexdigest(),
-            expires_at=datetime.utcnow() + timedelta(minutes=minutes),
+            expires_at=datetime.now(UTC) + timedelta(minutes=minutes),
         )
     )
     db.commit()
@@ -100,15 +100,21 @@ def consume_action_token(db: Session, raw_token: str, purpose: str) -> User:
             AuthToken.token_hash == token_hash, AuthToken.purpose == purpose
         )
     )
+    now = datetime.now(UTC)
+    expires_at = (
+        token.expires_at
+        if token and token.expires_at.tzinfo is not None
+        else (token.expires_at.replace(tzinfo=UTC) if token else None)
+    )
     if (
         token is None
         or token.used_at is not None
-        or token.expires_at < datetime.utcnow()
+        or (expires_at is not None and expires_at < now)
     ):
         raise HTTPException(
             status_code=400, detail="This link is invalid or has expired."
         )
-    token.used_at = datetime.utcnow()
+    token.used_at = datetime.now(UTC)
     user = db.get(User, token.user_id)
     db.commit()
     if user is None:

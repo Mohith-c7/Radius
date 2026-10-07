@@ -28,7 +28,9 @@ def test_semantic_pruner_impacted(mock_client_class):
     mock_client.models.generate_content.assert_called_once()
     call_kwargs = mock_client.models.generate_content.call_args.kwargs
     assert call_kwargs["model"] == "gemini-2.0-flash"
-    assert call_kwargs["config"] == {"response_mime_type": "application/json"}
+    assert call_kwargs["config"]["response_mime_type"] == "application/json"
+    from radius_analysis.ai.pruner import PrunerDecision
+    assert call_kwargs["config"]["response_schema"] == PrunerDecision
 
 
 @patch("radius_analysis.ai.pruner._USE_GENAI", True)

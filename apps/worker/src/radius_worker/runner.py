@@ -285,6 +285,18 @@ def load_persisted_analysis_command(
         destination,
         extra_headers=extra_headers,
     )
+    if hasattr(git_client, "fetch_pull_request") and pull_request.github_pr_number:
+        try:
+            git_client.fetch_pull_request(
+                repository_path,
+                pull_request.github_pr_number,
+                extra_headers=extra_headers,
+            )
+        except Exception:
+            LOGGER.debug(
+                "Could not fetch pull request ref directly; continuing with commit SHA checkout.",
+                extra={"pr_number": pull_request.github_pr_number},
+            )
     git_client.checkout(repository_path, analysis.commit_sha)
     return ExecuteAnalysisCommand(
         analysis_id=analysis.id,
@@ -380,16 +392,27 @@ def _publish_github_result(
     github_settings = _github_settings(settings)
     if not settings.github_publish_results or not github_settings.enabled:
         return
-    installation_id = _github_installation_id(
-        session=session,
-        analysis_id=analysis_id,
-        settings=settings,
-    )
-    report = _github_report(session, analysis_id, settings)
-    GitHubAnalysisPublisher(github_client).publish(
-        installation_id=installation_id,
-        report=report,
-    )
+    try:
+        installation_id = _github_installation_id(
+            session=session,
+            analysis_id=analysis_id,
+            settings=settings,
+        )
+        report = _github_report(session, analysis_id, settings)
+        GitHubAnalysisPublisher(github_client).publish(
+            installation_id=installation_id,
+            report=report,
+        )
+        LOGGER.info(
+            "Successfully published GitHub Check Run and PR comment",
+            extra={"analysis_id": str(analysis_id), "pr_number": report.pull_request_number},
+        )
+    except Exception as exc:
+        LOGGER.warning(
+            "Could not publish GitHub Check Run or PR comment: %s",
+            exc,
+            extra={"analysis_id": str(analysis_id)},
+        )
 
 
 def _github_installation_id(
@@ -479,4 +502,7 @@ def _github_report(
         skipped_tests_count=skipped_tests_count,
         time_saved_percent=time_saved_percent,
         affected_files=affected_files,
+        change_risk=confidence.change_risk,
+        verification_status=confidence.verification_status,
+        analysis_completeness=float(confidence.analysis_completeness) if confidence.analysis_completeness is not None else None,
     )

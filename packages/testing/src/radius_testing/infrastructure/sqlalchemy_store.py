@@ -92,6 +92,8 @@ class SqlAlchemyTestStore:
                     reason=selected.reason.value,
                 )
             )
+        if selection.skipped_tests:
+            self.save_test_cases(selection.skipped_tests)
         self._session.flush()
         saved = self.get_selection(selection.analysis_id)
         if saved is None:
@@ -113,18 +115,25 @@ class SqlAlchemyTestStore:
         )
         if row is None:
             return None
+        selected_tests = tuple(
+            SelectedTest(
+                self._test_case_to_domain(selected.test_case),
+                TestSelectionReason(selected.reason),
+            )
+            for selected in sorted(
+                row.selected_tests,
+                key=lambda item: item.test_case.path,
+            )
+        )
+        all_tests = self.list_test_cases()
+        selected_paths = {selected.test_case.path.value for selected in selected_tests}
+        skipped_tests = tuple(t for t in all_tests if t.path.value not in selected_paths)
+        total_count = max(len(all_tests), len(selected_tests))
         return TestSelection(
             analysis_id=row.analysis_id,
-            selected_tests=tuple(
-                SelectedTest(
-                    self._test_case_to_domain(selected.test_case),
-                    TestSelectionReason(selected.reason),
-                )
-                for selected in sorted(
-                    row.selected_tests,
-                    key=lambda item: item.test_case.path,
-                )
-            ),
+            selected_tests=selected_tests,
+            skipped_tests=skipped_tests,
+            total_discovered_count=total_count,
             created_at=row.created_at,
         )
 

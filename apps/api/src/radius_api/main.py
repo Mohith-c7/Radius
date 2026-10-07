@@ -3,6 +3,8 @@
 # Authentication remains implemented in the existing application auth module.
 # Register it on this package-managed entrypoint so the dashboard and the
 # development command use the same auth system and persistent token store.
+from contextlib import asynccontextmanager
+
 from app.database import Base as AuthBase
 from app.database import engine as auth_engine
 from app.routes_auth import router as auth_router
@@ -60,10 +62,20 @@ def create_app() -> FastAPI:
 
     settings = get_api_settings()
     configure_logging(settings.log_level)
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        DomainBase.metadata.create_all(bind=auth_engine)
+        AuthBase.metadata.create_all(bind=auth_engine)
+        from radius_api.seed import seed_open_source_results
+
+        seed_open_source_results(app.state.container)
+        yield
+
     app = FastAPI(
         title="Radius API",
         version="0.1.0",
         description="Software verification API for Radius.",
+        lifespan=lifespan,
     )
     allow_origins = [
         "http://localhost:3000",
@@ -96,13 +108,6 @@ def create_app() -> FastAPI:
     app.include_router(confidence_router, prefix="/api/v1")
     app.include_router(github_webhooks_router, prefix="/api/v1")
     app.include_router(auth_router)
-
-    @app.on_event("startup")
-    def initialize_auth_database() -> None:
-        """Create the tables used by the shared authentication and domain models."""
-
-        DomainBase.metadata.create_all(bind=auth_engine)
-        AuthBase.metadata.create_all(bind=auth_engine)
 
     return app
 

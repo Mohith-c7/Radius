@@ -78,6 +78,10 @@ export type ConfidenceReport = {
   evidence: ConfidenceEvidence[];
   recommendations: string[];
   generated_at: string;
+  change_risk?: string | null;
+  verification_confidence?: number | null;
+  analysis_completeness?: number | null;
+  verification_status?: string | null;
 };
 
 export type TestCase = {
@@ -226,9 +230,46 @@ export function connectRepository(payload: ConnectRepositoryPayload) {
   });
 }
 
+export type PullRequest = {
+  id: UUID;
+  repository_id: UUID;
+  github_pr_number: number;
+  title: string;
+  source_branch: string;
+  target_branch: string;
+  author: string;
+  status: string;
+  opened_at: string;
+  merged_at: string | null;
+};
+
+export function getPullRequestByNumber(repositoryId: UUID, prNumber: number) {
+  return radiusFetch<PullRequest>(`/repositories/${repositoryId}/pull-requests/${prNumber}`);
+}
+
+export function listPullRequests(repositoryId: UUID) {
+  return radiusFetch<PullRequest[]>(`/repositories/${repositoryId}/pull-requests`);
+}
+
+export function syncPullRequests(repositoryId: UUID, autoAnalyze = true) {
+  return radiusFetch<PullRequest[]>(
+    `/repositories/${repositoryId}/sync-pull-requests${buildQuery({
+      auto_analyze: autoAnalyze ? "true" : "false",
+    })}`,
+    { method: "POST" },
+  );
+}
+
 export function disconnectRepository(repositoryId: UUID) {
   return radiusFetch<Repository>(`/repositories/${repositoryId}`, {
     method: "DELETE",
+  });
+}
+
+export function updateRepository(repositoryId: UUID, payload: { defaultBranch: string }) {
+  return radiusFetch<Repository>(`/repositories/${repositoryId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
   });
 }
 
@@ -254,6 +295,22 @@ export function rerunAnalysis(analysisId: UUID) {
   return radiusFetch<Analysis>(`/analyses/${analysisId}/rerun`, {
     method: "POST",
     idempotencyKey: crypto.randomUUID(),
+  });
+}
+
+export function startAnalysis(payload: {
+  repositoryId: UUID;
+  pullRequestId?: UUID;
+  commitSha: string;
+}) {
+  return radiusFetch<Analysis>("/analyses", {
+    method: "POST",
+    idempotencyKey: crypto.randomUUID(),
+    body: JSON.stringify({
+      repository_id: payload.repositoryId,
+      pull_request_id: payload.pullRequestId ?? crypto.randomUUID(),
+      commit_sha: payload.commitSha,
+    }),
   });
 }
 

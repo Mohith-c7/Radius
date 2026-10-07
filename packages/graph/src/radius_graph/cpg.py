@@ -65,6 +65,9 @@ class CodePropertyGraph:
         self.nodes: dict[str, Node] = {}
         self.file_imports: dict[str, list[Import]] = {}
         self._unresolved_references: list[Reference] = []
+        self._nodes_by_name: dict[str, list[str]] = {}
+        self._nodes_by_file: dict[str, list[str]] = {}
+        self._pending_by_target: dict[str, list[Reference]] = {}
 
     def add_import(self, imp: Import) -> None:
         """Registers an import under its source file."""
@@ -72,23 +75,26 @@ class CodePropertyGraph:
             self.file_imports[imp.source_file] = []
         self.file_imports[imp.source_file].append(imp)
 
-        # Re-attempt resolution of pending references
-        pending = self._unresolved_references
-        self._unresolved_references = []
-        for ref in pending:
-            if not self._resolve_reference(ref):
-                self._unresolved_references.append(ref)
-
     def add_symbol(self, symbol: Symbol) -> None:
         """Registers a parsed symbol into the graph as a Node."""
         if symbol.id not in self.nodes:
             self.nodes[symbol.id] = Node(symbol=symbol)
-            # Re-attempt resolution of pending references
-            pending = self._unresolved_references
-            self._unresolved_references = []
-            for ref in pending:
+            self._nodes_by_name.setdefault(symbol.name, []).append(symbol.id)
+            self._nodes_by_file.setdefault(symbol.file_path, []).append(symbol.id)
+
+            # Re-attempt resolution only for pending references targeting this symbol name
+            target_candidates = [symbol.name]
+            if "." in symbol.name:
+                target_candidates.append(symbol.name.split(".")[-1])
+
+            to_retry: list[Reference] = []
+            for target_cand in target_candidates:
+                if target_cand in self._pending_by_target:
+                    to_retry.extend(self._pending_by_target.pop(target_cand))
+
+            for ref in to_retry:
                 if not self._resolve_reference(ref):
-                    self._unresolved_references.append(ref)
+                    self._pending_by_target.setdefault(ref.target_name, []).append(ref)
 
     def _resolve_reference(self, reference: Reference) -> bool:
         """Attempts to resolve a reference using import/module rules, same-file declarations, or global fallback.
@@ -123,13 +129,11 @@ class CodePropertyGraph:
                 if matched_import.imported_name != "*"
                 else target_name
             )
-            # Exact match
-            for node_id, node in self.nodes.items():
-                if (
-                    _file_matches_module(
-                        node.symbol.file_path, matched_import.module_path, source_file
-                    )
-                    and node.symbol.name == lookup_name
+            # Exact match via name index
+            for node_id in self._nodes_by_name.get(lookup_name, []):
+                node = self.nodes[node_id]
+                if _file_matches_module(
+                    node.symbol.file_path, matched_import.module_path, source_file
                 ):
                     target_id = node_id
                     break
@@ -144,29 +148,24 @@ class CodePropertyGraph:
         else:
             # 2. If not found in imports, check if target symbol is declared in the same source_file
             if source_file:
-                for node_id, node in self.nodes.items():
-                    if (
-                        node.symbol.file_path == source_file
-                        and node.symbol.name == target_name
-                    ):
-                        target_id = node_id
-                        break
-                if not target_id:
-                    for node_id, node in self.nodes.items():
-                        if (
-                            node.symbol.file_path == source_file
-                            and node.symbol.name.endswith("." + target_name)
-                        ):
-                            target_id = node_id
-                            break
-
-            # 3. If neither, fall back to global name match
-            if not target_id:
-                for node_id, node in self.nodes.items():
+                for node_id in self._nodes_by_file.get(source_file, []):
+                    node = self.nodes[node_id]
                     if node.symbol.name == target_name:
                         target_id = node_id
                         break
                 if not target_id:
+                    for node_id in self._nodes_by_file.get(source_file, []):
+                        node = self.nodes[node_id]
+                        if node.symbol.name.endswith("." + target_name):
+                            target_id = node_id
+                            break
+
+            # 3. If neither, fall back to global name match via name index
+            if not target_id:
+                candidate_ids = self._nodes_by_name.get(target_name, [])
+                if candidate_ids:
+                    target_id = candidate_ids[0]
+                else:
                     for node_id, node in self.nodes.items():
                         if node.symbol.name.endswith("." + target_name):
                             target_id = node_id
@@ -186,4 +185,5 @@ class CodePropertyGraph:
     def add_reference(self, reference: Reference) -> None:
         """Resolves a reference and creates bidirectional edges."""
         if not self._resolve_reference(reference):
+            self._pending_by_target.setdefault(reference.target_name, []).append(reference)
             self._unresolved_references.append(reference)

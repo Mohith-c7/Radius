@@ -208,7 +208,9 @@ class Phase1AnalysisOrchestrator:
         ts_extensions = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
 
         # 1. Parse all files dynamically
-        for root, _, files in os.walk(repo_path):
+        ignored_dirs = {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build", ".turbo"}
+        for root, dirs, files in os.walk(repo_path):
+            dirs[:] = [d for d in dirs if d not in ignored_dirs]
             for file in files:
                 is_py = file.endswith(py_extensions)
                 is_ts = file.endswith(ts_extensions)

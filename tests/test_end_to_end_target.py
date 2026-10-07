@@ -20,12 +20,16 @@ from uuid import uuid4
 
 from radius_analysis.application import AnalysisApplicationService
 from radius_analysis.domain import Analysis, AnalysisStatus, CommitSha
-from radius_analysis.infrastructure import InMemoryAnalysisStore, UnifiedDiffChangeAnalyzer
+from radius_analysis.infrastructure import (
+    InMemoryAnalysisStore,
+    UnifiedDiffChangeAnalyzer,
+)
 from radius_confidence.application import ConfidenceApplicationService
-from radius_confidence.infrastructure import DeterministicConfidenceScorer, InMemoryConfidenceStore
+from radius_confidence.infrastructure import (
+    DeterministicConfidenceScorer,
+    InMemoryConfidenceStore,
+)
 from radius_github.publisher import (
-    CHECK_RUN_NAME,
-    GitHubAnalysisPublisher,
     GitHubAnalysisReport,
     _markdown_report,
 )
@@ -34,22 +38,30 @@ from radius_graph.cpg import CodePropertyGraph
 from radius_graph.infrastructure import InMemoryGraphStore
 from radius_graph.slicer import GraphSlicer
 from radius_parser.application import ParserApplicationService
-from radius_parser.core import ParserEngine
-from radius_parser.extractors.python import PythonExtractor
-from radius_parser.extractors.typescript import TypeScriptExtractor
-from radius_parser.infrastructure import FilesystemSourceDiscovery, default_language_parser_registry
+from radius_parser.infrastructure import (
+    FilesystemSourceDiscovery,
+    default_language_parser_registry,
+)
 from radius_testing.application import TestingApplicationService as AppTestingService
 from radius_testing.domain import (
     TestRunPlan as RadiusTestRunPlan,
+)
+from radius_testing.domain import (
     TestRunResult as RadiusTestRunResult,
+)
+from radius_testing.domain import (
     TestRunStatus as RadiusTestRunStatus,
 )
 from radius_testing.infrastructure import (
     ConventionalTestDiscoverer,
     InMemoryTestStore,
-    JUnitReportParser,
     PathBasedTestSelector,
     StaticTestCommandPlanner,
+)
+from radius_worker.orchestrator import (
+    AnalysisExecutionResult,
+    ExecuteAnalysisCommand,
+    Phase1AnalysisOrchestrator,
 )
 
 
@@ -67,13 +79,6 @@ class MockTargetTestRunner:
             duration_ms=100,
             output="Mock target tests executed successfully",
         )
-
-
-from radius_worker.orchestrator import (
-    AnalysisExecutionResult,
-    ExecuteAnalysisCommand,
-    Phase1AnalysisOrchestrator,
-)
 
 
 def _init_git_target_repo(repo_dir: Path) -> None:
@@ -305,6 +310,7 @@ def test_end_to_end_target_verification_flow(tmp_path: Path) -> None:
     )
 
     result: AnalysisExecutionResult = orchestrator.execute(command)
+    assert result is not None
 
     # --- 2. CPG Slicing & Precision Verification ---
     assert orchestrator._last_cpg is not None
@@ -385,7 +391,6 @@ def test_end_to_end_target_verification_flow(tmp_path: Path) -> None:
     assert recalculated_report.risk_level in ("high", "critical")
 
     # --- 5. Rich GitHub PR Publisher Verification ---
-    publisher = GitHubAnalysisPublisher(client=None)
     github_report = GitHubAnalysisReport(
         analysis_id=analysis_id,
         owner="Mohith-c7",
