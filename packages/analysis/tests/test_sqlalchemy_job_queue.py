@@ -46,9 +46,7 @@ def test_sqlalchemy_job_queue_recovers_stale_running_jobs() -> None:
         queue.enqueue(analysis_id)
         queue.claim_next()
         row = session.scalar(
-            select(AnalysisJobModel).where(
-                AnalysisJobModel.analysis_id == analysis_id
-            )
+            select(AnalysisJobModel).where(AnalysisJobModel.analysis_id == analysis_id)
         )
         row.locked_at = datetime.now(UTC) - timedelta(minutes=5)
         session.flush()

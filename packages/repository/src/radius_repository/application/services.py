@@ -59,6 +59,17 @@ class RepositoryApplicationService:
         saved = self._store.save(repository)
         return RepositoryDetailResponse.from_entity(saved)
 
+    def get_by_github_repository_id(
+        self,
+        github_repository_id: int,
+    ) -> RepositoryDetailResponse | None:
+        """Return a repository by GitHub repository id if found."""
+
+        repository = self._store.get_by_github_repository_id(github_repository_id)
+        if repository is None:
+            return None
+        return RepositoryDetailResponse.from_entity(repository)
+
     def get_repository(self, repository_id: UUID) -> RepositoryDetailResponse:
         """Return a repository or raise a shared not-found error."""
 
@@ -97,6 +108,25 @@ class RepositoryApplicationService:
             RepositoryStatus.DISCONNECTED,
         )
         return RepositoryResponse.from_entity(repository)
+
+    def update_default_branch(
+        self,
+        repository_id: UUID,
+        default_branch: str,
+    ) -> RepositoryDetailResponse:
+        """Update repository default branch."""
+
+        if self._store.get_by_id(repository_id) is None:
+            msg = f"Repository {repository_id} was not found."
+            raise NotFoundError(msg)
+
+        clean_branch = default_branch.strip()
+        if not clean_branch:
+            msg = "Default branch name cannot be empty."
+            raise ValidationError(msg)
+
+        repository = self._store.update_default_branch(repository_id, clean_branch)
+        return RepositoryDetailResponse.from_entity(repository)
 
     def upsert_branch(self, command: UpsertBranchCommand) -> BranchResponse:
         """Create or update branch metadata for a connected repository."""
@@ -164,6 +194,22 @@ class RepositoryApplicationService:
             )
             raise NotFoundError(msg)
         return PullRequestResponse.from_entity(pull_request)
+
+    def list_pull_requests(
+        self,
+        repository_id: UUID,
+    ) -> list[PullRequestResponse]:
+        """Return all pull requests for one repository."""
+
+        repository = self._store.get_by_id(repository_id)
+        if repository is None:
+            msg = f"Repository {repository_id} was not found."
+            raise NotFoundError(msg)
+
+        pull_requests = self._store.list_pull_requests(repository_id)
+        return [
+            PullRequestResponse.from_entity(pr) for pr in pull_requests
+        ]
 
     @staticmethod
     def _parse_status(status: str | None) -> RepositoryStatus | None:

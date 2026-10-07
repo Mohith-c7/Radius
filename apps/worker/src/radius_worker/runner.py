@@ -285,6 +285,18 @@ def load_persisted_analysis_command(
         destination,
         extra_headers=extra_headers,
     )
+    if hasattr(git_client, "fetch_pull_request") and pull_request.github_pr_number:
+        try:
+            git_client.fetch_pull_request(
+                repository_path,
+                pull_request.github_pr_number,
+                extra_headers=extra_headers,
+            )
+        except Exception:
+            LOGGER.debug(
+                "Could not fetch pull request ref directly; continuing with commit SHA checkout.",
+                extra={"pr_number": pull_request.github_pr_number},
+            )
     git_client.checkout(repository_path, analysis.commit_sha)
     return ExecuteAnalysisCommand(
         analysis_id=analysis.id,
@@ -334,8 +346,7 @@ def _repository_cache_path(
 
 def _safe_path_segment(value: str) -> str:
     return "".join(
-        char if char.isalnum() or char in {"-", "_", "."} else "-"
-        for char in value
+        char if char.isalnum() or char in {"-", "_", "."} else "-" for char in value
     )
 
 
@@ -381,16 +392,27 @@ def _publish_github_result(
     github_settings = _github_settings(settings)
     if not settings.github_publish_results or not github_settings.enabled:
         return
-    installation_id = _github_installation_id(
-        session=session,
-        analysis_id=analysis_id,
-        settings=settings,
-    )
-    report = _github_report(session, analysis_id, settings)
-    GitHubAnalysisPublisher(github_client).publish(
-        installation_id=installation_id,
-        report=report,
-    )
+    try:
+        installation_id = _github_installation_id(
+            session=session,
+            analysis_id=analysis_id,
+            settings=settings,
+        )
+        report = _github_report(session, analysis_id, settings)
+        GitHubAnalysisPublisher(github_client).publish(
+            installation_id=installation_id,
+            report=report,
+        )
+        LOGGER.info(
+            "Successfully published GitHub Check Run and PR comment",
+            extra={"analysis_id": str(analysis_id), "pr_number": report.pull_request_number},
+        )
+    except Exception as exc:
+        LOGGER.warning(
+            "Could not publish GitHub Check Run or PR comment: %s",
+            exc,
+            extra={"analysis_id": str(analysis_id)},
+        )
 
 
 def _github_installation_id(
@@ -399,7 +421,7 @@ def _github_installation_id(
     analysis_id,
     settings: WorkerSettings,
 ) -> int:
-    if settings.github_installation_id is not None:
+    if settings.github_installation_id:
         return settings.github_installation_id
     analysis = session.get(db_models.Analysis, analysis_id)
     if analysis is None:
@@ -427,9 +449,11 @@ def _github_report(
         raise NotFoundError(msg)
     repository = session.get(db_models.Repository, analysis.repository_id)
     pull_request = session.get(db_models.PullRequest, analysis.pull_request_id)
-    confidence = session.query(db_models.ConfidenceReport).filter_by(
-        analysis_id=analysis_id
-    ).one_or_none()
+    confidence = (
+        session.query(db_models.ConfidenceReport)
+        .filter_by(analysis_id=analysis_id)
+        .one_or_none()
+    )
     if repository is None or pull_request is None or confidence is None:
         msg = f"GitHub publishing artifacts for analysis {analysis_id} are incomplete."
         raise NotFoundError(msg)
@@ -438,6 +462,31 @@ def _github_report(
         if settings.dashboard_base_url
         else None
     )
+
+    test_selection = (
+        session.query(db_models.TestSelection)
+        .filter_by(analysis_id=analysis_id)
+        .one_or_none()
+    )
+    selected_tests_count = (
+        len(test_selection.selected_tests) if test_selection else 0
+    )
+
+    test_runs = (
+        session.query(db_models.TestRun)
+        .filter_by(analysis_id=analysis_id)
+        .all()
+    )
+    skipped_tests_count = sum(tr.skipped for tr in test_runs)
+    total_tests = sum(tr.total_tests for tr in test_runs)
+    time_saved_percent = (
+        round((skipped_tests_count / total_tests) * 100, 1)
+        if total_tests > 0
+        else 0.0
+    )
+
+    affected_files = tuple(cf.path for cf in (analysis.changed_files or ()))
+
     return GitHubAnalysisReport(
         analysis_id=analysis.id,
         owner=repository.owner,
@@ -449,4 +498,11 @@ def _github_report(
         summary=confidence.summary,
         recommendations=tuple(confidence.recommendations),
         dashboard_url=dashboard_url,
+        selected_tests_count=selected_tests_count,
+        skipped_tests_count=skipped_tests_count,
+        time_saved_percent=time_saved_percent,
+        affected_files=affected_files,
+        change_risk=confidence.change_risk,
+        verification_status=confidence.verification_status,
+        analysis_completeness=float(confidence.analysis_completeness) if confidence.analysis_completeness is not None else None,
     )

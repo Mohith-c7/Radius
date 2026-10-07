@@ -14,10 +14,9 @@ RUN apt-get update \
 
 COPY pyproject.toml alembic.ini ./
 COPY infra/database ./infra/database
-
-RUN python -m pip install --no-cache-dir .
-
 COPY apps/worker/src ./apps/worker/src
 COPY packages ./packages
+
+RUN python -m pip install --no-cache-dir .
 
 CMD ["python", "-m", "radius_worker"]

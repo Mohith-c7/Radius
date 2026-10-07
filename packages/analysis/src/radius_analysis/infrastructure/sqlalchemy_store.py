@@ -63,8 +63,8 @@ class SqlAlchemyAnalysisStore:
         if analysis.id is not None:
             row = self._session.get(db_models.Analysis, analysis.id)
             if row is None:
-                msg = f"Analysis {analysis.id} was not found."
-                raise NotFoundError(msg)
+                row = db_models.Analysis(id=analysis.id)
+                self._session.add(row)
         else:
             row = db_models.Analysis()
             self._session.add(row)
@@ -129,9 +129,7 @@ class SqlAlchemyAnalysisStore:
             db_models.ChangedFile(
                 analysis_id=analysis_id,
                 path=changed_file.path.value,
-                change_type=db_enums.ChangedFileType(
-                    changed_file.change_type.value
-                ),
+                change_type=db_enums.ChangedFileType(changed_file.change_type.value),
                 additions=changed_file.additions,
                 deletions=changed_file.deletions,
             )

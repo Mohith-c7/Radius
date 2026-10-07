@@ -64,6 +64,10 @@ class ConfidenceReport:
     summary: str
     evidence: tuple[ConfidenceEvidence, ...]
     recommendations: tuple[str, ...]
+    change_risk: str = "low"
+    verification_confidence: float = 100.0
+    analysis_completeness: float = 100.0
+    verification_status: str = "unverified"
     generated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:

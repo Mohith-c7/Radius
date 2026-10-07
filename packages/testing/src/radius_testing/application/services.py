@@ -1,4 +1,4 @@
-"""Testing application service."""
+from uuid import UUID
 
 from radius_shared.errors import NotFoundError, ValidationError
 
@@ -15,6 +15,7 @@ from radius_testing.dto.responses import (
     TestRunResultResponse,
     TestSelectionResponse,
 )
+from radius_testing.infrastructure.junit_parser import JUnitReportParser
 from radius_testing.interfaces.discovery import TestDiscoverer
 from radius_testing.interfaces.runner import TestCommandPlanner, TestRunner
 from radius_testing.interfaces.selection import TestSelector
@@ -31,12 +32,15 @@ class TestingApplicationService:
         store: TestStore,
         planner: TestCommandPlanner,
         runner: TestRunner | None = None,
+        parser: JUnitReportParser | None = None,
     ) -> None:
         self._discoverer = discoverer
         self._selector = selector
         self._store = store
         self._planner = planner
         self._runner = runner
+        self._parser = parser or JUnitReportParser()
+
 
     def discover_tests(
         self,
@@ -114,3 +118,15 @@ class TestingApplicationService:
             msg = f"Test run result for analysis {analysis_id} was not found."
             raise NotFoundError(msg)
         return TestRunResultResponse.from_entity(result)
+
+    def ingest_test_results(
+        self,
+        analysis_id: UUID,
+        content: str | bytes,
+    ) -> TestRunResultResponse:
+        """Ingest and persist test results from CI / JUnit report."""
+        parser = JUnitReportParser()
+        result = parser.parse(content, analysis_id)
+        saved = self._store.save_run_result(result)
+        return TestRunResultResponse.from_entity(saved)
+

@@ -133,3 +133,63 @@ test("radiusFetch rejects successful empty data envelopes", async () => {
     /Radius API returned an empty data payload\./,
   );
 });
+
+test("getTestRunResult fetches CI test run results", async () => {
+  globalThis.fetch = async (input) => {
+    assert.equal(
+      String(input),
+      "https://radius.test/api/v1/analyses/analysis-1/tests/results",
+    );
+    return envelope({
+      success: true,
+      data: {
+        id: "result-1",
+        analysis_id: "analysis-1",
+        status: "PASSED",
+        total_tests: 10,
+        passed: 10,
+        failed: 0,
+        skipped: 0,
+        duration_ms: 125,
+        output: "",
+      },
+    });
+  };
+
+  const result = await api.getTestRunResult("analysis-1");
+  assert.equal(result?.status, "PASSED");
+  assert.equal(result?.total_tests, 10);
+});
+
+test("uploadTestResults posts JUnit XML report payload", async () => {
+  globalThis.fetch = async (input, init) => {
+    assert.equal(
+      String(input),
+      "https://radius.test/api/v1/analyses/analysis-1/tests/results",
+    );
+    assert.equal(init?.method, "POST");
+    const headers = new Headers(init?.headers);
+    assert.equal(headers.get("Content-Type"), "application/xml");
+    assert.equal(init?.body, "<testsuite></testsuite>");
+
+    return envelope({
+      success: true,
+      data: {
+        id: "result-2",
+        analysis_id: "analysis-1",
+        status: "PASSED",
+        total_tests: 1,
+        passed: 1,
+        failed: 0,
+        skipped: 0,
+        duration_ms: 50,
+        output: "",
+      },
+    });
+  };
+
+  const res = await api.uploadTestResults("analysis-1", "<testsuite></testsuite>", true);
+  assert.equal(res.status, "PASSED");
+  assert.equal(res.total_tests, 1);
+});
+

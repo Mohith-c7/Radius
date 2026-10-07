@@ -17,3 +17,11 @@ class ConnectRepositoryRequest(BaseModel):
     visibility: str = "private"
 
     model_config = {"populate_by_name": True}
+
+
+class UpdateRepositoryRequest(BaseModel):
+    """Request to update a repository configuration."""
+
+    default_branch: str = Field(min_length=1, max_length=255, alias="defaultBranch")
+
+    model_config = {"populate_by_name": True}

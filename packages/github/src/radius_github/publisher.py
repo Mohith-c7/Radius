@@ -26,6 +26,28 @@ class GitHubAnalysisReport:
     summary: str
     recommendations: tuple[str, ...]
     dashboard_url: str | None = None
+    selected_tests_count: int = 0
+    skipped_tests_count: int = 0
+    time_saved_percent: float = 0.0
+    affected_files: tuple[str, ...] = ()
+    affected_symbols: tuple[str, ...] = ()
+    ai_pruned_count: int = 0
+    ai_pruning_notes: tuple[str, ...] = ()
+    change_risk: str | None = None
+    verification_status: str | None = None
+    analysis_completeness: float | None = None
+
+
+_RISK_BADGES: dict[str, str] = {
+    "low": "🟢",
+    "medium": "🟡",
+    "high": "🟠",
+    "critical": "🔴",
+}
+
+
+def _risk_badge(risk_level: str) -> str:
+    return _RISK_BADGES.get(risk_level.strip().lower(), "⚪")
 
 
 class GitHubAnalysisPublisher:
@@ -33,6 +55,47 @@ class GitHubAnalysisPublisher:
 
     def __init__(self, client: GitHubAppClient) -> None:
         self._client = client
+
+    def publish_in_progress(
+        self,
+        *,
+        installation_id: int,
+        owner: str,
+        repository_name: str,
+        head_sha: str,
+        dashboard_url: str | None = None,
+    ) -> None:
+        """Publish an in-progress Check Run."""
+
+        token = self._client.create_installation_token(installation_id).token
+        check_run = _latest_check_run(
+            self._client.list_check_runs_for_ref(
+                token=token,
+                owner=owner,
+                repo=repository_name,
+                ref=head_sha,
+                check_name=CHECK_RUN_NAME,
+            )
+        )
+        check_run_args = {
+            "token": token,
+            "owner": owner,
+            "repo": repository_name,
+            "name": CHECK_RUN_NAME,
+            "head_sha": head_sha,
+            "status": "in_progress",
+            "title": "Radius confidence: Analysis in progress...",
+            "summary": "Radius analysis is currently running for this commit.",
+            "text": "Radius is analyzing changed files, dependencies, and selecting tests.",
+            "details_url": dashboard_url,
+        }
+        if check_run is None:
+            self._client.create_check_run(**check_run_args)
+        else:
+            self._client.update_check_run(
+                **check_run_args,
+                check_run_id=int(check_run["id"]),
+            )
 
     def publish(
         self,
@@ -64,6 +127,7 @@ class GitHubAnalysisPublisher:
             "repo": report.repository_name,
             "name": CHECK_RUN_NAME,
             "head_sha": report.head_sha,
+            "status": "completed",
             "conclusion": conclusion,
             "title": f"Radius confidence: {report.confidence_score:.0f}/100",
             "summary": summary,
@@ -114,6 +178,60 @@ def _check_conclusion(risk_level: str) -> str:
 
 
 def _markdown_report(report: GitHubAnalysisReport) -> str:
+    badge = _risk_badge(report.risk_level)
+    
+    rows = [
+        f"| **Confidence Score** | {badge} {report.confidence_score:.0f}/100 |",
+    ]
+    if report.verification_status:
+        status_icon = "🟢" if report.verification_status.upper() == "VERIFIED" else "🔴" if report.verification_status.upper() == "FAILED" else "🟡"
+        rows.append(f"| **Verification Status** | {status_icon} {report.verification_status.upper()} |")
+    if report.change_risk:
+        risk_icon = _risk_badge(report.change_risk)
+        rows.append(f"| **Change Risk** | {risk_icon} {report.change_risk.capitalize()} |")
+    if report.analysis_completeness is not None:
+        pct = float(report.analysis_completeness)
+        if pct <= 1.0:
+            pct *= 100.0
+        rows.append(f"| **Analysis Completeness** | {round(pct)}% |")
+    rows.append(
+        f"| **Predictive Test Selection** | {report.time_saved_percent}% time saved "
+        f"({report.selected_tests_count} selected, {report.skipped_tests_count} skipped) |"
+    )
+    rows.append(f"| **AI Impact Pruning** | {report.ai_pruned_count} pruned |")
+
+    metrics_table = (
+        "| Metric | Result |\n"
+        "| --- | --- |\n"
+        + "\n".join(rows)
+    )
+
+    blast_radius_section = ""
+    if report.affected_files:
+        files_rows = "\n".join(f"| `{path}` |" for path in report.affected_files)
+        blast_radius_section = (
+            "\n\n<details>\n"
+            f"<summary><strong>Blast Radius Affected Files ({len(report.affected_files)})</strong></summary>\n\n"
+            "| Affected File |\n"
+            "| --- |\n"
+            f"{files_rows}\n"
+            "</details>"
+        )
+
+    ai_pruning_section = ""
+    if report.ai_pruned_count > 0 or report.ai_pruning_notes:
+        notes_lines = []
+        if report.ai_pruned_count > 0:
+            notes_lines.append(
+                f"- **Pruned Callers:** {report.ai_pruned_count} unaffected caller(s) pruned by semantic analysis."
+            )
+        for note in report.ai_pruning_notes:
+            notes_lines.append(f"- {note}")
+        ai_pruning_section = (
+            "\n\n### AI Pruning Insights\n\n"
+            + "\n".join(notes_lines)
+        )
+
     recommendations = "\n".join(
         f"- {item}" for item in report.recommendations
     ) or "- No additional recommendations."
@@ -124,11 +242,15 @@ def _markdown_report(report: GitHubAnalysisReport) -> str:
     )
     return (
         f"{COMMENT_MARKER}\n"
-        "## Radius Confidence Report\n\n"
+        f"## {badge} Radius Confidence Report\n\n"
         f"**Score:** {report.confidence_score:.0f}/100\n\n"
         f"**Risk:** {report.risk_level}\n\n"
         f"{report.summary}\n\n"
-        "### Recommendations\n"
+        "### Verification Metrics\n\n"
+        f"{metrics_table}"
+        f"{blast_radius_section}"
+        f"{ai_pruning_section}\n\n"
+        "### Recommendations\n\n"
         f"{recommendations}"
         f"{details}"
     )

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from radius_shared.database.session import DatabaseSettings
 
 
@@ -34,6 +34,14 @@ class WorkerSettings(DatabaseSettings):
         default=None,
         alias="GITHUB_INSTALLATION_ID",
     )
+
+    @field_validator("github_installation_id", mode="before")
+    @classmethod
+    def _parse_installation_id(cls, v):
+        if v is None or v == "" or v == 0 or v == "0":
+            return None
+        return int(v)
+
     github_api_base_url: str = Field(
         default="https://api.github.com",
         alias="GITHUB_API_BASE_URL",

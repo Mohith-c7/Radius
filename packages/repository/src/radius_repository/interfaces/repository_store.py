@@ -37,6 +37,13 @@ class RepositoryStore(Protocol):
     ) -> Repository:
         """Update repository connection status."""
 
+    def update_default_branch(
+        self,
+        repository_id: UUID,
+        default_branch: str,
+    ) -> Repository:
+        """Update repository default branch."""
+
     def upsert_branch(self, branch: Branch) -> Branch:
         """Create or update branch metadata."""
 
@@ -46,6 +53,12 @@ class RepositoryStore(Protocol):
         github_pr_number: int,
     ) -> PullRequest | None:
         """Return one pull request by repository and provider number."""
+
+    def list_pull_requests(
+        self,
+        repository_id: UUID,
+    ) -> list[PullRequest]:
+        """Return all pull requests for a repository."""
 
     def upsert_pull_request(self, pull_request: PullRequest) -> PullRequest:
         """Create or update pull request metadata."""

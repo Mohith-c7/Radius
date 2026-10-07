@@ -40,7 +40,27 @@ class TestSelection:
 
     analysis_id: UUID
     selected_tests: tuple[SelectedTest, ...]
+    skipped_tests: tuple[TestCase, ...] = ()
+    total_discovered_count: int = 0
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    @property
+    def selected_count(self) -> int:
+        return len(self.selected_tests)
+
+    @property
+    def skipped_count(self) -> int:
+        return len(self.skipped_tests)
+
+    @property
+    def time_saved_percent(self) -> float:
+        if not self.total_discovered_count:
+            return 0.0
+        return round((self.skipped_count / self.total_discovered_count) * 100, 1)
+
+    @property
+    def cli_args(self) -> str:
+        return " ".join(item.test_case.path.value for item in self.selected_tests)
 
 
 @dataclass(frozen=True, slots=True)

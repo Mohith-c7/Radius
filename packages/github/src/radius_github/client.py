@@ -108,13 +108,14 @@ class GitHubAppClient:
         repo: str,
         name: str,
         head_sha: str,
-        conclusion: str,
         title: str,
         summary: str,
         text: str,
+        status: str = "completed",
+        conclusion: str | None = None,
         details_url: str | None = None,
     ) -> dict[str, Any]:
-        """Publish a completed GitHub Check Run."""
+        """Publish a GitHub Check Run."""
 
         return self._request(
             "POST",
@@ -123,6 +124,7 @@ class GitHubAppClient:
             body=_check_run_payload(
                 name=name,
                 head_sha=head_sha,
+                status=status,
                 conclusion=conclusion,
                 title=title,
                 summary=summary,
@@ -140,13 +142,14 @@ class GitHubAppClient:
         check_run_id: int,
         name: str,
         head_sha: str,
-        conclusion: str,
         title: str,
         summary: str,
         text: str,
+        status: str = "completed",
+        conclusion: str | None = None,
         details_url: str | None = None,
     ) -> dict[str, Any]:
-        """Update a completed GitHub Check Run."""
+        """Update a GitHub Check Run."""
 
         return self._request(
             "PATCH",
@@ -155,6 +158,7 @@ class GitHubAppClient:
             body=_check_run_payload(
                 name=name,
                 head_sha=head_sha,
+                status=status,
                 conclusion=conclusion,
                 title=title,
                 summary=summary,
@@ -238,6 +242,24 @@ class GitHubAppClient:
         )
         return response if isinstance(response, list) else []
 
+    def list_pull_requests(
+        self,
+        *,
+        token: str,
+        owner: str,
+        repo: str,
+        state: str = "open",
+    ) -> list[dict[str, Any]]:
+        """Return pull requests for a repository from GitHub."""
+
+        query = urllib.parse.urlencode({"state": state, "per_page": 100})
+        response = self._request(
+            "GET",
+            f"/repos/{owner}/{repo}/pulls?{query}",
+            token=token,
+        )
+        return response if isinstance(response, list) else []
+
     def _jwt(self) -> str:
         issued_at = int(self._clock()) - 60
         expires_at = issued_at + 9 * 60
@@ -295,24 +317,38 @@ def _check_run_payload(
     *,
     name: str,
     head_sha: str,
-    conclusion: str,
     title: str,
     summary: str,
     text: str,
-    details_url: str | None,
+    status: str = "completed",
+    conclusion: str | None = None,
+    details_url: str | None = None,
 ) -> dict[str, Any]:
-    payload: dict[str, Any] = {
-        "name": name,
-        "head_sha": head_sha,
-        "status": "completed",
-        "conclusion": conclusion,
-        "completed_at": datetime.now(UTC).isoformat(),
-        "output": {
-            "title": title,
-            "summary": summary,
-            "text": text,
-        },
-    }
+    if status == "in_progress":
+        payload: dict[str, Any] = {
+            "name": name,
+            "head_sha": head_sha,
+            "status": "in_progress",
+            "started_at": datetime.now(UTC).isoformat(),
+            "output": {
+                "title": title,
+                "summary": summary,
+                "text": text,
+            },
+        }
+    else:
+        payload = {
+            "name": name,
+            "head_sha": head_sha,
+            "status": status,
+            "conclusion": conclusion or "neutral",
+            "completed_at": datetime.now(UTC).isoformat(),
+            "output": {
+                "title": title,
+                "summary": summary,
+                "text": text,
+            },
+        }
     if details_url:
         payload["details_url"] = details_url
     return payload

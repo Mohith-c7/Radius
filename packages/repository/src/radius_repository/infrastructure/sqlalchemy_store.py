@@ -75,8 +75,8 @@ class SqlAlchemyRepositoryStore:
         if repository.id is not None:
             row = self._session.get(db_models.Repository, repository.id)
             if row is None:
-                msg = f"Repository {repository.id} was not found."
-                raise NotFoundError(msg)
+                row = db_models.Repository(id=repository.id)
+                self._session.add(row)
         else:
             row = self._session.scalar(
                 select(db_models.Repository).where(
@@ -127,6 +127,27 @@ class SqlAlchemyRepositoryStore:
             raise NotFoundError(msg)
         return domain
 
+    def update_default_branch(
+        self,
+        repository_id: UUID,
+        default_branch: str,
+    ) -> Repository:
+        """Update repository default branch."""
+
+        row = self._session.get(db_models.Repository, repository_id)
+        if row is None:
+            msg = f"Repository {repository_id} was not found."
+            raise NotFoundError(msg)
+
+        row.default_branch = default_branch
+        self._session.flush()
+        self._session.refresh(row, attribute_names=["branches"])
+        domain = self._to_domain(row)
+        if domain is None:
+            msg = f"Repository {repository_id} was not found."
+            raise NotFoundError(msg)
+        return domain
+
     def upsert_branch(self, branch: Branch) -> Branch:
         """Create or update branch metadata."""
 
@@ -164,6 +185,16 @@ class SqlAlchemyRepositoryStore:
             )
         )
         return self._pull_request_to_domain(row) if row is not None else None
+
+    def list_pull_requests(self, repository_id: UUID) -> list[PullRequest]:
+        """Return all pull requests for a repository ordered by opened_at desc."""
+
+        rows = self._session.scalars(
+            select(db_models.PullRequest)
+            .where(db_models.PullRequest.repository_id == repository_id)
+            .order_by(db_models.PullRequest.opened_at.desc())
+        ).all()
+        return [self._pull_request_to_domain(r) for r in rows]
 
     def upsert_pull_request(self, pull_request: PullRequest) -> PullRequest:
         """Create or update pull request metadata."""

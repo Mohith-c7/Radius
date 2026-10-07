@@ -1,0 +1,6 @@
+
+> @radius/github@0.1.0 build D:\Radius\packages\github
+> python -m compileall src
+
+Listing 'src'...
+Listing 'src\\radius_github'...

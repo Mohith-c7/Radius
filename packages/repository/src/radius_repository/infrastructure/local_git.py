@@ -47,6 +47,47 @@ class LocalGitRepositoryClient:
             raise ValidationError(msg)
         self._run(("git", "checkout", branch_name), cwd=repository_path)
 
+    def fetch_pull_request(
+        self,
+        repository_path: Path,
+        pr_number: int,
+        *,
+        extra_headers: tuple[str, ...] = (),
+    ) -> None:
+        """Fetch PR head ref from origin into refs/remotes/origin/pr/<pr_number>."""
+
+        if not (repository_path / ".git").exists():
+            msg = f"Repository path is not a Git checkout: {repository_path}."
+            raise ValidationError(msg)
+        self._run(
+            (
+                "git",
+                "fetch",
+                "origin",
+                f"+refs/pull/{pr_number}/head:refs/remotes/origin/pr/{pr_number}",
+            ),
+            cwd=repository_path,
+            extra_headers=extra_headers,
+        )
+
+    def fetch_ref(
+        self,
+        repository_path: Path,
+        remote_ref: str,
+        *,
+        extra_headers: tuple[str, ...] = (),
+    ) -> None:
+        """Fetch a specific remote ref from origin."""
+
+        if not (repository_path / ".git").exists():
+            msg = f"Repository path is not a Git checkout: {repository_path}."
+            raise ValidationError(msg)
+        self._run(
+            ("git", "fetch", "origin", remote_ref),
+            cwd=repository_path,
+            extra_headers=extra_headers,
+        )
+
     @staticmethod
     def _run(
         command: tuple[str, ...],

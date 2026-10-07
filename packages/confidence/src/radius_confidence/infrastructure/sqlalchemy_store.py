@@ -35,6 +35,9 @@ class SqlAlchemyConfidenceStore:
                 analysis_id=report.analysis_id,
                 confidence_score=report.confidence_score.value,
                 risk_level=db_enums.RiskLevel(report.risk_level.value),
+                change_risk=report.change_risk,
+                verification_status=report.verification_status,
+                analysis_completeness=report.analysis_completeness,
                 summary=report.summary,
                 recommendations=list(report.recommendations),
                 generated_at=report.generated_at,
@@ -48,6 +51,9 @@ class SqlAlchemyConfidenceStore:
             )
         row.confidence_score = report.confidence_score.value
         row.risk_level = db_enums.RiskLevel(report.risk_level.value)
+        row.change_risk = report.change_risk
+        row.verification_status = report.verification_status
+        row.analysis_completeness = report.analysis_completeness
         row.summary = report.summary
         row.recommendations = list(report.recommendations)
         row.generated_at = report.generated_at
@@ -107,4 +113,7 @@ class SqlAlchemyConfidenceStore:
             ),
             recommendations=tuple(row.recommendations),
             generated_at=row.generated_at,
+            change_risk=row.change_risk,
+            verification_status=row.verification_status,
+            analysis_completeness=float(row.analysis_completeness) if row.analysis_completeness is not None else None,
         )

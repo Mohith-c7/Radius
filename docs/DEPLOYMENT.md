@@ -1,76 +1,99 @@
-# Deployment
+# Production Deployment Guide
 
-This document covers the Phase 1 production runtime shape for Radius.
+This document covers the production runtime architecture, configuration, and deployment procedures for the Radius software verification platform.
 
-## Services
+---
 
-- `postgres`: PostgreSQL 16 database.
-- `migrations`: one-shot Alembic migration runner.
-- `api`: FastAPI service exposed on port `8000`.
-- `worker`: SQL-backed analysis worker.
-- `dashboard`: Next.js dashboard exposed on port `3000`.
+## 1. Services Architecture
 
-## Local Production Smoke Test
+Radius runs as an orchestrated multi-service stack:
+
+| Service | Technology | Port | Purpose |
+| :--- | :--- | :--- | :--- |
+| **`postgres`** | PostgreSQL 16 (Alpine) | `5432` | Relational storage for organizations, repositories, analyses, test runs, and confidence reports. |
+| **`migrations`** | Alembic (one-shot container) | — | Automatically applies all pending database schema migrations on startup before the API launches. |
+| **`api`** | FastAPI (Python 3.12, Uvicorn) | `8000` | REST API handling repository management, analysis triggers, predictive test queries, CI ingestion, and dashboard data. |
+| **`worker`** | Python 3.12 Background Worker | — | Processes asynchronous analysis jobs, builds multi-language ASTs and CPGs, slices diff hunks, runs AI pruning, and publishes GitHub Check Runs. |
+| **`dashboard`** | Next.js 15.5 (Node 22) | `3000` | Web console with interactive SVG CPG graph viewer, Predictive Test Selection Hub, CI report uploader, and real-time confidence metrics. |
+
+---
+
+## 2. Docker Compose Deployment
+
+To spin up the entire production stack locally or on a single VM:
 
 ```bash
-docker compose up --build
+# Clone the repository
+git clone https://github.com/Mohith-c7/Radius.git
+cd Radius
+
+# Configure production environment variables
+cp .env.example .env.production
+# (Edit .env.production with your database and GitHub App credentials)
+
+# Build and start all services
+docker compose --env-file .env.production up -d --build
 ```
 
-Then check:
+### Healthcheck Verification
 
 ```bash
-curl http://localhost:8000/api/v1/health
-curl http://localhost:8000/api/v1/ready
+# Verify API service liveness and database readiness
+curl -f http://localhost:8000/api/v1/health
+curl -f http://localhost:8000/api/v1/ready
+
+# Check logs
+docker compose logs -f api worker dashboard
 ```
 
-The dashboard is available at `http://localhost:3000`.
+The Next.js web console is available at `http://localhost:3000`.
 
-## Required Environment
+---
 
-Set these before running a real deployment:
+## 3. Production Environment Configuration
 
-- `DATABASE_URL`: PostgreSQL connection string for API, worker, and migrations.
-- `API_KEYS`: comma-separated API keys accepted by the API.
-- `GITHUB_WEBHOOK_SECRET`: shared secret configured on the GitHub webhook.
-- `GITHUB_DEFAULT_ORGANIZATION_ID`: default organization UUID for webhook-created analyses.
-- `GITHUB_APP_ID`: GitHub App id used to create installation tokens.
-- `GITHUB_APP_PRIVATE_KEY`: PEM private key for the GitHub App. Use escaped
-  `\n` line breaks when storing in a single-line secret.
-- `GITHUB_INSTALLATION_ID`: optional fallback installation id. Webhook payloads
-  can also persist `installation.id` onto the organization.
-- `GITHUB_PUBLISH_RESULTS`: set to `false` only for local smoke tests where
-  GitHub publishing should be skipped.
-- `DASHBOARD_BASE_URL`: public dashboard URL used in GitHub Check Runs and PR
-  comments.
-- `NEXT_PUBLIC_RADIUS_API_BASE_URL`: browser-visible API base URL.
-- `NEXT_PUBLIC_RADIUS_ORGANIZATION_ID`: organization UUID used by the dashboard.
-- `NEXT_PUBLIC_RADIUS_API_KEY`: dashboard API key if API key enforcement is enabled.
+| Variable | Description | Default / Example |
+| :--- | :--- | :--- |
+| **`DATABASE_URL`** | PostgreSQL connection string for API, worker, and migrations. | `postgresql+psycopg://radius:password@postgres:5432/radius` |
+| **`RADIUS_ENV`** | Application runtime environment (`production`, `development`). | `production` |
+| **`RADIUS_LOG_LEVEL`** | Application logging level (`INFO`, `DEBUG`, `WARNING`). | `INFO` |
+| **`GEMINI_API_KEY`** | Google Gemini API key for Gemini 2.0 Flash semantic AI impact pruning. | `AIzaSy...` |
+| **`API_KEYS`** | Comma-separated API keys accepted by API in format `org_id:key`. | `00000000-0000-4000-8000-000000000001:radius_key_live` |
+| **`GITHUB_APP_ID`** | GitHub App ID used to generate installation access tokens. | `123456` |
+| **`GITHUB_APP_PRIVATE_KEY`** | RSA Private Key for the GitHub App (PEM format with `\n`). | `-----BEGIN RSA PRIVATE KEY-----\n...` |
+| **`GITHUB_WEBHOOK_SECRET`** | Shared secret configured in the GitHub App webhook settings. | `whsec_live_secret_string` |
+| **`GITHUB_DEFAULT_ORGANIZATION_ID`** | Default organization UUID assigned to webhook-created analyses. | `00000000-0000-4000-8000-000000000001` |
+| **`GITHUB_PUBLISH_RESULTS`** | Whether the worker publishes Check Runs and PR comments to GitHub. | `true` |
+| **`DASHBOARD_BASE_URL`** | Canonical public URL of the dashboard used in PR comment links. | `https://radius.yourcompany.com` |
+| **`NEXT_PUBLIC_RADIUS_API_BASE_URL`** | Public URL used by the browser to communicate with the API. | `https://api-radius.yourcompany.com` |
+| **`NEXT_PUBLIC_RADIUS_ORGANIZATION_ID`** | Tenant organization UUID loaded by the dashboard. | `00000000-0000-4000-8000-000000000001` |
 
-For production, replace the compose defaults with managed secrets and a managed
-PostgreSQL instance. Do not use the sample `radius/radius` database credentials.
+---
 
-## CI
+## 4. GitHub App Setup & Permissions
 
-`.github/workflows/ci.yml` validates pull requests and protected branches by
-running:
+To configure Radius to automatically verify Pull Requests:
 
-- `pnpm install --frozen-lockfile`
-- `pnpm lint`
-- `pnpm typecheck`
-- `pnpm test`
-- `pnpm build`
-- `alembic upgrade head`
+1. Create a GitHub App under your GitHub Organization:
+   - **Homepage URL**: `https://radius.yourcompany.com`
+   - **Webhook URL**: `https://api-radius.yourcompany.com/api/v1/github/webhooks`
+   - **Webhook Secret**: Generate a secure 32+ character string and set as `GITHUB_WEBHOOK_SECRET`.
+2. Configure Permissions:
+   - **Repository contents**: Read (to clone and parse repository ASTs)
+   - **Pull requests**: Read & Write (to inspect PR diffs and post verification markdown comments)
+   - **Checks**: Read & Write (to publish `Radius confidence` in-progress and completed Check Runs)
+   - **Metadata**: Read
+3. Subscribe to Webhook Events:
+   - `pull_request` (opened, synchronize, reopened)
+   - `push`
+4. Generate a Private Key, download the `.pem` file, and assign the content to `GITHUB_APP_PRIVATE_KEY`.
+5. Install the App onto your organization's repositories.
 
-The migration sanity step runs against a PostgreSQL service container.
+---
 
-## GitHub App Permissions
+## 5. Security & Isolation
 
-Configure the GitHub App with:
-
-- Repository contents: read
-- Pull requests: read
-- Checks: read/write
-- Issues: write
-- Metadata: read
-
-Subscribe it to `pull_request`, `push`, and `ping` webhook events.
+- **Tenant Isolation**: Every API request requires an `X-Radius-Organization-Id` header (and optional Bearer API key). Data queries strictly scope records by organization ID.
+- **Symlink Traversal Defense**: The worker uses `os.path.realpath` bounds checking during repository filesystem traversal to prevent symlink escape vulnerabilities.
+- **Fail-Safe AI Pruning**: If the Gemini API key is missing or an unexpected error occurs during AI evaluation, the semantic pruner automatically defaults to `impacted=True` (safe fallback) to ensure critical tests are never missed.
+- **No Unsafe Code Execution**: Worker analysis is purely static AST and CPG graph traversal; untrusted repository code is never executed inside worker containers.

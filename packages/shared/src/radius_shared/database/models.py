@@ -55,6 +55,14 @@ class Organization(UuidPrimaryKeyMixin, TimestampMixin, Base):
         back_populates="organization"
     )
 
+    @property
+    def slug(self) -> str:
+        """URL-friendly slug derived from organization name."""
+        import re
+
+        clean = re.sub(r"[^a-zA-Z0-9]+", "-", self.name.strip().lower()).strip("-")
+        return clean or "workspace"
+
 
 class User(UuidPrimaryKeyMixin, TimestampMixin, Base):
     """Authenticated user."""
@@ -66,7 +74,12 @@ class User(UuidPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         index=True,
     )
-    github_user_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False)
+    github_user_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        unique=True,
+        nullable=True,
+        default=None,
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[str] = mapped_column(String(320), nullable=False)
     role: Mapped[UserRole] = mapped_column(
@@ -490,6 +503,9 @@ class ConfidenceReport(UuidPrimaryKeyMixin, Base):
         Enum(RiskLevel, values_callable=enum_values),
         nullable=False,
     )
+    change_risk: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    verification_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    analysis_completeness: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
     summary: Mapped[str] = mapped_column(Text, nullable=False)
     recommendations: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     generated_at: Mapped[datetime] = mapped_column(

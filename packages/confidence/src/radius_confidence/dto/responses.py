@@ -44,6 +44,10 @@ class ConfidenceReportResponse:
     summary: str
     evidence: tuple[ConfidenceEvidenceResponse, ...]
     recommendations: tuple[str, ...]
+    change_risk: str
+    verification_confidence: float
+    analysis_completeness: float
+    verification_status: str
     generated_at: datetime
 
     @classmethod
@@ -61,5 +65,9 @@ class ConfidenceReportResponse:
                 for item in report.evidence
             ),
             recommendations=report.recommendations,
+            change_risk=report.change_risk,
+            verification_confidence=report.verification_confidence,
+            analysis_completeness=report.analysis_completeness,
+            verification_status=report.verification_status,
             generated_at=report.generated_at,
         )

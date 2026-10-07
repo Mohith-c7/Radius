@@ -67,9 +67,11 @@ async def handle_github_webhook(
     _validate_signature(request, body, signature)
     body_hash = hashlib.sha256(body).hexdigest()
     scope = f"github_webhook:{event}"
+    payload = json.loads(body)
+    org_id = _resolve_webhook_organization_id(request, payload, repository_service)
     existing = replay_or_validate(
         idempotency_store,
-        _webhook_organization_id(request),
+        org_id,
         delivery_id,
         scope,
         body_hash,
@@ -80,8 +82,7 @@ async def handle_github_webhook(
             content=existing.response_body,
         )
 
-    payload = json.loads(body)
-    _record_installation_id(request, payload)
+    _record_installation_id(request, payload, repository_service)
     result = _handle_payload(
         request,
         event,
@@ -93,7 +94,7 @@ async def handle_github_webhook(
     response = success_response(result)
     response_body = jsonable_encoder(response)
     idempotency_store.save(
-        _webhook_organization_id(request),
+        org_id,
         delivery_id,
         scope,
         body_hash,
@@ -267,7 +268,15 @@ def _connect_repository(
     payload: GitHubRepositoryPayload,
     repository_service: RepositoryApplicationService,
 ):
-    organization_id = _webhook_organization_id(request)
+    existing = repository_service.get_by_github_repository_id(payload.id)
+    if existing is not None:
+        return existing
+
+    organization_id = _resolve_webhook_organization_id(
+        request,
+        {"repository": {"id": payload.id}},
+        repository_service,
+    )
     repository = repository_service.connect_repository(
         ConnectRepositoryCommand(
             organization_id=organization_id,
@@ -316,12 +325,42 @@ def _validate_signature(
         raise AccessDeniedError(msg)
 
 
-def _webhook_organization_id(request: Request) -> UUID:
+def _resolve_webhook_organization_id(
+    request: Request,
+    payload: dict[str, Any] | None = None,
+    repository_service: RepositoryApplicationService | None = None,
+) -> UUID:
+    """Resolve organization from existing repo or installation, falling back to default."""
+    if payload and repository_service:
+        repo_data = payload.get("repository")
+        if isinstance(repo_data, dict) and repo_data.get("id"):
+            existing = repository_service.get_by_github_repository_id(int(repo_data["id"]))
+            if existing is not None:
+                return existing.organization_id
+
+    if payload:
+        installation = payload.get("installation")
+        if isinstance(installation, dict) and installation.get("id"):
+            session = getattr(request.state, "radius_db_session", None)
+            if session is not None:
+                org = (
+                    session.query(db_models.Organization)
+                    .filter_by(github_installation_id=int(installation["id"]))
+                    .first()
+                )
+                if org is not None:
+                    return org.id
+
     organization_id = request.app.state.settings.github_default_organization_id
-    if organization_id is None:
-        msg = "GITHUB_DEFAULT_ORGANIZATION_ID is required for GitHub webhooks."
-        raise ValidationError(msg)
-    return organization_id
+    if organization_id is not None:
+        return organization_id
+
+    msg = "GITHUB_DEFAULT_ORGANIZATION_ID is required for GitHub webhooks."
+    raise ValidationError(msg)
+
+
+def _webhook_organization_id(request: Request) -> UUID:
+    return _resolve_webhook_organization_id(request)
 
 
 def _pull_request_status(payload: GitHubPullRequestPayload) -> str:
@@ -332,16 +371,25 @@ def _pull_request_status(payload: GitHubPullRequestPayload) -> str:
     return "open"
 
 
-def _record_installation_id(request: Request, payload: dict[str, Any]) -> None:
+def _record_installation_id(
+    request: Request,
+    payload: dict[str, Any],
+    repository_service: RepositoryApplicationService | None = None,
+) -> None:
     installation = payload.get("installation")
     if not isinstance(installation, dict) or installation.get("id") is None:
         return
     session = getattr(request.state, "radius_db_session", None)
     if session is None:
         return
-    organization = session.get(
-        db_models.Organization,
-        _webhook_organization_id(request),
-    )
+    try:
+        org_id = _resolve_webhook_organization_id(
+            request,
+            payload=payload,
+            repository_service=repository_service,
+        )
+    except ValidationError:
+        return
+    organization = session.get(db_models.Organization, org_id)
     if organization is not None:
         organization.github_installation_id = int(installation["id"])

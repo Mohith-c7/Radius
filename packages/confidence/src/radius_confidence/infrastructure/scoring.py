@@ -7,6 +7,7 @@ from radius_confidence.domain.entities import (
 )
 from radius_confidence.domain.enums import EvidenceCategory, EvidenceImpact
 from radius_confidence.domain.value_objects import ConfidenceScore
+from radius_confidence.interfaces.scoring import ScoringResult
 
 
 class DeterministicConfidenceScorer:
@@ -16,8 +17,8 @@ class DeterministicConfidenceScorer:
         self,
         impact: ImpactEvidence,
         tests: TestEvidence,
-    ) -> tuple[ConfidenceScore, tuple[ConfidenceEvidence, ...]]:
-        """Return score and evidence."""
+    ) -> ScoringResult:
+        """Return score, evidence, and decoupled confidence metrics."""
 
         score = 100.0
         evidence: list[ConfidenceEvidence] = [
@@ -33,7 +34,32 @@ class DeterministicConfidenceScorer:
         score = self._apply_test_penalties(score, tests, evidence)
         score = self._apply_coverage_penalties(score, tests, evidence)
         score = self._apply_impact_penalties(score, impact, evidence)
-        return ConfidenceScore(max(0, min(100, score))), tuple(evidence)
+        final_score = ConfidenceScore(max(0, min(100, score)))
+
+        completeness = 100.0
+        if tests.total_tests == 0:
+            completeness -= 50.0
+
+        if tests.total_tests == 0 and impact.affected_files > 0:
+            status = "insufficient_evidence"
+        elif tests.failed > 0:
+            status = "failed"
+        elif final_score.value >= 80:
+            status = "verified"
+        else:
+            status = "unverified"
+
+        change_risk = "high" if impact.affected_files > 10 else "low"
+        v_conf = 100.0 if tests.failed == 0 and tests.total_tests > 0 else 50.0
+
+        metrics = {
+            "analysis_completeness": completeness,
+            "verification_status": status,
+            "change_risk": change_risk,
+            "verification_confidence": v_conf,
+        }
+
+        return ScoringResult(final_score, tuple(evidence), metrics)
 
     def _apply_test_penalties(
         self,
