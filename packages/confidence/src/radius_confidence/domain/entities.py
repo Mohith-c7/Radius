@@ -1,7 +1,11 @@
 """Confidence domain entities."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+
+UTC = timezone.utc
 from uuid import UUID
 
 from radius_confidence.domain.enums import (
@@ -11,8 +15,10 @@ from radius_confidence.domain.enums import (
 )
 from radius_confidence.domain.value_objects import ConfidenceScore, CoveragePercent
 
+UTC = timezone.utc
 
-@dataclass(frozen=True, slots=True)
+
+@dataclass(frozen=True)
 class ImpactEvidence:
     """Blast-radius evidence for confidence scoring."""
 
@@ -23,7 +29,7 @@ class ImpactEvidence:
     dependency_depth: int
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class TestEvidence:
     """Test evidence for confidence scoring."""
 
@@ -34,7 +40,7 @@ class TestEvidence:
     coverage_percent: CoveragePercent | None = None
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class ConfidenceEvidence:
     """One explainable confidence scoring fact."""
 
@@ -53,7 +59,26 @@ class ConfidenceEvidence:
             raise ValueError(msg)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
+class CoverageEvidence:
+    """One explainable runtime coverage fact."""
+
+    category: EvidenceCategory
+    label: str
+    message: str
+    impact: EvidenceImpact = EvidenceImpact.NEUTRAL
+    value: float | None = None
+
+    def __post_init__(self) -> None:
+        if not self.label.strip():
+            msg = "Evidence label cannot be empty."
+            raise ValueError(msg)
+        if not self.message.strip():
+            msg = "Evidence message cannot be empty."
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True)
 class ConfidenceReport:
     """Final deterministic confidence report."""
 
@@ -64,7 +89,7 @@ class ConfidenceReport:
     summary: str
     evidence: tuple[ConfidenceEvidence, ...]
     recommendations: tuple[str, ...]
-    generated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def __post_init__(self) -> None:
         if not self.summary.strip():

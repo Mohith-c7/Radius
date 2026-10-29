@@ -1,13 +1,26 @@
 """Confidence response DTOs."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from radius_confidence.domain.entities import ConfidenceEvidence, ConfidenceReport
+from radius_confidence.domain.enums import EvidenceCategory, EvidenceImpact
+from radius_confidence.domain.entities import ConfidenceReport
+
+__all__ = [
+    "CoverageArtifactResponse",
+    "CoverageFileResponse",
+    "CoverageReportResponse",
+    "CoverageSummaryResponse",
+    "ConfidenceEvidenceResponse",
+    "ConfidenceReportResponse",
+]
 
 
-@dataclass(frozen=True, slots=True)
+
+@dataclass(frozen=True)
 class ConfidenceEvidenceResponse:
     """Confidence evidence response DTO."""
 
@@ -20,7 +33,7 @@ class ConfidenceEvidenceResponse:
     @classmethod
     def from_entity(
         cls,
-        evidence: ConfidenceEvidence,
+        evidence: "ConfidenceEvidence",
     ) -> "ConfidenceEvidenceResponse":
         """Create a response DTO from confidence evidence."""
 
@@ -33,16 +46,69 @@ class ConfidenceEvidenceResponse:
         )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
+class CoverageArtifactResponse:
+    """One normalized coverage line."""
+
+    test_id: UUID
+    test_path: str
+    file_path: str
+    symbol: str | None
+    executed: bool
+    count: int
+    covered: bool
+
+
+@dataclass(frozen=True)
+class CoverageFileResponse:
+    """Aggregated coverage for a source file."""
+
+    file_path: str
+    source_language: str
+    covered_lines: int
+    total_lines: int
+    covered_percent: float | None
+
+
+@dataclass(frozen=True)
+class CoverageSummaryResponse:
+    """Aggregated coverage for an analysis."""
+
+    covered_lines: int
+    total_lines: int
+    coverage_percent: float | None
+    artifact_count: int
+    available: bool
+
+    def __getitem__(self, key: str):
+        """Keep compatibility with existing dictionary-shaped callers."""
+        return getattr(self, key)
+
+
+@dataclass(frozen=True)
+class CoverageReportResponse:
+    """Full coverage payload for one analysis."""
+
+    analysis_id: UUID
+    framework: str
+    coverage_percent: float | None
+    covered_lines: int
+    total_lines: int
+    files: tuple[CoverageFileResponse, ...]
+    artifacts: tuple[CoverageArtifactResponse, ...]
+    generated_at: datetime
+
+
+@dataclass(frozen=True)
 class ConfidenceReportResponse:
-    """Confidence report response DTO."""
+    """Final confidence report response DTO."""
 
     id: UUID | None
     analysis_id: UUID
     confidence_score: float
     risk_level: str
     summary: str
-    evidence: tuple[ConfidenceEvidenceResponse, ...]
+    evidence: tuple
     recommendations: tuple[str, ...]
     generated_at: datetime
 

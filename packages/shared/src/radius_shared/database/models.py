@@ -1,6 +1,7 @@
 """Phase 1 SQLAlchemy models."""
 
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import (
@@ -422,6 +423,9 @@ class TestSelection(UuidPrimaryKeyMixin, Base):
     selected_tests: Mapped[list["SelectedTest"]] = relationship(
         back_populates="selection"
     )
+    decisions: Mapped[list["TestSelectionEvidence"]] = relationship(
+        back_populates="selection", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (Index("ix_test_selections_analysis_id", "analysis_id"),)
 
@@ -454,6 +458,26 @@ class SelectedTest(UuidPrimaryKeyMixin, Base):
     )
 
 
+class TestSelectionEvidence(UuidPrimaryKeyMixin, Base):
+    """Evidence-backed selected or skipped test decision."""
+
+    __tablename__ = "test_selection_evidence"
+
+    selection_id: Mapped[UUID] = mapped_column(ForeignKey("test_selections.id"), nullable=False)
+    test_case_id: Mapped[UUID] = mapped_column(ForeignKey("test_cases.id"), nullable=False)
+    decision: Mapped[str] = mapped_column(String(20), nullable=False)
+    evidence_sources: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    evidence_details: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    relevance_score: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+
+    selection: Mapped[TestSelection] = relationship(back_populates="decisions")
+    test_case: Mapped[TestCase] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint("selection_id", "test_case_id", name="uq_test_selection_evidence_case"),
+        Index("ix_test_selection_evidence_selection_id", "selection_id"),
+    )
 class TestRunPlan(UuidPrimaryKeyMixin, Base):
     """Structured test command plan."""
 
@@ -503,6 +527,53 @@ class ConfidenceReport(UuidPrimaryKeyMixin, Base):
     )
 
     __table_args__ = (Index("ix_confidence_reports_analysis_id", "analysis_id"),)
+
+class TestExecutionHistory(UuidPrimaryKeyMixin, Base):
+    """Historical record of test executions across CI runs."""
+
+    __tablename__ = "test_execution_histories"
+
+    test_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    test_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    repository_id: Mapped[UUID] = mapped_column(
+        ForeignKey("repositories.id"), nullable=False
+    )
+    analysis_id: Mapped[UUID] = mapped_column(
+        ForeignKey("analyses.id"), nullable=False
+    )
+    commit_sha: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    pr_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    branch: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(String(50), nullable=False)
+    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    failure_info: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    coverage_percent: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
+    framework: Mapped[str] = mapped_column(String(100), nullable=False, server_default="unknown")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        UniqueConstraint("analysis_id", "test_path", name="uq_test_execution_history_analysis_test"),
+        Index("ix_test_execution_histories_analysis_id", "analysis_id"),
+        Index("ix_test_execution_histories_test_path", "test_path"),
+        Index("ix_test_execution_histories_repository_id", "repository_id"),
+        Index("ix_test_execution_histories_status_timestamp", "status", "timestamp"),
+        Index("ix_test_execution_histories_timestamp", "timestamp"),
+    )
+
+
 
 
 class ConfidenceEvidence(UuidPrimaryKeyMixin, Base):

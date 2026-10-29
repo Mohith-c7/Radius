@@ -1,6 +1,6 @@
 """FastAPI entrypoint for Radius."""
 
-from fastapi import FastAPI, Request
+from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from radius_shared.dto import error_response
@@ -16,6 +16,7 @@ from radius_shared.logging import configure_logging
 from radius_api.config import get_api_settings
 from radius_api.dependencies import AppContainer, configure_sql_storage
 from radius_api.routes.analyses import router as analyses_router
+from radius_api.routes.coverage import router as coverage_router
 from radius_api.routes.confidence import router as confidence_router
 from radius_api.routes.github_webhooks import router as github_webhooks_router
 from radius_api.routes.graph import router as graph_router
@@ -86,6 +87,7 @@ def create_app() -> FastAPI:
     app.include_router(graph_router, prefix="/api/v1")
     app.include_router(tests_router, prefix="/api/v1")
     app.include_router(confidence_router, prefix="/api/v1")
+    app.include_router(coverage_router, prefix="/api/v1")
     app.include_router(github_webhooks_router, prefix="/api/v1")
     app.include_router(auth_router)
 

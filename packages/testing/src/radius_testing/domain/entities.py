@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from radius_testing.domain.enums import (
+    TestDecision,
     TestFramework,
     TestRunStatus,
     TestSelectionReason,
@@ -35,11 +36,24 @@ class SelectedTest:
 
 
 @dataclass(frozen=True, slots=True)
+class TestSelectionDecision:
+    """Auditable decision backed exclusively by Radius evidence."""
+
+    test_case: TestCase
+    decision: TestDecision
+    evidence_sources: tuple[str, ...]
+    evidence_details: tuple[str, ...]
+    relevance_score: float
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
 class TestSelection:
     """Selected tests for one analysis."""
 
     analysis_id: UUID
     selected_tests: tuple[SelectedTest, ...]
+    decisions: tuple[TestSelectionDecision, ...] = ()
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 

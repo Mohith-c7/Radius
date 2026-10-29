@@ -2,7 +2,7 @@
 
 import json
 import logging
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from radius_shared.config import LogLevel
@@ -13,7 +13,7 @@ class JsonFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, Any] = {
-            "timestamp": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
+            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -30,7 +30,7 @@ def configure_logging(level: LogLevel | str = LogLevel.INFO) -> None:
 
     root_logger = logging.getLogger()
     root_logger.handlers.clear()
-    root_logger.setLevel(str(level))
+    root_logger.setLevel(str(level).upper())
 
     handler = logging.StreamHandler()
     handler.setFormatter(JsonFormatter())

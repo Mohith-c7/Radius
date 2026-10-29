@@ -1,5 +1,8 @@
 """Testing application service."""
 
+from datetime import datetime, timezone
+from uuid import UUID
+
 from radius_shared.errors import NotFoundError, ValidationError
 
 from radius_testing.dto.commands import (
@@ -63,6 +66,10 @@ class TestingApplicationService:
             self._store.list_test_cases(),
             command.changed_file_paths,
             command.affected_file_paths,
+            command.changed_symbols,
+            command.semantic_evidence,
+            command.coverage_evidence,
+            command.history_evidence,
         )
         return TestSelectionResponse.from_entity(
             self._store.save_selection(selection)
@@ -114,3 +121,17 @@ class TestingApplicationService:
             msg = f"Test run result for analysis {analysis_id} was not found."
             raise NotFoundError(msg)
         return TestRunResultResponse.from_entity(result)
+
+    def get_test_history(self, analysis_id: UUID):
+        """Return test execution history for an analysis."""
+        return self._store.get_test_history(analysis_id)
+
+    def get_test_statistics(self, analysis_id: UUID):
+        """Return test execution statistics for an analysis."""
+        return self._store.get_test_statistics(analysis_id)
+
+    def get_recent_executions(
+        self, repository_id: UUID | None = None, limit: int = 50
+    ):
+        """Return recent test executions across analyses."""
+        return self._store.get_recent_executions(repository_id, limit)

@@ -8,6 +8,7 @@ from radius_testing.dto.commands import (
 )
 from radius_testing.dto.responses import (
     SelectedTestResponse,
+    TestDecisionResponse,
     TestCaseResponse,
     TestDiscoveryResponse,
     TestRunPlanResponse,
@@ -21,6 +22,7 @@ __all__ = [
     "PlanTestRunCommand",
     "SelectTestsCommand",
     "SelectedTestResponse",
+    "TestDecisionResponse",
     "TestCaseResponse",
     "TestDiscoveryResponse",
     "TestRunPlanResponse",

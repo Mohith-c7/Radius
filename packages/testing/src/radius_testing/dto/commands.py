@@ -19,6 +19,12 @@ class SelectTestsCommand:
     analysis_id: UUID
     changed_file_paths: tuple[str, ...]
     affected_file_paths: tuple[str, ...] = ()
+    changed_symbols: tuple[str, ...] = ()
+    # Optional evidence is normalized by the callers that own those sources.
+    # Keys are test paths and values are factual descriptions from Radius.
+    semantic_evidence: dict[str, tuple[str, ...]] | None = None
+    coverage_evidence: dict[str, tuple[str, ...]] | None = None
+    history_evidence: dict[str, tuple[str, ...]] | None = None
 
 
 @dataclass(frozen=True, slots=True)

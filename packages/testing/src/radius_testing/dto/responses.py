@@ -10,6 +10,7 @@ from radius_testing.domain.entities import (
     TestRunPlan,
     TestRunResult,
     TestSelection,
+    TestSelectionDecision,
 )
 
 
@@ -66,6 +67,26 @@ class SelectedTestResponse:
 
 
 @dataclass(frozen=True, slots=True)
+class TestDecisionResponse:
+    """One selected or skipped test with its concrete evidence."""
+
+    test: TestCaseResponse
+    decision: str
+    evidence_sources: tuple[str, ...]
+    evidence_details: tuple[str, ...]
+    relevance_score: float
+    reason: str
+
+    @classmethod
+    def from_entity(cls, item: TestSelectionDecision) -> "TestDecisionResponse":
+        return cls(
+            test=TestCaseResponse.from_entity(item.test_case), decision=item.decision.value,
+            evidence_sources=item.evidence_sources, evidence_details=item.evidence_details,
+            relevance_score=item.relevance_score, reason=item.reason,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class TestSelectionResponse:
     """Test selection response DTO."""
 
@@ -73,6 +94,7 @@ class TestSelectionResponse:
     selected_count: int
     selected_tests: tuple[SelectedTestResponse, ...]
     created_at: datetime
+    decisions: tuple[TestDecisionResponse, ...] = ()
 
     @classmethod
     def from_entity(cls, selection: TestSelection) -> "TestSelectionResponse":
@@ -85,6 +107,7 @@ class TestSelectionResponse:
                 SelectedTestResponse.from_entity(item)
                 for item in selection.selected_tests
             ),
+            decisions=tuple(TestDecisionResponse.from_entity(item) for item in selection.decisions),
             created_at=selection.created_at,
         )
 
