@@ -48,4 +48,6 @@ protects `dev` and `main` using GitHub's repository and protected branch APIs.
 
 ## CI Checks
 
-Required status checks are intentionally not configured yet because this repository does not currently have workflows in `.github/workflows`. After CI is added, update `required_status_checks` in `scripts/apply-github-branch-protection.ps1` with the exact check names so GitHub can enforce passing builds before merge.
+The branch-protection script requires the `Validate` GitHub Actions status check
+from `.github/workflows/ci.yml`. Re-run the script after the workflow has run at
+least once on GitHub so the check name is available to branch protection.

@@ -1,7 +1,12 @@
 import { AppLayout } from "../../components/layout";
-import { PageHeading, Status } from "../../components/ui";
-import { repositories } from "../../lib/data";
-import Link from "next/link";
-import { ChevronDown, FolderGit2, Plus } from "lucide-react";
+import { RepositoriesData } from "../../components/data-panels";
 
-export default function RepositoriesPage() { return <AppLayout><div className="page"><PageHeading eyebrow="Repository management" title="Repositories" description="Connected GitHub repositories and their latest verification health." action={<Link href="/repositories/connect" className="button"><Plus size={16}/>Connect repository</Link>}/><div className="filters"><button className="filter">All repositories <ChevronDown size={14}/></button><button className="filter">Health: Any <ChevronDown size={14}/></button><button className="filter">Provider: GitHub <ChevronDown size={14}/></button></div><section className="card"><div className="table-wrap"><table><thead><tr><th>Repository</th><th>Default branch</th><th>Latest sync</th><th>Open pull requests</th><th>Confidence</th><th>Health</th></tr></thead><tbody>{repositories.map(r=><tr key={r.id}><td><div className="repo-name"><span className="repo-icon"><FolderGit2 size={16}/></span><span><Link href={`/repositories/${r.id}`} style={{color:"inherit",textDecoration:"none"}}><strong>{r.name}</strong></Link><div className="subtext"><i className="language-dot"/> {r.language}</div></span></div></td><td><code>{r.branch}</code></td><td className="subtext">{r.updated}</td><td>{r.pullRequests}</td><td><b>{r.confidence}/100</b></td><td><Status status={r.status}/></td></tr>)}</tbody></table></div></section><div className="detail-grid wide-card"><section className="card detail-card"><h2>Connect a repository</h2><p className="muted">Install the Radius GitHub App, choose a repository, and Radius starts its first synchronization automatically.</p><Link className="button" style={{marginTop:18}} href="/repositories/connect">Manage GitHub connection</Link></section><section className="card detail-card"><h2>What happens on sync</h2><div className="timeline"><div><strong>Repository metadata refreshed</strong><p>Branches, commits, and pull requests are updated.</p></div><div><strong>Dependency graph updated</strong><p>New source relationships are recorded.</p></div><div><strong>Ready for pull request analysis</strong><p>Future GitHub events trigger verification.</p></div></div></section></div></div></AppLayout>; }
+export default function RepositoriesPage() {
+  return (
+    <AppLayout>
+      <div className="page">
+        <RepositoriesData />
+      </div>
+    </AppLayout>
+  );
+}

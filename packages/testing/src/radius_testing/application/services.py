@@ -1,10 +1,16 @@
-"""Testing application service."""
-
-from datetime import datetime, timezone
-from uuid import UUID
+import hashlib
+from dataclasses import replace
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from radius_shared.errors import NotFoundError, ValidationError
 
+from radius_testing.domain.entities import (
+    CaseOutcome,
+    ReportedTestCase,
+    TestResultUpload,
+    TestRunResult,
+)
+from radius_testing.domain.enums import TestRunStatus
 from radius_testing.dto.commands import (
     DiscoverTestsCommand,
     ExecuteTestRunCommand,
@@ -12,11 +18,19 @@ from radius_testing.dto.commands import (
     SelectTestsCommand,
 )
 from radius_testing.dto.responses import (
+    SelectedTestAttributionResponse,
     TestCaseResponse,
     TestDiscoveryResponse,
+    TestIngestionResponse,
     TestRunPlanResponse,
     TestRunResultResponse,
     TestSelectionResponse,
+    TestUploadResponse,
+)
+from radius_testing.infrastructure.junit_parser import JUnitReportParser
+from radius_testing.infrastructure.result_matching import (
+    attribute_selected_tests,
+    report_cases,
 )
 from radius_testing.interfaces.discovery import TestDiscoverer
 from radius_testing.interfaces.runner import TestCommandPlanner, TestRunner
@@ -34,12 +48,15 @@ class TestingApplicationService:
         store: TestStore,
         planner: TestCommandPlanner,
         runner: TestRunner | None = None,
+        parser: JUnitReportParser | None = None,
     ) -> None:
         self._discoverer = discoverer
         self._selector = selector
         self._store = store
         self._planner = planner
         self._runner = runner
+        self._parser = parser or JUnitReportParser()
+
 
     def discover_tests(
         self,
@@ -47,29 +64,53 @@ class TestingApplicationService:
     ) -> TestDiscoveryResponse:
         """Discover and store test cases."""
 
-        if not command.repository_path.exists() or not command.repository_path.is_dir():
-            msg = f"Repository path does not exist: {command.repository_path}."
-            raise ValidationError(msg)
-        tests = self._store.save_test_cases(
-            self._discoverer.discover(command.repository_path)
-        )
+        tests = self.discover_test_cases(command)
         return TestDiscoveryResponse(
             test_count=len(tests),
             tests=tuple(TestCaseResponse.from_entity(test) for test in tests),
         )
 
+    def discover_test_cases(self, command: DiscoverTestsCommand) -> tuple:
+        """Discover, persist, and return the test cases of one snapshot."""
+
+        if not command.repository_path.exists() or not command.repository_path.is_dir():
+            msg = f"Repository path does not exist: {command.repository_path}."
+            raise ValidationError(msg)
+        discovered = self._discoverer.discover(command.repository_path)
+        if command.repository_id is not None:
+            # Test ids are derived from the path; include the repository so two
+            # repositories with the same test path never share a row.
+            discovered = tuple(
+                replace(
+                    test,
+                    id=uuid5(
+                        NAMESPACE_URL,
+                        f"radius:test:{command.repository_id}:{test.path.value}",
+                    ),
+                )
+                for test in discovered
+            )
+        self._store.save_test_cases(discovered, command.repository_id)
+        return discovered
+
     def select_tests(self, command: SelectTestsCommand) -> TestSelectionResponse:
         """Select tests for changed and affected paths."""
 
+        tests = (
+            command.available_tests
+            if command.available_tests is not None
+            else self._store.list_test_cases()
+        )
         selection = self._selector.select(
             command.analysis_id,
-            self._store.list_test_cases(),
+            tests,
             command.changed_file_paths,
             command.affected_file_paths,
             command.changed_symbols,
             command.semantic_evidence,
             command.coverage_evidence,
             command.history_evidence,
+            full_suite_reasons=command.full_suite_reasons,
         )
         return TestSelectionResponse.from_entity(
             self._store.save_selection(selection)
@@ -135,3 +176,174 @@ class TestingApplicationService:
     ):
         """Return recent test executions across analyses."""
         return self._store.get_recent_executions(repository_id, limit)
+    def ingest_test_results(
+        self,
+        analysis_id: UUID,
+        content: str | bytes,
+        commit_sha: str = "",
+    ) -> TestRunResultResponse:
+        """Ingest one CI / JUnit report and return the aggregate over all uploads."""
+
+        aggregate, _ = self._ingest(analysis_id, content, commit_sha)
+        return TestRunResultResponse.from_entity(aggregate)
+
+    def count_result_uploads(self, analysis_id: UUID) -> int:
+        """Return how many distinct result uploads an analysis has."""
+
+        return len(self._store.list_result_uploads(analysis_id))
+
+    def ingest_test_report(
+        self,
+        analysis_id: UUID,
+        content: str | bytes,
+        commit_sha: str,
+    ) -> TestIngestionResponse:
+        """Ingest one CI report and attribute the accumulated results.
+
+        Uploads accumulate per analysis: failures are sticky across uploads,
+        executed cases are unioned when matching selected tests, and an exact
+        replay (same body hash) is recognised and not double-counted.
+        Malformed reports raise ``ValidationError`` before anything is stored.
+        """
+
+        return self._ingest(analysis_id, content, commit_sha)[1]
+
+    def _ingest(
+        self,
+        analysis_id: UUID,
+        content: str | bytes,
+        commit_sha: str,
+    ) -> tuple[TestRunResult, TestIngestionResponse]:
+        parsed = self._parser.parse(content, analysis_id)
+        # Lock before reading/writing uploads so concurrent shards are
+        # aggregated one after another, never from partial views.
+        self._store.lock_result_uploads(analysis_id)
+        body = content.encode("utf-8") if isinstance(content, str) else content
+        digest = hashlib.sha256(body).hexdigest()
+        upload = self._store.get_result_upload(analysis_id, digest)
+        duplicate = upload is not None
+        if upload is None:
+            candidate = TestResultUpload(
+                id=parsed.id,
+                analysis_id=analysis_id,
+                commit_sha=commit_sha.strip().lower(),
+                body_sha256=digest,
+                result=parsed,
+                cases=report_cases(content),
+            )
+            upload = self._store.save_result_upload(candidate)
+            duplicate = upload.id != candidate.id  # lost a concurrent replay race
+
+        uploads = self._store.list_result_uploads(analysis_id)
+        aggregate = aggregate_uploads(analysis_id, uploads)
+        self._store.save_run_result(aggregate)
+        cases = tuple(case for item in uploads for case in item.cases)
+
+        selection = self._store.get_selection(analysis_id)
+        attribution = None
+        if selection is not None:
+            attribution = attribute_selected_tests(
+                tuple(item.test_case.path.value for item in selection.selected_tests),
+                cases,
+            )
+
+        response = TestIngestionResponse(
+            id=aggregate.id,
+            analysis_id=analysis_id,
+            status=aggregate.status.value,
+            total_tests=aggregate.total_tests,
+            passed=aggregate.passed,
+            failed=aggregate.failed,
+            skipped=aggregate.skipped,
+            duration_ms=aggregate.duration_ms,
+            coverage_percent=aggregate.coverage_percent,
+            output=aggregate.output,
+            upload_count=len(uploads),
+            upload=TestUploadResponse(
+                id=upload.id,
+                commit_sha=upload.commit_sha,
+                body_sha256=upload.body_sha256,
+                duplicate=duplicate,
+                status=upload.result.status.value,
+                total_tests=upload.result.total_tests,
+                passed=upload.result.passed,
+                failed=upload.result.failed,
+                skipped=upload.result.skipped,
+                reported_cases=len(upload.cases),
+            ),
+            selected_tests=(
+                SelectedTestAttributionResponse(
+                    selected_count=len(attribution.selected),
+                    executed_count=len(attribution.executed),
+                    passed_count=len(attribution.passed),
+                    failed_count=len(attribution.failed),
+                    skipped_count=len(attribution.skipped),
+                    not_reported_count=len(attribution.not_reported),
+                    executed=attribution.executed,
+                    failed=attribution.failed,
+                    skipped=attribution.skipped,
+                    not_reported=attribution.not_reported,
+                )
+                if attribution is not None
+                else None
+            ),
+            contradictory_cases=contradictory_cases(cases),
+        )
+        return aggregate, response
+
+
+def aggregate_uploads(
+    analysis_id: UUID,
+    uploads: tuple[TestResultUpload, ...],
+) -> TestRunResult:
+    """Combine distinct uploads into the run summary the verdict uses.
+
+    Counts are summed per distinct upload. A failure anywhere is sticky: the
+    aggregate is failed if any upload failed or any case was ever reported as
+    failed, even when a later upload reports the same case as passing.
+    """
+
+    results = [upload.result for upload in uploads]
+    failed_keys = {
+        case.key
+        for upload in uploads
+        for case in upload.cases
+        if case.outcome == CaseOutcome.FAILED
+    }
+    failed = max(sum(result.failed for result in results), len(failed_keys))
+    if any(result.status == TestRunStatus.ERROR for result in results):
+        status = TestRunStatus.ERROR
+    elif failed > 0 or any(result.status == TestRunStatus.FAILED for result in results):
+        status = TestRunStatus.FAILED
+        failed = max(failed, 1)
+    else:
+        status = TestRunStatus.PASSED
+    coverages = [
+        result.coverage_percent for result in results if result.coverage_percent is not None
+    ]
+    return TestRunResult(
+        id=uuid4(),
+        analysis_id=analysis_id,
+        status=status,
+        total_tests=sum(result.total_tests for result in results),
+        passed=sum(result.passed for result in results),
+        failed=failed,
+        skipped=sum(result.skipped for result in results),
+        duration_ms=sum(result.duration_ms for result in results),
+        # Shard coverage is not additive; report the most conservative value.
+        coverage_percent=min(coverages) if coverages else None,
+        output="\n\n".join(result.output for result in results if result.output),
+    )
+
+
+def contradictory_cases(cases: tuple[ReportedTestCase, ...]) -> tuple[str, ...]:
+    """Return cases reported as passed in one place and failed in another."""
+
+    outcomes: dict[tuple[str, str, str], set[str]] = {}
+    for case in cases:
+        outcomes.setdefault(case.key, set()).add(case.outcome)
+    return tuple(
+        "::".join(part for part in key if part)
+        for key, seen in outcomes.items()
+        if {CaseOutcome.PASSED, CaseOutcome.FAILED} <= seen
+    )

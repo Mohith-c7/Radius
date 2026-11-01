@@ -1,5 +1,6 @@
 """Analysis API routes."""
 
+import re
 from typing import Annotated
 from uuid import UUID
 
@@ -15,6 +16,7 @@ from radius_analysis.dto import (
 from radius_repository.application import RepositoryApplicationService
 from radius_repository.dto import RepositoryListQuery
 from radius_shared.dto import success_response
+from radius_shared.errors import NotFoundError, ValidationError
 
 from radius_api.auth import ApiPrincipal, ensure_same_organization, get_api_principal
 from radius_api.dependencies import (
@@ -30,6 +32,8 @@ from radius_api.idempotency import (
 from radius_api.schemas.analyses import StartAnalysisRequest
 
 router = APIRouter(prefix="/analyses", tags=["analyses"])
+
+_COMMIT_SHA = re.compile(r"^[0-9a-fA-F]{7,64}$")
 
 
 @router.post("", status_code=status.HTTP_202_ACCEPTED)
@@ -134,6 +138,96 @@ def list_analyses(
             )
         )
     return success_response(analyses)
+
+
+@router.get("/lookup")
+def lookup_analysis(
+    service: Annotated[
+        AnalysisApplicationService,
+        Depends(get_analysis_service),
+    ],
+    repository_service: Annotated[
+        RepositoryApplicationService,
+        Depends(get_repository_service),
+    ],
+    principal: Annotated[ApiPrincipal, Depends(get_api_principal)],
+    pull_request_number: Annotated[int, Query(alias="pullRequest", ge=1)],
+    commit_sha: Annotated[str, Query(alias="commitSha")],
+    repository: Annotated[
+        str | None,
+        Query(description="Repository as owner/name (e.g. GITHUB_REPOSITORY)."),
+    ] = None,
+    repository_id: Annotated[UUID | None, Query(alias="repositoryId")] = None,
+):
+    """Resolve the newest analysis for a pull request head commit.
+
+    Lets CI find the analysis for ``(repository, PR number, head SHA)``
+    without knowing Radius-internal ids. Scoped to the caller's
+    organization; returns 404 when Radius has not (yet) created an analysis
+    for that commit, so callers can poll.
+    """
+
+    if not _COMMIT_SHA.match(commit_sha):
+        msg = "commitSha must be 7-64 hexadecimal characters."
+        raise ValidationError(msg)
+    resolved_repository_id = _resolve_repository_id(
+        repository_service,
+        principal,
+        repository=repository,
+        repository_id=repository_id,
+    )
+    pull_request = repository_service.get_pull_request_by_repository_and_number(
+        resolved_repository_id,
+        pull_request_number,
+    )
+    sha = commit_sha.lower()
+    candidates = [
+        analysis
+        for analysis in service.list_analyses(
+            AnalysisListQuery(
+                repository_id=resolved_repository_id,
+                pull_request_id=pull_request.id,
+            )
+        )
+        if analysis.commit_sha.lower() == sha
+        or (len(sha) < 40 and analysis.commit_sha.lower().startswith(sha))
+    ]
+    if not candidates:
+        msg = (
+            f"No analysis found for pull request #{pull_request_number} at commit "
+            f"{sha[:12]}."
+        )
+        raise NotFoundError(msg)
+    newest = max(candidates, key=lambda item: item.created_at)
+    return success_response(newest)
+
+
+def _resolve_repository_id(
+    repository_service: RepositoryApplicationService,
+    principal: ApiPrincipal,
+    *,
+    repository: str | None,
+    repository_id: UUID | None,
+) -> UUID:
+    if repository_id is not None:
+        found = repository_service.get_repository(repository_id)
+        ensure_same_organization(principal, found.organization_id)
+        return repository_id
+    if not repository or repository.count("/") != 1:
+        msg = "Pass repository=owner/name or repositoryId."
+        raise ValidationError(msg)
+    owner, name = (part.strip().lower() for part in repository.split("/"))
+    for candidate in repository_service.list_repositories(
+        RepositoryListQuery(organization_id=principal.organization_id)
+    ):
+        if (
+            candidate.id is not None
+            and candidate.owner.lower() == owner
+            and candidate.name.lower() == name
+        ):
+            return candidate.id
+    msg = f"Repository {repository} is not connected to this organization."
+    raise NotFoundError(msg)
 
 
 @router.get("/{analysis_id}")

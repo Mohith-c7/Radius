@@ -13,6 +13,7 @@ def test_pull_request_webhook_creates_analysis_and_replays_delivery() -> None:
     app = create_app()
     organization_id = uuid4()
     app.state.settings.github_default_organization_id = organization_id
+    app.state.settings.github_single_tenant = True
     app.state.settings.github_webhook_secret = "secret"
     client = TestClient(app)
     body = _webhook_body()
@@ -28,9 +29,35 @@ def test_pull_request_webhook_creates_analysis_and_replays_delivery() -> None:
     assert len(app.state.container.analysis_queue) == 1
 
 
+def test_new_delivery_for_same_head_sha_reuses_active_analysis() -> None:
+    app = create_app()
+    app.state.settings.github_default_organization_id = uuid4()
+    app.state.settings.github_single_tenant = True
+    app.state.settings.github_webhook_secret = "secret"
+    client = TestClient(app)
+    body = _webhook_body()
+
+    first = client.post(
+        "/api/v1/webhooks/github",
+        content=body,
+        headers=_github_headers(body, "delivery-a", "secret"),
+    )
+    second = client.post(
+        "/api/v1/webhooks/github",
+        content=body,
+        headers=_github_headers(body, "delivery-b", "secret"),
+    )
+
+    assert first.status_code == 202
+    assert second.status_code == 202
+    assert first.json()["data"]["analysisId"] == second.json()["data"]["analysisId"]
+    assert len(app.state.container.analysis_queue) == 1
+
+
 def test_github_webhook_rejects_invalid_signature() -> None:
     app = create_app()
     app.state.settings.github_default_organization_id = uuid4()
+    app.state.settings.github_single_tenant = True
     app.state.settings.github_webhook_secret = "secret"
     client = TestClient(app)
     body = _webhook_body()

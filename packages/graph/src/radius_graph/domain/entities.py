@@ -52,9 +52,7 @@ class DependencyGraph:
     def reverse_dependencies(self, node_id: GraphNodeId) -> set[GraphNodeId]:
         """Return nodes with direct edges into the requested node."""
 
-        return {
-            edge.source_id for edge in self.edges if edge.target_id == node_id
-        }
+        return {edge.source_id for edge in self.edges if edge.target_id == node_id}
 
 
 @dataclass(frozen=True, slots=True)

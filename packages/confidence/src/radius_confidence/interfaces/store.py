@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 from typing import Protocol
 from uuid import UUID
 
@@ -18,6 +18,8 @@ class ConfidenceStore(Protocol):
     def get_by_analysis_id(self, analysis_id: UUID) -> ConfidenceReport | None:
         """Return confidence report by analysis id."""
 
+    def replace_report(self, report: ConfidenceReport) -> ConfidenceReport:
+        """Replace the confidence report for an analysis (e.g. after CI ingestion)."""
 
 class CoverageStore(Protocol):
     """Contract for storing and retrieving runtime coverage."""

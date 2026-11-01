@@ -83,6 +83,12 @@ class Analysis:
         if self.status == AnalysisStatus.CANCELLED:
             msg = "Cancelled analyses cannot be completed."
             raise ValueError(msg)
+        if self.status == AnalysisStatus.FAILED:
+            # E.g. the reaper failed it (deadline) and completed its check while
+            # a slow worker was still running; that worker must not overwrite
+            # the published failure with a result.
+            msg = "Failed analyses cannot be completed; start a new analysis."
+            raise ValueError(msg)
         self.status = AnalysisStatus.COMPLETED
         self.completed_at = completed_at or datetime.now(UTC)
 

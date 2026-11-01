@@ -1,5 +1,18 @@
 import { AppLayout } from "../../components/layout";
+import { CompareData } from "../../components/data-panels";
 import { PageHeading } from "../../components/ui";
-import { ArrowDown, ArrowUp, ChevronDown } from "lucide-react";
-const rows=[['Confidence score','94 / 100','87 / 100','+7'],['Affected-path coverage','91%','84%','+7%'],['Blast radius','12 files · 3 modules','18 files · 5 modules','−6 files'],['Test results','42 / 42 passed','28 / 28 passed','Same'],['Execution time','2m 14s','1m 07s','+1m 07s']];
-export default function ComparePage(){return <AppLayout><div className="page"><PageHeading eyebrow="Analysis history" title="Compare analyses" description="Review the verification evidence between two immutable analysis runs."/><div className="filters"><button className="filter">#482 Add OAuth token rotation <ChevronDown size={14}/></button><span style={{color:'#94a29c'}}>vs.</span><button className="filter">#481 Refine dashboard filters <ChevronDown size={14}/></button></div><section className="card"><div className="table-wrap"><table><thead><tr><th>Verification signal</th><th>Analysis #482</th><th>Analysis #481</th><th>Difference</th></tr></thead><tbody>{rows.map((r,i)=><tr key={r[0]}><td><strong>{r[0]}</strong></td><td>{r[1]}</td><td>{r[2]}</td><td style={{color:i<3?'#19815c':'#70807a',fontWeight:700}}>{i<3?<ArrowUp size={13} style={{verticalAlign:'-2px'}}/>:<ArrowDown size={13} style={{verticalAlign:'-2px'}}/>} {r[3]}</td></tr>)}</tbody></table></div></section></div></AppLayout>}
+
+export default function ComparePage() {
+  return (
+    <AppLayout>
+      <div className="page">
+        <PageHeading
+          eyebrow="Analysis history"
+          title="Compare analyses"
+          description="Review verification evidence between two backend analysis runs."
+        />
+        <CompareData />
+      </div>
+    </AppLayout>
+  );
+}

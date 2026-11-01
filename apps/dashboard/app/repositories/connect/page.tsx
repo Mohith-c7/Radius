@@ -1,6 +1,12 @@
 import { AppLayout } from "../../../components/layout";
-import { PageHeading } from "../../../components/ui";
-import { Check, Github, LockKeyhole, Search } from "lucide-react";
+import { ConnectRepositoryForm } from "../../../components/data-panels";
 
-const available = ["radius/cli", "radius/worker", "radius/infra"];
-export default function ConnectRepositoryPage(){return <AppLayout><div className="page"><PageHeading eyebrow="Repository management" title="Connect a repository" description="Select a GitHub repository for Radius to synchronize and analyze."/><div className="detail-grid"><section className="card detail-card"><div className="status positive"><Check size={14}/>GitHub App connected</div><h2 style={{marginTop:18}}>Choose repositories</h2><div className="search" style={{background:"#f8faf8",border:"1px solid #e7ece8",borderRadius:7,padding:"10px 12px",width:"100%"}}><Search size={16}/><input placeholder="Search accessible GitHub repositories"/></div><div className="repo-list" style={{marginTop:15,padding:0}}>{available.map((name,index)=><label className="repo-row" key={name} style={{cursor:"pointer"}}><input type="checkbox" defaultChecked={index===0}/><span><strong>{name}</strong><small>Private repository · GitHub</small></span><span className="subtext">Read access</span></label>)}</div><button className="button" style={{marginTop:20}}>Connect selected repository</button></section><aside className="card detail-card"><LockKeyhole size={22} color="#19815c"/><h2 style={{marginTop:14}}>What Radius can access</h2><p className="muted">Radius needs repository metadata, pull requests, commits, and checks to synchronize source intelligence and publish verification results.</p><a className="text-link" style={{marginTop:20}} href="/settings"><Github size={15}/>Manage GitHub App permissions</a></aside></div></div></AppLayout>}
+export default function ConnectRepositoryPage() {
+  return (
+    <AppLayout>
+      <div className="page">
+        <ConnectRepositoryForm />
+      </div>
+    </AppLayout>
+  );
+}

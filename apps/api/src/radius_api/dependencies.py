@@ -10,15 +10,15 @@ from radius_analysis.infrastructure import (
     SqlAlchemyAnalysisJobQueue,
     SqlAlchemyAnalysisStore,
 )
-from radius_confidence.application import ConfidenceApplicationService
-from radius_confidence.application import CoverageApplicationService
+from radius_confidence.application import (
+    ConfidenceApplicationService,
+    CoverageApplicationService,
+)
 from radius_confidence.infrastructure import (
     DeterministicConfidenceScorer,
     InMemoryConfidenceStore,
-    SqlAlchemyConfidenceStore,
-)
-from radius_confidence.infrastructure import (
     InMemoryCoverageStore,
+    SqlAlchemyConfidenceStore,
     SqlAlchemyCoverageStore,
 )
 from radius_graph.infrastructure import InMemoryGraphStore, SqlAlchemyGraphStore

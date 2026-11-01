@@ -4,7 +4,11 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from radius_confidence.application import ConfidenceApplicationService
-from radius_confidence.domain import CoveragePercent, ImpactEvidence
+from radius_confidence.domain import (
+    AnalysisEvidence,
+    CoveragePercent,
+    ImpactEvidence,
+)
 from radius_confidence.domain import TestEvidence as ConfidenceTestEvidence
 from radius_confidence.dto import GenerateConfidenceReportCommand
 from radius_confidence.infrastructure import (
@@ -46,6 +50,11 @@ def test_sqlalchemy_confidence_store_persists_evidence_and_recommendations() -> 
                     skipped=0,
                     coverage_percent=CoveragePercent(90),
                 ),
+                analysis=AnalysisEvidence(
+                    changed_files=2,
+                    covered_files=("src/app.py",),
+                    non_executable_files=("README.md",),
+                ),
             )
         )
         loaded = service.get_report(analysis_id)
@@ -53,6 +62,8 @@ def test_sqlalchemy_confidence_store_persists_evidence_and_recommendations() -> 
         assert loaded.id == report.id
         assert loaded.evidence
         assert loaded.recommendations == ("Proceed with standard review.",)
+        assert loaded.verification_status == "verified"
+        assert loaded.analysis_completeness == 100.0
 
 
 def _session() -> Session:

@@ -72,11 +72,9 @@ class GraphSnapshotResponse:
             graph_version=snapshot.graph_version.value,
             created_at=snapshot.created_at,
             nodes=tuple(
-                GraphNodeResponse.from_entity(node)
-                for node in snapshot.graph.nodes
+                GraphNodeResponse.from_entity(node) for node in snapshot.graph.nodes
             ),
             edges=tuple(
-                GraphEdgeResponse.from_entity(edge)
-                for edge in snapshot.graph.edges
+                GraphEdgeResponse.from_entity(edge) for edge in snapshot.graph.edges
             ),
         )

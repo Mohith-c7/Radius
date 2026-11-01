@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 
 from radius_parser.domain.entities import (
     ExportReference,
@@ -18,16 +19,23 @@ IMPORT_RE = re.compile(
     r"""^\s*(?:import\s+(?:type\s+)?(?:.+?\s+from\s+)?|export\s+.+?\s+from\s+)["'](?P<source>[^"']+)["']""",
 )
 REQUIRE_RE = re.compile(r"""require\(["'](?P<source>[^"']+)["']\)""")
+# Whole-file patterns: formatters routinely split import specifiers across
+# lines (``import {\n  a,\n  b,\n} from "./x"``), which a per-line regex misses.
+MODULE_IMPORT_RE = re.compile(
+    r"""(?:^|[;\n])\s*(?:import|export)\b[^;'"`]*?\bfrom\s*["'](?P<source>[^"'\n]+)["']""",
+)
+SIDE_EFFECT_IMPORT_RE = re.compile(r"""(?:^|[;\n])\s*import\s*["'](?P<source>[^"'\n]+)["']""")
+CALL_IMPORT_RE = re.compile(
+    r"""\b(?:require|import)\s*\(\s*["'](?P<source>[^"'\n]+)["']\s*\)""",
+)
 CLASS_RE = re.compile(
-    r"""^\s*(?:export\s+)?(?:abstract\s+)?class\s+"""
-    r"""(?P<name>[A-Za-z_$][\w$]*)""",
+    r"""^\s*(?:export\s+)?(?:abstract\s+)?class\s+""" r"""(?P<name>[A-Za-z_$][\w$]*)""",
 )
 INTERFACE_RE = re.compile(
     r"""^\s*(?:export\s+)?interface\s+(?P<name>[A-Za-z_$][\w$]*)""",
 )
 FUNCTION_RE = re.compile(
-    r"""^\s*(?:export\s+)?(?:async\s+)?function\s+"""
-    r"""(?P<name>[A-Za-z_$][\w$]*)""",
+    r"""^\s*(?:export\s+)?(?:async\s+)?function\s+""" r"""(?P<name>[A-Za-z_$][\w$]*)""",
 )
 CONST_FN_RE = re.compile(
     r"""^\s*(?:export\s+)?(?:const|let|var)\s+"""
@@ -40,6 +48,32 @@ EXPORT_DECL_RE = re.compile(
     r"""(?P<name>[A-Za-z_$][\w$]*)""",
 )
 EXPORT_LIST_RE = re.compile(r"""^\s*export\s*\{(?P<names>[^}]+)\}""")
+
+
+@lru_cache(maxsize=2)
+def _tree_sitter_parser(grammar: str):
+    import tree_sitter  # noqa: PLC0415 - optional heavy import
+    import tree_sitter_typescript  # noqa: PLC0415
+
+    language = tree_sitter.Language(
+        tree_sitter_typescript.language_tsx()
+        if grammar == "tsx"
+        else tree_sitter_typescript.language_typescript()
+    )
+    return tree_sitter.Parser(language)
+
+
+def _string_value(node) -> str:
+    """Return the literal value of a tree-sitter ``string`` node (no template parts)."""
+
+    fragments = [
+        child.text.decode("utf-8", errors="replace")
+        for child in node.named_children
+        if child.type in {"string_fragment", "escape_sequence"}
+    ]
+    if any(child.type not in {"string_fragment", "escape_sequence"} for child in node.named_children):
+        return ""
+    return "".join(fragments).strip()
 
 
 class TypeScriptLikeParser:
@@ -56,16 +90,15 @@ class TypeScriptLikeParser:
         symbols: list[Symbol] = []
         exports: dict[str, ExportReference] = {}
 
+        suffix = (
+            source_file.absolute_path.suffix.lower()
+            if source_file.absolute_path is not None
+            else ""
+        )
+        imports.extend(self._imports(source, suffix))
+
         for line_number, line in enumerate(source.splitlines(), start=1):
             location = SourceLocation(start_line=line_number)
-            import_match = IMPORT_RE.search(line) or REQUIRE_RE.search(line)
-            if import_match is not None:
-                imports.append(
-                    ImportReference(
-                        source=import_match.group("source"),
-                        location=location,
-                    )
-                )
 
             symbol = self._symbol_from_line(line, location)
             if symbol is not None:
@@ -96,6 +129,69 @@ class TypeScriptLikeParser:
         if source_file.absolute_path is None:
             return ""
         return source_file.absolute_path.read_text(encoding="utf-8")
+
+    @classmethod
+    def _imports(cls, source: str, suffix: str = ".ts") -> list[ImportReference]:
+        """Extract import sources with tree-sitter; fall back to regex on failure."""
+
+        try:
+            return cls._tree_sitter_imports(source, suffix)
+        except Exception:  # noqa: BLE001 - any grammar/runtime failure falls back
+            return cls._regex_imports(source)
+
+    @staticmethod
+    def _tree_sitter_imports(source: str, suffix: str) -> list[ImportReference]:
+        parser = _tree_sitter_parser("tsx" if suffix in {".tsx", ".jsx"} else "typescript")
+        tree = parser.parse(source.encode("utf-8"))
+        found: dict[tuple[str, int], ImportReference] = {}
+
+        def add(string_node) -> None:
+            if string_node is None or string_node.type != "string":
+                return
+            value = _string_value(string_node)
+            if not value:
+                return
+            line = string_node.start_point[0] + 1
+            found.setdefault(
+                (value, line),
+                ImportReference(source=value, location=SourceLocation(start_line=line)),
+            )
+
+        stack = [tree.root_node]
+        while stack:
+            node = stack.pop()
+            node_type = node.type
+            if node_type in {"import_statement", "export_statement", "import_require_clause"}:
+                add(node.child_by_field_name("source"))
+            elif node_type == "call_expression":
+                function = node.child_by_field_name("function")
+                arguments = node.child_by_field_name("arguments")
+                is_loader = function is not None and (
+                    function.type == "import"
+                    or (function.type == "identifier" and function.text == b"require")
+                )
+                if is_loader and arguments is not None:
+                    values = [child for child in arguments.named_children]
+                    if len(values) == 1:
+                        add(values[0])
+            stack.extend(node.children)
+        return [found[key] for key in sorted(found, key=lambda item: (item[1], item[0]))]
+
+    @staticmethod
+    def _regex_imports(source: str) -> list[ImportReference]:
+        found: dict[tuple[str, int], ImportReference] = {}
+        for pattern in (MODULE_IMPORT_RE, SIDE_EFFECT_IMPORT_RE, CALL_IMPORT_RE):
+            for match in pattern.finditer(source):
+                line = source.count("\n", 0, match.start("source")) + 1
+                key = (match.group("source"), line)
+                found.setdefault(
+                    key,
+                    ImportReference(
+                        source=match.group("source"),
+                        location=SourceLocation(start_line=line),
+                    ),
+                )
+        return [found[key] for key in sorted(found, key=lambda item: (item[1], item[0]))]
 
     @staticmethod
     def _symbol_from_line(line: str, location: SourceLocation) -> Symbol | None:

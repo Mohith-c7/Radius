@@ -31,6 +31,7 @@ def test_signed_webhook_runs_through_sql_worker_to_confidence(
     monkeypatch.setenv("STORAGE_BACKEND", "sql")
     monkeypatch.setenv("GITHUB_WEBHOOK_SECRET", "secret")
     monkeypatch.setenv("GITHUB_DEFAULT_ORGANIZATION_ID", str(organization_id))
+    monkeypatch.setenv("GITHUB_SINGLE_TENANT", "true")
     monkeypatch.setenv("REPOSITORY_CACHE_DIR", str(tmp_path / "cache"))
     get_api_settings.cache_clear()
 
@@ -96,11 +97,14 @@ def _webhook_body(source_repo: Path, head_sha: str) -> bytes:
 
 
 def _github_headers(body: bytes, delivery_id: str, secret: str) -> dict[str, str]:
-    signature = "sha256=" + hmac.new(
-        secret.encode(),
-        body,
-        hashlib.sha256,
-    ).hexdigest()
+    signature = (
+        "sha256="
+        + hmac.new(
+            secret.encode(),
+            body,
+            hashlib.sha256,
+        ).hexdigest()
+    )
     return {
         "X-GitHub-Event": "pull_request",
         "X-GitHub-Delivery": delivery_id,

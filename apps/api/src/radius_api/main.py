@@ -1,8 +1,18 @@
 """FastAPI entrypoint for Radius."""
 
-from fastapi import APIRouter, FastAPI, Request
+# Authentication remains implemented in the existing application auth module.
+# Register it on this package-managed entrypoint so the dashboard and the
+# development command use the same auth system and persistent token store.
+from contextlib import asynccontextmanager
+
+from app.database import Base as AuthBase
+from app.database import engine as auth_engine
+from app.routes_auth import router as auth_router
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from radius_shared.config import RuntimeEnvironment
+from radius_shared.database.base import Base as DomainBase
 from radius_shared.dto import error_response
 from radius_shared.errors import (
     AccessDeniedError,
@@ -11,25 +21,33 @@ from radius_shared.errors import (
     RadiusError,
     ValidationError,
 )
-from radius_shared.logging import configure_logging
+from radius_shared.logging import configure_logging, get_logger
 
 from radius_api.config import get_api_settings
 from radius_api.dependencies import AppContainer, configure_sql_storage
 from radius_api.routes.analyses import router as analyses_router
-from radius_api.routes.coverage import router as coverage_router
 from radius_api.routes.confidence import router as confidence_router
+from radius_api.routes.coverage import router as coverage_router
 from radius_api.routes.github_webhooks import router as github_webhooks_router
 from radius_api.routes.graph import router as graph_router
 from radius_api.routes.health import router as health_router
 from radius_api.routes.repositories import router as repositories_router
 from radius_api.routes.tests import router as tests_router
 
-# Authentication remains implemented in the existing application auth module.
-# Register it on this package-managed entrypoint so the dashboard and the
-# development command use the same auth system and persistent token store.
-from app.database import Base as AuthBase
-from app.database import engine as auth_engine
-from app.routes_auth import router as auth_router
+LOGGER = get_logger(__name__)
+
+
+def should_seed_demo_data(settings) -> bool:
+    """Return whether demo fixtures may be seeded for these settings."""
+
+    if not getattr(settings, "seed_demo_data", False):
+        return False
+    if settings.environment == RuntimeEnvironment.PRODUCTION:
+        LOGGER.warning(
+            "RADIUS_SEED_DEMO_DATA is ignored in production; demo data was not seeded."
+        )
+        return False
+    return True
 
 
 async def radius_error_handler(
@@ -61,25 +79,44 @@ def create_app() -> FastAPI:
 
     settings = get_api_settings()
     configure_logging(settings.log_level)
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        DomainBase.metadata.create_all(bind=auth_engine)
+        AuthBase.metadata.create_all(bind=auth_engine)
+        if should_seed_demo_data(settings):
+            from radius_api.seed import seed_open_source_results
+
+            seed_open_source_results(app.state.container)
+        yield
+
     app = FastAPI(
         title="Radius API",
         version="0.1.0",
         description="Software verification API for Radius.",
+        lifespan=lifespan,
+    )
+    allow_origins = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+    ]
+    if settings.cors_origins:
+        allow_origins.extend(
+            [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+        )
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allow_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
     app.state.settings = settings
     app.state.container = AppContainer()
     if settings.storage_backend == "sql":
         configure_sql_storage(app.state.container, settings)
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=[
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-        ],
-        allow_credentials=True,
-        allow_methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["Content-Type", "X-CSRF-Token"],
-    )
     app.add_exception_handler(RadiusError, radius_error_handler)
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(repositories_router, prefix="/api/v1")
@@ -90,12 +127,6 @@ def create_app() -> FastAPI:
     app.include_router(coverage_router, prefix="/api/v1")
     app.include_router(github_webhooks_router, prefix="/api/v1")
     app.include_router(auth_router)
-
-    @app.on_event("startup")
-    def initialize_auth_database() -> None:
-        """Create the tables used by the shared authentication implementation."""
-
-        AuthBase.metadata.create_all(bind=auth_engine)
 
     return app
 

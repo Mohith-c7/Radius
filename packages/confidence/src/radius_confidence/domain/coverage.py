@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
 from typing import Union
-
-Self = Union[object, 'CoverageFile']
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from radius_confidence.domain.value_objects import CoveragePercent
+
+Self = Union[object, "CoverageFile"]
 
 
 @dataclass(frozen=True)

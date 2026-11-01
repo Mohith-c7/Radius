@@ -4,11 +4,14 @@ from enum import StrEnum
 
 
 class SourceLanguage(StrEnum):
-    """Source languages supported by Phase 1 discovery."""
+    """Source languages supported by Radius parser engine."""
 
     PYTHON = "python"
     TYPESCRIPT = "typescript"
     JAVASCRIPT = "javascript"
+    GO = "go"
+    JAVA = "java"
+    RUST = "rust"
     JSON = "json"
     MARKDOWN = "markdown"
     UNKNOWN = "unknown"
@@ -24,6 +27,8 @@ class SymbolType(StrEnum):
     VARIABLE = "variable"
     ENUM = "enum"
     NAMESPACE = "namespace"
+    STRUCT = "struct"
+    TRAIT = "trait"
 
 
 class SymbolVisibility(StrEnum):

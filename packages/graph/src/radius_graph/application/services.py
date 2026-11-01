@@ -12,7 +12,10 @@ from radius_graph.domain.enums import GraphEdgeType, GraphNodeType
 from radius_graph.domain.value_objects import GraphNodeId, GraphVersion
 from radius_graph.dto.commands import BuildGraphCommand
 from radius_graph.dto.responses import GraphSnapshotResponse
-from radius_graph.infrastructure.module_resolver import ModuleResolver
+from radius_graph.infrastructure.module_resolver import (
+    ModuleResolver,
+    load_tsconfig_aliases,
+)
 from radius_graph.interfaces.graph_store import GraphStore
 
 
@@ -27,7 +30,15 @@ class GraphApplicationService:
 
         nodes: dict[GraphNodeId, GraphNode] = {}
         edges: set[GraphEdge] = set()
-        module_resolver = ModuleResolver(command.parse_result.parsed_files)
+        repository_path = command.parse_result.repository_path
+        module_resolver = ModuleResolver(
+            command.parse_result.parsed_files,
+            path_aliases=(
+                load_tsconfig_aliases(repository_path)
+                if repository_path is not None and repository_path.is_dir()
+                else None
+            ),
+        )
 
         for parsed_file in command.parse_result.parsed_files:
             self._add_parsed_file(parsed_file, nodes, edges, module_resolver)
@@ -111,15 +122,19 @@ class GraphApplicationService:
                     edge_type=GraphEdgeType.DEPENDS_ON,
                 )
             )
-            resolved_file_id = module_resolver.resolve(file_path, item.source)
-            if resolved_file_id is not None and resolved_file_id != file_id:
-                edges.add(
-                    GraphEdge(
-                        source_id=file_id,
-                        target_id=resolved_file_id,
-                        edge_type=GraphEdgeType.DEPENDS_ON,
+            for resolved_file_id in module_resolver.resolve_all(
+                file_path,
+                item.source,
+                getattr(item, "names", ()),
+            ):
+                if resolved_file_id != file_id:
+                    edges.add(
+                        GraphEdge(
+                            source_id=file_id,
+                            target_id=resolved_file_id,
+                            edge_type=GraphEdgeType.DEPENDS_ON,
+                        )
                     )
-                )
 
         for item in parsed_file.exports:
             export_id = self.export_node_id(file_path, item.name)

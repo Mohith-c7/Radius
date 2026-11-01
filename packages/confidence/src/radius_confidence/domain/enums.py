@@ -2,17 +2,7 @@
 
 from __future__ import annotations
 
-from enum import Enum
-
-
-class StrEnum(str, Enum):
-    """Backport of Python 3.11 StrEnum for Python 3.9."""
-
-    def __str__(self) -> str:
-        return self.value
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}.{self.name}"
+from enum import StrEnum
 
 
 class RiskLevel(StrEnum):
@@ -30,6 +20,19 @@ class EvidenceCategory(StrEnum):
     BLAST_RADIUS = "blast_radius"
     TESTS = "tests"
     COVERAGE = "coverage"
+    ANALYSIS = "analysis"
+
+
+class VerificationStatus(StrEnum):
+    """Evidence-gated merge verdict.
+
+    ``VERIFIED`` is only produced when every executable change is mapped to
+    selected tests that actually ran to completion and passed.
+    """
+
+    VERIFIED = "verified"
+    FAILED = "failed"
+    INSUFFICIENT_EVIDENCE = "insufficient_evidence"
 
 
 class EvidenceImpact(StrEnum):

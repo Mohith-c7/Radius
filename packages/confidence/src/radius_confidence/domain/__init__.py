@@ -6,31 +6,37 @@ from radius_confidence.domain.coverage import (
     CoverageSymbol,
 )
 from radius_confidence.domain.entities import (
-    CoverageEvidence,
+    AnalysisEvidence,
     ConfidenceEvidence,
     ConfidenceReport,
+    CoverageEvidence,
     ImpactEvidence,
     TestEvidence,
+    TestRunOutcome,
 )
 from radius_confidence.domain.enums import (
     EvidenceCategory,
     EvidenceImpact,
     RiskLevel,
+    VerificationStatus,
 )
 from radius_confidence.domain.value_objects import ConfidenceScore, CoveragePercent
 
 __all__ = [
-    "CoverageEvidence",
-    "CoverageFile",
-    "CoverageReportValueObject",
-    "CoverageSymbol",
+    "AnalysisEvidence",
     "ConfidenceEvidence",
     "ConfidenceReport",
+    "ConfidenceScore",
+    "CoverageEvidence",
+    "CoverageFile",
+    "CoveragePercent",
+    "CoverageReportValueObject",
+    "CoverageSymbol",
     "EvidenceCategory",
     "EvidenceImpact",
     "ImpactEvidence",
     "RiskLevel",
     "TestEvidence",
-    "ConfidenceScore",
-    "CoveragePercent",
+    "TestRunOutcome",
+    "VerificationStatus",
 ]

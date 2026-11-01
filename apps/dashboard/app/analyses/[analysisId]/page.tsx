@@ -1,6 +1,17 @@
 import { AppLayout } from "../../../components/layout";
-import { ConfidenceRing, PageHeading, Status } from "../../../components/ui";
-import { confidenceEvidence } from "../../../lib/data";
-import { ArrowRight, FileCode2, Play, RefreshCw, TestTube2 } from "lucide-react";
+import { AnalysisDetailData } from "../../../components/data-panels";
 
-export default function AnalysisDetailPage(){return <AppLayout><div className="page"><PageHeading eyebrow="Analysis / #482" title="Pull request verification" description="radius/api · #482 Add OAuth token rotation" action={<button className="button secondary"><RefreshCw size={15}/>Re-run analysis</button>}/><section className="analysis-hero"><div><Status status="Verified"/><h2>Safe to merge with high confidence</h2><p className="muted">Completed 8 minutes ago · 2m 14s total execution time</p></div><ConfidenceRing score={94}/></section><nav className="analysis-tabs"><a href="#summary">Summary</a><a href="#impact">Blast radius</a><a href="#tests">Tests</a><a href="#graph">Dependencies</a></nav><div className="detail-grid" id="summary"><section className="card"><div className="card-heading"><div><h2>Confidence evidence</h2><p>Why this pull request received a 94/100 score</p></div></div><div className="evidence">{confidenceEvidence.map(e=><div className="evidence-row" key={e.label}><div><strong>{e.label}</strong><p>{e.detail}</p></div><span>{e.score}</span></div>)}</div></section><aside className="card detail-card"><h2>Recommendation</h2><p className="muted">Merge is recommended. All relevant tests passed and no high-risk dependency paths were detected.</p><button className="button" style={{marginTop:18}}><Play size={15}/>Open GitHub pull request</button></aside></div><div className="detail-grid wide-card" id="impact"><section className="card detail-card"><h2><FileCode2 size={17} style={{verticalAlign:"-3px",marginRight:7,color:"#19815c"}}/>Blast radius</h2><div className="stat-list"><div><span>Changed files</span><strong>12</strong></div><div><span>Affected modules</span><strong>3</strong></div><div><span>Affected APIs</span><strong>0</strong></div><div><span>Dependency depth</span><strong>2 hops</strong></div></div><a href="/graph" className="text-link" style={{marginTop:20}}>Explore dependency graph <ArrowRight size={14}/></a></section><section className="card detail-card" id="tests"><h2><TestTube2 size={17} style={{verticalAlign:"-3px",marginRight:7,color:"#19815c"}}/>Targeted validation</h2><div className="stat-list"><div><span>Selected tests</span><strong>42</strong></div><div><span>Passed</span><strong style={{color:"#19815c"}}>42</strong></div><div><span>Failed</span><strong>0</strong></div><div><span>Affected-path coverage</span><strong>91%</strong></div></div><div className="progress" style={{marginTop:20}}><span style={{width:"91%"}}/></div></section></div><section className="card detail-card wide-card"><h2>Selection evidence &amp; test health</h2><p className="muted">Each selected or skipped test shows its actual AST/CPG, coverage, semantic, and history evidence through the analysis tests API. Test history surfaces total runs, pass rate, recent failures, average duration, and last run.</p><div className="stat-list" style={{marginTop:16}}><div><span>Decision audit</span><strong>Selected / skipped reasons</strong></div><div><span>History health</span><strong>Pass rate · recent failures</strong></div></div></section></div></AppLayout>}
+export default async function AnalysisDetailPage({
+  params,
+}: {
+  params: Promise<{ analysisId: string }>;
+}) {
+  const { analysisId } = await params;
+  return (
+    <AppLayout>
+      <div className="page">
+        <AnalysisDetailData analysisId={analysisId} />
+      </div>
+    </AppLayout>
+  );
+}

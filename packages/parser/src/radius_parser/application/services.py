@@ -48,16 +48,23 @@ class ParserApplicationService:
             command.changed_paths,
         )
         parsed_files = []
+        parse_failures: list[str] = []
         for source_file in source_files:
             parser = self._parser_registry.get_parser(source_file.language)
             if parser is None:
                 continue
-            parsed_files.append(parser.parse(source_file))
+            try:
+                parsed_files.append(parser.parse(source_file))
+            except (SyntaxError, UnicodeDecodeError, ValueError, OSError, RecursionError):
+                # One malformed or binary file must not abort the whole
+                # analysis; it is reported as missing evidence instead.
+                parse_failures.append(source_file.path.value)
 
         result = RepositoryParseResult(
             repository_path=repository_path,
             source_files=tuple(source_files),
             parsed_files=tuple(parsed_files),
+            parse_failures=tuple(parse_failures),
         )
         return result
 

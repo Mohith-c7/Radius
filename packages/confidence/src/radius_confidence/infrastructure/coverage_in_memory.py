@@ -2,14 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 from uuid import UUID
 
-from radius_confidence.domain.coverage import (
-    CoverageFile,
-    CoverageReportValueObject,
-    CoverageSymbol,
-)
 from radius_confidence.interfaces.store import CoverageStore
 
 

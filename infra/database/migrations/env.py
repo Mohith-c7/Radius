@@ -3,10 +3,9 @@
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
-
-from radius_shared.database.base import metadata
 from radius_shared.database import models  # noqa: F401
+from radius_shared.database.base import metadata
+from sqlalchemy import engine_from_config, pool
 
 config = context.config
 
@@ -21,10 +20,16 @@ def get_database_url() -> str:
 
     from os import getenv
 
-    return getenv(
+    url = getenv(
         "DATABASE_URL",
         config.get_main_option("sqlalchemy.url"),
     )
+    if url:
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql+psycopg://", 1)
+        elif url.startswith("postgresql://") and not url.startswith("postgresql+"):
+            url = url.replace("postgresql://", "postgresql+psycopg://", 1)
+    return url
 
 
 def run_migrations_offline() -> None:

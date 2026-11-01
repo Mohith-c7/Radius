@@ -50,7 +50,10 @@ function Protect-Branch {
     $baseUri = "https://api.github.com/repos/$Owner/$Repo/branches/$encodedBranch/protection"
 
     $payload = @{
-        required_status_checks           = $null
+        required_status_checks           = @{
+            strict   = $true
+            contexts = @("Validate")
+        }
         enforce_admins                   = $true
         required_pull_request_reviews    = @{
             dismissal_restrictions          = @{

@@ -1,10 +1,6 @@
 """Standard API response envelopes."""
 
-from typing import Generic, TypeVar
-
 from pydantic import BaseModel, Field
-
-DataT = TypeVar("DataT")
 
 
 class ErrorResponse(BaseModel):
@@ -14,7 +10,7 @@ class ErrorResponse(BaseModel):
     message: str
 
 
-class ApiResponse(BaseModel, Generic[DataT]):
+class ApiResponse[DataT](BaseModel):
     """Consistent response envelope for Radius APIs."""
 
     success: bool
@@ -23,7 +19,7 @@ class ApiResponse(BaseModel, Generic[DataT]):
     meta: dict[str, object] = Field(default_factory=dict)
 
 
-def success_response(
+def success_response[DataT](
     data: DataT,
     meta: dict[str, object] | None = None,
 ) -> ApiResponse[DataT]:

@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=70"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "radius"
 version = "0.1.0"
@@ -9,20 +13,33 @@ dependencies = [
   "pydantic>=2.10.0",
   "pydantic-settings>=2.7.0",
   "psycopg[binary]>=3.2.0",
+  "PyJWT[crypto]>=2.10.0",
   "sqlalchemy>=2.0.36",
   "uvicorn[standard]>=0.34.0",
-  "PyJWT>=2.10.1",
-  "email-validator>=2.2.0",
+  "tree-sitter>=0.23.2",
+  "tree-sitter-python>=0.23.2",
+  "tree-sitter-typescript>=0.23.2",
+  "tree-sitter-go>=0.25.0",
+  "tree-sitter-java>=0.23.5",
+  "tree-sitter-rust>=0.24.2",
+  "google-genai>=0.1.0",
+  "google-generativeai>=0.8.3",
   "argon2-cffi>=23.1.0",
+  "Authlib>=1.4.1",
+  "httpx>=0.28.1",
+  "email-validator>=2.0.0",
+  "defusedxml>=0.7.1",
 ]
 
 [project.optional-dependencies]
 dev = [
-  "black>=24.10.0",
-  "pytest>=8.3.0",
-  "httpx>=0.28.0",
-  "ruff>=0.8.0",
+  "black==26.10.1",
+  "pytest==9.2.0",
+  "ruff==0.17.3",
 ]
+
+[tool.setuptools]
+py-modules = []
 
 [tool.black]
 line-length = 88
@@ -31,13 +48,23 @@ target-version = ["py312"]
 [tool.ruff]
 line-length = 88
 target-version = "py312"
+exclude = [
+  "tmp",
+  ".docker-smoke",
+  ".docker-pip-smoke",
+  "audit_script.py",
+  "scripts",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501", "B008"]
 
 [tool.pytest.ini_options]
 addopts = "-q --import-mode=importlib"
-asyncio_default_fixture_loop_scope = "function"
+filterwarnings = [
+  "ignore::FutureWarning:google.generativeai.*",
+]
 pythonpath = [
   "apps/api",
   "apps/api/src",
@@ -45,19 +72,23 @@ pythonpath = [
   "packages/analysis/src",
   "packages/confidence/src",
   "packages/graph/src",
+  "packages/github/src",
   "packages/parser/src",
   "packages/repository/src",
   "packages/shared/src",
   "packages/testing/src",
 ]
 testpaths = [
+  "tests",
   "apps/api/tests",
   "apps/worker/tests",
   "packages/analysis/tests",
   "packages/confidence/tests",
   "packages/graph/tests",
+  "packages/github/tests",
   "packages/parser/tests",
   "packages/repository/tests",
   "packages/shared/tests",
   "packages/testing/tests",
 ]
+

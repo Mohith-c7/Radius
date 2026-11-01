@@ -184,6 +184,35 @@ export function LoginForm() {
         </div>
         <ErrorMessage error={error} />
         <Submit loading={loading}>Sign In</Submit>
+        <button
+          type="button"
+          className="button secondary"
+          style={{ width: "100%", marginTop: "10px", justifyContent: "center" }}
+          onClick={async () => {
+            setEmail("demo@radius.dev");
+            setPassword("RadiusDemo123!");
+            setLoading(true);
+            setError("");
+            try {
+              await authRequest("/auth/login", {
+                method: "POST",
+                body: JSON.stringify({ email: "demo@radius.dev", password: "RadiusDemo123!", remember: true }),
+              });
+              await refresh();
+              router.replace("/analyses");
+            } catch (reason) {
+              setError(
+                reason instanceof Error
+                  ? reason.message
+                  : "We couldn't connect to Radius. Please try again."
+              );
+            } finally {
+              setLoading(false);
+            }
+          }}
+        >
+          ⚡ Quick Demo Sign-In
+        </button>
       </form>
       <AuthFooter prompt="Don't have an account?" href="/signup" action="Create account" />
     </AuthFrame>

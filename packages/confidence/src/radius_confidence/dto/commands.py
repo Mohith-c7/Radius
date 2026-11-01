@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 from uuid import UUID
 
-from radius_confidence.domain.entities import ImpactEvidence, TestEvidence
+from radius_confidence.domain.entities import (
+    AnalysisEvidence,
+    ImpactEvidence,
+    TestEvidence,
+)
 
 
 @dataclass(frozen=True)
@@ -16,6 +20,7 @@ class GenerateConfidenceReportCommand:
     analysis_id: UUID
     impact: ImpactEvidence
     tests: TestEvidence
+    analysis: AnalysisEvidence | None = None
 
 
 @dataclass(frozen=True)

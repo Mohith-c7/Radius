@@ -13,14 +13,23 @@ from radius_analysis.dto import (
     ComputeBlastRadiusCommand,
 )
 from radius_confidence.application import ConfidenceApplicationService
-from radius_confidence.domain import CoveragePercent, ImpactEvidence, TestEvidence
+from radius_confidence.domain import (
+    AnalysisEvidence,
+    CoveragePercent,
+    ImpactEvidence,
+    TestEvidence,
+    TestRunOutcome,
+)
 from radius_confidence.dto import GenerateConfidenceReportCommand
 from radius_graph.application import GraphApplicationService
-from radius_graph.domain import GraphEdgeType, GraphNodeId, GraphNodeType, GraphSnapshot
+from radius_graph.domain import GraphSnapshot
 from radius_graph.dto import BuildGraphCommand
 from radius_graph.interfaces.graph_store import GraphStore
+from radius_graph.traversal import file_dependents
 from radius_parser.application import ParserApplicationService
 from radius_parser.dto import ParseRepositoryCommand
+from radius_parser.extractors.typescript import TypeScriptExtractor
+from radius_shared.logging import get_logger
 from radius_testing.application import TestingApplicationService
 from radius_testing.dto import (
     DiscoverTestsCommand,
@@ -28,6 +37,13 @@ from radius_testing.dto import (
     PlanTestRunCommand,
     SelectTestsCommand,
 )
+from radius_testing.infrastructure.impact_mapping import (
+    ChangedFileRef,
+    map_changes_to_tests,
+)
+from radius_testing.infrastructure.selection import PathBasedTestSelector
+
+LOGGER = get_logger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +70,7 @@ class AnalysisExecutionResult:
     selected_tests: int
     confidence_score: float
     risk_level: str
+    verification_status: str = "insufficient_evidence"
 
 
 class Phase1AnalysisOrchestrator:
@@ -67,6 +84,7 @@ class Phase1AnalysisOrchestrator:
         graph_store: GraphStore,
         testing_service: TestingApplicationService,
         confidence_service: ConfidenceApplicationService,
+        execute_tests: bool = True,
     ) -> None:
         self._analysis = analysis_service
         self._parser = parser_service
@@ -74,6 +92,7 @@ class Phase1AnalysisOrchestrator:
         self._graph_store = graph_store
         self._testing = testing_service
         self._confidence = confidence_service
+        self._execute_tests = execute_tests
 
     def execute(self, command: ExecuteAnalysisCommand) -> AnalysisExecutionResult:
         """Execute one analysis and mark its lifecycle status."""
@@ -90,9 +109,23 @@ class Phase1AnalysisOrchestrator:
     def _execute(self, command: ExecuteAnalysisCommand) -> AnalysisExecutionResult:
         changes = self._analyze_changes(command)
         changed_paths = tuple(item.path for item in changes.changed_files)
+
+        # NOTE: the experimental LLM "semantic pruning" step is intentionally
+        # NOT part of this pipeline. It could remove files (and therefore
+        # tests) from the blast radius based on an unvalidated model judgment,
+        # which is a false-safety risk. See docs/audit/RADIUS_AUDIT.md.
+
         parse_result = self._parser.parse_repository_result(
             ParseRepositoryCommand(repository_path=command.repository_path)
         )
+        if parse_result.parse_failures:
+            LOGGER.warning(
+                "Some source files could not be parsed",
+                extra={
+                    "analysis_id": str(command.analysis_id),
+                    "parse_failures": len(parse_result.parse_failures),
+                },
+            )
         graph_response = self._graph.build_graph(
             BuildGraphCommand(
                 repository_id=command.repository_id,
@@ -101,22 +134,43 @@ class Phase1AnalysisOrchestrator:
             )
         )
         graph_snapshot = self._require_graph_snapshot(command.analysis_id)
-        affected_paths = self._affected_file_paths(graph_snapshot, changed_paths)
-        self._testing.discover_tests(DiscoverTestsCommand(command.repository_path))
+        dependents = file_dependents(graph_snapshot.graph, changed_paths)
+        affected_paths = tuple(
+            sorted(
+                {path for reached in dependents.values() for path in reached}
+                - set(changed_paths)
+            )
+        )
+
+        discovered_tests = self._testing.discover_test_cases(
+            DiscoverTestsCommand(command.repository_path, command.repository_id)
+        )
+        selector = PathBasedTestSelector()
+        mapping = map_changes_to_tests(
+            changed_files=tuple(
+                ChangedFileRef(item.path, item.change_type)
+                for item in changes.changed_files
+            ),
+            dependents=dependents,
+            test_paths=frozenset(test.path.value for test in discovered_tests),
+            conventional_tests={
+                path: selector.conventional_matches(path, discovered_tests)
+                for path in changed_paths
+            },
+            parse_failures=frozenset(parse_result.parse_failures),
+        )
         selection = self._testing.select_tests(
             SelectTestsCommand(
                 analysis_id=command.analysis_id,
                 changed_file_paths=changed_paths,
                 affected_file_paths=affected_paths,
+                available_tests=discovered_tests,
+                full_suite_reasons=mapping.full_suite_reasons,
             )
         )
         self._testing.plan_test_run(PlanTestRunCommand(command.analysis_id))
-        test_result = self._testing.execute_test_run(
-            ExecuteTestRunCommand(
-                analysis_id=command.analysis_id,
-                repository_path=command.repository_path,
-            )
-        )
+        test_evidence = self._run_or_defer_tests(command, selection.selected_count)
+
         blast_radius = self._analysis.compute_blast_radius(
             ComputeBlastRadiusCommand(
                 analysis_id=command.analysis_id,
@@ -137,18 +191,26 @@ class Phase1AnalysisOrchestrator:
                     affected_tests=blast_radius.affected_tests,
                     dependency_depth=blast_radius.dependency_depth,
                 ),
-                tests=TestEvidence(
-                    total_tests=test_result.total_tests,
-                    passed=test_result.passed,
-                    failed=test_result.failed,
-                    skipped=test_result.skipped,
-                    coverage_percent=(
-                        CoveragePercent(test_result.coverage_percent)
-                        if test_result.coverage_percent is not None
-                        else None
-                    ),
+                tests=test_evidence,
+                analysis=AnalysisEvidence(
+                    changed_files=len(changed_paths),
+                    covered_files=mapping.covered_files,
+                    unmapped_files=mapping.unmapped_files,
+                    unanalyzed_files=mapping.unanalyzed_files,
+                    non_executable_files=mapping.non_executable_files,
+                    parse_failures=mapping.parse_failures,
+                    full_suite_fallback_reasons=mapping.full_suite_reasons,
                 ),
-            )
+            ),
+        )
+        LOGGER.info(
+            "Analysis completed",
+            extra={
+                "analysis_id": str(command.analysis_id),
+                "selected_tests": selection.selected_count,
+                "discovered_tests": selection.total_count,
+                "verification_status": confidence.verification_status,
+            },
         )
         return AnalysisExecutionResult(
             analysis_id=command.analysis_id,
@@ -159,7 +221,199 @@ class Phase1AnalysisOrchestrator:
             selected_tests=selection.selected_count,
             confidence_score=confidence.confidence_score,
             risk_level=confidence.risk_level,
+            verification_status=confidence.verification_status,
         )
+
+    def _run_or_defer_tests(
+        self,
+        command: ExecuteAnalysisCommand,
+        selected_count: int,
+    ) -> TestEvidence:
+        if not self._execute_tests:
+            return TestEvidence(
+                total_tests=0,
+                passed=0,
+                failed=0,
+                skipped=0,
+                run_outcome=TestRunOutcome.NOT_RUN,
+                run_detail="in-worker test execution is disabled",
+            )
+        if selected_count == 0:
+            return TestEvidence(total_tests=0, passed=0, failed=0, skipped=0)
+        result = self._testing.execute_test_run(
+            ExecuteTestRunCommand(
+                analysis_id=command.analysis_id,
+                repository_path=command.repository_path,
+            )
+        )
+        outcome = (
+            TestRunOutcome.ERROR
+            if result.status == "error"
+            else TestRunOutcome.COMPLETED
+        )
+        return TestEvidence(
+            total_tests=result.total_tests,
+            passed=result.passed,
+            failed=result.failed,
+            skipped=result.skipped,
+            coverage_percent=(
+                CoveragePercent(result.coverage_percent)
+                if result.coverage_percent is not None
+                else None
+            ),
+            run_outcome=outcome,
+            run_detail=(result.output.splitlines()[0][:200] if outcome != TestRunOutcome.COMPLETED and result.output else None),
+        )
+
+    def _run_semantic_cpg_poc(
+        self, repo_path: Path, changed_paths: tuple[str, ...], diff_text: str | None
+    ) -> set[str]:
+        import os
+
+        from radius_analysis.ai.pruner import SemanticPruner
+        from radius_analysis.diff_hunks import parse_diff_modified_lines
+        from radius_graph.cpg import CodePropertyGraph
+        from radius_graph.slicer import GraphSlicer
+        from radius_parser.core import ParserEngine
+        from radius_parser.extractors.python import PythonExtractor
+
+        print(
+            f"\n[PHASE 2 POC] Starting Semantic CPG Engine on cloned repo: {repo_path}"
+        )
+        engine = ParserEngine()
+        py_extractor = PythonExtractor()
+        ts_extractor = TypeScriptExtractor()
+        cpg = CodePropertyGraph()
+
+        py_extensions = (".py",)
+        ts_extensions = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
+
+        # 1. Parse all files dynamically
+        ignored_dirs = {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build", ".turbo"}
+        for root, dirs, files in os.walk(repo_path):
+            dirs[:] = [d for d in dirs if d not in ignored_dirs]
+            for file in files:
+                is_py = file.endswith(py_extensions)
+                is_ts = file.endswith(ts_extensions)
+                if not (is_py or is_ts):
+                    continue
+
+                filepath = os.path.join(root, file)
+
+                # [SECURITY] Mitigate Symlink Traversal / Arbitrary File Read
+                resolved_path = os.path.realpath(filepath)
+                resolved_repo = os.path.realpath(repo_path)
+                if not resolved_path.startswith(resolved_repo):
+                    print(
+                        f"[SECURITY WARNING] Blocked arbitrary file read attempt via symlink: {filepath}"
+                    )
+                    continue
+
+                try:
+                    with open(filepath, encoding="utf-8") as f:
+                        code = f.read()
+                    rel_path = os.path.relpath(filepath, repo_path).replace("\\", "/")
+                    if is_py:
+                        tree = engine.parse_python(code)
+                        for imp in py_extractor.extract_imports(
+                            tree.root_node, rel_path, code
+                        ):
+                            cpg.add_import(imp)
+                        symbols = py_extractor.extract_symbols(
+                            tree.root_node, rel_path, code
+                        )
+                        for sym in symbols:
+                            cpg.add_symbol(sym)
+                            sym_tree = engine.parse_python(sym.source_code)
+                            calls = py_extractor.extract_calls(
+                                sym_tree.root_node, sym.id, sym.source_code
+                            )
+                            for call in calls:
+                                cpg.add_reference(call)
+                    elif is_ts:
+                        tree = engine.parse_typescript(code)
+                        for imp in ts_extractor.extract_imports(
+                            tree.root_node, rel_path, code
+                        ):
+                            cpg.add_import(imp)
+                        symbols = ts_extractor.extract_symbols(
+                            tree.root_node, rel_path, code
+                        )
+                        for sym in symbols:
+                            cpg.add_symbol(sym)
+                            sym_tree = engine.parse_typescript(sym.source_code)
+                            calls = ts_extractor.extract_calls(
+                                sym_tree.root_node, sym.id, sym.source_code
+                            )
+                            for call in calls:
+                                cpg.add_reference(call)
+
+                except Exception:
+                    pass
+
+        print(f"[PHASE 2 POC] CPG Built successfully. Total Nodes: {len(cpg.nodes)}")
+        self._last_cpg = cpg
+
+        slicer = GraphSlicer(cpg)
+        api_key = os.environ.get("GEMINI_API_KEY", "")
+        pruner = SemanticPruner(api_key=api_key)
+
+        pruned_files = set()
+        modified_lines_by_file = (
+            parse_diff_modified_lines(diff_text) if diff_text else {}
+        )
+
+        # 2. Extract Blast Radius for changes
+        for path in changed_paths:
+            path_norm = path.replace("\\", "/")
+            if not path_norm.endswith(
+                (".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
+            ):
+                continue
+
+            print(f"[PHASE 2 POC] Analyzing changed file: {path_norm}")
+            for node_id, node in cpg.nodes.items():
+                if node.symbol.file_path == path_norm:
+                    if (
+                        path_norm in modified_lines_by_file
+                        and modified_lines_by_file[path_norm]
+                    ):
+                        mod_lines = modified_lines_by_file[path_norm]
+                        sym = node.symbol
+                        overlaps = any(
+                            sym.start_line <= line <= sym.end_line for line in mod_lines
+                        )
+                        if not overlaps:
+                            print(
+                                f"[PHASE 2 POC] Skipping untouched symbol '{node_id}' ({sym.start_line}-{sym.end_line})"
+                            )
+                            continue
+
+                    slice_nodes = slicer.extract_caller_slice(node_id)
+                    if slice_nodes:
+                        print(
+                            f"[PHASE 2 POC] Target '{node_id}' has {len(slice_nodes)} dependent callers."
+                        )
+                        for caller in slice_nodes:
+                            if api_key:
+                                is_impacted = pruner.evaluate_impact(
+                                    caller.symbol.source_code, str(diff_text)
+                                )
+                                if not is_impacted:
+                                    print(
+                                        f"[PHASE 2 POC] -> Caller {caller.symbol.id}: PRUNE (Benign)"
+                                    )
+                                    pruned_files.add(caller.symbol.file_path)
+                                else:
+                                    print(
+                                        f"[PHASE 2 POC] -> Caller {caller.symbol.id}: KEEP (Breaking)"
+                                    )
+                            else:
+                                print(
+                                    f"[PHASE 2 POC] -> Caller {caller.symbol.id}: Skipped AI Eval (No API Key)"
+                                )
+
+        return pruned_files
 
     def _analyze_changes(self, command: ExecuteAnalysisCommand):
         if command.diff_text is not None:
@@ -187,32 +441,3 @@ class Phase1AnalysisOrchestrator:
             msg = f"Graph snapshot for analysis {analysis_id} was not found."
             raise ValueError(msg)
         return snapshot
-
-    @staticmethod
-    def _affected_file_paths(
-        graph_snapshot: GraphSnapshot,
-        changed_paths: tuple[str, ...],
-    ) -> tuple[str, ...]:
-        start_ids = {GraphNodeId(f"file:{path}") for path in changed_paths}
-        graph_node_ids = graph_snapshot.graph.node_ids()
-        affected = {node_id for node_id in start_ids if node_id in graph_node_ids}
-        frontier = set(affected)
-        while frontier:
-            next_frontier: set[GraphNodeId] = set()
-            for edge in graph_snapshot.graph.edges:
-                if (
-                    edge.edge_type == GraphEdgeType.DEPENDS_ON
-                    and edge.target_id in frontier
-                    and edge.source_id not in affected
-                ):
-                    affected.add(edge.source_id)
-                    next_frontier.add(edge.source_id)
-            frontier = next_frontier
-        paths = {
-            node.path
-            for node in graph_snapshot.graph.nodes
-            if node.id in affected
-            and node.node_type == GraphNodeType.FILE
-            and node.path is not None
-        }
-        return tuple(sorted(paths - set(changed_paths)))

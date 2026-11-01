@@ -2,17 +2,7 @@
 
 from __future__ import annotations
 
-from enum import Enum
-
-
-class StrEnum(str, Enum):
-    """Backport of Python 3.11 StrEnum for Python 3.9."""
-
-    def __str__(self) -> str:
-        return self.value
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}.{self.name}"
+from enum import StrEnum
 
 
 class UserRole(StrEnum):

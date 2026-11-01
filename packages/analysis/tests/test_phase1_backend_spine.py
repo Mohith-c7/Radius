@@ -15,6 +15,7 @@ from radius_analysis.dto import (
 from radius_analysis.infrastructure import UnifiedDiffChangeAnalyzer
 from radius_confidence.application import ConfidenceApplicationService
 from radius_confidence.domain import (
+    AnalysisEvidence,
     CoveragePercent,
     ImpactEvidence,
 )
@@ -188,6 +189,7 @@ def test_phase1_backend_spine_from_diff_to_confidence(tmp_path: Path) -> None:
                 skipped=0,
                 coverage_percent=CoveragePercent(88),
             ),
+            analysis=AnalysisEvidence(changed_files=1, covered_files=("src/app.py",)),
         )
     )
 

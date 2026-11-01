@@ -25,9 +25,11 @@ class StaticTestCommandPlanner:
         if pytest_paths:
             command_plan.append(("python", ("-m", "pytest", *pytest_paths)))
         if jest_paths:
-            command_plan.append(("jest", jest_paths))
+            # npx --no-install: only use the repository's own pinned runner and
+            # never download one at analysis time.
+            command_plan.append(("npx", ("--no-install", "jest", "--ci", *jest_paths)))
         if vitest_paths:
-            command_plan.append(("vitest", vitest_paths))
+            command_plan.append(("npx", ("--no-install", "vitest", "run", *vitest_paths)))
         return TestRunPlan.pending(
             analysis_id=analysis_id,
             selected_tests=tests,

@@ -6,8 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from radius_confidence.domain.enums import EvidenceCategory, EvidenceImpact
-from radius_confidence.domain.entities import ConfidenceReport
+from radius_confidence.domain.entities import ConfidenceEvidence, ConfidenceReport
 
 __all__ = [
     "CoverageArtifactResponse",
@@ -33,8 +32,8 @@ class ConfidenceEvidenceResponse:
     @classmethod
     def from_entity(
         cls,
-        evidence: "ConfidenceEvidence",
-    ) -> "ConfidenceEvidenceResponse":
+        evidence: ConfidenceEvidence,
+    ) -> ConfidenceEvidenceResponse:
         """Create a response DTO from confidence evidence."""
 
         return cls(
@@ -110,10 +109,14 @@ class ConfidenceReportResponse:
     summary: str
     evidence: tuple
     recommendations: tuple[str, ...]
+    change_risk: str
+    verification_confidence: float
+    analysis_completeness: float
+    verification_status: str
     generated_at: datetime
 
     @classmethod
-    def from_entity(cls, report: ConfidenceReport) -> "ConfidenceReportResponse":
+    def from_entity(cls, report: ConfidenceReport) -> ConfidenceReportResponse:
         """Create a response DTO from a confidence report."""
 
         return cls(
@@ -127,5 +130,9 @@ class ConfidenceReportResponse:
                 for item in report.evidence
             ),
             recommendations=report.recommendations,
+            change_risk=report.change_risk,
+            verification_confidence=report.verification_confidence,
+            analysis_completeness=report.analysis_completeness,
+            verification_status=report.verification_status,
             generated_at=report.generated_at,
         )

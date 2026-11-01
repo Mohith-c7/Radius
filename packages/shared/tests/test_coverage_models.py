@@ -1,6 +1,5 @@
 """Tests for coverage SQLAlchemy models."""
 
-from radius_shared.database import coverage as coverage_models
 from radius_shared.database.base import metadata
 from sqlalchemy import create_engine, inspect
 

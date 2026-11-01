@@ -1,21 +1,14 @@
 """SQLAlchemy coverage store adapter."""
 
-from typing import Iterable
+from collections.abc import Iterable
 from uuid import UUID
-
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
 from radius_shared.database import coverage as db_models
 from radius_shared.database import models as db_schema
 from radius_shared.errors import ValidationError
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.orm import Session, selectinload
 
-from radius_confidence.domain.coverage import (
-    CoverageFile,
-    CoverageReportValueObject,
-    CoverageSymbol,
-)
 from radius_confidence.interfaces.store import CoverageStore
 
 

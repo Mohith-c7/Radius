@@ -8,9 +8,7 @@ class StaticLanguageParserRegistry:
     """Registry backed by a fixed parser collection."""
 
     def __init__(self, parsers: tuple[LanguageParser, ...] = ()) -> None:
-        self._parsers = {
-            parser.supported_language: parser for parser in parsers
-        }
+        self._parsers = {parser.supported_language: parser for parser in parsers}
 
     def get_parser(self, language: SourceLanguage) -> LanguageParser | None:
         """Return a parser for a language when registered."""
@@ -28,11 +26,19 @@ def default_language_parser_registry() -> StaticLanguageParserRegistry:
     from radius_parser.infrastructure.python_parser import (
         PythonAstParser,  # noqa: PLC0415
     )
+    from radius_parser.infrastructure.tree_sitter_parsers import (  # noqa: PLC0415
+        GoLanguageParser,
+        JavaLanguageParser,
+        RustLanguageParser,
+    )
 
     return StaticLanguageParserRegistry(
         (
             PythonAstParser(),
             JavaScriptParser(),
             TypeScriptParser(),
+            GoLanguageParser(),
+            JavaLanguageParser(),
+            RustLanguageParser(),
         )
     )

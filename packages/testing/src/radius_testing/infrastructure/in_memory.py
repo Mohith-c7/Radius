@@ -5,6 +5,7 @@ from uuid import UUID
 
 from radius_testing.domain.entities import (
     TestCase,
+    TestResultUpload,
     TestRunPlan,
     TestRunResult,
     TestSelection,
@@ -15,25 +16,37 @@ class InMemoryTestStore:
     """Store testing state in memory."""
 
     def __init__(self) -> None:
-        self._tests: dict[str, TestCase] = {}
+        self._tests: dict[tuple[UUID | None, str], TestCase] = {}
         self._selections: dict[UUID, TestSelection] = {}
         self._plans: dict[UUID, TestRunPlan] = {}
         self._results: dict[UUID, TestRunResult] = {}
         self._history: dict[UUID, list[dict]] = {}  # analysis_id -> history
         self._statistics: dict[UUID, dict] = {}  # analysis_id -> statistics
         self._recent: dict[UUID, list[dict]] = {}  # analysis_id -> recent executions
+        self._uploads: dict[UUID, list[TestResultUpload]] = {}
 
-    def save_test_cases(self, tests: tuple[TestCase, ...]) -> tuple[TestCase, ...]:
-        """Persist discovered test cases."""
+    def save_test_cases(
+        self,
+        tests: tuple[TestCase, ...],
+        repository_id: UUID | None = None,
+    ) -> tuple[TestCase, ...]:
+        """Persist discovered test cases by (repository, path)."""
 
         for test in tests:
-            self._tests[test.path.value] = test
-        return self.list_test_cases()
+            self._tests[(repository_id, test.path.value)] = test
+        return self.list_test_cases(repository_id)
 
-    def list_test_cases(self) -> tuple[TestCase, ...]:
-        """Return known test cases."""
+    def list_test_cases(
+        self,
+        repository_id: UUID | None = None,
+    ) -> tuple[TestCase, ...]:
+        """Return known test cases, scoped to one repository when given."""
 
-        return tuple(self._tests[path] for path in sorted(self._tests))
+        keys = sorted(
+            (key for key in self._tests if repository_id is None or key[0] == repository_id),
+            key=lambda key: (key[1], str(key[0])),
+        )
+        return tuple(self._tests[key] for key in keys)
 
     def save_selection(self, selection: TestSelection) -> TestSelection:
         """Persist a test selection."""
@@ -139,8 +152,41 @@ class InMemoryTestStore:
         # For in-memory, just return all stored recent executions
         # This is a simplification - in a real system we'd aggregate across analyses
         result = []
-        for aid, executions in self._recent.items():
-            result.extend(executions)
+        for executions in self._recent.values():
+            result.extend(
+                item
+                for item in executions
+                if repository_id is None
+                or str(item.get("repository_id")) == str(repository_id)
+            )
         # Sort by timestamp descending and limit
         result.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
         return result[:limit]
+    def get_result_upload(
+        self,
+        analysis_id: UUID,
+        body_sha256: str,
+    ) -> TestResultUpload | None:
+        """Return an earlier upload of the identical report body, if any."""
+
+        for upload in self._uploads.get(analysis_id, ()):
+            if upload.body_sha256 == body_sha256:
+                return upload
+        return None
+
+    def save_result_upload(self, upload: TestResultUpload) -> TestResultUpload:
+        """Append one upload; an identical body is stored only once."""
+
+        existing = self.get_result_upload(upload.analysis_id, upload.body_sha256)
+        if existing is not None:
+            return existing
+        self._uploads.setdefault(upload.analysis_id, []).append(upload)
+        return upload
+
+    def lock_result_uploads(self, analysis_id: UUID) -> None:
+        """No-op: in-memory ingestion runs synchronously on one event loop."""
+
+    def list_result_uploads(self, analysis_id: UUID) -> tuple[TestResultUpload, ...]:
+        """Return all uploads for an analysis, oldest first."""
+
+        return tuple(self._uploads.get(analysis_id, ()))

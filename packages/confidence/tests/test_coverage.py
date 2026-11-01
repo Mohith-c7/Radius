@@ -1,22 +1,14 @@
 """Tests for runtime coverage."""
 
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from radius_confidence.application import CoverageApplicationService
-from radius_confidence.domain import CoveragePercent
 from radius_confidence.dto.commands import (
     GetCoverageForAnalysisCommand,
     GetCoverageForArtifactCommand,
     GetTestsForSymbolCommand,
     IngestCoverageCommand,
 )
-from radius_confidence.dto.responses import (
-    CoverageArtifactResponse,
-    CoverageFileResponse,
-    CoverageReportResponse,
-    CoverageSummaryResponse,
-)
-from radius_confidence.interfaces.store import CoverageStore
 from radius_confidence.infrastructure.coverage_in_memory import InMemoryCoverageStore
 
 
