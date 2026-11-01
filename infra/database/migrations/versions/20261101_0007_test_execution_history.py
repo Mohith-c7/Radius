@@ -36,6 +36,16 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_test_execution_histories")),
+        sa.ForeignKeyConstraint(
+            ["repository_id"],
+            ["repositories.id"],
+            name="fk_test_execution_histories_repository_id_repositories",
+        ),
+        sa.ForeignKeyConstraint(
+            ["analysis_id"],
+            ["analyses.id"],
+            name="fk_test_execution_histories_analysis_id_analyses",
+        ),
     )
     op.create_index(
         "ix_test_execution_histories_analysis_id",
