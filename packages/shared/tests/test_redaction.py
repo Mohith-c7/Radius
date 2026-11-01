@@ -52,3 +52,23 @@ def test_json_formatter_redacts_message_extras_and_exception() -> None:
 
     assert TOKEN not in json.dumps(payload)
     assert payload["error"] == f"Authorization: {REDACTED}"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # key=value rule must not consume only the BEGIN marker and leave the body.
+        f"private_key=-----BEGIN RSA PRIVATE KEY-----\nMIIEbody{TOKEN}\n-----END RSA PRIVATE KEY-----",
+        # Truncated output without an END marker.
+        f"error: -----BEGIN RSA PRIVATE KEY-----\nMIIEbody{TOKEN}\n",
+        # JSON-quoted secrets.
+        f'{{"secret": "{TOKEN}", "ok": 1}}',
+        f'{{"api_key":"{TOKEN}"}}',
+    ],
+)
+def test_redact_secrets_handles_pem_bodies_truncation_and_json(text: str) -> None:
+    redacted = redact_secrets(text)
+
+    assert TOKEN not in redacted
+    assert "MIIEbody" not in redacted
+    assert REDACTED in redacted

@@ -60,5 +60,12 @@ class TestStore(Protocol):
         stored upload unchanged.
         """
 
+    def lock_result_uploads(self, analysis_id: UUID) -> None:
+        """Serialise result ingestion for one analysis until the transaction ends.
+
+        Concurrent uploads must not each compute the verdict from only their
+        own upload (the last writer could then drop another shard's failure).
+        """
+
     def list_result_uploads(self, analysis_id: UUID) -> tuple[TestResultUpload, ...]:
         """Return all uploads for an analysis, oldest first."""

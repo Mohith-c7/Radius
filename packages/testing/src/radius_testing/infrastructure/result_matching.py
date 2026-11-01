@@ -28,7 +28,7 @@ except ImportError:  # pragma: no cover - defusedxml is a declared dependency
 ExecutedCase = ReportedTestCase
 
 _FAILED_JSON_STATUSES = frozenset({"failed", "failure", "error", "errored", "broken"})
-_SKIPPED_JSON_STATUSES = frozenset({"skipped", "skip", "pending", "disabled", "todo"})
+_PASSED_JSON_STATUSES = frozenset({"passed", "pass", "ok", "success", "succeeded"})
 _OUTCOME_RANK = {CaseOutcome.SKIPPED: 0, CaseOutcome.PASSED: 1, CaseOutcome.FAILED: 2}
 
 
@@ -100,6 +100,17 @@ def attribute_selected_tests(
     """Classify each selected test file as passed/failed/skipped/not reported."""
 
     merged = merge_cases(cases)
+    normalized = {path: _norm(path) for path in selected_test_paths}
+    # A case whose reported location is only a suffix of a selected path (e.g.
+    # runner-relative "test_api.py") is ambiguous when that suffix fits more
+    # than one selected file; it then proves nothing about either of them.
+    ambiguous = {
+        case.key
+        for case in merged
+        if sum(1 for path in normalized.values() if _case_matches(path, case)) > 1
+        and not any(_case_matches(path, case, allow_short=False) for path in normalized.values())
+    }
+    merged = tuple(case for case in merged if case.key not in ambiguous)
     passed: list[str] = []
     failed: list[str] = []
     skipped: list[str] = []
@@ -138,11 +149,16 @@ def unmatched_selected_tests(
     )
 
 
-def _case_matches(path: str, case: ReportedTestCase) -> bool:
+def _case_matches(path: str, case: ReportedTestCase, *, allow_short: bool = True) -> bool:
     if case.file:
         reported = _norm(case.file)
-        # Reports may use absolute or runner-relative paths.
-        if reported == path or reported.endswith("/" + path) or path.endswith("/" + reported):
+        # Reports may use absolute paths (reported ends with the selected
+        # path) or runner-relative ones (selected path ends with reported).
+        if reported == path or reported.endswith("/" + path):
+            return True
+        # A bare file name ("test_api.py") could be any same-named test file,
+        # so the runner-relative form needs at least one directory component.
+        if allow_short and "/" in reported and path.endswith("/" + reported):
             return True
     if case.classname:
         classname = case.classname.strip()
@@ -204,10 +220,12 @@ def _json_cases(text: str) -> tuple[ReportedTestCase, ...]:
             status = str(item.get("status") or "").strip().lower()
             if status in _FAILED_JSON_STATUSES:
                 outcome = CaseOutcome.FAILED
-            elif status in _SKIPPED_JSON_STATUSES:
-                outcome = CaseOutcome.SKIPPED
-            else:
+            elif status in _PASSED_JSON_STATUSES:
                 outcome = CaseOutcome.PASSED
+            else:
+                # Skipped, timed out, cancelled, missing or unknown statuses are
+                # not evidence that the case ran and passed.
+                outcome = CaseOutcome.SKIPPED
             cases.append(
                 ReportedTestCase(
                     file=_optional_str(item.get("file")),

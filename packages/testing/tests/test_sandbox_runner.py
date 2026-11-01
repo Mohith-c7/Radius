@@ -412,6 +412,12 @@ def _docker_ready() -> bool:
     return info.returncode == 0
 
 
+if os.environ.get("RADIUS_REQUIRE_SANDBOX_TESTS") == "true" and not _docker_ready():
+    # CI builds the image; a silent skip there would hide isolation regressions.
+    raise RuntimeError(
+        f"RADIUS_REQUIRE_SANDBOX_TESTS=true but docker or {SANDBOX_TEST_IMAGE!r} is unavailable"
+    )
+
 requires_docker = pytest.mark.skipif(
     not _docker_ready(),
     reason=(

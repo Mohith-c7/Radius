@@ -478,3 +478,41 @@ def test_upload_count_per_analysis_is_bounded(monkeypatch) -> None:
 
     assert first.status_code == 200
     assert second.status_code == 409
+
+
+def test_stale_check_ignores_analyses_of_other_repositories() -> None:
+    """Another tenant reusing a pull_request_id must not make uploads stale."""
+
+    context: dict = {}
+    client, headers, analysis_id = _mapped_analysis(context=context)
+    other_org = str(uuid4())
+    other_headers = {"X-Radius-Organization-Id": other_org}
+    other_repo = client.post(
+        "/api/v1/repositories",
+        headers=other_headers,
+        json={
+            "organizationId": other_org,
+            "repositoryId": 999,
+            "name": "evil",
+            "owner": "mallory",
+            "defaultBranch": "main",
+            "cloneUrl": "https://github.com/mallory/evil.git",
+            "visibility": "private",
+        },
+    ).json()["data"]["id"]
+    foreign = client.post(
+        "/api/v1/analyses",
+        headers=other_headers,
+        json={
+            "repositoryId": other_repo,
+            "pullRequestId": context["pull_request"],
+            "commitSha": "b" * 40,
+        },
+    ).json()["data"]["id"]
+
+    response = _upload(
+        client, headers, analysis_id, _junit("tests.test_checkout"), commit_sha=HEAD
+    )
+
+    assert response.status_code == 200
+    assert foreign not in response.text

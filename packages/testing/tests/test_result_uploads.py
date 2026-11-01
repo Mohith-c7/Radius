@@ -178,3 +178,90 @@ def test_json_case_statuses_are_classified() -> None:
         CaseOutcome.SKIPPED,
         CaseOutcome.PASSED,
     ]
+
+
+class _RecordingStore(InMemoryTestStore):
+    def __init__(self) -> None:
+        super().__init__()
+        self.calls: list[str] = []
+
+    def lock_result_uploads(self, analysis_id):
+        self.calls.append("lock")
+
+    def get_result_upload(self, analysis_id, body_sha256):
+        self.calls.append("get")
+        return super().get_result_upload(analysis_id, body_sha256)
+
+    def save_result_upload(self, upload):
+        self.calls.append("save")
+        return super().save_result_upload(upload)
+
+    def list_result_uploads(self, analysis_id):
+        self.calls.append("list")
+        return super().list_result_uploads(analysis_id)
+
+
+def test_ingestion_locks_the_analysis_before_reading_or_writing_uploads() -> None:
+    """Concurrent shard uploads must be aggregated serially (no lost failure)."""
+
+    store = _RecordingStore()
+
+    _service(store).ingest_test_report(uuid4(), FAILING, SHA)
+
+    assert store.calls[0] == "lock"
+
+
+def test_sql_lock_is_a_row_lock_on_the_analysis() -> None:
+    store = _sql_store()
+    statements: list[str] = []
+    from sqlalchemy import event
+
+    engine = store._session.get_bind()
+    event.listen(engine, "before_cursor_execute", lambda *a: statements.append(a[2]))
+    from sqlalchemy.dialects import postgresql
+
+    store.lock_result_uploads(uuid4())
+
+    assert any("FROM analyses" in sql for sql in statements)
+    # SQLite drops FOR UPDATE; check the statement renders it on PostgreSQL.
+    from radius_shared.database import models as db_models
+    from sqlalchemy import select
+
+    rendered = str(
+        select(db_models.Analysis.id).with_for_update().compile(dialect=postgresql.dialect())
+    )
+    assert "FOR UPDATE" in rendered
+
+
+@pytest.mark.parametrize("status", ["timeout", "timedout", "cancelled", "unknown", "", None])
+def test_json_cases_with_unrecognised_status_are_not_evidence(status) -> None:
+    case = {"file": "tests/test_pay.py", "name": "test_charge"}
+    if status is not None:
+        case["status"] = status
+    report = '{"total": 1, "passed": 1, "testcases": [' + __import__("json").dumps(case) + "]}"
+
+    attribution = attribute_selected_tests(("tests/test_pay.py",), report_cases(report))
+
+    assert attribution.executed == ()
+    assert attribution.missing == ("tests/test_pay.py",)
+
+
+def test_bare_file_name_does_not_attribute_a_different_selected_test() -> None:
+    cases = (ReportedTestCase(file="test_api.py", name="test_x", outcome=CaseOutcome.PASSED),)
+
+    attribution = attribute_selected_tests(("tests/unit/test_api.py",), cases)
+
+    assert attribution.not_reported == ("tests/unit/test_api.py",)
+
+
+def test_ambiguous_runner_relative_path_attributes_nothing() -> None:
+    cases = (ReportedTestCase(file="tests/test_api.py", name="test_x", outcome=CaseOutcome.PASSED),)
+
+    attribution = attribute_selected_tests(
+        ("svc_a/tests/test_api.py", "svc_b/tests/test_api.py"), cases
+    )
+
+    assert attribution.executed == ()
+
+    unique = attribute_selected_tests(("svc_a/tests/test_api.py",), cases)
+    assert unique.passed == ("svc_a/tests/test_api.py",)

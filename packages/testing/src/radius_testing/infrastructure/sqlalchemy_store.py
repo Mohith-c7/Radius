@@ -320,6 +320,19 @@ class SqlAlchemyTestStore:
             return existing
         return upload
 
+    def lock_result_uploads(self, analysis_id: UUID) -> None:
+        """Take a row lock on the analysis for the rest of the transaction.
+
+        ``SELECT ... FOR UPDATE`` on PostgreSQL; SQLite ignores the clause but
+        already serialises writers.
+        """
+
+        self._session.execute(
+            select(db_models.Analysis.id)
+            .where(db_models.Analysis.id == analysis_id)
+            .with_for_update()
+        )
+
     def list_result_uploads(self, analysis_id: UUID) -> tuple[TestResultUpload, ...]:
         """Return all uploads for an analysis, oldest first."""
 

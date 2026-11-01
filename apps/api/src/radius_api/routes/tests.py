@@ -188,7 +188,10 @@ def _ensure_latest_for_pull_request(
     """Reject results for an analysis whose pull request head has moved on."""
 
     siblings = analysis_service.list_analyses(
-        AnalysisListQuery(pull_request_id=analysis.pull_request_id)
+        AnalysisListQuery(
+            repository_id=analysis.repository_id,
+            pull_request_id=analysis.pull_request_id,
+        )
     )
     if not siblings:
         return

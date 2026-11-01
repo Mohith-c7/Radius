@@ -14,7 +14,27 @@ import re
 
 REDACTED = "[REDACTED]"
 
+_SECRET_KEYS = (
+    r"x-radius-api-key|x-api-key|api[_-]?key|access[_-]?token|"
+    r"client[_-]?secret|private[_-]?key|password|secret|token"
+)
+
 _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    # PEM private keys first: later key=value rules would otherwise consume
+    # only the "-----BEGIN" marker and leave the key body behind. A block
+    # without an END marker (truncated output) is redacted to the end.
+    (
+        re.compile(
+            r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)",
+            re.DOTALL,
+        ),
+        REDACTED,
+    ),
+    # JSON-style "key": "value" secrets.
+    (
+        re.compile(rf'(?i)("(?:{_SECRET_KEYS})"\s*:\s*)"[^"]*"'),
+        rf'\1"{REDACTED}"',
+    ),
     # Credentials embedded in URLs: scheme://user:password@host or scheme://token@host
     (re.compile(r"(?i)\b([a-z][a-z0-9+.\-]*://)[^\s/@'\"]+@"), rf"\1{REDACTED}@"),
     # Authorization headers (any scheme) up to the end of the value.
@@ -27,22 +47,13 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     # Radius / generic API-key headers and key=value secrets.
     (
         re.compile(
-            r"(?i)\b(x-radius-api-key|x-api-key|api[_-]?key|access[_-]?token|"
-            r"client[_-]?secret|private[_-]?key|password|secret|token)"
+            rf"(?i)\b({_SECRET_KEYS})"
             r"(\s*[:=]\s*)[^\s'\",;&]+"
         ),
         rf"\1\2{REDACTED}",
     ),
     # GitHub token formats (installation, user, OAuth, refresh, fine-grained PAT).
     (re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b"), REDACTED),
-    # PEM private key blocks.
-    (
-        re.compile(
-            r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----",
-            re.DOTALL,
-        ),
-        REDACTED,
-    ),
 )
 
 

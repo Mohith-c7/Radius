@@ -198,6 +198,9 @@ class TestingApplicationService:
         commit_sha: str,
     ) -> tuple[TestRunResult, TestIngestionResponse]:
         parsed = self._parser.parse(content, analysis_id)
+        # Lock before reading/writing uploads so concurrent shards are
+        # aggregated one after another, never from partial views.
+        self._store.lock_result_uploads(analysis_id)
         body = content.encode("utf-8") if isinstance(content, str) else content
         digest = hashlib.sha256(body).hexdigest()
         upload = self._store.get_result_upload(analysis_id, digest)

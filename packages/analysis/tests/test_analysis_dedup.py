@@ -80,3 +80,25 @@ def test_rerun_always_creates_new_analysis() -> None:
 
     assert rerun.id != first.id
     assert len(pipeline.enqueued) == 2
+
+
+def test_failed_analysis_cannot_be_completed_later() -> None:
+    """A reaped (failed) analysis must not be flipped to completed by a slow worker."""
+
+    from uuid import uuid4 as _uuid4
+
+    import pytest
+    from radius_analysis.domain import Analysis, AnalysisStatus, CommitSha
+
+    analysis = Analysis(
+        id=_uuid4(),
+        repository_id=_uuid4(),
+        pull_request_id=_uuid4(),
+        commit_sha=CommitSha("a" * 40),
+        status=AnalysisStatus.RUNNING,
+    )
+    analysis.fail()
+
+    with pytest.raises(ValueError, match="Failed analyses cannot be completed"):
+        analysis.complete()
+    assert analysis.status == AnalysisStatus.FAILED

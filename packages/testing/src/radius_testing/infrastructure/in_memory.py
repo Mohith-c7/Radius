@@ -98,6 +98,9 @@ class InMemoryTestStore:
         self._uploads.setdefault(upload.analysis_id, []).append(upload)
         return upload
 
+    def lock_result_uploads(self, analysis_id: UUID) -> None:
+        """No-op: in-memory ingestion runs synchronously on one event loop."""
+
     def list_result_uploads(self, analysis_id: UUID) -> tuple[TestResultUpload, ...]:
         """Return all uploads for an analysis, oldest first."""
 
