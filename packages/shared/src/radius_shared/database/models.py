@@ -400,6 +400,45 @@ class TestRun(UuidPrimaryKeyMixin, Base):
     __table_args__ = (Index("ix_test_runs_analysis_id", "analysis_id"),)
 
 
+class TestResultUpload(UuidPrimaryKeyMixin, Base):
+    """One CI test report uploaded for an analysis, bound to a commit.
+
+    Uploads accumulate per analysis (CI shards, retries); the verdict is
+    computed over all of them. ``body_sha256`` makes exact replays idempotent.
+    """
+
+    __tablename__ = "test_result_uploads"
+
+    analysis_id: Mapped[UUID] = mapped_column(
+        ForeignKey("analyses.id"),
+        nullable=False,
+    )
+    commit_sha: Mapped[str] = mapped_column(String(64), nullable=False)
+    body_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    total_tests: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    passed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    failed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    skipped: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    duration_ms: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    coverage_percent: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    output: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    cases: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "analysis_id",
+            "body_sha256",
+            name="uq_test_result_uploads_analysis_id_body_sha256",
+        ),
+        Index("ix_test_result_uploads_analysis_id", "analysis_id"),
+    )
+
+
 class TestCase(UuidPrimaryKeyMixin, Base):
     """Discovered test case artifact."""
 

@@ -76,15 +76,7 @@ class DeterministicConfidenceScorer:
             score = self._apply_coverage_penalties(score, tests, evidence)
         score = self._apply_impact_penalties(score, impact, evidence)
         self._append_analysis_evidence(analysis, evidence)
-        for missing in tests.missing_selected_tests:
-            evidence.append(
-                ConfidenceEvidence(
-                    category=EvidenceCategory.TESTS,
-                    label="selected_test_not_in_results",
-                    message=missing,
-                    impact=EvidenceImpact.NEGATIVE,
-                )
-            )
+        self._append_selected_test_evidence(tests, evidence)
 
         gaps = self._verification_gaps(tests, analysis)
         if tests.failed > 0:
@@ -141,12 +133,73 @@ class DeterministicConfidenceScorer:
             gaps.append("No tests were selected or collected for the changed code")
         elif needs_tests and tests.passed == 0 and tests.failed == 0:
             gaps.append("All selected tests were skipped; nothing was verified")
+        if needs_tests and tests.selected_test_files == 0:
+            gaps.append(
+                "No selected test files are recorded for this analysis, so the "
+                "results cannot be attributed to the changed code"
+            )
         if tests.missing_selected_tests:
             gaps.append(
                 f"{len(tests.missing_selected_tests)} selected test file(s) do not appear "
                 "in the test results"
             )
         return tuple(gaps)
+
+    @staticmethod
+    def _append_selected_test_evidence(
+        tests: TestEvidence,
+        evidence: list[ConfidenceEvidence],
+    ) -> None:
+        if tests.selected_test_files is not None:
+            evidence.append(
+                ConfidenceEvidence(
+                    category=EvidenceCategory.TESTS,
+                    label="selected_test_files",
+                    message=(
+                        f"{tests.selected_test_files} selected test file(s): "
+                        f"{len(tests.executed_selected_tests)} executed, "
+                        f"{len(tests.failed_selected_tests)} with failures, "
+                        f"{len(tests.skipped_selected_tests)} only skipped, "
+                        f"{len(tests.missing_selected_tests) - len(tests.skipped_selected_tests)}"
+                        " not reported."
+                    ),
+                    impact=EvidenceImpact.NEUTRAL,
+                    value=float(tests.selected_test_files),
+                )
+            )
+        failed = set(tests.failed_selected_tests)
+        for path in tests.executed_selected_tests:
+            evidence.append(
+                ConfidenceEvidence(
+                    category=EvidenceCategory.TESTS,
+                    label="selected_test_failed" if path in failed else "selected_test_executed",
+                    message=path,
+                    impact=EvidenceImpact.NEGATIVE if path in failed else EvidenceImpact.POSITIVE,
+                )
+            )
+        skipped = set(tests.skipped_selected_tests)
+        for missing in tests.missing_selected_tests:
+            evidence.append(
+                ConfidenceEvidence(
+                    category=EvidenceCategory.TESTS,
+                    label=(
+                        "selected_test_only_skipped"
+                        if missing in skipped
+                        else "selected_test_not_in_results"
+                    ),
+                    message=missing,
+                    impact=EvidenceImpact.NEGATIVE,
+                )
+            )
+        for case in tests.contradictory_tests:
+            evidence.append(
+                ConfidenceEvidence(
+                    category=EvidenceCategory.TESTS,
+                    label="contradictory_test_result",
+                    message=f"{case} was reported as both passed and failed; counted as failed.",
+                    impact=EvidenceImpact.NEGATIVE,
+                )
+            )
 
     @staticmethod
     def _completeness(analysis: AnalysisEvidence | None) -> float:

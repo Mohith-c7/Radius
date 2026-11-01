@@ -4,11 +4,14 @@ from uuid import UUID
 
 from radius_shared.database import models as db_models
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from radius_testing.domain.entities import (
+    ReportedTestCase,
     SelectedTest,
     TestCase,
+    TestResultUpload,
     TestRunPlan,
     TestRunResult,
     TestSelection,
@@ -254,6 +257,113 @@ class SqlAlchemyTestStore:
                 if row.coverage_percent is not None
                 else None
             ),
+        )
+
+    def get_result_upload(
+        self,
+        analysis_id: UUID,
+        body_sha256: str,
+    ) -> TestResultUpload | None:
+        """Return an earlier upload of the identical report body, if any."""
+
+        row = self._session.scalar(
+            select(db_models.TestResultUpload).where(
+                db_models.TestResultUpload.analysis_id == analysis_id,
+                db_models.TestResultUpload.body_sha256 == body_sha256,
+            )
+        )
+        return self._upload_to_domain(row) if row is not None else None
+
+    def save_result_upload(self, upload: TestResultUpload) -> TestResultUpload:
+        """Append one upload; an identical body is stored only once.
+
+        The (analysis_id, body_sha256) unique constraint makes concurrent
+        replays of the same report collapse into one row.
+        """
+
+        existing = self.get_result_upload(upload.analysis_id, upload.body_sha256)
+        if existing is not None:
+            return existing
+        result = upload.result
+        row = db_models.TestResultUpload(
+            id=upload.id,
+            analysis_id=upload.analysis_id,
+            commit_sha=upload.commit_sha,
+            body_sha256=upload.body_sha256,
+            status=result.status.value,
+            total_tests=result.total_tests,
+            passed=result.passed,
+            failed=result.failed,
+            skipped=result.skipped,
+            duration_ms=result.duration_ms,
+            coverage_percent=result.coverage_percent,
+            output=result.output,
+            cases=[
+                {
+                    "file": case.file,
+                    "classname": case.classname,
+                    "name": case.name,
+                    "outcome": case.outcome,
+                }
+                for case in upload.cases
+            ],
+            created_at=upload.created_at,
+        )
+        try:
+            with self._session.begin_nested():
+                self._session.add(row)
+                self._session.flush()
+        except IntegrityError:
+            existing = self.get_result_upload(upload.analysis_id, upload.body_sha256)
+            if existing is None:
+                raise
+            return existing
+        return upload
+
+    def list_result_uploads(self, analysis_id: UUID) -> tuple[TestResultUpload, ...]:
+        """Return all uploads for an analysis, oldest first."""
+
+        rows = self._session.scalars(
+            select(db_models.TestResultUpload)
+            .where(db_models.TestResultUpload.analysis_id == analysis_id)
+            .order_by(db_models.TestResultUpload.created_at, db_models.TestResultUpload.id)
+        ).all()
+        return tuple(self._upload_to_domain(row) for row in rows)
+
+    @staticmethod
+    def _upload_to_domain(row: db_models.TestResultUpload) -> TestResultUpload:
+        return TestResultUpload(
+            id=row.id,
+            analysis_id=row.analysis_id,
+            commit_sha=row.commit_sha,
+            body_sha256=row.body_sha256,
+            result=TestRunResult(
+                id=row.id,
+                analysis_id=row.analysis_id,
+                status=TestRunStatus(row.status),
+                total_tests=row.total_tests,
+                passed=row.passed,
+                failed=row.failed,
+                skipped=row.skipped,
+                duration_ms=row.duration_ms,
+                coverage_percent=(
+                    float(row.coverage_percent)
+                    if row.coverage_percent is not None
+                    else None
+                ),
+                output=row.output or "",
+            ),
+            cases=tuple(
+                ReportedTestCase(
+                    file=item.get("file"),
+                    classname=item.get("classname"),
+                    name=item.get("name"),
+                    outcome=item.get("outcome", "passed"),
+                )
+                for item in (row.cases or ())
+                if isinstance(item, dict)
+            ),
+            created_at=row.created_at,
         )
 
     @staticmethod

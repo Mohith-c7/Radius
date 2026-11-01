@@ -48,6 +48,20 @@ class TestEvidence:
     run_detail: str | None = None
     missing_selected_tests: tuple[str, ...] = ()
     """Selected test files that the results do not show as executed."""
+    selected_test_files: int | None = None
+    """Number of selected test files, when results were attributed to a selection.
+
+    ``None`` means attribution was not performed (for example a worker-run
+    suite). ``0`` with executable changes means nothing could be attributed.
+    """
+    executed_selected_tests: tuple[str, ...] = ()
+    """Selected test files with at least one executed (passed or failed) case."""
+    failed_selected_tests: tuple[str, ...] = ()
+    """Selected test files with at least one failed case."""
+    skipped_selected_tests: tuple[str, ...] = ()
+    """Selected test files whose reported cases were all skipped."""
+    contradictory_tests: tuple[str, ...] = ()
+    """Test cases reported as passed in one upload and failed in another."""
 
 
 @dataclass(frozen=True, slots=True)

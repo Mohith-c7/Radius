@@ -5,6 +5,7 @@ from uuid import UUID
 
 from radius_testing.domain.entities import (
     TestCase,
+    TestResultUpload,
     TestRunPlan,
     TestRunResult,
     TestSelection,
@@ -44,3 +45,20 @@ class TestStore(Protocol):
 
     def get_run_result(self, analysis_id: UUID) -> TestRunResult | None:
         """Return test execution result."""
+
+    def get_result_upload(
+        self,
+        analysis_id: UUID,
+        body_sha256: str,
+    ) -> TestResultUpload | None:
+        """Return an earlier upload of the identical report body, if any."""
+
+    def save_result_upload(self, upload: TestResultUpload) -> TestResultUpload:
+        """Persist one CI report upload (uploads accumulate, never replace).
+
+        Saving a body hash that is already stored for the analysis returns the
+        stored upload unchanged.
+        """
+
+    def list_result_uploads(self, analysis_id: UUID) -> tuple[TestResultUpload, ...]:
+        """Return all uploads for an analysis, oldest first."""

@@ -65,6 +65,12 @@ class ConfidenceApplicationService:
         test_result: TestRunResultResponse | TestRunResult,
         impact: ImpactEvidence | None = None,
         missing_selected_tests: tuple[str, ...] = (),
+        *,
+        selected_test_files: int | None = None,
+        executed_selected_tests: tuple[str, ...] = (),
+        failed_selected_tests: tuple[str, ...] = (),
+        skipped_selected_tests: tuple[str, ...] = (),
+        contradictory_tests: tuple[str, ...] = (),
     ) -> ConfidenceReportResponse:
         """Re-score an analysis after CI test results were ingested.
 
@@ -106,6 +112,11 @@ class ConfidenceApplicationService:
             ),
             run_outcome=outcome,
             missing_selected_tests=missing_selected_tests,
+            selected_test_files=selected_test_files,
+            executed_selected_tests=executed_selected_tests,
+            failed_selected_tests=failed_selected_tests,
+            skipped_selected_tests=skipped_selected_tests,
+            contradictory_tests=contradictory_tests,
         )
         report = self._build_report(
             analysis_id=analysis_id,

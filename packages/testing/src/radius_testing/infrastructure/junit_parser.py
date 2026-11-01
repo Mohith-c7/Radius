@@ -11,6 +11,8 @@ try:
 except ImportError:
     defused_ET = None
 
+from radius_shared.errors import ValidationError
+
 from radius_testing.domain.entities import TestRunResult
 from radius_testing.domain.enums import TestRunStatus
 
@@ -19,19 +21,45 @@ class JUnitReportParser:
     """Parser for JUnit XML and JSON test execution reports."""
 
     def parse(self, content: str | bytes, analysis_id: UUID) -> TestRunResult:
-        """Parse test execution report content in JSON or XML format."""
+        """Parse test execution report content in JSON or XML format.
+
+        Raises ``ValidationError`` for empty, malformed or non-report content,
+        so a broken upload can never be mistaken for a (passing) test run.
+        """
         if isinstance(content, bytes):
             text = content.decode("utf-8", errors="replace")
         else:
             text = str(content)
 
         stripped = text.strip()
-        if stripped.startswith(("{", "[")):
-            return self._parse_json(stripped, analysis_id)
-        return self._parse_xml(stripped, analysis_id)
+        if not stripped:
+            msg = "Test report is empty."
+            raise ValidationError(msg)
+        try:
+            if stripped.startswith(("{", "[")):
+                result = self._parse_json(stripped, analysis_id)
+            else:
+                result = self._parse_xml(stripped, analysis_id)
+        except ValidationError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - any parse failure is a client error
+            msg = (
+                "Test report could not be parsed as JUnit XML or JSON "
+                f"({type(exc).__name__})."
+            )
+            raise ValidationError(msg) from None
+        counts = (result.total_tests, result.passed, result.failed, result.skipped)
+        if min(counts) < 0 or result.duration_ms < 0:
+            msg = "Test report contains negative test counts or duration."
+            raise ValidationError(msg)
+        return result
 
     def _parse_json(self, text: str, analysis_id: UUID) -> TestRunResult:
         data = json.loads(text)
+        items = data if isinstance(data, list) else [data]
+        if not items or not all(isinstance(item, dict) for item in items):
+            msg = "JSON test report must be an object or a non-empty list of objects."
+            raise ValidationError(msg)
 
         if isinstance(data, list):
             total = sum(
@@ -120,6 +148,16 @@ class JUnitReportParser:
                 root = defused_ET.fromstring(text)
             else:
                 root = ET.fromstring(text)  # nosec B314
+
+        tag = root.tag.lower() if isinstance(root.tag, str) else ""
+        if not tag.endswith(("testsuite", "testsuites")) and next(
+            root.iter("testcase"), None
+        ) is None:
+            msg = (
+                f"XML report root <{root.tag}> is not a JUnit <testsuite>/<testsuites> "
+                "element and contains no <testcase> elements."
+            )
+            raise ValidationError(msg)
 
         testsuites = (
             [root]

@@ -147,3 +147,46 @@ def test_missing_tests_and_coverage_are_penalized_deterministically() -> None:
 
     assert first.value == 65
     assert second.value == first.value
+
+
+def test_zero_selected_test_files_with_executable_changes_is_a_gap() -> None:
+    from radius_confidence.domain import AnalysisEvidence, ImpactEvidence, TestEvidence
+    from radius_confidence.infrastructure import DeterministicConfidenceScorer
+
+    result = DeterministicConfidenceScorer().score(
+        ImpactEvidence(1, 1, 1, 1, 1),
+        TestEvidence(5, 5, 0, 0, selected_test_files=0),
+        AnalysisEvidence(changed_files=1, covered_files=("app.py",)),
+    )
+
+    assert result.metrics["verification_status"] == "insufficient_evidence"
+    assert any("No selected test files" in gap for gap in result.metrics["verification_gaps"])
+
+
+def test_selected_test_attribution_is_recorded_as_evidence() -> None:
+    from radius_confidence.domain import AnalysisEvidence, ImpactEvidence, TestEvidence
+    from radius_confidence.infrastructure import DeterministicConfidenceScorer
+
+    result = DeterministicConfidenceScorer().score(
+        ImpactEvidence(1, 1, 1, 1, 1),
+        TestEvidence(
+            3,
+            2,
+            1,
+            0,
+            selected_test_files=3,
+            executed_selected_tests=("tests/test_a.py", "tests/test_b.py"),
+            failed_selected_tests=("tests/test_b.py",),
+            missing_selected_tests=("tests/test_c.py",),
+            skipped_selected_tests=("tests/test_c.py",),
+            contradictory_tests=("tests.test_b::t",),
+        ),
+        AnalysisEvidence(changed_files=1, covered_files=("app.py",)),
+    )
+
+    labels = {(item.label, item.message) for item in result[1]}
+    assert ("selected_test_executed", "tests/test_a.py") in labels
+    assert ("selected_test_failed", "tests/test_b.py") in labels
+    assert ("selected_test_only_skipped", "tests/test_c.py") in labels
+    assert any(label == "contradictory_test_result" for label, _ in labels)
+    assert result.metrics["verification_status"] == "failed"
