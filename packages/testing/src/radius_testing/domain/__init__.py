@@ -9,8 +9,10 @@ from radius_testing.domain.entities import (
     TestRunPlan,
     TestRunResult,
     TestSelection,
+    TestSelectionDecision,
 )
 from radius_testing.domain.enums import (
+    TestDecision,
     TestFramework,
     TestRunStatus,
     TestSelectionReason,
@@ -22,6 +24,7 @@ __all__ = [
     "CaseOutcome",
     "ReportedTestCase",
     "SelectedTest",
+    "TestDecision",
     "SourcePath",
     "TestCase",
     "TestFramework",
@@ -32,6 +35,7 @@ __all__ = [
     "TestRunResult",
     "TestRunStatus",
     "TestSelection",
+    "TestSelectionDecision",
     "TestSelectionReason",
     "TestType",
 ]

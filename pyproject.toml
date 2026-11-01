@@ -66,6 +66,7 @@ filterwarnings = [
   "ignore::FutureWarning:google.generativeai.*",
 ]
 pythonpath = [
+  "apps/api",
   "apps/api/src",
   "apps/worker/src",
   "packages/analysis/src",

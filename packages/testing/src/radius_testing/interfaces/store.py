@@ -46,6 +46,16 @@ class TestStore(Protocol):
     def get_run_result(self, analysis_id: UUID) -> TestRunResult | None:
         """Return test execution result."""
 
+    def get_test_history(self, analysis_id: UUID) -> list[dict]:
+        """Return test execution history for an analysis."""
+
+    def get_test_statistics(self, analysis_id: UUID) -> dict:
+        """Return test execution statistics for an analysis."""
+
+    def get_recent_executions(
+        self, repository_id: UUID | None = None, limit: int = 50
+    ) -> list[dict]:
+        """Return recent test executions across analyses."""
     def get_result_upload(
         self,
         analysis_id: UUID,

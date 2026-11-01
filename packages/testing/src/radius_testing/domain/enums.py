@@ -32,6 +32,13 @@ class TestSelectionReason(StrEnum):
     FALLBACK = "fallback"
 
 
+class TestDecision(StrEnum):
+    """Outcome of an evidence-based test-selection decision."""
+
+    SELECTED = "selected"
+    SKIPPED = "skipped"
+
+
 class TestRunStatus(StrEnum):
     """Planned or executed test run status."""
 

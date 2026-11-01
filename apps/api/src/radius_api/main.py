@@ -27,6 +27,7 @@ from radius_api.config import get_api_settings
 from radius_api.dependencies import AppContainer, configure_sql_storage
 from radius_api.routes.analyses import router as analyses_router
 from radius_api.routes.confidence import router as confidence_router
+from radius_api.routes.coverage import router as coverage_router
 from radius_api.routes.github_webhooks import router as github_webhooks_router
 from radius_api.routes.graph import router as graph_router
 from radius_api.routes.health import router as health_router
@@ -123,6 +124,7 @@ def create_app() -> FastAPI:
     app.include_router(graph_router, prefix="/api/v1")
     app.include_router(tests_router, prefix="/api/v1")
     app.include_router(confidence_router, prefix="/api/v1")
+    app.include_router(coverage_router, prefix="/api/v1")
     app.include_router(github_webhooks_router, prefix="/api/v1")
     app.include_router(auth_router)
 

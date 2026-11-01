@@ -41,7 +41,7 @@ def configure_logging(level: LogLevel | str = LogLevel.INFO) -> None:
 
     root_logger = logging.getLogger()
     root_logger.handlers.clear()
-    root_logger.setLevel(str(level))
+    root_logger.setLevel(str(level).upper())
 
     handler = logging.StreamHandler()
     handler.setFormatter(JsonFormatter())

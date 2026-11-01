@@ -14,13 +14,25 @@ from radius_confidence.domain.entities import (
 )
 from radius_confidence.domain.enums import RiskLevel, VerificationStatus
 from radius_confidence.domain.value_objects import CoveragePercent
-from radius_confidence.dto.commands import GenerateConfidenceReportCommand
-from radius_confidence.dto.responses import ConfidenceReportResponse
+from radius_confidence.dto.commands import (
+    GenerateConfidenceReportCommand,
+    GetCoverageForAnalysisCommand,
+    GetCoverageForArtifactCommand,
+    GetTestsForSymbolCommand,
+    IngestCoverageCommand,
+)
+from radius_confidence.dto.responses import (
+    ConfidenceReportResponse,
+    CoverageArtifactResponse,
+    CoverageFileResponse,
+    CoverageReportResponse,
+    CoverageSummaryResponse,
+)
 from radius_confidence.infrastructure.scoring import (
     analysis_evidence_from_report_evidence,
 )
 from radius_confidence.interfaces.scoring import ConfidenceScorer
-from radius_confidence.interfaces.store import ConfidenceStore
+from radius_confidence.interfaces.store import ConfidenceStore, CoverageStore
 
 if TYPE_CHECKING:
     from radius_testing.domain.entities import TestRunResult
@@ -206,3 +218,89 @@ class ConfidenceApplicationService:
         if score >= 85:
             return ("Proceed with standard review.",)
         return ("Selected tests passed, but the blast radius is large; review impacted files.",)
+
+
+class CoverageApplicationService:
+    """Application service for runtime coverage, independent of confidence scoring."""
+
+    def __init__(
+        self,
+        scorer: ConfidenceScorer,
+        confidence_store: ConfidenceStore,
+        coverage_store: CoverageStore,
+    ) -> None:
+        self._scorer = scorer
+        self._confidence_store = confidence_store
+        self._coverage_store = coverage_store
+
+    def ingest_coverage(self, command: IngestCoverageCommand) -> None:
+        """Persist the artifacts produced by one test run."""
+
+        self._coverage_store.ingest_coverage(
+            command.analysis_id,
+            command.framework,
+            command.coverage_percent,
+            command.files or (),
+            command.symbols or (),
+        )
+
+    def get_coverage_for_artifact(self, command: GetCoverageForArtifactCommand) -> dict | None:
+        return self._coverage_store.get_coverage_for_artifact(command.analysis_id, command.path)
+
+    def get_tests_for_symbol(self, command: GetTestsForSymbolCommand) -> dict | None:
+        return self._coverage_store.get_tests_for_symbol(command.analysis_id, command.file_path, command.symbol)
+
+    def get_coverage_summary(self, command: GetCoverageForAnalysisCommand) -> CoverageSummaryResponse | None:
+        summary = self._coverage_store.get_summary(command.analysis_id)
+        if summary is None:
+            return None
+        return CoverageSummaryResponse(
+            covered_lines=summary["covered_lines"],
+            total_lines=summary["total_lines"],
+            coverage_percent=summary["coverage_percent"],
+            artifact_count=summary["artifact_count"],
+            available=summary["available"],
+        )
+
+    def get_coverage_report(self, command: GetCoverageForAnalysisCommand) -> CoverageReportResponse | None:
+        payload = self._coverage_store.get_report(command.analysis_id)
+        if payload is None:
+            return None
+        return self._to_coverage_report(payload)
+
+    def _to_coverage_report(self, payload: dict) -> CoverageReportResponse:
+        report = payload["report"]
+        files = []
+        for item in payload.get("files", []):
+            files.append(
+                CoverageFileResponse(
+                    file_path=item["file_path"],
+                    source_language=item.get("source_language", "unknown"),
+                    covered_lines=item.get("covered_lines", 0),
+                    total_lines=item.get("total_lines", 0),
+                    covered_percent=item.get("covered_percent"),
+                )
+            )
+        artifacts = []
+        for item in payload.get("artifacts", []):
+            artifacts.append(
+                CoverageArtifactResponse(
+                    test_id=item["test_id"],
+                    test_path=item.get("test_path", ""),
+                    file_path=item.get("file_path", ""),
+                    symbol=item.get("symbol"),
+                    executed=item.get("executed", False),
+                    count=item.get("count", 0),
+                    covered=item.get("covered", False),
+                )
+            )
+        return CoverageReportResponse(
+            analysis_id=report["analysis_id"],
+            framework=report.get("framework", "unknown"),
+            coverage_percent=report.get("coverage_percent"),
+            covered_lines=report.get("covered_lines", 0),
+            total_lines=report.get("total_lines", 0),
+            files=tuple(files),
+            artifacts=tuple(artifacts),
+            generated_at=report.get("created_at") or report.get("updated_at"),
+        )

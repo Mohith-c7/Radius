@@ -1,9 +1,15 @@
-"""Pure business concepts for the confidence domain."""
+"""Domain primitives for the confidence package."""
 
+from radius_confidence.domain.coverage import (
+    CoverageFile,
+    CoverageReportValueObject,
+    CoverageSymbol,
+)
 from radius_confidence.domain.entities import (
     AnalysisEvidence,
     ConfidenceEvidence,
     ConfidenceReport,
+    CoverageEvidence,
     ImpactEvidence,
     TestEvidence,
     TestRunOutcome,
@@ -21,7 +27,11 @@ __all__ = [
     "ConfidenceEvidence",
     "ConfidenceReport",
     "ConfidenceScore",
+    "CoverageEvidence",
+    "CoverageFile",
     "CoveragePercent",
+    "CoverageReportValueObject",
+    "CoverageSymbol",
     "EvidenceCategory",
     "EvidenceImpact",
     "ImpactEvidence",

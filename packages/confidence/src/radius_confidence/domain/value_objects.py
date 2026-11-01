@@ -1,9 +1,11 @@
 """Confidence domain value objects."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class ConfidenceScore:
     """Confidence score in the inclusive 0..100 range."""
 
@@ -15,7 +17,7 @@ class ConfidenceScore:
             raise ValueError(msg)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class CoveragePercent:
     """Coverage percentage in the inclusive 0..100 range."""
 

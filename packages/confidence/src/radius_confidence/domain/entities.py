@@ -1,5 +1,7 @@
 """Confidence domain entities."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from uuid import UUID
@@ -12,7 +14,7 @@ from radius_confidence.domain.enums import (
 from radius_confidence.domain.value_objects import ConfidenceScore, CoveragePercent
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class ImpactEvidence:
     """Blast-radius evidence for confidence scoring."""
 
@@ -110,7 +112,7 @@ class AnalysisEvidence:
         return tuple(reasons)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class ConfidenceEvidence:
     """One explainable confidence scoring fact."""
 
@@ -129,7 +131,26 @@ class ConfidenceEvidence:
             raise ValueError(msg)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
+class CoverageEvidence:
+    """One explainable runtime coverage fact."""
+
+    category: EvidenceCategory
+    label: str
+    message: str
+    impact: EvidenceImpact = EvidenceImpact.NEUTRAL
+    value: float | None = None
+
+    def __post_init__(self) -> None:
+        if not self.label.strip():
+            msg = "Evidence label cannot be empty."
+            raise ValueError(msg)
+        if not self.message.strip():
+            msg = "Evidence message cannot be empty."
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True)
 class ConfidenceReport:
     """Final deterministic confidence report."""
 

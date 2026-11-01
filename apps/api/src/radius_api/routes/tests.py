@@ -1,7 +1,7 @@
 """Test selection API routes."""
 
 from dataclasses import replace
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -241,3 +241,76 @@ def get_test_run_result(
     return success_response(service.get_run_result(analysis_id))
 
 
+@router.get("/history", summary="Get test execution history")
+def get_test_history(
+    analysis_id: UUID,
+    service: Annotated[
+        TestingApplicationService,
+        Depends(get_testing_service),
+    ],
+    analysis_service: Annotated[
+        AnalysisApplicationService,
+        Depends(get_analysis_service),
+    ],
+    repository_service: Annotated[
+        RepositoryApplicationService,
+        Depends(get_repository_service),
+    ],
+    principal: Annotated[ApiPrincipal, Depends(get_api_principal)],
+) -> Any:
+    """Return test execution history for an analysis."""
+    analysis = analysis_service.get_analysis(analysis_id)
+    repository = repository_service.get_repository(analysis.repository_id)
+    ensure_same_organization(principal, repository.organization_id)
+    history = service.get_test_history(analysis_id)
+    return success_response(history)
+
+
+@router.get("/statistics", summary="Get test execution statistics")
+def get_test_statistics(
+    analysis_id: UUID,
+    service: Annotated[
+        TestingApplicationService,
+        Depends(get_testing_service),
+    ],
+    analysis_service: Annotated[
+        AnalysisApplicationService,
+        Depends(get_analysis_service),
+    ],
+    repository_service: Annotated[
+        RepositoryApplicationService,
+        Depends(get_repository_service),
+    ],
+    principal: Annotated[ApiPrincipal, Depends(get_api_principal)],
+) -> Any:
+    """Return test execution statistics for an analysis."""
+    analysis = analysis_service.get_analysis(analysis_id)
+    repository = repository_service.get_repository(analysis.repository_id)
+    ensure_same_organization(principal, repository.organization_id)
+    stats = service.get_test_statistics(analysis_id)
+    return success_response(stats)
+
+
+@router.get("/recent", summary="Get recent test executions across analyses")
+def get_recent_executions(
+    service: Annotated[
+        TestingApplicationService,
+        Depends(get_testing_service),
+    ],
+    repository_service: Annotated[
+        RepositoryApplicationService,
+        Depends(get_repository_service),
+    ],
+    principal: Annotated[ApiPrincipal, Depends(get_api_principal)],
+    repository_id: Annotated[UUID, Query(alias="repositoryId")],
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> Any:
+    """Return recent test executions of one repository in the caller's organization.
+
+    Authenticated and tenant-scoped: an unscoped listing would expose every
+    organization's test runs.
+    """
+    repository = repository_service.get_repository(repository_id)
+    ensure_same_organization(principal, repository.organization_id)
+    executions = service.get_recent_executions(repository_id, limit)
+    return success_response(executions)
