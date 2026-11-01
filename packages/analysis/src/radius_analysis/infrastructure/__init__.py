@@ -4,6 +4,7 @@ from radius_analysis.infrastructure.git_diff_provider import SubprocessGitDiffPr
 from radius_analysis.infrastructure.in_memory import InMemoryAnalysisStore
 from radius_analysis.infrastructure.sqlalchemy_job_queue import (
     AnalysisJob,
+    ReapedAnalysis,
     SqlAlchemyAnalysisJobQueue,
 )
 from radius_analysis.infrastructure.sqlalchemy_store import SqlAlchemyAnalysisStore
@@ -15,6 +16,7 @@ __all__ = [
     "AnalysisJob",
     "SqlAlchemyAnalysisStore",
     "InMemoryAnalysisStore",
+    "ReapedAnalysis",
     "SqlAlchemyAnalysisJobQueue",
     "SubprocessGitDiffProvider",
     "UnifiedDiffChangeAnalyzer",

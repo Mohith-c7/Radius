@@ -3,8 +3,11 @@
 SECURITY: this runner executes code from the repository under analysis. That
 code is untrusted (any pull request author controls it). It strips secrets
 from the child environment, but it does NOT sandbox the process: the child
-shares the worker's user, filesystem, and network. Only enable it in an
-isolated, credential-free execution environment. See ``WORKER_EXECUTE_TESTS``.
+shares the worker's user, filesystem, and network -- and, running as the same
+uid, it can read the worker's full environment via ``/proc/<ppid>/environ``.
+Only enable it in an isolated, credential-free execution environment. Prefer
+``ContainerSandboxRunner`` (``WORKER_TEST_EXECUTION_MODE=sandbox``); see
+``docs/security/EXECUTION_ISOLATION.md``.
 
 Result semantics are deliberately conservative:
 
@@ -86,38 +89,13 @@ class SubprocessTestRunner:
 
         started = time.monotonic()
         outputs: list[str] = []
-        totals = _CommandOutcome()
-        errors: list[str] = []
         env = self._get_sanitized_env()
 
-        for command, args in plan.command_plan:
-            outcome = self._run_command(command, args, repository_path, env, outputs)
-            totals.total += outcome.total
-            totals.passed += outcome.passed
-            totals.failed += outcome.failed
-            totals.skipped += outcome.skipped
-            if outcome.error:
-                errors.append(outcome.error)
-
-        if errors:
-            status = TestRunStatus.ERROR
-            outputs.insert(0, "Radius test execution incomplete: " + "; ".join(errors))
-        elif totals.failed:
-            status = TestRunStatus.FAILED
-        else:
-            status = TestRunStatus.PASSED
-
-        return TestRunResult(
-            id=uuid4(),
-            analysis_id=plan.analysis_id,
-            status=status,
-            total_tests=totals.total,
-            passed=totals.passed,
-            failed=totals.failed,
-            skipped=totals.skipped,
-            duration_ms=int((time.monotonic() - started) * 1000),
-            output="\n".join(item for item in outputs if item),
-        )
+        outcomes = [
+            self._run_command(command, args, repository_path, env, outputs)
+            for command, args in plan.command_plan
+        ]
+        return build_run_result(plan, outcomes, outputs, started)
 
     def _run_command(
         self,
@@ -128,11 +106,7 @@ class SubprocessTestRunner:
         outputs: list[str],
     ) -> _CommandOutcome:
         is_pytest = command == "python" and args[:2] == ("-m", "pytest")
-        test_files = [
-            arg
-            for arg in args
-            if not arg.startswith("-") and arg not in {"jest", "vitest", "run", "pytest"}
-        ]
+        test_files = planned_test_files(args)
         with tempfile.TemporaryDirectory(prefix="radius-run-") as scratch:
             junit_path = Path(scratch) / "junit.xml"
             argv = [command, *args]
@@ -196,25 +170,7 @@ class SubprocessTestRunner:
         return stdout, stderr, returncode, failure
 
     def _pytest_outcome(self, returncode: int, junit_path: Path) -> _CommandOutcome:
-        if returncode == PYTEST_EXIT_NO_TESTS_COLLECTED:
-            return _CommandOutcome()
-        if returncode not in (0, PYTEST_EXIT_TESTS_FAILED):
-            return _CommandOutcome(
-                error=f"pytest exited with code {returncode} (interrupted, internal, or usage error)"
-            )
-        if not junit_path.exists():
-            return _CommandOutcome(error="pytest did not produce a JUnit report")
-        parsed = self._junit.parse(junit_path.read_bytes(), uuid4())
-        outcome = _CommandOutcome(
-            total=parsed.total_tests,
-            passed=parsed.passed,
-            failed=parsed.failed,
-            skipped=parsed.skipped,
-        )
-        if returncode == PYTEST_EXIT_TESTS_FAILED and outcome.failed == 0:
-            # Exit code says failure but the report shows none: do not guess.
-            outcome.error = "pytest reported failure but JUnit report shows no failed tests"
-        return outcome
+        return pytest_outcome(self._junit, returncode, junit_path)
 
     @staticmethod
     def _exit_code_outcome(
@@ -223,11 +179,106 @@ class SubprocessTestRunner:
         combined_output: str,
         test_files: list[str],
     ) -> _CommandOutcome:
-        lowered = combined_output.lower()
-        if returncode != 0 and any(marker.lower() in lowered for marker in NPX_MISSING_MARKERS):
-            return _CommandOutcome(error=f"{command} is not installed in the repository")
-        count = len(test_files)
-        if returncode == 0:
-            # File-level granularity only: the framework did not emit per-test data.
-            return _CommandOutcome(total=count, passed=count)
-        return _CommandOutcome(total=count, failed=count)
+        return exit_code_outcome(command, returncode, combined_output, test_files)
+
+
+# --- Result interpretation shared by every runner (in-process and sandboxed) ---
+
+MAX_JUNIT_REPORT_BYTES = 20 * 1024 * 1024
+
+
+def pytest_outcome(
+    junit: JUnitReportParser,
+    returncode: int,
+    junit_path: Path,
+) -> _CommandOutcome:
+    """Interpret a pytest exit code plus its JUnit report conservatively."""
+
+    if returncode == PYTEST_EXIT_NO_TESTS_COLLECTED:
+        return _CommandOutcome()
+    if returncode not in (0, PYTEST_EXIT_TESTS_FAILED):
+        return _CommandOutcome(
+            error=f"pytest exited with code {returncode} (interrupted, internal, or usage error)"
+        )
+    if not junit_path.is_file() or junit_path.is_symlink():
+        return _CommandOutcome(error="pytest did not produce a JUnit report")
+    if junit_path.stat().st_size > MAX_JUNIT_REPORT_BYTES:
+        return _CommandOutcome(error="pytest JUnit report exceeds the size limit")
+    parsed = junit.parse(junit_path.read_bytes(), uuid4())
+    outcome = _CommandOutcome(
+        total=parsed.total_tests,
+        passed=parsed.passed,
+        failed=parsed.failed,
+        skipped=parsed.skipped,
+    )
+    if returncode == PYTEST_EXIT_TESTS_FAILED and outcome.failed == 0:
+        # Exit code says failure but the report shows none: do not guess.
+        outcome.error = "pytest reported failure but JUnit report shows no failed tests"
+    return outcome
+
+
+def exit_code_outcome(
+    command: str,
+    returncode: int,
+    combined_output: str,
+    test_files: list[str],
+) -> _CommandOutcome:
+    """Interpret a framework that only reports a process exit code."""
+
+    lowered = combined_output.lower()
+    if returncode != 0 and any(marker.lower() in lowered for marker in NPX_MISSING_MARKERS):
+        return _CommandOutcome(error=f"{command} is not installed in the repository")
+    count = len(test_files)
+    if returncode == 0:
+        # File-level granularity only: the framework did not emit per-test data.
+        return _CommandOutcome(total=count, passed=count)
+    return _CommandOutcome(total=count, failed=count)
+
+
+def planned_test_files(args: tuple[str, ...]) -> list[str]:
+    """Return the positional test-file arguments of a planned command."""
+
+    return [
+        arg
+        for arg in args
+        if not arg.startswith("-") and arg not in {"jest", "vitest", "run", "pytest"}
+    ]
+
+
+def build_run_result(
+    plan: TestRunPlan,
+    outcomes: list[_CommandOutcome],
+    outputs: list[str],
+    started: float,
+) -> TestRunResult:
+    """Aggregate per-command outcomes. Any error makes the run ``ERROR``."""
+
+    totals = _CommandOutcome()
+    errors: list[str] = []
+    for outcome in outcomes:
+        totals.total += outcome.total
+        totals.passed += outcome.passed
+        totals.failed += outcome.failed
+        totals.skipped += outcome.skipped
+        if outcome.error:
+            errors.append(outcome.error)
+
+    if errors:
+        status = TestRunStatus.ERROR
+        outputs.insert(0, "Radius test execution incomplete: " + "; ".join(errors))
+    elif totals.failed:
+        status = TestRunStatus.FAILED
+    else:
+        status = TestRunStatus.PASSED
+
+    return TestRunResult(
+        id=uuid4(),
+        analysis_id=plan.analysis_id,
+        status=status,
+        total_tests=totals.total,
+        passed=totals.passed,
+        failed=totals.failed,
+        skipped=totals.skipped,
+        duration_ms=int((time.monotonic() - started) * 1000),
+        output="\n".join(item for item in outputs if item),
+    )
