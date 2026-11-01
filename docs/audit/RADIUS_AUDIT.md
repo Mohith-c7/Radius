@@ -416,3 +416,22 @@ Planned scope of this branch (each item implemented and tested in this branch; c
 - *Not "Functional MVP".* Before this branch, the central output, the merge-safety signal, was demonstrably wrong in the unsafe direction (S11), and the default deployment shipped a known admin credential and fabricated results. After this branch the signal is honest, but in the default configuration (no in-worker execution) most PRs will correctly read `insufficient_evidence` until the CI-ingestion flow (P1-4, P1-5) or a sandbox (P0-5) supplies execution evidence.
 - *Not "Not yet a viable prototype".* The end-to-end path (webhook → durable job → graph → selection → report → Check Run) exists, is modular, and is covered by a substantial test suite. The fixes in this branch are incremental, not a rewrite.
 - **Next maturity gate (Functional MVP)** requires P0-5 sandbox or P1-5 CI flow, P1-1/P1-2 security defaults and tenancy, P1-4 ingestion matching, P1-10 live GitHub App validation, and a first P2-1 benchmark run showing zero `verified` verdicts on injected regressions.
+
+---
+
+## K. P2/P3 follow-up status (2026-11-01, on top of `6e35427`)
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| Evidence bound to repo + head commit; stale/superseded, mismatched, not-completed analyses rejected | Implemented, tested | `routes/tests.py`; `apps/api/tests/test_ingestion_attribution.py` |
+| Multiple uploads accumulate; failures sticky; replays idempotent; contradictory cases count as failed | Implemented, tested | `test_result_uploads` (migration 0006); `packages/testing/tests/test_result_uploads.py` |
+| Selected vs executed vs passed/failed/skipped/not-reported tracked | Implemented, tested | ingestion response `selected_tests`; confidence evidence |
+| Malformed/oversized reports rejected without changing the verdict | Implemented, tested | 422 / 413 / upload cap |
+| Migration 0005/0006 on PostgreSQL 16 | Verified upgrade/downgrade/re-upgrade locally | — |
+| P0-5 sandbox | Container runner implemented, default `disabled`; real-docker isolation tests pass; gVisor/microVM, fork-bomb/OOM limits, rootless/podman untested | `docs/security/EXECUTION_ISOLATION.md` |
+| Stuck/crashed analyses reach a terminal state with a completed check | Implemented, tested with fake GitHub client | `apps/worker/tests/test_failure_handling.py` |
+| CI flow (lookup by PR+SHA, plan, upload, verdict gate, composite action) | Implemented; tested against fake server and real API under uvicorn; **not run on real GitHub Actions** | `scripts/radius_ci.py`, `docs/examples/radius-ci-workflow.yml` |
+| Radius Check Run re-published after CI uploads | **Not implemented** (needs GitHub App credentials in the API or a worker re-publish job); CI job exit code is the gate | — |
+| P2-1 benchmark | Mutation benchmark on Radius's own packages (self-evaluation); no external OSS executed in this session | `docs/benchmarks/REAL_REPO_BENCHMARK.md` |
+| P2-4 calibration | Insufficient data; score remains a labelled heuristic | benchmark §score table |
+| P1-10 live GitHub App validation | Not done (needs credentials) | — |
