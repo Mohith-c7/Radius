@@ -1,8 +1,10 @@
 """Worker runtime shell."""
 
 import time
+import traceback
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import timedelta
 from pathlib import Path
 
 from radius_analysis.application import AnalysisApplicationService
@@ -19,6 +21,8 @@ from radius_confidence.infrastructure import (
     InMemoryConfidenceStore,
     SqlAlchemyConfidenceStore,
 )
+from radius_github import GitHubAnalysisPublisher, GitHubAppClient, GitHubAppSettings
+from radius_github.publisher import GitHubAnalysisReport
 from radius_graph.application import GraphApplicationService
 from radius_graph.infrastructure import InMemoryGraphStore, SqlAlchemyGraphStore
 from radius_parser.application import ParserApplicationService
@@ -32,7 +36,9 @@ from radius_shared.database.session import (
     create_database_engine,
     create_session_factory,
 )
-from radius_shared.errors import NotFoundError
+from radius_shared.errors import NotFoundError, ValidationError
+from radius_shared.logging import configure_logging, get_logger
+from radius_shared.redaction import redact_secrets
 from radius_testing.application import TestingApplicationService
 from radius_testing.infrastructure import (
     ConventionalTestDiscoverer,
@@ -45,17 +51,29 @@ from radius_testing.infrastructure import (
 from sqlalchemy.orm import Session, sessionmaker
 
 from radius_worker.config import WorkerSettings
+from radius_worker.execution_mode import (
+    TestExecutionMode,
+    build_test_runner,
+    resolve_test_execution_mode,
+)
 from radius_worker.orchestrator import (
     ExecuteAnalysisCommand,
     Phase1AnalysisOrchestrator,
 )
 from radius_worker.queue import InMemoryAnalysisQueue
 
+LOGGER = get_logger(__name__)
+
+
+class AnalysisStuckError(RuntimeError):
+    """An analysis was stopped by the reaper because it could not finish."""
+
 
 def run_worker() -> None:
     """Start the SQL-backed worker process."""
 
     settings = WorkerSettings()
+    configure_logging(settings.log_level)
     runtime = create_sql_worker_runtime(settings)
     print("Radius worker ready")
     runtime.run_loop(poll_interval_seconds=settings.poll_interval_seconds)
@@ -68,6 +86,8 @@ class SqlAlchemyWorkerRuntime:
     session_factory: sessionmaker[Session]
     repository_cache_dir: Path
     git_client: LocalGitRepositoryClient
+    settings: WorkerSettings
+    github_client: GitHubAppClient
 
     def run_once(self) -> bool:
         """Claim and execute one durable analysis job."""
@@ -77,22 +97,106 @@ class SqlAlchemyWorkerRuntime:
             return False
         try:
             with self.session_factory() as session:
-                orchestrator = _create_sql_orchestrator(session)
+                orchestrator = _create_sql_orchestrator(session, self.settings)
+                clone_headers = _github_clone_headers(
+                    session=session,
+                    analysis_id=job.analysis_id,
+                    settings=self.settings,
+                    github_client=self.github_client,
+                )
                 command = load_persisted_analysis_command(
                     session=session,
                     analysis_id=job.analysis_id,
                     repository_cache_dir=self.repository_cache_dir,
                     git_client=self.git_client,
+                    extra_headers=clone_headers,
                 )
                 orchestrator.execute(command)
-                SqlAlchemyAnalysisJobQueue(session).complete(job.analysis_id)
+                _publish_github_result(
+                    session=session,
+                    analysis_id=job.analysis_id,
+                    settings=self.settings,
+                    github_client=self.github_client,
+                )
+                self._queue(session).complete(job.analysis_id)
                 session.commit()
         except Exception as exc:
-            with self.session_factory() as session:
-                SqlAlchemyAnalysisJobQueue(session).fail(job.analysis_id, str(exc))
-                session.commit()
+            self._record_job_failure(job, exc)
             raise
+        LOGGER.info(
+            "Analysis job finished",
+            extra={
+                "analysis_id": str(job.analysis_id),
+                "job_id": str(job.id),
+                "attempt": job.attempts,
+                "outcome": "completed",
+            },
+        )
         return True
+
+    def _record_job_failure(self, job, exc: Exception) -> None:
+        """Persist a failed attempt; on the final attempt fail the analysis too.
+
+        The pipeline session was rolled back, so the orchestrator's own
+        ``fail_analysis`` did not persist, and failures before the
+        orchestrator ran (token, clone, checkout) never touched the analysis.
+        The terminal state is therefore written here, in a fresh session,
+        and committed before the GitHub check is completed.
+        """
+
+        error = redact_secrets(f"{exc.__class__.__name__}: {exc}", max_length=2000)
+        final_attempt = job.attempts >= self.settings.job_max_attempts
+        LOGGER.error(
+            "Analysis job attempt failed",
+            extra={
+                "analysis_id": str(job.analysis_id),
+                "job_id": str(job.id),
+                "attempt": job.attempts,
+                "outcome": "failed" if final_attempt else "requeued",
+                "error": error,
+                "traceback": redact_secrets(
+                    "".join(traceback.format_exception(exc)), max_length=8000
+                ),
+            },
+        )
+        with self.session_factory() as session:
+            queue = self._queue(session)
+            if final_attempt:
+                queue.fail(job.analysis_id, error)
+                queue.mark_analysis_failed(job.analysis_id)
+            else:
+                queue.requeue(job.analysis_id, error)
+            session.commit()
+            if final_attempt:
+                _publish_github_failure(
+                    session=session,
+                    analysis_id=job.analysis_id,
+                    settings=self.settings,
+                    github_client=self.github_client,
+                    error=exc,
+                )
+
+    def reap_stuck_analyses(self) -> list:
+        """Fail analyses that can no longer finish and complete their checks.
+
+        Covers jobs whose attempts were exhausted by stale-claim recovery (a
+        worker died mid-run) and analyses past ``analysis_deadline_seconds``.
+        """
+
+        with self.session_factory() as session:
+            reaped = self._queue(session).reap_stuck_analyses(
+                deadline=timedelta(seconds=self.settings.analysis_deadline_seconds),
+            )
+            session.commit()
+            for item in reaped:
+                _publish_github_failure(
+                    session=session,
+                    analysis_id=item.analysis_id,
+                    settings=self.settings,
+                    github_client=self.github_client,
+                    error=AnalysisStuckError(item.reason),
+                )
+        return reaped
 
     def run_loop(
         self,
@@ -100,11 +204,35 @@ class SqlAlchemyWorkerRuntime:
         poll_interval_seconds: float = 2.0,
         stop_after_idle_cycles: int | None = None,
     ) -> None:
-        """Run the SQL-backed polling loop."""
+        """Run the SQL-backed polling loop.
+
+        A failing job never stops the loop: the failure is already recorded
+        (requeued or failed) by ``run_once``, so the loop logs and moves on.
+        The reaper runs every ``reaper_interval_seconds``.
+        """
 
         idle_cycles = 0
+        next_reap = 0.0
         while True:
-            processed = self.run_once()
+            if time.monotonic() >= next_reap:
+                next_reap = time.monotonic() + self.settings.reaper_interval_seconds
+                try:
+                    self.reap_stuck_analyses()
+                except Exception as exc:
+                    LOGGER.error(
+                        "Stuck-analysis reaper failed",
+                        extra={"outcome": "reaper_error", "error": redact_secrets(exc)},
+                    )
+            try:
+                processed = self.run_once()
+            except Exception as exc:
+                LOGGER.warning(
+                    "Worker iteration failed; continuing",
+                    extra={"outcome": "iteration_error", "error": redact_secrets(exc)},
+                )
+                idle_cycles = 0
+                time.sleep(poll_interval_seconds)
+                continue
             if processed:
                 idle_cycles = 0
                 continue
@@ -118,20 +246,31 @@ class SqlAlchemyWorkerRuntime:
 
     def _claim_job(self):
         with self.session_factory() as session:
-            queue = SqlAlchemyAnalysisJobQueue(session)
+            queue = self._queue(session)
             job = queue.claim_next()
             session.commit()
             return job
+
+    def _queue(self, session: Session) -> SqlAlchemyAnalysisJobQueue:
+        return SqlAlchemyAnalysisJobQueue(
+            session,
+            stale_after=timedelta(seconds=self.settings.job_stale_after_seconds),
+            max_attempts=self.settings.job_max_attempts,
+        )
 
 
 def create_sql_worker_runtime(settings: WorkerSettings) -> SqlAlchemyWorkerRuntime:
     """Create the SQL-backed worker runtime."""
 
+    # Fail fast at startup on a forbidden execution mode (e.g. unsafe in prod).
+    resolve_test_execution_mode(settings)
     engine = create_database_engine(settings)
     return SqlAlchemyWorkerRuntime(
         session_factory=create_session_factory(engine),
         repository_cache_dir=settings.repository_cache_dir,
         git_client=LocalGitRepositoryClient(),
+        settings=settings,
+        github_client=GitHubAppClient(_github_settings(settings)),
     )
 
 
@@ -223,6 +362,7 @@ def load_persisted_analysis_command(
     analysis_id,
     repository_cache_dir: Path,
     git_client: LocalGitRepositoryClient,
+    extra_headers: tuple[str, ...] = (),
 ) -> ExecuteAnalysisCommand:
     """Resolve an analysis row into an executable worker command."""
 
@@ -240,7 +380,23 @@ def load_persisted_analysis_command(
         raise NotFoundError(msg)
 
     destination = _repository_cache_path(repository_cache_dir, repository)
-    repository_path = git_client.clone_or_fetch(repository.clone_url, destination)
+    repository_path = git_client.clone_or_fetch(
+        repository.clone_url,
+        destination,
+        extra_headers=extra_headers,
+    )
+    if hasattr(git_client, "fetch_pull_request") and pull_request.github_pr_number:
+        try:
+            git_client.fetch_pull_request(
+                repository_path,
+                pull_request.github_pr_number,
+                extra_headers=extra_headers,
+            )
+        except Exception:
+            LOGGER.debug(
+                "Could not fetch pull request ref directly; continuing with commit SHA checkout.",
+                extra={"pr_number": pull_request.github_pr_number},
+            )
     git_client.checkout(repository_path, analysis.commit_sha)
     return ExecuteAnalysisCommand(
         analysis_id=analysis.id,
@@ -251,8 +407,13 @@ def load_persisted_analysis_command(
     )
 
 
-def _create_sql_orchestrator(session: Session) -> Phase1AnalysisOrchestrator:
+def _create_sql_orchestrator(
+    session: Session,
+    settings: WorkerSettings | None = None,
+) -> Phase1AnalysisOrchestrator:
     graph_store = SqlAlchemyGraphStore(session)
+    # Runner selection is security-critical: see radius_worker.execution_mode.
+    execution_mode = resolve_test_execution_mode(settings)
     return Phase1AnalysisOrchestrator(
         analysis_service=AnalysisApplicationService(
             SqlAlchemyAnalysisStore(session),
@@ -270,12 +431,13 @@ def _create_sql_orchestrator(session: Session) -> Phase1AnalysisOrchestrator:
             selector=PathBasedTestSelector(),
             store=SqlAlchemyTestStore(session),
             planner=StaticTestCommandPlanner(),
-            runner=SubprocessTestRunner(),
+            runner=build_test_runner(execution_mode, settings),
         ),
         confidence_service=ConfidenceApplicationService(
             scorer=DeterministicConfidenceScorer(),
             store=SqlAlchemyConfidenceStore(session),
         ),
+        execute_tests=execution_mode != TestExecutionMode.DISABLED,
     )
 
 
@@ -290,6 +452,243 @@ def _repository_cache_path(
 
 def _safe_path_segment(value: str) -> str:
     return "".join(
-        char if char.isalnum() or char in {"-", "_", "."} else "-"
-        for char in value
+        char if char.isalnum() or char in {"-", "_", "."} else "-" for char in value
     )
+
+
+def _github_settings(settings: WorkerSettings) -> GitHubAppSettings:
+    return GitHubAppSettings(
+        RADIUS_ENV=settings.environment,
+        RADIUS_LOG_LEVEL=settings.log_level,
+        GITHUB_APP_ID=settings.github_app_id,
+        GITHUB_APP_PRIVATE_KEY=settings.github_app_private_key,
+        GITHUB_INSTALLATION_ID=settings.github_installation_id,
+        GITHUB_API_BASE_URL=settings.github_api_base_url,
+        GITHUB_API_VERSION=settings.github_api_version,
+        GITHUB_TIMEOUT_SECONDS=settings.github_timeout_seconds,
+    )
+
+
+def _github_clone_headers(
+    *,
+    session: Session,
+    analysis_id,
+    settings: WorkerSettings,
+    github_client: GitHubAppClient,
+) -> tuple[str, ...]:
+    github_settings = _github_settings(settings)
+    if not github_settings.enabled:
+        return ()
+    installation_id = _github_installation_id(
+        session=session,
+        analysis_id=analysis_id,
+        settings=settings,
+    )
+    token = github_client.create_installation_token(installation_id).token
+    return (f"Authorization: Bearer {token}",)
+
+
+def _publish_github_result(
+    *,
+    session: Session,
+    analysis_id,
+    settings: WorkerSettings,
+    github_client: GitHubAppClient,
+) -> None:
+    github_settings = _github_settings(settings)
+    if not settings.github_publish_results or not github_settings.enabled:
+        return
+    try:
+        installation_id = _github_installation_id(
+            session=session,
+            analysis_id=analysis_id,
+            settings=settings,
+        )
+        report = _github_report(session, analysis_id, settings)
+        GitHubAnalysisPublisher(github_client).publish(
+            installation_id=installation_id,
+            report=report,
+        )
+        LOGGER.info(
+            "Successfully published GitHub Check Run and PR comment",
+            extra={"analysis_id": str(analysis_id), "pr_number": report.pull_request_number},
+        )
+    except Exception as exc:
+        LOGGER.warning(
+            "Could not publish GitHub Check Run or PR comment: %s",
+            redact_secrets(exc),
+            extra={"analysis_id": str(analysis_id), "outcome": "publish_error"},
+        )
+
+
+def _publish_github_failure(
+    *,
+    session: Session,
+    analysis_id,
+    settings: WorkerSettings,
+    github_client: GitHubAppClient,
+    error: Exception,
+) -> None:
+    """Complete the check run so a crashed analysis never looks pending or passing."""
+
+    github_settings = _github_settings(settings)
+    if not settings.github_publish_results or not github_settings.enabled:
+        return
+    try:
+        analysis = session.get(db_models.Analysis, analysis_id)
+        repository = (
+            session.get(db_models.Repository, analysis.repository_id)
+            if analysis is not None
+            else None
+        )
+        if analysis is None or repository is None:
+            return
+        publisher = GitHubAnalysisPublisher(github_client)
+        if not hasattr(publisher, "publish_failure"):
+            return
+        publisher.publish_failure(
+            installation_id=_github_installation_id(
+                session=session,
+                analysis_id=analysis_id,
+                settings=settings,
+            ),
+            owner=repository.owner,
+            repository_name=repository.name,
+            head_sha=analysis.commit_sha,
+            # Exception text can contain repository-controlled content and
+            # credentials echoed by git/HTTP clients: redact, then keep it short.
+            error_summary=redact_secrets(
+                f"{error.__class__.__name__}: {error}", max_length=300
+            ),
+            dashboard_url=(
+                f"{settings.dashboard_base_url.rstrip('/')}/analyses/{analysis_id}"
+                if settings.dashboard_base_url
+                else None
+            ),
+        )
+    except Exception as publish_exc:  # pragma: no cover - best effort
+        LOGGER.warning(
+            "Could not publish GitHub failure status: %s",
+            redact_secrets(publish_exc),
+            extra={"analysis_id": str(analysis_id), "outcome": "publish_error"},
+        )
+
+
+def _github_installation_id(
+    *,
+    session: Session,
+    analysis_id,
+    settings: WorkerSettings,
+) -> int:
+    if settings.github_installation_id:
+        return settings.github_installation_id
+    analysis = session.get(db_models.Analysis, analysis_id)
+    if analysis is None:
+        msg = f"Analysis {analysis_id} was not found."
+        raise NotFoundError(msg)
+    repository = session.get(db_models.Repository, analysis.repository_id)
+    if repository is None:
+        msg = f"Repository {analysis.repository_id} was not found."
+        raise NotFoundError(msg)
+    organization = session.get(db_models.Organization, repository.organization_id)
+    if organization and organization.github_installation_id is not None:
+        return organization.github_installation_id
+    msg = "GITHUB_INSTALLATION_ID or organization.github_installation_id is required."
+    raise ValidationError(msg)
+
+
+def _github_report(
+    session: Session,
+    analysis_id,
+    settings: WorkerSettings,
+) -> GitHubAnalysisReport:
+    analysis = session.get(db_models.Analysis, analysis_id)
+    if analysis is None:
+        msg = f"Analysis {analysis_id} was not found."
+        raise NotFoundError(msg)
+    repository = session.get(db_models.Repository, analysis.repository_id)
+    pull_request = session.get(db_models.PullRequest, analysis.pull_request_id)
+    confidence = (
+        session.query(db_models.ConfidenceReport)
+        .filter_by(analysis_id=analysis_id)
+        .one_or_none()
+    )
+    if repository is None or pull_request is None or confidence is None:
+        msg = f"GitHub publishing artifacts for analysis {analysis_id} are incomplete."
+        raise NotFoundError(msg)
+    dashboard_url = (
+        f"{settings.dashboard_base_url.rstrip('/')}/analyses/{analysis_id}"
+        if settings.dashboard_base_url
+        else None
+    )
+
+    test_selection = (
+        session.query(db_models.TestSelection)
+        .filter_by(analysis_id=analysis_id)
+        .one_or_none()
+    )
+    selected_tests_count = (
+        len(test_selection.selected_tests) if test_selection else 0
+    )
+
+    discovered_tests_count = (
+        selected_tests_count
+        + len(getattr(test_selection, "skipped_tests", None) or ())
+        if test_selection
+        else 0
+    )
+    discovered_tests_count = max(
+        discovered_tests_count,
+        int(getattr(test_selection, "total_discovered_count", 0) or 0)
+        if test_selection
+        else 0,
+    )
+    # "Skipped" here means "not selected", which is NOT time saved unless the
+    # full suite would otherwise have run. Do not present it as savings.
+    skipped_tests_count = max(0, discovered_tests_count - selected_tests_count)
+
+    affected_files = tuple(cf.path for cf in (analysis.changed_files or ()))
+    evidence_items = list(getattr(confidence, "evidence_items", None) or ())
+    verification_gaps = tuple(
+        item.message
+        for item in evidence_items
+        if item.category == "analysis" and item.label == "verdict_gap"
+    )
+    unmapped_files = tuple(
+        item.message
+        for item in evidence_items
+        if item.category == "analysis"
+        and item.label in {"unmapped_changed_file", "unanalyzed_changed_file", "parse_failure"}
+    )
+
+    return GitHubAnalysisReport(
+        analysis_id=analysis.id,
+        owner=repository.owner,
+        repository_name=repository.name,
+        pull_request_number=pull_request.github_pr_number,
+        head_sha=analysis.commit_sha,
+        confidence_score=float(confidence.confidence_score),
+        risk_level=confidence.risk_level.value,
+        summary=confidence.summary,
+        recommendations=tuple(confidence.recommendations),
+        dashboard_url=dashboard_url,
+        selected_tests_count=selected_tests_count,
+        skipped_tests_count=skipped_tests_count,
+        time_saved_percent=0.0,
+        affected_files=affected_files,
+        **_optional_report_fields(
+            discovered_tests_count=discovered_tests_count,
+            verification_gaps=verification_gaps,
+            unmapped_files=unmapped_files,
+        ),
+        change_risk=confidence.change_risk,
+        verification_status=confidence.verification_status,
+        analysis_completeness=float(confidence.analysis_completeness) if confidence.analysis_completeness is not None else None,
+    )
+
+
+def _optional_report_fields(**fields) -> dict:
+    """Pass only the report fields supported by the installed publisher."""
+
+    supported = getattr(GitHubAnalysisReport, "__dataclass_fields__", {})
+    return {key: value for key, value in fields.items() if key in supported}

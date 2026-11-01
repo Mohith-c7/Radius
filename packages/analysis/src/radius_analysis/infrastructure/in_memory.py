@@ -5,7 +5,7 @@ from __future__ import annotations
 from uuid import UUID, uuid4
 
 from radius_analysis.domain.entities import Analysis, BlastRadius, ChangedFile
-from radius_analysis.domain.enums import AnalysisStatus
+from radius_analysis.domain.enums import ACTIVE_ANALYSIS_STATUSES, AnalysisStatus
 
 
 class InMemoryAnalysisStore:
@@ -41,10 +41,24 @@ class InMemoryAnalysisStore:
                 if analysis.pull_request_id == pull_request_id
             ]
         if status is not None:
-            analyses = [
-                analysis for analysis in analyses if analysis.status == status
-            ]
+            analyses = [analysis for analysis in analyses if analysis.status == status]
         return analyses
+
+    def find_active(
+        self,
+        pull_request_id: UUID,
+        commit_sha: str,
+    ) -> Analysis | None:
+        """Return a pending/running analysis for the same PR head commit."""
+
+        for analysis in self._analyses.values():
+            if (
+                analysis.pull_request_id == pull_request_id
+                and analysis.commit_sha.value == commit_sha
+                and analysis.status in ACTIVE_ANALYSIS_STATUSES
+            ):
+                return analysis
+        return None
 
     def save(self, analysis: Analysis) -> Analysis:
         """Persist an analysis in memory."""

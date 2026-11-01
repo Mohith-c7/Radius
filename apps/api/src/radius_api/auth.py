@@ -6,7 +6,6 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import Header, Request
-from radius_shared.config import RuntimeEnvironment
 from radius_shared.errors import AccessDeniedError, ValidationError
 
 
@@ -51,11 +50,13 @@ def get_api_principal(
         raise AccessDeniedError(msg)
 
     configured_keys = _configured_api_keys(request)
-    is_production = (
-        request.app.state.settings.environment == RuntimeEnvironment.PRODUCTION
-    )
-    if is_production and not configured_keys:
-        msg = "Radius API keys must be configured in production."
+    if not configured_keys and not _insecure_dev_mode(request):
+        # Fail closed: without API keys every caller could claim any
+        # organization. Only an explicit dev/test opt-in tolerates that.
+        msg = (
+            "Radius API keys are not configured. Set API_KEYS, or set "
+            "RADIUS_ALLOW_INSECURE_DEV=true for local development only."
+        )
         raise AccessDeniedError(msg)
 
     if configured_keys:
@@ -68,6 +69,11 @@ def get_api_principal(
             raise AccessDeniedError(msg)
 
     return ApiPrincipal(organization_id=organization_id)
+
+
+def _insecure_dev_mode(request: Request) -> bool:
+    settings = request.app.state.settings
+    return bool(getattr(settings, "insecure_dev_mode", False))
 
 
 def ensure_same_organization(

@@ -95,3 +95,38 @@ def test_connect_repository_replays_idempotent_response() -> None:
     assert first.status_code == 201
     assert second.status_code == 201
     assert second.json() == first.json()
+
+
+def test_update_repository_default_branch() -> None:
+    app = create_app()
+    client = TestClient(app)
+    organization_id = str(uuid4())
+    headers = {"X-Radius-Organization-Id": organization_id}
+
+    created = client.post(
+        "/api/v1/repositories",
+        headers=headers,
+        json={
+            "organizationId": organization_id,
+            "repositoryId": 202,
+            "name": "radius-core",
+            "owner": "acme",
+            "defaultBranch": "main",
+            "cloneUrl": "https://github.com/acme/radius-core.git",
+            "visibility": "private",
+        },
+    )
+    assert created.status_code == 201
+    repo_id = created.json()["data"]["id"]
+
+    updated = client.patch(
+        f"/api/v1/repositories/{repo_id}",
+        headers=headers,
+        json={"defaultBranch": "develop"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["data"]["default_branch"] == "develop"
+
+    fetched = client.get(f"/api/v1/repositories/{repo_id}", headers=headers)
+    assert fetched.status_code == 200
+    assert fetched.json()["data"]["default_branch"] == "develop"

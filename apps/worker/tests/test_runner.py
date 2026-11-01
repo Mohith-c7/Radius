@@ -94,6 +94,85 @@ def test_load_persisted_analysis_command_prepares_repository_checkout(
         assert command.head_ref == analysis.commit_sha
         assert command.repository_path == git_client.destination
         assert git_client.checked_out == analysis.commit_sha
+        assert git_client.extra_headers == ()
+
+
+def test_load_persisted_analysis_command_passes_clone_headers(
+    tmp_path: Path,
+) -> None:
+    with _session_factory()() as session:
+        analysis, _, _ = _persist_analysis_context(session)
+        git_client = FakeGitClient()
+
+        load_persisted_analysis_command(
+            session=session,
+            analysis_id=analysis.id,
+            repository_cache_dir=tmp_path / "cache",
+            git_client=git_client,
+            extra_headers=("Authorization: Bearer token",),
+        )
+
+        assert git_client.extra_headers == ("Authorization: Bearer token",)
+
+
+def test_github_clone_headers_use_stored_installation_id() -> None:
+    with _session_factory()() as session:
+        analysis, _, _ = _persist_analysis_context(
+            session,
+            github_installation_id=12345,
+        )
+        github_client = TokenGitHubClient("clone-token")
+
+        headers = worker_runner._github_clone_headers(
+            session=session,
+            analysis_id=analysis.id,
+            settings=worker_runner.WorkerSettings(
+                GITHUB_APP_ID="app-id",
+                GITHUB_APP_PRIVATE_KEY="private-key",
+            ),
+            github_client=github_client,
+        )
+
+        assert headers == ("Authorization: Bearer clone-token",)
+        assert github_client.installation_ids == [12345]
+
+
+def test_publish_github_result_builds_report_from_persisted_confidence() -> None:
+    with _session_factory()() as session:
+        analysis, _, _ = _persist_analysis_context(
+            session,
+            github_installation_id=12345,
+        )
+        session.add(
+            ConfidenceReport(
+                analysis_id=analysis.id,
+                confidence_score=81,
+                risk_level=db_enums.RiskLevel.LOW,
+                summary="Relevant tests passed.",
+                recommendations=["Keep coverage close to changed modules."],
+                generated_at=datetime.now(UTC),
+            )
+        )
+        session.flush()
+        github_client = PublishingGitHubClient()
+
+        worker_runner._publish_github_result(
+            session=session,
+            analysis_id=analysis.id,
+            settings=worker_runner.WorkerSettings(
+                GITHUB_APP_ID="app-id",
+                GITHUB_APP_PRIVATE_KEY="private-key",
+                DASHBOARD_BASE_URL="https://radius.example",
+            ),
+            github_client=github_client,
+        )
+
+        assert github_client.installation_ids == [12345]
+        assert github_client.check_runs[0]["owner"] == "acme"
+        assert github_client.check_runs[0]["repo"] == "radius"
+        assert github_client.check_runs[0]["head_sha"] == analysis.commit_sha
+        assert github_client.comments[0]["issue_number"] == 42
+        assert "81/100" in github_client.comments[0]["body"]
 
 
 def test_sqlalchemy_worker_runtime_executes_persisted_job(tmp_path: Path) -> None:
@@ -113,6 +192,8 @@ def test_sqlalchemy_worker_runtime_executes_persisted_job(tmp_path: Path) -> Non
         session_factory=session_factory,
         repository_cache_dir=tmp_path / "cache",
         git_client=RealGitClient(),
+        settings=worker_runner.WorkerSettings(GITHUB_PUBLISH_RESULTS=False),
+        github_client=DisabledGitHubClient(),
     )
 
     assert runtime.run_once() is True
@@ -181,9 +262,17 @@ class FakeGitClient:
     def __init__(self) -> None:
         self.destination = None
         self.checked_out = None
+        self.extra_headers = ()
 
-    def clone_or_fetch(self, clone_url: str, destination: Path) -> Path:
+    def clone_or_fetch(
+        self,
+        clone_url: str,
+        destination: Path,
+        *,
+        extra_headers: tuple[str, ...] = (),
+    ) -> Path:
         self.destination = destination
+        self.extra_headers = extra_headers
         return destination
 
     def checkout(self, repository_path: Path, branch_name: str) -> None:
@@ -191,15 +280,66 @@ class FakeGitClient:
 
 
 class RealGitClient:
-    def clone_or_fetch(self, clone_url: str, destination: Path) -> Path:
+    def clone_or_fetch(
+        self,
+        clone_url: str,
+        destination: Path,
+        *,
+        extra_headers: tuple[str, ...] = (),
+    ) -> Path:
         from radius_repository.infrastructure import LocalGitRepositoryClient
 
-        return LocalGitRepositoryClient().clone_or_fetch(clone_url, destination)
+        return LocalGitRepositoryClient().clone_or_fetch(
+            clone_url,
+            destination,
+            extra_headers=extra_headers,
+        )
 
     def checkout(self, repository_path: Path, branch_name: str) -> None:
         from radius_repository.infrastructure import LocalGitRepositoryClient
 
         LocalGitRepositoryClient().checkout(repository_path, branch_name)
+
+
+class DisabledGitHubClient:
+    def create_installation_token(self, installation_id: int):
+        raise AssertionError("GitHub publishing should be disabled in this test")
+
+
+class Token:
+    def __init__(self, token: str) -> None:
+        self.token = token
+
+
+class TokenGitHubClient:
+    def __init__(self, token: str) -> None:
+        self.token = token
+        self.installation_ids = []
+
+    def create_installation_token(self, installation_id: int):
+        self.installation_ids.append(installation_id)
+        return Token(self.token)
+
+
+class PublishingGitHubClient(TokenGitHubClient):
+    def __init__(self) -> None:
+        super().__init__("publish-token")
+        self.check_runs = []
+        self.comments = []
+
+    def list_check_runs_for_ref(self, **kwargs):
+        return []
+
+    def create_check_run(self, **kwargs):
+        self.check_runs.append(kwargs)
+        return {"id": 1}
+
+    def list_issue_comments(self, **kwargs):
+        return []
+
+    def create_issue_comment(self, **kwargs):
+        self.comments.append(kwargs)
+        return {"id": 2}
 
 
 def _session_factory() -> sessionmaker[Session]:
@@ -213,8 +353,12 @@ def _persist_analysis_context(
     *,
     clone_url: str = "https://github.com/acme/radius.git",
     commit_sha: str = "a" * 40,
+    github_installation_id: int | None = None,
 ):
-    organization = Organization(name="Acme")
+    organization = Organization(
+        name="Acme",
+        github_installation_id=github_installation_id,
+    )
     repository = Repository(
         organization=organization,
         github_repository_id=999,

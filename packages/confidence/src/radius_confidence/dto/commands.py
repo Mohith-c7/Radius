@@ -3,7 +3,11 @@
 from dataclasses import dataclass
 from uuid import UUID
 
-from radius_confidence.domain.entities import ImpactEvidence, TestEvidence
+from radius_confidence.domain.entities import (
+    AnalysisEvidence,
+    ImpactEvidence,
+    TestEvidence,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -13,3 +17,4 @@ class GenerateConfidenceReportCommand:
     analysis_id: UUID
     impact: ImpactEvidence
     tests: TestEvidence
+    analysis: AnalysisEvidence | None = None

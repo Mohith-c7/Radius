@@ -23,6 +23,13 @@ class AnalysisStore(Protocol):
     ) -> list[Analysis]:
         """Return analyses matching optional filters."""
 
+    def find_active(
+        self,
+        pull_request_id: UUID,
+        commit_sha: str,
+    ) -> Analysis | None:
+        """Return a pending/running analysis for the same PR head commit."""
+
     def save(self, analysis: Analysis) -> Analysis:
         """Persist an analysis."""
 

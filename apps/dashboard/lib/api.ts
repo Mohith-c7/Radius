@@ -78,6 +78,10 @@ export type ConfidenceReport = {
   evidence: ConfidenceEvidence[];
   recommendations: string[];
   generated_at: string;
+  change_risk?: string | null;
+  verification_confidence?: number | null;
+  analysis_completeness?: number | null;
+  verification_status?: string | null;
 };
 
 export type TestCase = {
@@ -92,8 +96,26 @@ export type TestCase = {
 export type TestSelection = {
   analysis_id: UUID;
   selected_count: number;
+  skipped_count?: number;
+  total_count?: number;
+  time_saved_percent?: number;
+  cli_args?: string;
   selected_tests: Array<{ test: TestCase; reason: string }>;
+  skipped_tests?: TestCase[];
   created_at: string;
+};
+
+export type TestRunResult = {
+  id: UUID;
+  analysis_id: UUID;
+  status: string;
+  total_tests: number;
+  passed: number;
+  failed: number;
+  skipped: number;
+  duration_ms: number;
+  coverage_percent?: number | null;
+  output: string;
 };
 
 export type GraphNode = {
@@ -208,9 +230,46 @@ export function connectRepository(payload: ConnectRepositoryPayload) {
   });
 }
 
+export type PullRequest = {
+  id: UUID;
+  repository_id: UUID;
+  github_pr_number: number;
+  title: string;
+  source_branch: string;
+  target_branch: string;
+  author: string;
+  status: string;
+  opened_at: string;
+  merged_at: string | null;
+};
+
+export function getPullRequestByNumber(repositoryId: UUID, prNumber: number) {
+  return radiusFetch<PullRequest>(`/repositories/${repositoryId}/pull-requests/${prNumber}`);
+}
+
+export function listPullRequests(repositoryId: UUID) {
+  return radiusFetch<PullRequest[]>(`/repositories/${repositoryId}/pull-requests`);
+}
+
+export function syncPullRequests(repositoryId: UUID, autoAnalyze = true) {
+  return radiusFetch<PullRequest[]>(
+    `/repositories/${repositoryId}/sync-pull-requests${buildQuery({
+      auto_analyze: autoAnalyze ? "true" : "false",
+    })}`,
+    { method: "POST" },
+  );
+}
+
 export function disconnectRepository(repositoryId: UUID) {
   return radiusFetch<Repository>(`/repositories/${repositoryId}`, {
     method: "DELETE",
+  });
+}
+
+export function updateRepository(repositoryId: UUID, payload: { defaultBranch: string }) {
+  return radiusFetch<Repository>(`/repositories/${repositoryId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
   });
 }
 
@@ -239,6 +298,22 @@ export function rerunAnalysis(analysisId: UUID) {
   });
 }
 
+export function startAnalysis(payload: {
+  repositoryId: UUID;
+  pullRequestId?: UUID;
+  commitSha: string;
+}) {
+  return radiusFetch<Analysis>("/analyses", {
+    method: "POST",
+    idempotencyKey: crypto.randomUUID(),
+    body: JSON.stringify({
+      repository_id: payload.repositoryId,
+      pull_request_id: payload.pullRequestId ?? crypto.randomUUID(),
+      commit_sha: payload.commitSha,
+    }),
+  });
+}
+
 export function getBlastRadius(analysisId: UUID) {
   return radiusFetch<BlastRadius>(`/analyses/${analysisId}/blast-radius`);
 }
@@ -251,6 +326,29 @@ export function getTests(analysisId: UUID) {
   return radiusFetch<TestSelection>(`/analyses/${analysisId}/tests`);
 }
 
+export async function getTestRunResult(analysisId: UUID): Promise<TestRunResult | null> {
+  try {
+    return await radiusFetch<TestRunResult>(`/analyses/${analysisId}/tests/results`);
+  } catch {
+    return null;
+  }
+}
+
+export function uploadTestResults(
+  analysisId: UUID,
+  payload: string,
+  isXml = true,
+): Promise<TestRunResult> {
+  return radiusFetch<TestRunResult>(`/analyses/${analysisId}/tests/results`, {
+    method: "POST",
+    headers: {
+      "Content-Type": isXml ? "application/xml" : "application/json",
+    },
+    body: payload,
+  });
+}
+
 export function getGraph(analysisId: UUID) {
   return radiusFetch<GraphSnapshot>(`/analyses/${analysisId}/graph`);
 }
+

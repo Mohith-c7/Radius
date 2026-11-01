@@ -13,6 +13,9 @@ LANGUAGE_BY_SUFFIX = {
     ".tsx": SourceLanguage.TYPESCRIPT,
     ".js": SourceLanguage.JAVASCRIPT,
     ".jsx": SourceLanguage.JAVASCRIPT,
+    ".go": SourceLanguage.GO,
+    ".java": SourceLanguage.JAVA,
+    ".rs": SourceLanguage.RUST,
     ".json": SourceLanguage.JSON,
     ".md": SourceLanguage.MARKDOWN,
 }

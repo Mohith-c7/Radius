@@ -40,7 +40,27 @@ class TestSelection:
 
     analysis_id: UUID
     selected_tests: tuple[SelectedTest, ...]
+    skipped_tests: tuple[TestCase, ...] = ()
+    total_discovered_count: int = 0
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    @property
+    def selected_count(self) -> int:
+        return len(self.selected_tests)
+
+    @property
+    def skipped_count(self) -> int:
+        return len(self.skipped_tests)
+
+    @property
+    def time_saved_percent(self) -> float:
+        if not self.total_discovered_count:
+            return 0.0
+        return round((self.skipped_count / self.total_discovered_count) * 100, 1)
+
+    @property
+    def cli_args(self) -> str:
+        return " ".join(item.test_case.path.value for item in self.selected_tests)
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,3 +106,53 @@ class TestRunResult:
     duration_ms: int
     coverage_percent: float | None = None
     output: str = ""
+
+
+class CaseOutcome:
+    """Outcome of one reported test case."""
+
+    PASSED = "passed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+
+
+@dataclass(frozen=True, slots=True)
+class ReportedTestCase:
+    """Identity, location hints and outcome of one test case in a CI report."""
+
+    file: str | None = None
+    classname: str | None = None
+    name: str | None = None
+    outcome: str = CaseOutcome.PASSED
+
+    @property
+    def executed(self) -> bool:
+        """Return whether the case actually ran (passed or failed)."""
+
+        return self.outcome != CaseOutcome.SKIPPED
+
+    @property
+    def key(self) -> tuple[str, str, str]:
+        """Return a stable identity used to merge the same case across uploads."""
+
+        file = (self.file or "").replace("\\", "/").strip()
+        while file.startswith("./"):
+            file = file[2:]
+        return (file, (self.classname or "").strip(), (self.name or "").strip())
+
+
+@dataclass(frozen=True, slots=True)
+class TestResultUpload:
+    """One CI test report uploaded for an analysis, bound to a commit.
+
+    Uploads accumulate: a later upload never replaces an earlier one, so a
+    passing shard (or replay) cannot erase a failing one.
+    """
+
+    id: UUID
+    analysis_id: UUID
+    commit_sha: str
+    body_sha256: str
+    result: TestRunResult
+    cases: tuple[ReportedTestCase, ...] = ()
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))

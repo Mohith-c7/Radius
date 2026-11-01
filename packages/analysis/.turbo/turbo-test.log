@@ -1,0 +1,6 @@
+
+> @radius/analysis@0.1.0 test D:\Radius\packages\analysis
+> python -m pytest tests
+
+........................                                                 [100%]
+24 passed in 3.05s

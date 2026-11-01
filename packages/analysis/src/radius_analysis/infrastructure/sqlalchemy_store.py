@@ -12,7 +12,11 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, selectinload
 
 from radius_analysis.domain.entities import Analysis, BlastRadius, ChangedFile
-from radius_analysis.domain.enums import AnalysisStatus, ChangedFileType
+from radius_analysis.domain.enums import (
+    ACTIVE_ANALYSIS_STATUSES,
+    AnalysisStatus,
+    ChangedFileType,
+)
 from radius_analysis.domain.value_objects import CommitSha, FilePath
 
 
@@ -29,6 +33,27 @@ class SqlAlchemyAnalysisStore:
             self._analysis_query().where(db_models.Analysis.id == analysis_id)
         )
         return self._to_domain(row)
+
+    def find_active(
+        self,
+        pull_request_id: UUID,
+        commit_sha: str,
+    ) -> Analysis | None:
+        """Return a pending/running analysis for the same PR head commit."""
+
+        row = self._session.scalars(
+            self._analysis_query()
+            .where(db_models.Analysis.pull_request_id == pull_request_id)
+            .where(db_models.Analysis.commit_sha == commit_sha)
+            .where(
+                db_models.Analysis.status.in_(
+                    [db_enums.AnalysisStatus(item.value) for item in ACTIVE_ANALYSIS_STATUSES]
+                )
+            )
+            .order_by(db_models.Analysis.created_at.desc())
+            .limit(1)
+        ).first()
+        return self._to_domain(row) if row is not None else None
 
     def list(
         self,
@@ -63,8 +88,8 @@ class SqlAlchemyAnalysisStore:
         if analysis.id is not None:
             row = self._session.get(db_models.Analysis, analysis.id)
             if row is None:
-                msg = f"Analysis {analysis.id} was not found."
-                raise NotFoundError(msg)
+                row = db_models.Analysis(id=analysis.id)
+                self._session.add(row)
         else:
             row = db_models.Analysis()
             self._session.add(row)
@@ -129,9 +154,7 @@ class SqlAlchemyAnalysisStore:
             db_models.ChangedFile(
                 analysis_id=analysis_id,
                 path=changed_file.path.value,
-                change_type=db_enums.ChangedFileType(
-                    changed_file.change_type.value
-                ),
+                change_type=db_enums.ChangedFileType(changed_file.change_type.value),
                 additions=changed_file.additions,
                 deletions=changed_file.deletions,
             )

@@ -2,11 +2,12 @@
   "name": "@radius/dashboard",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "next build",
     "dev": "next dev",
     "lint": "eslint .",
-    "test": "echo \"dashboard tests not configured yet\"",
+    "test": "node --experimental-strip-types --test \"tests/*.test.mjs\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

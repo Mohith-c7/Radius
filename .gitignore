@@ -19,6 +19,7 @@ build/
 out/
 
 # Build cache
+**/.turbo/
 .turbo/
 *.tsbuildinfo
 
@@ -38,7 +39,12 @@ Thumbs.db
 .idea/
 .vscode/
 
-# Logs
+# Logs & DB
 *.log
 pnpm-debug.log*
 package-lock.json
+*.db
+bandit_report.json
+test_e2e.py
+ui-audit.md
+tmp/

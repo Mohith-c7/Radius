@@ -71,7 +71,12 @@ class TestSelectionResponse:
 
     analysis_id: UUID
     selected_count: int
+    skipped_count: int
+    total_count: int
+    time_saved_percent: float
+    cli_args: str
     selected_tests: tuple[SelectedTestResponse, ...]
+    skipped_tests: tuple[TestCaseResponse, ...]
     created_at: datetime
 
     @classmethod
@@ -80,10 +85,18 @@ class TestSelectionResponse:
 
         return cls(
             analysis_id=selection.analysis_id,
-            selected_count=len(selection.selected_tests),
+            selected_count=selection.selected_count,
+            skipped_count=selection.skipped_count,
+            total_count=selection.total_discovered_count,
+            time_saved_percent=selection.time_saved_percent,
+            cli_args=selection.cli_args,
             selected_tests=tuple(
                 SelectedTestResponse.from_entity(item)
                 for item in selection.selected_tests
+            ),
+            skipped_tests=tuple(
+                TestCaseResponse.from_entity(t)
+                for t in selection.skipped_tests
             ),
             created_at=selection.created_at,
         )
@@ -143,3 +156,65 @@ class TestRunResultResponse:
             coverage_percent=result.coverage_percent,
             output=result.output,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class TestUploadResponse:
+    """The single report accepted (or recognised as a replay) by one upload."""
+
+    id: UUID
+    commit_sha: str
+    body_sha256: str
+    duplicate: bool
+    status: str
+    total_tests: int
+    passed: int
+    failed: int
+    skipped: int
+    reported_cases: int
+
+
+@dataclass(frozen=True, slots=True)
+class SelectedTestAttributionResponse:
+    """Selected test files split by what the accumulated results show.
+
+    ``executed`` = ``passed`` + ``failed``. Being in the plan never counts as
+    executed: ``skipped`` files had only skipped cases and ``not_reported``
+    files had none.
+    """
+
+    selected_count: int
+    executed_count: int
+    passed_count: int
+    failed_count: int
+    skipped_count: int
+    not_reported_count: int
+    executed: tuple[str, ...]
+    failed: tuple[str, ...]
+    skipped: tuple[str, ...]
+    not_reported: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class TestIngestionResponse:
+    """Result of one CI upload, with counts aggregated over every upload.
+
+    Top-level counts are the aggregate the verdict is computed from (all
+    distinct uploads for the analysis); ``upload`` describes this request.
+    """
+
+    id: UUID
+    analysis_id: UUID
+    status: str
+    total_tests: int
+    passed: int
+    failed: int
+    skipped: int
+    duration_ms: int
+    coverage_percent: float | None
+    output: str
+    upload_count: int
+    upload: TestUploadResponse
+    selected_tests: SelectedTestAttributionResponse | None
+    contradictory_cases: tuple[str, ...] = ()
+    verification_status: str | None = None

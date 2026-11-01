@@ -1,0 +1,101 @@
+# Example GitHub Actions workflow for a repository verified by Radius.
+#
+# Copy to .github/workflows/radius.yml in YOUR repository (it is kept under
+# docs/ here so it does not run in the Radius repository itself).
+#
+# Prerequisites:
+#   * The Radius GitHub App is installed on the repository, so Radius analyses
+#     every pull request head commit.
+#   * Repository/organization variables RADIUS_API_URL and RADIUS_ORG_ID, and
+#     the secret RADIUS_API_KEY.
+#
+# Flow: plan (wait for the analysis of the PR head SHA, get the selected test
+# files) -> run only those tests with JUnit output -> upload the report, bound
+# to the same head SHA. The upload step prints the Radius verdict and fails on
+# a `failed` verdict; with `require-verified: "true"` it also fails unless the
+# verdict is `verified`, which makes this job usable as a required check.
+#
+# Fork pull requests: GitHub does not expose secrets to `pull_request` runs
+# from forks, so upload will fail with 401/403 there. Do NOT switch to
+# `pull_request_target` to work around it: that runs untrusted PR code with
+# your secrets.
+
+name: Radius verification
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: radius-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  radius:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out the PR head commit (the commit Radius analysed)
+        uses: actions/checkout@v4
+        with:
+          # pull_request runs default to the merge commit (GITHUB_SHA); Radius
+          # analyses and binds evidence to the head commit instead.
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest
+
+      - name: Radius plan (wait for the analysis, fetch selected tests)
+        id: plan
+        uses: Mohith-c7/Radius/.github/actions/radius-verify@develop
+        with:
+          command: plan
+          api-url: ${{ vars.RADIUS_API_URL }}
+          organization-id: ${{ vars.RADIUS_ORG_ID }}
+          api-key: ${{ secrets.RADIUS_API_KEY }}
+          wait-seconds: "900"
+
+      - name: Run the selected tests
+        if: steps.plan.outputs.has-tests == 'true'
+        env:
+          # Test paths come from the PR; read them from the file into an array
+          # instead of interpolating ${{ }} into the script (no shell injection).
+          RADIUS_TESTS_FILE: ${{ steps.plan.outputs.tests-file }}
+        run: |
+          mapfile -t tests < "$RADIUS_TESTS_FILE"
+          python -m pytest --junitxml=junit.xml -- "${tests[@]}"
+
+      - name: Radius upload (bind results to the head commit, report the verdict)
+        # always(): failing tests must still be uploaded so the verdict is `failed`.
+        if: always() && steps.plan.outputs.has-tests == 'true'
+        uses: Mohith-c7/Radius/.github/actions/radius-verify@develop
+        with:
+          command: upload
+          api-url: ${{ vars.RADIUS_API_URL }}
+          organization-id: ${{ vars.RADIUS_ORG_ID }}
+          api-key: ${{ secrets.RADIUS_API_KEY }}
+          analysis-id: ${{ steps.plan.outputs.analysis-id }}
+          junit-path: junit.xml
+          require-verified: "true"
+
+      - name: Radius verdict (no tests selected)
+        # With no selected tests there is nothing to upload, but the job must
+        # still gate on the verdict: a PR whose executable changes reach no
+        # test is `insufficient_evidence`, not a pass.
+        if: always() && steps.plan.outputs.has-tests != 'true' && steps.plan.outputs.analysis-id != ''
+        uses: Mohith-c7/Radius/.github/actions/radius-verify@develop
+        with:
+          command: verdict
+          api-url: ${{ vars.RADIUS_API_URL }}
+          organization-id: ${{ vars.RADIUS_ORG_ID }}
+          api-key: ${{ secrets.RADIUS_API_KEY }}
+          analysis-id: ${{ steps.plan.outputs.analysis-id }}
+          require-verified: "true"

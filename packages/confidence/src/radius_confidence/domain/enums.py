@@ -18,6 +18,19 @@ class EvidenceCategory(StrEnum):
     BLAST_RADIUS = "blast_radius"
     TESTS = "tests"
     COVERAGE = "coverage"
+    ANALYSIS = "analysis"
+
+
+class VerificationStatus(StrEnum):
+    """Evidence-gated merge verdict.
+
+    ``VERIFIED`` is only produced when every executable change is mapped to
+    selected tests that actually ran to completion and passed.
+    """
+
+    VERIFIED = "verified"
+    FAILED = "failed"
+    INSUFFICIENT_EVIDENCE = "insufficient_evidence"
 
 
 class EvidenceImpact(StrEnum):
