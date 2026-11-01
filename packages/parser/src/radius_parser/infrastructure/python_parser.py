@@ -29,12 +29,17 @@ class PythonAstParser:
         imports: list[ImportReference] = []
         explicit_exports = self._explicit_exports(tree)
 
-        for node in tree.body:
+        # Imports are collected from the whole module, not just the top level:
+        # imports inside functions, ``try`` blocks and ``if TYPE_CHECKING`` are
+        # real (sometimes lazy) dependencies.
+        for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 imports.extend(self._import_references(node))
             elif isinstance(node, ast.ImportFrom):
                 imports.append(self._from_import_reference(node))
-            elif isinstance(node, ast.ClassDef):
+
+        for node in tree.body:
+            if isinstance(node, ast.ClassDef):
                 symbols.append(self._symbol(node.name, SymbolType.CLASS, node))
                 symbols.extend(self._method_symbols(node))
             elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
@@ -77,6 +82,7 @@ class PythonAstParser:
         return ImportReference(
             source=f"{prefix}{module}",
             location=PythonAstParser._location(node),
+            names=tuple(alias.name for alias in node.names if alias.name != "*"),
         )
 
     @classmethod

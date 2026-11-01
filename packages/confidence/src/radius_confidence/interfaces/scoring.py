@@ -3,6 +3,7 @@
 from typing import Any, Protocol
 
 from radius_confidence.domain.entities import (
+    AnalysisEvidence,
     ConfidenceEvidence,
     ImpactEvidence,
     TestEvidence,
@@ -30,5 +31,6 @@ class ConfidenceScorer(Protocol):
         self,
         impact: ImpactEvidence,
         tests: TestEvidence,
+        analysis: AnalysisEvidence | None = None,
     ) -> ScoringResult:
         """Return score, evidence, and decoupled confidence metrics."""

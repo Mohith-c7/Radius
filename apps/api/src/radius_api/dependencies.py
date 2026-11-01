@@ -10,11 +10,16 @@ from radius_analysis.infrastructure import (
     SqlAlchemyAnalysisJobQueue,
     SqlAlchemyAnalysisStore,
 )
-from radius_confidence.application import ConfidenceApplicationService
+from radius_confidence.application import (
+    ConfidenceApplicationService,
+    CoverageApplicationService,
+)
 from radius_confidence.infrastructure import (
     DeterministicConfidenceScorer,
     InMemoryConfidenceStore,
+    InMemoryCoverageStore,
     SqlAlchemyConfidenceStore,
+    SqlAlchemyCoverageStore,
 )
 from radius_graph.infrastructure import InMemoryGraphStore, SqlAlchemyGraphStore
 from radius_repository.application import RepositoryApplicationService
@@ -57,6 +62,9 @@ class AppContainer:
     confidence_store: InMemoryConfidenceStore = field(
         default_factory=InMemoryConfidenceStore
     )
+    coverage_store: InMemoryCoverageStore = field(
+        default_factory=InMemoryCoverageStore
+    )
     idempotency_store: InMemoryIdempotencyStore = field(
         default_factory=InMemoryIdempotencyStore
     )
@@ -91,6 +99,15 @@ class AppContainer:
         return ConfidenceApplicationService(
             scorer=DeterministicConfidenceScorer(),
             store=self.confidence_store,
+        )
+
+    def coverage_service(self) -> CoverageApplicationService:
+        """Return coverage application service."""
+
+        return CoverageApplicationService(
+            scorer=DeterministicConfidenceScorer(),
+            confidence_store=self.confidence_store,
+            coverage_store=self.coverage_store,
         )
 
 
@@ -227,6 +244,28 @@ def get_confidence_service(request: Request):
         _release_request_session(request, failed=failed)
 
 
+def get_coverage_service(request: Request):
+    """Return coverage application service."""
+
+    container = get_container(request)
+    if container.session_factory is None:
+        yield container.coverage_service()
+        return
+    session = _acquire_request_session(request, container)
+    failed = False
+    try:
+        yield CoverageApplicationService(
+            scorer=DeterministicConfidenceScorer(),
+            confidence_store=SqlAlchemyConfidenceStore(session),
+            coverage_store=SqlAlchemyCoverageStore(session),
+        )
+    except Exception:
+        failed = True
+        raise
+    finally:
+        _release_request_session(request, failed=failed)
+
+
 def get_graph_store(request: Request):
     """Return graph store."""
 
@@ -256,6 +295,24 @@ def get_idempotency_store(request: Request):
     failed = False
     try:
         yield SqlAlchemyIdempotencyStore(session)
+    except Exception:
+        failed = True
+        raise
+    finally:
+        _release_request_session(request, failed=failed)
+
+
+def get_coverage_store(request: Request):
+    """Return coverage store."""
+
+    container = get_container(request)
+    if container.session_factory is None:
+        yield container.coverage_store
+        return
+    session = _acquire_request_session(request, container)
+    failed = False
+    try:
+        yield SqlAlchemyCoverageStore(session)
     except Exception:
         failed = True
         raise

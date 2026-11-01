@@ -97,8 +97,8 @@ def test_static_planner_groups_javascript_test_frameworks() -> None:
     )
 
     assert plan.command_plan == (
-        ("jest", ("src/app.test.js",)),
-        ("vitest", ("src/app.test.ts",)),
+        ("npx", ("--no-install", "jest", "--ci", "src/app.test.js")),
+        ("npx", ("--no-install", "vitest", "run", "src/app.test.ts")),
     )
 
 

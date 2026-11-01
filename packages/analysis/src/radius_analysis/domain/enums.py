@@ -20,3 +20,6 @@ class ChangedFileType(StrEnum):
     MODIFIED = "modified"
     DELETED = "deleted"
     RENAMED = "renamed"
+
+
+ACTIVE_ANALYSIS_STATUSES = frozenset({AnalysisStatus.PENDING, AnalysisStatus.RUNNING})

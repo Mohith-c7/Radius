@@ -3,7 +3,7 @@
 from logging.config import fileConfig
 
 from alembic import context
-from radius_shared.database import models  # noqa: F401
+from radius_shared.database import coverage, models  # noqa: F401
 from radius_shared.database.base import metadata
 from sqlalchemy import engine_from_config, pool
 

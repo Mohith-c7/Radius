@@ -70,6 +70,8 @@ The Next.js web console is available at `http://localhost:3000`.
 
 ---
 
+> **Demo data:** `RADIUS_SEED_DEMO_DATA=true` seeds hand-written Bottle/Emittery demo fixtures (labelled "DEMO FIXTURE", not real analyses) and a `demo@radius.dev` login with a publicly known password. It defaults to `false` and is always ignored when `RADIUS_ENV=production`.
+
 ## 4. GitHub App Setup & Permissions
 
 To configure Radius to automatically verify Pull Requests:

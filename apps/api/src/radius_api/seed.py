@@ -76,7 +76,7 @@ def seed_demo_user() -> None:
 
         with SessionLocal() as db:
             existing = db.scalar(select(User).where(User.email == "demo@radius.dev"))
-            if not existing:
+            if existing is None:
                 demo_user = User(
                     id=str(uuid4()),
                     name="Radius Demo User",
@@ -90,11 +90,8 @@ def seed_demo_user() -> None:
                 db.commit()
                 print("[Radius Seed] Demo user created: demo@radius.dev / RadiusDemo123!")
             else:
-                # Always sync password so login works regardless of prior session state
-                existing.password_hash = hash_password("RadiusDemo123!")
-                existing.email_verified = True
-                db.commit()
-                print("[Radius Seed] Demo user password synced: demo@radius.dev / RadiusDemo123!")
+                # Never reset credentials of an existing account.
+                print("[Radius Seed] Demo user already exists; leaving it unchanged.")
     except Exception as exc:
         print(f"[Radius Seed] Demo user seeding skipped: {exc}")
 
@@ -243,7 +240,10 @@ def _populate_stores(
             analysis_id=BOTTLE_ANALYSIS_ID,
             confidence_score=ConfidenceScore(92.0),
             risk_level=RiskLevel.LOW,
-            summary="Confidence score updated from CI test run: 92.0. Impacted JSON filter tests passing.",
+            summary=(
+                "DEMO FIXTURE (not a real analysis): illustrative report for the "
+                "bottle JSON plugin change; numbers are hand-written, not measured."
+            ),
             evidence=(
                 ConfidenceEvidence(
                     category=EvidenceCategory.TESTS,
@@ -269,15 +269,16 @@ def _populate_stores(
                 ConfidenceEvidence(
                     category=EvidenceCategory.TESTS,
                     label="Predictive Test Selection",
-                    message="Skipped 26 unaffected test suites (96.3% CI time saved)",
+                    message="Demo fixture: 26 test suites not selected (illustrative, not measured)",
                     impact=EvidenceImpact.POSITIVE,
                     value=96.3,
                 ),
             ),
             recommendations=(
-                "All impacted JSON filter tests passing. Safe to merge.",
-                "Skipped 26 unaffected test suites without risk.",
+                "Demo data only: run a real Radius analysis to obtain a verdict.",
             ),
+            verification_status="insufficient_evidence",
+            analysis_completeness=0.0,
             generated_at=now - timedelta(minutes=14),
         )
         confidence_store.save_report(bottle_confidence)
@@ -288,7 +289,10 @@ def _populate_stores(
             analysis_id=EMITTERY_ANALYSIS_ID,
             confidence_score=ConfidenceScore(88.5),
             risk_level=RiskLevel.LOW,
-            summary="Semantic AST analysis and TypeScript typings verified clean.",
+            summary=(
+                "DEMO FIXTURE (not a real analysis): illustrative report for the "
+                "emittery typings change; numbers are hand-written, not measured."
+            ),
             evidence=(
                 ConfidenceEvidence(
                     category=EvidenceCategory.BLAST_RADIUS,
@@ -306,9 +310,10 @@ def _populate_stores(
                 ),
             ),
             recommendations=(
-                "TypeScript definition alignment verified with implementation.",
-                "All event emitter listener contracts intact.",
+                "Demo data only: run a real Radius analysis to obtain a verdict.",
             ),
+            verification_status="insufficient_evidence",
+            analysis_completeness=0.0,
             generated_at=now - timedelta(minutes=29),
         )
         confidence_store.save_report(emittery_confidence)
@@ -569,7 +574,10 @@ def _seed_sql_database(session_factory: object) -> None:
 
 
 def seed_open_source_results(container: object) -> None:
-    """Seed authentic open source repository and test verification results."""
+    """Seed illustrative demo fixtures (NOT real analyses) for local development.
+
+    Only called when ``RADIUS_SEED_DEMO_DATA=true`` outside production.
+    """
     seed_demo_user()
 
     repo_store = getattr(container, "repository_store", None)
@@ -593,4 +601,4 @@ def seed_open_source_results(container: object) -> None:
     if session_factory:
         _seed_sql_database(session_factory)
 
-    print("[Radius Seed] Open-source target results (Bottle & Emittery) ready!")
+    print("[Radius Seed] Demo fixtures (Bottle & Emittery, not real analyses) ready.")

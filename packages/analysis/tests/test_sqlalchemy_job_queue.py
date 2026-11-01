@@ -113,3 +113,46 @@ def _create_analysis(session: Session):
     session.add_all([organization, repository, pull_request, analysis])
     session.flush()
     return analysis.id
+
+
+def test_sqlalchemy_job_queue_redacts_stored_errors() -> None:
+    token = "ghs_abcdefghijklmnopqrstuvwxyz0123456789"
+    with _session() as session:
+        analysis_id = _create_analysis(session)
+        queue = SqlAlchemyAnalysisJobQueue(session, max_attempts=3)
+        queue.enqueue(analysis_id)
+        queue.claim_next()
+
+        queue.requeue(analysis_id, f"clone https://x-access-token:{token}@github.com/a/b.git")
+
+        job = queue.get_by_analysis_id(analysis_id)
+        assert token not in job.last_error
+        assert "[REDACTED]" in job.last_error
+
+
+def test_sqlalchemy_job_queue_reenqueue_of_exhausted_job_is_claimable() -> None:
+    with _session() as session:
+        analysis_id = _create_analysis(session)
+        queue = SqlAlchemyAnalysisJobQueue(session, max_attempts=1)
+        queue.enqueue(analysis_id)
+        queue.claim_next()
+        queue.requeue(analysis_id, "boom")
+        assert queue.get_by_analysis_id(analysis_id).status == "failed"
+
+        queue.enqueue(analysis_id)
+        claimed = queue.claim_next()
+
+        assert claimed is not None
+        assert claimed.attempts == 1
+
+
+def test_sqlalchemy_job_queue_mark_analysis_failed_skips_terminal_rows() -> None:
+    with _session() as session:
+        analysis_id = _create_analysis(session)
+        queue = SqlAlchemyAnalysisJobQueue(session)
+
+        assert queue.mark_analysis_failed(analysis_id) is True
+        analysis = session.get(Analysis, analysis_id)
+        assert analysis.status == db_enums.AnalysisStatus.FAILED
+        assert analysis.completed_at is not None
+        assert queue.mark_analysis_failed(analysis_id) is False

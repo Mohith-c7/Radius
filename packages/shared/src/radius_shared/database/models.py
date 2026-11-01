@@ -1,6 +1,6 @@
 """Phase 1 SQLAlchemy models."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import (
@@ -400,12 +400,55 @@ class TestRun(UuidPrimaryKeyMixin, Base):
     __table_args__ = (Index("ix_test_runs_analysis_id", "analysis_id"),)
 
 
+class TestResultUpload(UuidPrimaryKeyMixin, Base):
+    """One CI test report uploaded for an analysis, bound to a commit.
+
+    Uploads accumulate per analysis (CI shards, retries); the verdict is
+    computed over all of them. ``body_sha256`` makes exact replays idempotent.
+    """
+
+    __tablename__ = "test_result_uploads"
+
+    analysis_id: Mapped[UUID] = mapped_column(
+        ForeignKey("analyses.id"),
+        nullable=False,
+    )
+    commit_sha: Mapped[str] = mapped_column(String(64), nullable=False)
+    body_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    total_tests: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    passed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    failed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    skipped: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    duration_ms: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    coverage_percent: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    output: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    cases: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "analysis_id",
+            "body_sha256",
+            name="uq_test_result_uploads_analysis_id_body_sha256",
+        ),
+        Index("ix_test_result_uploads_analysis_id", "analysis_id"),
+    )
+
+
 class TestCase(UuidPrimaryKeyMixin, Base):
     """Discovered test case artifact."""
 
     __tablename__ = "test_cases"
 
-    path: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    repository_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("repositories.id"),
+        nullable=True,
+    )
+    path: Mapped[str] = mapped_column(Text, nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     framework: Mapped[str] = mapped_column(String(100), nullable=False)
     test_type: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -414,7 +457,14 @@ class TestCase(UuidPrimaryKeyMixin, Base):
 
     selections: Mapped[list["SelectedTest"]] = relationship(back_populates="test_case")
 
-    __table_args__ = (Index("ix_test_cases_path", "path"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "repository_id",
+            "path",
+            name="uq_test_cases_repository_id_path",
+        ),
+        Index("ix_test_cases_path", "path"),
+    )
 
 
 class TestSelection(UuidPrimaryKeyMixin, Base):
@@ -434,6 +484,9 @@ class TestSelection(UuidPrimaryKeyMixin, Base):
 
     selected_tests: Mapped[list["SelectedTest"]] = relationship(
         back_populates="selection"
+    )
+    decisions: Mapped[list["TestSelectionEvidence"]] = relationship(
+        back_populates="selection", cascade="all, delete-orphan"
     )
 
     __table_args__ = (Index("ix_test_selections_analysis_id", "analysis_id"),)
@@ -467,6 +520,26 @@ class SelectedTest(UuidPrimaryKeyMixin, Base):
     )
 
 
+class TestSelectionEvidence(UuidPrimaryKeyMixin, Base):
+    """Evidence-backed selected or skipped test decision."""
+
+    __tablename__ = "test_selection_evidence"
+
+    selection_id: Mapped[UUID] = mapped_column(ForeignKey("test_selections.id"), nullable=False)
+    test_case_id: Mapped[UUID] = mapped_column(ForeignKey("test_cases.id"), nullable=False)
+    decision: Mapped[str] = mapped_column(String(20), nullable=False)
+    evidence_sources: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    evidence_details: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    relevance_score: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+
+    selection: Mapped[TestSelection] = relationship(back_populates="decisions")
+    test_case: Mapped[TestCase] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint("selection_id", "test_case_id", name="uq_test_selection_evidence_case"),
+        Index("ix_test_selection_evidence_selection_id", "selection_id"),
+    )
 class TestRunPlan(UuidPrimaryKeyMixin, Base):
     """Structured test command plan."""
 
@@ -519,6 +592,53 @@ class ConfidenceReport(UuidPrimaryKeyMixin, Base):
     )
 
     __table_args__ = (Index("ix_confidence_reports_analysis_id", "analysis_id"),)
+
+class TestExecutionHistory(UuidPrimaryKeyMixin, Base):
+    """Historical record of test executions across CI runs."""
+
+    __tablename__ = "test_execution_histories"
+
+    test_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    test_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    repository_id: Mapped[UUID] = mapped_column(
+        ForeignKey("repositories.id"), nullable=False
+    )
+    analysis_id: Mapped[UUID] = mapped_column(
+        ForeignKey("analyses.id"), nullable=False
+    )
+    commit_sha: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    pr_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    branch: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(String(50), nullable=False)
+    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    failure_info: Mapped[str | None] = mapped_column(Text, nullable=True)
+    coverage_percent: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    framework: Mapped[str] = mapped_column(String(100), nullable=False, server_default="unknown")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        UniqueConstraint("analysis_id", "test_path", name="uq_test_execution_history_analysis_test"),
+        Index("ix_test_execution_histories_analysis_id", "analysis_id"),
+        Index("ix_test_execution_histories_test_path", "test_path"),
+        Index("ix_test_execution_histories_repository_id", "repository_id"),
+        Index("ix_test_execution_histories_status_timestamp", "status", "timestamp"),
+        Index("ix_test_execution_histories_timestamp", "timestamp"),
+    )
+
+
 
 
 class ConfidenceEvidence(UuidPrimaryKeyMixin, Base):

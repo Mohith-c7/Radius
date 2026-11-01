@@ -90,3 +90,36 @@ def _session() -> Session:
     engine = create_engine("sqlite+pysqlite:///:memory:")
     Base.metadata.create_all(engine)
     return Session(engine)
+
+
+def test_same_test_path_in_two_repositories_is_stored_independently(tmp_path) -> None:
+    from radius_testing.application import TestingApplicationService
+    from radius_testing.dto import DiscoverTestsCommand
+    from radius_testing.infrastructure import (
+        ConventionalTestDiscoverer,
+        PathBasedTestSelector,
+        StaticTestCommandPlanner,
+    )
+
+    repo_a, repo_b = uuid4(), uuid4()
+    for name, body in (("a", "def test_a():\n    pass\n"), ("b", "def test_b():\n    pass\n")):
+        tests_dir = tmp_path / name / "tests"
+        tests_dir.mkdir(parents=True)
+        (tests_dir / "test_app.py").write_text(body, encoding="utf-8")
+
+    with _session() as session:
+        store = SqlAlchemyTestStore(session)
+        service = TestingApplicationService(
+            discoverer=ConventionalTestDiscoverer(),
+            selector=PathBasedTestSelector(),
+            store=store,
+            planner=StaticTestCommandPlanner(),
+        )
+        found_a = service.discover_test_cases(DiscoverTestsCommand(tmp_path / "a", repo_a))
+        found_b = service.discover_test_cases(DiscoverTestsCommand(tmp_path / "b", repo_b))
+
+        assert found_a[0].path.value == found_b[0].path.value == "tests/test_app.py"
+        assert found_a[0].id != found_b[0].id
+        assert [t.id for t in store.list_test_cases(repo_a)] == [found_a[0].id]
+        assert [t.id for t in store.list_test_cases(repo_b)] == [found_b[0].id]
+        assert len(store.list_test_cases()) == 2

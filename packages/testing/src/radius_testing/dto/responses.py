@@ -10,6 +10,7 @@ from radius_testing.domain.entities import (
     TestRunPlan,
     TestRunResult,
     TestSelection,
+    TestSelectionDecision,
 )
 
 
@@ -66,6 +67,26 @@ class SelectedTestResponse:
 
 
 @dataclass(frozen=True, slots=True)
+class TestDecisionResponse:
+    """One selected or skipped test with its concrete evidence."""
+
+    test: TestCaseResponse
+    decision: str
+    evidence_sources: tuple[str, ...]
+    evidence_details: tuple[str, ...]
+    relevance_score: float
+    reason: str
+
+    @classmethod
+    def from_entity(cls, item: TestSelectionDecision) -> "TestDecisionResponse":
+        return cls(
+            test=TestCaseResponse.from_entity(item.test_case), decision=item.decision.value,
+            evidence_sources=item.evidence_sources, evidence_details=item.evidence_details,
+            relevance_score=item.relevance_score, reason=item.reason,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class TestSelectionResponse:
     """Test selection response DTO."""
 
@@ -78,6 +99,7 @@ class TestSelectionResponse:
     selected_tests: tuple[SelectedTestResponse, ...]
     skipped_tests: tuple[TestCaseResponse, ...]
     created_at: datetime
+    decisions: tuple[TestDecisionResponse, ...] = ()
 
     @classmethod
     def from_entity(cls, selection: TestSelection) -> "TestSelectionResponse":
@@ -94,6 +116,7 @@ class TestSelectionResponse:
                 SelectedTestResponse.from_entity(item)
                 for item in selection.selected_tests
             ),
+            decisions=tuple(TestDecisionResponse.from_entity(item) for item in selection.decisions),
             skipped_tests=tuple(
                 TestCaseResponse.from_entity(t)
                 for t in selection.skipped_tests
@@ -156,3 +179,65 @@ class TestRunResultResponse:
             coverage_percent=result.coverage_percent,
             output=result.output,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class TestUploadResponse:
+    """The single report accepted (or recognised as a replay) by one upload."""
+
+    id: UUID
+    commit_sha: str
+    body_sha256: str
+    duplicate: bool
+    status: str
+    total_tests: int
+    passed: int
+    failed: int
+    skipped: int
+    reported_cases: int
+
+
+@dataclass(frozen=True, slots=True)
+class SelectedTestAttributionResponse:
+    """Selected test files split by what the accumulated results show.
+
+    ``executed`` = ``passed`` + ``failed``. Being in the plan never counts as
+    executed: ``skipped`` files had only skipped cases and ``not_reported``
+    files had none.
+    """
+
+    selected_count: int
+    executed_count: int
+    passed_count: int
+    failed_count: int
+    skipped_count: int
+    not_reported_count: int
+    executed: tuple[str, ...]
+    failed: tuple[str, ...]
+    skipped: tuple[str, ...]
+    not_reported: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class TestIngestionResponse:
+    """Result of one CI upload, with counts aggregated over every upload.
+
+    Top-level counts are the aggregate the verdict is computed from (all
+    distinct uploads for the analysis); ``upload`` describes this request.
+    """
+
+    id: UUID
+    analysis_id: UUID
+    status: str
+    total_tests: int
+    passed: int
+    failed: int
+    skipped: int
+    duration_ms: int
+    coverage_percent: float | None
+    output: str
+    upload_count: int
+    upload: TestUploadResponse
+    selected_tests: SelectedTestAttributionResponse | None
+    contradictory_cases: tuple[str, ...] = ()
+    verification_status: str | None = None

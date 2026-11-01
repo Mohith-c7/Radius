@@ -4,6 +4,7 @@ from uuid import uuid4
 
 from radius_confidence.application import ConfidenceApplicationService
 from radius_confidence.domain import (
+    AnalysisEvidence,
     CoveragePercent,
     ImpactEvidence,
     RiskLevel,
@@ -52,12 +53,23 @@ def test_recalculate_from_test_results_all_passed_high_score_low_risk() -> None:
         output="",
     )
 
+    # A prior analysis mapped the single changed file to the selected tests.
+    service.generate_report(
+        GenerateConfidenceReportCommand(
+            analysis_id=analysis_id,
+            impact=ImpactEvidence(1, 1, 1, 1, 1),
+            tests=ConfidenceTestEvidence(0, 0, 0, 0, run_outcome="not_run"),
+            analysis=AnalysisEvidence(changed_files=1, covered_files=("src/a.py",)),
+        )
+    )
+
     report = service.recalculate_from_test_results(analysis_id, test_result)
 
     assert report.analysis_id == analysis_id
     assert report.confidence_score >= 85.0
     assert report.risk_level == RiskLevel.LOW.value
-    assert "updated from CI test run" in report.summary
+    assert report.verification_status == "verified"
+    assert "CI test results" in report.summary
     assert report.recommendations == ("Proceed with standard review.",)
 
     loaded = service.get_report(analysis_id)
@@ -88,12 +100,11 @@ def test_recalculate_from_test_results_with_failures_drops_score_high_risk() -> 
     assert report.analysis_id == analysis_id
     # 100 - 35 (failed > 0) - 15 (failed > 5) - 20 (coverage < 50) = 30
     assert report.confidence_score <= 50.0
-    assert report.risk_level in (RiskLevel.HIGH.value, RiskLevel.CRITICAL.value)
-    assert "updated from CI test run" in report.summary
-    assert (
-        "Block merge until failures and coverage gaps are resolved."
-        in report.recommendations
-        or "Add focused tests before merging." in report.recommendations
+    assert report.risk_level == RiskLevel.CRITICAL.value
+    assert report.verification_status == "failed"
+    assert "CI test results" in report.summary
+    assert report.recommendations == (
+        "Block merge until the failing selected tests are fixed.",
     )
 
 
@@ -118,6 +129,7 @@ def test_recalculate_from_test_results_updates_existing_report() -> None:
             skipped=0,
             coverage_percent=CoveragePercent(88.0),
         ),
+        analysis=AnalysisEvidence(changed_files=1, covered_files=("src/a.py",)),
     )
     initial_report = service.generate_report(initial_command)
     assert initial_report.confidence_score >= 85.0
@@ -140,7 +152,64 @@ def test_recalculate_from_test_results_updates_existing_report() -> None:
 
     # Score dropped due to test failure (-35)
     assert updated_report.confidence_score < initial_report.confidence_score
-    assert "updated from CI test run" in updated_report.summary
+    assert updated_report.verification_status == "failed"
+    assert "CI test results" in updated_report.summary
 
     persisted = service.get_report(analysis_id)
     assert persisted.confidence_score == updated_report.confidence_score
+
+
+def test_ci_results_without_recorded_mapping_cannot_verify() -> None:
+    service = _create_service()
+    analysis_id = uuid4()
+    result = RadiusTestRunResultResponse(
+        id=uuid4(),
+        analysis_id=analysis_id,
+        status="passed",
+        total_tests=1,
+        passed=1,
+        failed=0,
+        skipped=0,
+        duration_ms=10,
+        coverage_percent=99.0,
+        output="",
+    )
+
+    report = service.recalculate_from_test_results(analysis_id, result)
+
+    assert report.verification_status == "insufficient_evidence"
+    assert report.confidence_score <= 69
+
+
+def test_ci_recalculation_preserves_unmapped_files_from_analysis() -> None:
+    service = _create_service()
+    analysis_id = uuid4()
+    service.generate_report(
+        GenerateConfidenceReportCommand(
+            analysis_id=analysis_id,
+            impact=ImpactEvidence(2, 2, 1, 1, 1),
+            tests=ConfidenceTestEvidence(0, 0, 0, 0, run_outcome="not_run"),
+            analysis=AnalysisEvidence(
+                changed_files=2,
+                covered_files=("src/a.py",),
+                unmapped_files=("src/b.py",),
+            ),
+        )
+    )
+    result = RadiusTestRunResultResponse(
+        id=uuid4(),
+        analysis_id=analysis_id,
+        status="passed",
+        total_tests=4,
+        passed=4,
+        failed=0,
+        skipped=0,
+        duration_ms=10,
+        coverage_percent=99.0,
+        output="",
+    )
+
+    report = service.recalculate_from_test_results(analysis_id, result)
+
+    assert report.verification_status == "insufficient_evidence"
+    assert any(item.message == "src/b.py" for item in report.evidence)

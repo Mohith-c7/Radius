@@ -313,6 +313,9 @@ def test_end_to_end_target_verification_flow(tmp_path: Path) -> None:
     assert result is not None
 
     # --- 2. CPG Slicing & Precision Verification ---
+    # The experimental symbol-level CPG is no longer on the verdict path; build
+    # it explicitly to keep exercising the extractor and slicer.
+    orchestrator._run_semantic_cpg_poc(repo_dir, (), None)
     assert orchestrator._last_cpg is not None
     cpg: CodePropertyGraph = orchestrator._last_cpg
 
@@ -414,8 +417,8 @@ def test_end_to_end_target_verification_flow(tmp_path: Path) -> None:
     assert "Radius Confidence Report" in markdown_body
     # Should include visual badge for high risk
     assert any(badge in markdown_body for badge in ("🟠", "🔴"))
-    assert "Predictive Test Selection" in markdown_body
-    assert f"{selection.time_saved_percent}%" in markdown_body
+    assert "Test Selection" in markdown_body
+    assert "time saved" not in markdown_body
     assert "src/auth.py" in markdown_body
     assert "AI Impact Pruning" in markdown_body
 

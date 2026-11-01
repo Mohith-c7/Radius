@@ -42,6 +42,11 @@ class ImportReference:
 
     source: str
     location: SourceLocation | None = None
+    names: tuple[str, ...] = ()
+    """Names imported from ``source`` (e.g. ``from pkg import a, b``).
+
+    Used to resolve ``from package import submodule`` to the submodule file.
+    """
 
     def __post_init__(self) -> None:
         if not self.source.strip():
@@ -79,6 +84,12 @@ class RepositoryParseResult:
     repository_path: Path
     source_files: tuple[SourceFile, ...]
     parsed_files: tuple[ParsedSourceFile, ...] = field(default_factory=tuple)
+    parse_failures: tuple[str, ...] = field(default_factory=tuple)
+    """Repository-relative paths of files that could not be parsed.
+
+    A failure degrades the dependency graph; it must be surfaced as missing
+    evidence rather than aborting the analysis or being silently ignored.
+    """
 
     @property
     def file_count(self) -> int:

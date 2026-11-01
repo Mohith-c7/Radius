@@ -18,6 +18,17 @@ IGNORED_DIRECTORIES = {
 }
 
 
+# Support code that lives under test directories but is not itself a test.
+NON_TEST_SUPPORT_DIRECTORIES = {
+    "fixtures",
+    "__fixtures__",
+    "helpers",
+    "__mocks__",
+    "testdata",
+    "data",
+}
+
+
 class ConventionalTestDiscoverer:
     """Discover tests from conventional file paths."""
 
@@ -52,6 +63,10 @@ class ConventionalTestDiscoverer:
     def _is_test_path(path: str) -> bool:
         p = Path(path)
         name = p.name
+        if name in {"conftest.py", "__init__.py", "setup.py"}:
+            return False
+        if any(part in NON_TEST_SUPPORT_DIRECTORIES for part in p.parts[:-1]):
+            return False
         is_conventional_name = (
             name.startswith("test_")
             and name.endswith(".py")

@@ -11,6 +11,7 @@ from app.routes_auth import router as auth_router
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from radius_shared.config import RuntimeEnvironment
 from radius_shared.database.base import Base as DomainBase
 from radius_shared.dto import error_response
 from radius_shared.errors import (
@@ -20,17 +21,33 @@ from radius_shared.errors import (
     RadiusError,
     ValidationError,
 )
-from radius_shared.logging import configure_logging
+from radius_shared.logging import configure_logging, get_logger
 
 from radius_api.config import get_api_settings
 from radius_api.dependencies import AppContainer, configure_sql_storage
 from radius_api.routes.analyses import router as analyses_router
 from radius_api.routes.confidence import router as confidence_router
+from radius_api.routes.coverage import router as coverage_router
 from radius_api.routes.github_webhooks import router as github_webhooks_router
 from radius_api.routes.graph import router as graph_router
 from radius_api.routes.health import router as health_router
 from radius_api.routes.repositories import router as repositories_router
 from radius_api.routes.tests import router as tests_router
+
+LOGGER = get_logger(__name__)
+
+
+def should_seed_demo_data(settings) -> bool:
+    """Return whether demo fixtures may be seeded for these settings."""
+
+    if not getattr(settings, "seed_demo_data", False):
+        return False
+    if settings.environment == RuntimeEnvironment.PRODUCTION:
+        LOGGER.warning(
+            "RADIUS_SEED_DEMO_DATA is ignored in production; demo data was not seeded."
+        )
+        return False
+    return True
 
 
 async def radius_error_handler(
@@ -66,9 +83,10 @@ def create_app() -> FastAPI:
     async def lifespan(app: FastAPI):
         DomainBase.metadata.create_all(bind=auth_engine)
         AuthBase.metadata.create_all(bind=auth_engine)
-        from radius_api.seed import seed_open_source_results
+        if should_seed_demo_data(settings):
+            from radius_api.seed import seed_open_source_results
 
-        seed_open_source_results(app.state.container)
+            seed_open_source_results(app.state.container)
         yield
 
     app = FastAPI(
@@ -106,6 +124,7 @@ def create_app() -> FastAPI:
     app.include_router(graph_router, prefix="/api/v1")
     app.include_router(tests_router, prefix="/api/v1")
     app.include_router(confidence_router, prefix="/api/v1")
+    app.include_router(coverage_router, prefix="/api/v1")
     app.include_router(github_webhooks_router, prefix="/api/v1")
     app.include_router(auth_router)
 

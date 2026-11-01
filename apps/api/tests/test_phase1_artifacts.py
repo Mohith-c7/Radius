@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 from fastapi.testclient import TestClient
 from radius_api.main import create_app
 from radius_confidence.domain import (
+    AnalysisEvidence,
     CoveragePercent,
     ImpactEvidence,
 )
@@ -120,6 +121,7 @@ def test_phase1_artifact_endpoints_return_graph_tests_and_confidence() -> None:
                 skipped=0,
                 coverage_percent=CoveragePercent(90),
             ),
+            analysis=AnalysisEvidence(changed_files=1, covered_files=("src/app.py",)),
         )
     )
 
@@ -136,6 +138,7 @@ def test_phase1_artifact_endpoints_return_graph_tests_and_confidence() -> None:
     assert tests.json()["data"]["selected_count"] == 1
     assert confidence.status_code == 200
     assert confidence.json()["data"]["risk_level"] == "low"
+    assert confidence.json()["data"]["verification_status"] == "verified"
 
 
 def test_missing_graph_artifact_uses_not_found_envelope() -> None:

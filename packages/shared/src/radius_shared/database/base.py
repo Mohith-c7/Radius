@@ -1,5 +1,7 @@
 """SQLAlchemy declarative base and shared mixins."""
 
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from typing import ClassVar
 from uuid import UUID, uuid4

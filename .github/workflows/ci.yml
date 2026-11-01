@@ -32,6 +32,7 @@ jobs:
       DATABASE_URL: postgresql+psycopg://radius:radius@localhost:5432/radius
       RADIUS_ENV: test
       STORAGE_BACKEND: sql
+      RADIUS_REQUIRE_SANDBOX_TESTS: "true"
       NEXT_PUBLIC_RADIUS_API_BASE_URL: http://localhost:8000
       NEXT_PUBLIC_RADIUS_ORGANIZATION_ID: 00000000-0000-0000-0000-000000000000
       PYTHONPATH: apps/api/src:apps/worker/src:packages/analysis/src:packages/confidence/src:packages/graph/src:packages/parser/src:packages/repository/src:packages/shared/src:packages/testing/src:packages/github/src
@@ -64,6 +65,13 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
 
+      - name: Build sandbox test image
+        # Lets the real-container isolation tests in
+        # packages/testing/tests/test_sandbox_runner.py run instead of skipping.
+        run: |
+          printf 'FROM mirror.gcr.io/library/python:3.12-slim\nRUN pip install --no-cache-dir pytest==9.2.0\n' \
+            | docker build -t radius-sandbox-test:latest -
+
       - name: Lint
         run: pnpm lint
 
@@ -72,6 +80,9 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      - name: Root end-to-end tests
+        run: python -m pytest tests -q
 
       - name: Build
         run: pnpm build

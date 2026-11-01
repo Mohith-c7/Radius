@@ -36,6 +36,9 @@ class GitHubAnalysisReport:
     change_risk: str | None = None
     verification_status: str | None = None
     analysis_completeness: float | None = None
+    discovered_tests_count: int = 0
+    verification_gaps: tuple[str, ...] = ()
+    unmapped_files: tuple[str, ...] = ()
 
 
 _RISK_BADGES: dict[str, str] = {
@@ -97,6 +100,57 @@ class GitHubAnalysisPublisher:
                 check_run_id=int(check_run["id"]),
             )
 
+    def publish_failure(
+        self,
+        *,
+        installation_id: int,
+        owner: str,
+        repository_name: str,
+        head_sha: str,
+        error_summary: str,
+        dashboard_url: str | None = None,
+    ) -> None:
+        """Complete the Check Run when an analysis crashed.
+
+        A failed analysis must never leave the check stuck ``in_progress`` and
+        must never look like a pass: the conclusion is ``neutral`` and the
+        summary states that no verification was performed.
+        """
+
+        token = self._client.create_installation_token(installation_id).token
+        check_run = _latest_check_run(
+            self._client.list_check_runs_for_ref(
+                token=token,
+                owner=owner,
+                repo=repository_name,
+                ref=head_sha,
+                check_name=CHECK_RUN_NAME,
+            )
+        )
+        check_run_args = {
+            "token": token,
+            "owner": owner,
+            "repo": repository_name,
+            "name": CHECK_RUN_NAME,
+            "head_sha": head_sha,
+            "status": "completed",
+            "conclusion": "neutral",
+            "title": "Radius: analysis failed",
+            "summary": (
+                "Radius analysis failed before producing a result. "
+                "No verification was performed for this commit; do not treat it as verified."
+            ),
+            "text": f"Error: {error_summary[:1000]}",
+            "details_url": dashboard_url,
+        }
+        if check_run is None:
+            self._client.create_check_run(**check_run_args)
+        else:
+            self._client.update_check_run(
+                **check_run_args,
+                check_run_id=int(check_run["id"]),
+            )
+
     def publish(
         self,
         *,
@@ -106,10 +160,15 @@ class GitHubAnalysisPublisher:
         """Publish a completed Check Run and PR comment."""
 
         token = self._client.create_installation_token(installation_id).token
-        conclusion = _check_conclusion(report.risk_level)
+        conclusion = _check_conclusion(report.risk_level, report.verification_status)
+        title = (
+            f"{_verdict_title(report.verification_status)} "
+            f"(heuristic score {report.confidence_score:.0f}/100)"
+        )
         summary = (
-            f"Radius confidence score: {report.confidence_score:.0f}/100 "
-            f"({report.risk_level} risk)."
+            f"{_verdict_title(report.verification_status)}. "
+            f"Heuristic score {report.confidence_score:.0f}/100 "
+            f"({report.risk_level} risk); not a calibrated probability."
         )
         body = _markdown_report(report)
         check_run = _latest_check_run(
@@ -129,7 +188,7 @@ class GitHubAnalysisPublisher:
             "head_sha": report.head_sha,
             "status": "completed",
             "conclusion": conclusion,
-            "title": f"Radius confidence: {report.confidence_score:.0f}/100",
+            "title": title,
             "summary": summary,
             "text": body,
             "details_url": report.dashboard_url,
@@ -168,13 +227,34 @@ class GitHubAnalysisPublisher:
             )
 
 
-def _check_conclusion(risk_level: str) -> str:
-    normalized = risk_level.lower()
-    if normalized in {"critical", "high"}:
+def _check_conclusion(risk_level: str, verification_status: str | None = None) -> str:
+    """Map the evidence-gated verdict (not the heuristic score) to a conclusion.
+
+    Only a ``verified`` analysis with low/medium heuristic risk can produce a
+    green check. Missing or unknown evidence is ``neutral``, never ``success``.
+    """
+
+    status = (verification_status or "").strip().lower()
+    if status == "failed":
         return "failure"
-    if normalized == "medium":
+    if status == "verified":
+        if risk_level.strip().lower() in {"low", "medium"}:
+            return "success"
         return "neutral"
-    return "success"
+    return "neutral"
+
+
+_VERDICT_TITLES: dict[str, str] = {
+    "verified": "Radius: Verified",
+    "failed": "Radius: Failed",
+    "insufficient_evidence": "Radius: Not verified (insufficient evidence)",
+    "unverified": "Radius: Not verified",
+}
+
+
+def _verdict_title(verification_status: str | None) -> str:
+    status = (verification_status or "").strip().lower()
+    return _VERDICT_TITLES.get(status, "Radius: Not verified (verdict unavailable)")
 
 
 def _markdown_report(report: GitHubAnalysisReport) -> str:
@@ -194,11 +274,16 @@ def _markdown_report(report: GitHubAnalysisReport) -> str:
         if pct <= 1.0:
             pct *= 100.0
         rows.append(f"| **Analysis Completeness** | {round(pct)}% |")
-    rows.append(
-        f"| **Predictive Test Selection** | {report.time_saved_percent}% time saved "
-        f"({report.selected_tests_count} selected, {report.skipped_tests_count} skipped) |"
-    )
-    rows.append(f"| **AI Impact Pruning** | {report.ai_pruned_count} pruned |")
+    if report.discovered_tests_count:
+        selection_text = (
+            f"{report.selected_tests_count} of {report.discovered_tests_count} "
+            "discovered test files selected"
+        )
+    else:
+        selection_text = f"{report.selected_tests_count} test files selected"
+    rows.append(f"| **Test Selection** | {selection_text} |")
+    if report.ai_pruned_count > 0:
+        rows.append(f"| **AI Impact Pruning** | {report.ai_pruned_count} pruned |")
 
     metrics_table = (
         "| Metric | Result |\n"
@@ -232,6 +317,23 @@ def _markdown_report(report: GitHubAnalysisReport) -> str:
             + "\n".join(notes_lines)
         )
 
+    gaps_section = ""
+    if report.verification_gaps:
+        gaps_section = "\n\n### Why this is not verified\n\n" + "\n".join(
+            f"- {gap}" for gap in report.verification_gaps
+        )
+
+    unmapped_section = ""
+    if report.unmapped_files:
+        unmapped_rows = "\n".join(f"- `{path}`" for path in report.unmapped_files)
+        unmapped_section = (
+            "\n\n<details>\n"
+            "<summary><strong>Changed files with no test evidence "
+            f"({len(report.unmapped_files)})</strong></summary>\n\n"
+            f"{unmapped_rows}\n"
+            "</details>"
+        )
+
     recommendations = "\n".join(
         f"- {item}" for item in report.recommendations
     ) or "- No additional recommendations."
@@ -243,11 +345,16 @@ def _markdown_report(report: GitHubAnalysisReport) -> str:
     return (
         f"{COMMENT_MARKER}\n"
         f"## {badge} Radius Confidence Report\n\n"
+        f"**Verdict:** {_verdict_title(report.verification_status)}\n\n"
         f"**Score:** {report.confidence_score:.0f}/100\n\n"
         f"**Risk:** {report.risk_level}\n\n"
+        "_The score is a heuristic computed from fixed penalties, not a calibrated "
+        "probability that this change is correct._\n\n"
         f"{report.summary}\n\n"
         "### Verification Metrics\n\n"
         f"{metrics_table}"
+        f"{gaps_section}"
+        f"{unmapped_section}"
         f"{blast_radius_section}"
         f"{ai_pruning_section}\n\n"
         "### Recommendations\n\n"
@@ -268,6 +375,22 @@ def _existing_radius_comment(comments: list[dict[str, Any]]) -> dict[str, Any] |
         if (
             COMMENT_MARKER in str(comment.get("body", ""))
             and comment.get("id") is not None
+            and _is_bot_comment(comment)
         ):
             return comment
     return None
+
+
+def _is_bot_comment(comment: dict[str, Any]) -> bool:
+    """Return whether a comment was authored by a bot (e.g. the Radius App).
+
+    A human comment that merely quotes the marker must not be edited. Comments
+    without author data are accepted for backward compatibility.
+    """
+
+    user = comment.get("user")
+    if user is None:
+        return True
+    if not isinstance(user, dict):
+        return False
+    return str(user.get("type", "")).lower() == "bot"

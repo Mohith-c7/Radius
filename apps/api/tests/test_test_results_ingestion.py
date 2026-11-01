@@ -33,6 +33,8 @@ def _setup_analysis(client: TestClient, headers: dict[str, str]) -> tuple[UUID, 
         },
     )
     analysis_id = UUID(analysis_res.json()["data"]["id"])
+    # Results are only accepted for completed analyses.
+    client.app.state.container.analysis_service().complete_analysis(analysis_id)
     return repo_id, analysis_id
 
 
@@ -53,6 +55,7 @@ def test_ingest_junit_xml_successful() -> None:
 
     response = client.post(
         f"/api/v1/analyses/{analysis_id}/tests/results",
+        params={"commit_sha": "f" * 40},
         headers={**headers, "Content-Type": "application/xml"},
         content=junit_xml,
     )
@@ -74,7 +77,10 @@ def test_ingest_junit_xml_successful() -> None:
     conf_body = conf_response.json()
     assert conf_body["success"] is True
     conf_data = conf_body["data"]
-    assert conf_data["confidence_score"] >= 80
+    # No analysis recorded which changed files these tests exercise, so passing
+    # CI results alone must not produce a "verified"/low-risk verdict.
+    assert conf_data["verification_status"] == "insufficient_evidence"
+    assert conf_data["confidence_score"] <= 69
 
 
 def test_ingest_junit_xml_with_failures_reduces_confidence() -> None:
@@ -94,6 +100,7 @@ def test_ingest_junit_xml_with_failures_reduces_confidence() -> None:
 """
     client.post(
         f"/api/v1/analyses/{analysis_id}/tests/results",
+        params={"commit_sha": "f" * 40},
         headers={**headers, "Content-Type": "application/xml"},
         content=passing_xml,
     )
@@ -113,6 +120,7 @@ def test_ingest_junit_xml_with_failures_reduces_confidence() -> None:
 
     response = client.post(
         f"/api/v1/analyses/{analysis_id}/tests/results",
+        params={"commit_sha": "f" * 40},
         headers={**headers, "Content-Type": "application/xml"},
         content=failing_xml,
     )
@@ -142,6 +150,7 @@ def test_ingest_json_results() -> None:
 
     response = client.post(
         f"/api/v1/analyses/{analysis_id}/tests/results",
+        params={"commit_sha": "f" * 40},
         headers={**headers, "Content-Type": "application/json"},
         json={"total": 5, "passed": 5, "failed": 0, "skipped": 0},
     )
@@ -165,6 +174,7 @@ def test_ingest_test_results_organization_authorization() -> None:
     different_org_headers = {"X-Radius-Organization-Id": str(uuid4())}
     response = client.post(
         f"/api/v1/analyses/{analysis_id}/tests/results",
+        params={"commit_sha": "f" * 40},
         headers={**different_org_headers, "Content-Type": "application/json"},
         json={"total": 5, "passed": 5, "failed": 0, "skipped": 0},
     )
@@ -189,6 +199,7 @@ def test_get_test_run_results_endpoint() -> None:
     # Ingest results
     client.post(
         f"/api/v1/analyses/{analysis_id}/tests/results",
+        params={"commit_sha": "f" * 40},
         headers={**headers, "Content-Type": "application/json"},
         json={"total": 8, "passed": 7, "failed": 1, "skipped": 0, "duration_ms": 450},
     )

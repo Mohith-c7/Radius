@@ -13,15 +13,23 @@ from radius_analysis.dto import (
     ComputeBlastRadiusCommand,
 )
 from radius_confidence.application import ConfidenceApplicationService
-from radius_confidence.domain import CoveragePercent, ImpactEvidence, TestEvidence
+from radius_confidence.domain import (
+    AnalysisEvidence,
+    CoveragePercent,
+    ImpactEvidence,
+    TestEvidence,
+    TestRunOutcome,
+)
 from radius_confidence.dto import GenerateConfidenceReportCommand
 from radius_graph.application import GraphApplicationService
-from radius_graph.domain import GraphEdgeType, GraphNodeId, GraphNodeType, GraphSnapshot
+from radius_graph.domain import GraphSnapshot
 from radius_graph.dto import BuildGraphCommand
 from radius_graph.interfaces.graph_store import GraphStore
+from radius_graph.traversal import file_dependents
 from radius_parser.application import ParserApplicationService
 from radius_parser.dto import ParseRepositoryCommand
 from radius_parser.extractors.typescript import TypeScriptExtractor
+from radius_shared.logging import get_logger
 from radius_testing.application import TestingApplicationService
 from radius_testing.dto import (
     DiscoverTestsCommand,
@@ -29,6 +37,13 @@ from radius_testing.dto import (
     PlanTestRunCommand,
     SelectTestsCommand,
 )
+from radius_testing.infrastructure.impact_mapping import (
+    ChangedFileRef,
+    map_changes_to_tests,
+)
+from radius_testing.infrastructure.selection import PathBasedTestSelector
+
+LOGGER = get_logger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +70,7 @@ class AnalysisExecutionResult:
     selected_tests: int
     confidence_score: float
     risk_level: str
+    verification_status: str = "insufficient_evidence"
 
 
 class Phase1AnalysisOrchestrator:
@@ -68,6 +84,7 @@ class Phase1AnalysisOrchestrator:
         graph_store: GraphStore,
         testing_service: TestingApplicationService,
         confidence_service: ConfidenceApplicationService,
+        execute_tests: bool = True,
     ) -> None:
         self._analysis = analysis_service
         self._parser = parser_service
@@ -75,6 +92,7 @@ class Phase1AnalysisOrchestrator:
         self._graph_store = graph_store
         self._testing = testing_service
         self._confidence = confidence_service
+        self._execute_tests = execute_tests
 
     def execute(self, command: ExecuteAnalysisCommand) -> AnalysisExecutionResult:
         """Execute one analysis and mark its lifecycle status."""
@@ -92,18 +110,22 @@ class Phase1AnalysisOrchestrator:
         changes = self._analyze_changes(command)
         changed_paths = tuple(item.path for item in changes.changed_files)
 
-        # --- PHASE 2 POC INTEGRATION ---
-        pruned_files = set()
-        try:
-            pruned_files = self._run_semantic_cpg_poc(
-                command.repository_path, changed_paths, command.diff_text
-            )
-        except Exception as e:
-            print(f"[PHASE 2 POC] Error running semantic cpg pipeline: {e}")
+        # NOTE: the experimental LLM "semantic pruning" step is intentionally
+        # NOT part of this pipeline. It could remove files (and therefore
+        # tests) from the blast radius based on an unvalidated model judgment,
+        # which is a false-safety risk. See docs/audit/RADIUS_AUDIT.md.
 
         parse_result = self._parser.parse_repository_result(
             ParseRepositoryCommand(repository_path=command.repository_path)
         )
+        if parse_result.parse_failures:
+            LOGGER.warning(
+                "Some source files could not be parsed",
+                extra={
+                    "analysis_id": str(command.analysis_id),
+                    "parse_failures": len(parse_result.parse_failures),
+                },
+            )
         graph_response = self._graph.build_graph(
             BuildGraphCommand(
                 repository_id=command.repository_id,
@@ -112,29 +134,43 @@ class Phase1AnalysisOrchestrator:
             )
         )
         graph_snapshot = self._require_graph_snapshot(command.analysis_id)
-        affected_paths = self._affected_file_paths(graph_snapshot, changed_paths)
-
-        # [NEW] Actually apply the AI pruning to the pipeline so the UI receives the filtered results!
-        if pruned_files:
-            affected_paths = tuple(
-                p for p in affected_paths if p.replace("\\", "/") not in pruned_files
+        dependents = file_dependents(graph_snapshot.graph, changed_paths)
+        affected_paths = tuple(
+            sorted(
+                {path for reached in dependents.values() for path in reached}
+                - set(changed_paths)
             )
+        )
 
-        self._testing.discover_tests(DiscoverTestsCommand(command.repository_path))
+        discovered_tests = self._testing.discover_test_cases(
+            DiscoverTestsCommand(command.repository_path, command.repository_id)
+        )
+        selector = PathBasedTestSelector()
+        mapping = map_changes_to_tests(
+            changed_files=tuple(
+                ChangedFileRef(item.path, item.change_type)
+                for item in changes.changed_files
+            ),
+            dependents=dependents,
+            test_paths=frozenset(test.path.value for test in discovered_tests),
+            conventional_tests={
+                path: selector.conventional_matches(path, discovered_tests)
+                for path in changed_paths
+            },
+            parse_failures=frozenset(parse_result.parse_failures),
+        )
         selection = self._testing.select_tests(
             SelectTestsCommand(
                 analysis_id=command.analysis_id,
                 changed_file_paths=changed_paths,
                 affected_file_paths=affected_paths,
+                available_tests=discovered_tests,
+                full_suite_reasons=mapping.full_suite_reasons,
             )
         )
         self._testing.plan_test_run(PlanTestRunCommand(command.analysis_id))
-        test_result = self._testing.execute_test_run(
-            ExecuteTestRunCommand(
-                analysis_id=command.analysis_id,
-                repository_path=command.repository_path,
-            )
-        )
+        test_evidence = self._run_or_defer_tests(command, selection.selected_count)
+
         blast_radius = self._analysis.compute_blast_radius(
             ComputeBlastRadiusCommand(
                 analysis_id=command.analysis_id,
@@ -155,24 +191,27 @@ class Phase1AnalysisOrchestrator:
                     affected_tests=blast_radius.affected_tests,
                     dependency_depth=blast_radius.dependency_depth,
                 ),
-                tests=TestEvidence(
-                    total_tests=test_result.total_tests,
-                    passed=test_result.passed,
-                    failed=test_result.failed,
-                    skipped=test_result.skipped,
-                    coverage_percent=(
-                        CoveragePercent(test_result.coverage_percent)
-                        if test_result.coverage_percent is not None
-                        else None
-                    ),
+                tests=test_evidence,
+                analysis=AnalysisEvidence(
+                    changed_files=len(changed_paths),
+                    covered_files=mapping.covered_files,
+                    unmapped_files=mapping.unmapped_files,
+                    unanalyzed_files=mapping.unanalyzed_files,
+                    non_executable_files=mapping.non_executable_files,
+                    parse_failures=mapping.parse_failures,
+                    full_suite_fallback_reasons=mapping.full_suite_reasons,
                 ),
             ),
         )
-        print(
-            f"[TEST SELECTION] Selected {selection.selected_count}/{selection.total_count} "
-            f"tests ({selection.skipped_count} skipped, {selection.time_saved_percent}% time saved)"
+        LOGGER.info(
+            "Analysis completed",
+            extra={
+                "analysis_id": str(command.analysis_id),
+                "selected_tests": selection.selected_count,
+                "discovered_tests": selection.total_count,
+                "verification_status": confidence.verification_status,
+            },
         )
-        print(f"[TEST SELECTION] CLI args: {selection.cli_args}")
         return AnalysisExecutionResult(
             analysis_id=command.analysis_id,
             changed_file_count=len(changes.changed_files),
@@ -182,6 +221,48 @@ class Phase1AnalysisOrchestrator:
             selected_tests=selection.selected_count,
             confidence_score=confidence.confidence_score,
             risk_level=confidence.risk_level,
+            verification_status=confidence.verification_status,
+        )
+
+    def _run_or_defer_tests(
+        self,
+        command: ExecuteAnalysisCommand,
+        selected_count: int,
+    ) -> TestEvidence:
+        if not self._execute_tests:
+            return TestEvidence(
+                total_tests=0,
+                passed=0,
+                failed=0,
+                skipped=0,
+                run_outcome=TestRunOutcome.NOT_RUN,
+                run_detail="in-worker test execution is disabled",
+            )
+        if selected_count == 0:
+            return TestEvidence(total_tests=0, passed=0, failed=0, skipped=0)
+        result = self._testing.execute_test_run(
+            ExecuteTestRunCommand(
+                analysis_id=command.analysis_id,
+                repository_path=command.repository_path,
+            )
+        )
+        outcome = (
+            TestRunOutcome.ERROR
+            if result.status == "error"
+            else TestRunOutcome.COMPLETED
+        )
+        return TestEvidence(
+            total_tests=result.total_tests,
+            passed=result.passed,
+            failed=result.failed,
+            skipped=result.skipped,
+            coverage_percent=(
+                CoveragePercent(result.coverage_percent)
+                if result.coverage_percent is not None
+                else None
+            ),
+            run_outcome=outcome,
+            run_detail=(result.output.splitlines()[0][:200] if outcome != TestRunOutcome.COMPLETED and result.output else None),
         )
 
     def _run_semantic_cpg_poc(
@@ -360,32 +441,3 @@ class Phase1AnalysisOrchestrator:
             msg = f"Graph snapshot for analysis {analysis_id} was not found."
             raise ValueError(msg)
         return snapshot
-
-    @staticmethod
-    def _affected_file_paths(
-        graph_snapshot: GraphSnapshot,
-        changed_paths: tuple[str, ...],
-    ) -> tuple[str, ...]:
-        start_ids = {GraphNodeId(f"file:{path}") for path in changed_paths}
-        graph_node_ids = graph_snapshot.graph.node_ids()
-        affected = {node_id for node_id in start_ids if node_id in graph_node_ids}
-        frontier = set(affected)
-        while frontier:
-            next_frontier: set[GraphNodeId] = set()
-            for edge in graph_snapshot.graph.edges:
-                if (
-                    edge.edge_type == GraphEdgeType.DEPENDS_ON
-                    and edge.target_id in frontier
-                    and edge.source_id not in affected
-                ):
-                    affected.add(edge.source_id)
-                    next_frontier.add(edge.source_id)
-            frontier = next_frontier
-        paths = {
-            node.path
-            for node in graph_snapshot.graph.nodes
-            if node.id in affected
-            and node.node_type == GraphNodeType.FILE
-            and node.path is not None
-        }
-        return tuple(sorted(paths - set(changed_paths)))

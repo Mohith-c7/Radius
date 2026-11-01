@@ -31,6 +31,7 @@ def test_signed_webhook_runs_through_sql_worker_to_confidence(
     monkeypatch.setenv("STORAGE_BACKEND", "sql")
     monkeypatch.setenv("GITHUB_WEBHOOK_SECRET", "secret")
     monkeypatch.setenv("GITHUB_DEFAULT_ORGANIZATION_ID", str(organization_id))
+    monkeypatch.setenv("GITHUB_SINGLE_TENANT", "true")
     monkeypatch.setenv("REPOSITORY_CACHE_DIR", str(tmp_path / "cache"))
     get_api_settings.cache_clear()
 
