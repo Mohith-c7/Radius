@@ -17,6 +17,7 @@ def test_publisher_creates_check_run_and_pr_comment() -> None:
         summary="Relevant tests passed.",
         recommendations=("Keep coverage close to changed modules.",),
         dashboard_url="https://radius.example/analyses/1",
+        verification_status="verified",
     )
 
     publisher.publish(installation_id=123, report=report)
@@ -45,6 +46,7 @@ def test_publisher_updates_existing_check_run_and_pr_comment() -> None:
         risk_level="medium",
         summary="Some affected files do not have direct coverage.",
         recommendations=("Review affected modules.",),
+        verification_status="insufficient_evidence",
     )
 
     publisher.publish(installation_id=123, report=report)

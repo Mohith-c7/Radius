@@ -48,25 +48,36 @@ class TestingApplicationService:
     ) -> TestDiscoveryResponse:
         """Discover and store test cases."""
 
-        if not command.repository_path.exists() or not command.repository_path.is_dir():
-            msg = f"Repository path does not exist: {command.repository_path}."
-            raise ValidationError(msg)
-        tests = self._store.save_test_cases(
-            self._discoverer.discover(command.repository_path)
-        )
+        tests = self.discover_test_cases(command)
         return TestDiscoveryResponse(
             test_count=len(tests),
             tests=tuple(TestCaseResponse.from_entity(test) for test in tests),
         )
 
+    def discover_test_cases(self, command: DiscoverTestsCommand) -> tuple:
+        """Discover, persist, and return the test cases of one snapshot."""
+
+        if not command.repository_path.exists() or not command.repository_path.is_dir():
+            msg = f"Repository path does not exist: {command.repository_path}."
+            raise ValidationError(msg)
+        discovered = self._discoverer.discover(command.repository_path)
+        self._store.save_test_cases(discovered)
+        return discovered
+
     def select_tests(self, command: SelectTestsCommand) -> TestSelectionResponse:
         """Select tests for changed and affected paths."""
 
+        tests = (
+            command.available_tests
+            if command.available_tests is not None
+            else self._store.list_test_cases()
+        )
         selection = self._selector.select(
             command.analysis_id,
-            self._store.list_test_cases(),
+            tests,
             command.changed_file_paths,
             command.affected_file_paths,
+            full_suite_reasons=command.full_suite_reasons,
         )
         return TestSelectionResponse.from_entity(
             self._store.save_selection(selection)

@@ -18,6 +18,15 @@ IMPORT_RE = re.compile(
     r"""^\s*(?:import\s+(?:type\s+)?(?:.+?\s+from\s+)?|export\s+.+?\s+from\s+)["'](?P<source>[^"']+)["']""",
 )
 REQUIRE_RE = re.compile(r"""require\(["'](?P<source>[^"']+)["']\)""")
+# Whole-file patterns: formatters routinely split import specifiers across
+# lines (``import {\n  a,\n  b,\n} from "./x"``), which a per-line regex misses.
+MODULE_IMPORT_RE = re.compile(
+    r"""(?:^|[;\n])\s*(?:import|export)\b[^;'"`]*?\bfrom\s*["'](?P<source>[^"'\n]+)["']""",
+)
+SIDE_EFFECT_IMPORT_RE = re.compile(r"""(?:^|[;\n])\s*import\s*["'](?P<source>[^"'\n]+)["']""")
+CALL_IMPORT_RE = re.compile(
+    r"""\b(?:require|import)\s*\(\s*["'](?P<source>[^"'\n]+)["']\s*\)""",
+)
 CLASS_RE = re.compile(
     r"""^\s*(?:export\s+)?(?:abstract\s+)?class\s+""" r"""(?P<name>[A-Za-z_$][\w$]*)""",
 )
@@ -54,16 +63,10 @@ class TypeScriptLikeParser:
         symbols: list[Symbol] = []
         exports: dict[str, ExportReference] = {}
 
+        imports.extend(self._imports(source))
+
         for line_number, line in enumerate(source.splitlines(), start=1):
             location = SourceLocation(start_line=line_number)
-            import_match = IMPORT_RE.search(line) or REQUIRE_RE.search(line)
-            if import_match is not None:
-                imports.append(
-                    ImportReference(
-                        source=import_match.group("source"),
-                        location=location,
-                    )
-                )
 
             symbol = self._symbol_from_line(line, location)
             if symbol is not None:
@@ -94,6 +97,22 @@ class TypeScriptLikeParser:
         if source_file.absolute_path is None:
             return ""
         return source_file.absolute_path.read_text(encoding="utf-8")
+
+    @staticmethod
+    def _imports(source: str) -> list[ImportReference]:
+        found: dict[tuple[str, int], ImportReference] = {}
+        for pattern in (MODULE_IMPORT_RE, SIDE_EFFECT_IMPORT_RE, CALL_IMPORT_RE):
+            for match in pattern.finditer(source):
+                line = source.count("\n", 0, match.start("source")) + 1
+                key = (match.group("source"), line)
+                found.setdefault(
+                    key,
+                    ImportReference(
+                        source=match.group("source"),
+                        location=SourceLocation(start_line=line),
+                    ),
+                )
+        return [found[key] for key in sorted(found, key=lambda item: (item[1], item[0]))]
 
     @staticmethod
     def _symbol_from_line(line: str, location: SourceLocation) -> Symbol | None:

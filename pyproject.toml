@@ -33,9 +33,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-  "black>=24.10.0",
-  "pytest>=8.3.0",
-  "ruff>=0.8.0",
+  "black==26.10.1",
+  "pytest==9.2.0",
+  "ruff==0.17.3",
 ]
 
 [tool.setuptools]
@@ -62,7 +62,6 @@ ignore = ["E501", "B008"]
 
 [tool.pytest.ini_options]
 addopts = "-q --import-mode=importlib"
-asyncio_default_fixture_loop_scope = "function"
 filterwarnings = [
   "ignore::FutureWarning:google.generativeai.*",
 ]

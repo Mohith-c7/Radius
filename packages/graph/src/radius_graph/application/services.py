@@ -111,15 +111,19 @@ class GraphApplicationService:
                     edge_type=GraphEdgeType.DEPENDS_ON,
                 )
             )
-            resolved_file_id = module_resolver.resolve(file_path, item.source)
-            if resolved_file_id is not None and resolved_file_id != file_id:
-                edges.add(
-                    GraphEdge(
-                        source_id=file_id,
-                        target_id=resolved_file_id,
-                        edge_type=GraphEdgeType.DEPENDS_ON,
+            for resolved_file_id in module_resolver.resolve_all(
+                file_path,
+                item.source,
+                getattr(item, "names", ()),
+            ):
+                if resolved_file_id != file_id:
+                    edges.add(
+                        GraphEdge(
+                            source_id=file_id,
+                            target_id=resolved_file_id,
+                            edge_type=GraphEdgeType.DEPENDS_ON,
+                        )
                     )
-                )
 
         for item in parsed_file.exports:
             export_id = self.export_node_id(file_path, item.name)

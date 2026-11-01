@@ -78,6 +78,11 @@ class SqlAlchemyConfidenceStore:
             raise ValidationError(msg)
         return saved
 
+    def replace_report(self, report: ConfidenceReport) -> ConfidenceReport:
+        """Replace the report for an analysis (``save_report`` already upserts)."""
+
+        return self.save_report(report)
+
     def get_by_analysis_id(self, analysis_id: UUID) -> ConfidenceReport | None:
         """Return confidence report by analysis id."""
 

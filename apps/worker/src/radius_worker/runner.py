@@ -86,7 +86,7 @@ class SqlAlchemyWorkerRuntime:
             return False
         try:
             with self.session_factory() as session:
-                orchestrator = _create_sql_orchestrator(session)
+                orchestrator = _create_sql_orchestrator(session, self.settings)
                 clone_headers = _github_clone_headers(
                     session=session,
                     analysis_id=job.analysis_id,
@@ -116,11 +116,20 @@ class SqlAlchemyWorkerRuntime:
             )
             with self.session_factory() as session:
                 queue = self._queue(session)
-                if job.attempts >= self.settings.job_max_attempts:
+                final_attempt = job.attempts >= self.settings.job_max_attempts
+                if final_attempt:
                     queue.fail(job.analysis_id, str(exc))
                 else:
                     queue.requeue(job.analysis_id, str(exc))
                 session.commit()
+                if final_attempt:
+                    _publish_github_failure(
+                        session=session,
+                        analysis_id=job.analysis_id,
+                        settings=self.settings,
+                        github_client=self.github_client,
+                        error=exc,
+                    )
             raise
         return True
 
@@ -307,8 +316,13 @@ def load_persisted_analysis_command(
     )
 
 
-def _create_sql_orchestrator(session: Session) -> Phase1AnalysisOrchestrator:
+def _create_sql_orchestrator(
+    session: Session,
+    settings: WorkerSettings | None = None,
+) -> Phase1AnalysisOrchestrator:
     graph_store = SqlAlchemyGraphStore(session)
+    execute_tests = bool(settings.execute_tests) if settings is not None else False
+    timeout = settings.test_timeout_seconds if settings is not None else 600
     return Phase1AnalysisOrchestrator(
         analysis_service=AnalysisApplicationService(
             SqlAlchemyAnalysisStore(session),
@@ -326,12 +340,13 @@ def _create_sql_orchestrator(session: Session) -> Phase1AnalysisOrchestrator:
             selector=PathBasedTestSelector(),
             store=SqlAlchemyTestStore(session),
             planner=StaticTestCommandPlanner(),
-            runner=SubprocessTestRunner(),
+            runner=SubprocessTestRunner(timeout_seconds=timeout),
         ),
         confidence_service=ConfidenceApplicationService(
             scorer=DeterministicConfidenceScorer(),
             store=SqlAlchemyConfidenceStore(session),
         ),
+        execute_tests=execute_tests,
     )
 
 
@@ -415,6 +430,56 @@ def _publish_github_result(
         )
 
 
+def _publish_github_failure(
+    *,
+    session: Session,
+    analysis_id,
+    settings: WorkerSettings,
+    github_client: GitHubAppClient,
+    error: Exception,
+) -> None:
+    """Complete the check run so a crashed analysis never looks pending or passing."""
+
+    github_settings = _github_settings(settings)
+    if not settings.github_publish_results or not github_settings.enabled:
+        return
+    try:
+        analysis = session.get(db_models.Analysis, analysis_id)
+        repository = (
+            session.get(db_models.Repository, analysis.repository_id)
+            if analysis is not None
+            else None
+        )
+        if analysis is None or repository is None:
+            return
+        publisher = GitHubAnalysisPublisher(github_client)
+        if not hasattr(publisher, "publish_failure"):
+            return
+        publisher.publish_failure(
+            installation_id=_github_installation_id(
+                session=session,
+                analysis_id=analysis_id,
+                settings=settings,
+            ),
+            owner=repository.owner,
+            repository_name=repository.name,
+            head_sha=analysis.commit_sha,
+            # Exception text can contain repository-controlled content; keep it short.
+            error_summary=f"{error.__class__.__name__}: {str(error)[:300]}",
+            dashboard_url=(
+                f"{settings.dashboard_base_url.rstrip('/')}/analyses/{analysis_id}"
+                if settings.dashboard_base_url
+                else None
+            ),
+        )
+    except Exception as publish_exc:  # pragma: no cover - best effort
+        LOGGER.warning(
+            "Could not publish GitHub failure status: %s",
+            publish_exc,
+            extra={"analysis_id": str(analysis_id)},
+        )
+
+
 def _github_installation_id(
     *,
     session: Session,
@@ -472,20 +537,35 @@ def _github_report(
         len(test_selection.selected_tests) if test_selection else 0
     )
 
-    test_runs = (
-        session.query(db_models.TestRun)
-        .filter_by(analysis_id=analysis_id)
-        .all()
+    discovered_tests_count = (
+        selected_tests_count
+        + len(getattr(test_selection, "skipped_tests", None) or ())
+        if test_selection
+        else 0
     )
-    skipped_tests_count = sum(tr.skipped for tr in test_runs)
-    total_tests = sum(tr.total_tests for tr in test_runs)
-    time_saved_percent = (
-        round((skipped_tests_count / total_tests) * 100, 1)
-        if total_tests > 0
-        else 0.0
+    discovered_tests_count = max(
+        discovered_tests_count,
+        int(getattr(test_selection, "total_discovered_count", 0) or 0)
+        if test_selection
+        else 0,
     )
+    # "Skipped" here means "not selected", which is NOT time saved unless the
+    # full suite would otherwise have run. Do not present it as savings.
+    skipped_tests_count = max(0, discovered_tests_count - selected_tests_count)
 
     affected_files = tuple(cf.path for cf in (analysis.changed_files or ()))
+    evidence_items = list(getattr(confidence, "evidence_items", None) or ())
+    verification_gaps = tuple(
+        item.message
+        for item in evidence_items
+        if item.category == "analysis" and item.label == "verdict_gap"
+    )
+    unmapped_files = tuple(
+        item.message
+        for item in evidence_items
+        if item.category == "analysis"
+        and item.label in {"unmapped_changed_file", "unanalyzed_changed_file", "parse_failure"}
+    )
 
     return GitHubAnalysisReport(
         analysis_id=analysis.id,
@@ -500,9 +580,21 @@ def _github_report(
         dashboard_url=dashboard_url,
         selected_tests_count=selected_tests_count,
         skipped_tests_count=skipped_tests_count,
-        time_saved_percent=time_saved_percent,
+        time_saved_percent=0.0,
         affected_files=affected_files,
+        **_optional_report_fields(
+            discovered_tests_count=discovered_tests_count,
+            verification_gaps=verification_gaps,
+            unmapped_files=unmapped_files,
+        ),
         change_risk=confidence.change_risk,
         verification_status=confidence.verification_status,
         analysis_completeness=float(confidence.analysis_completeness) if confidence.analysis_completeness is not None else None,
     )
+
+
+def _optional_report_fields(**fields) -> dict:
+    """Pass only the report fields supported by the installed publisher."""
+
+    supported = getattr(GitHubAnalysisReport, "__dataclass_fields__", {})
+    return {key: value for key, value in fields.items() if key in supported}

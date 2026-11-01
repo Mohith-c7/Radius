@@ -6,14 +6,19 @@ from uuid import UUID
 from radius_shared.errors import NotFoundError
 
 from radius_confidence.domain.entities import (
+    AnalysisEvidence,
     ConfidenceReport,
     ImpactEvidence,
     TestEvidence,
+    TestRunOutcome,
 )
-from radius_confidence.domain.enums import RiskLevel
+from radius_confidence.domain.enums import RiskLevel, VerificationStatus
 from radius_confidence.domain.value_objects import CoveragePercent
 from radius_confidence.dto.commands import GenerateConfidenceReportCommand
 from radius_confidence.dto.responses import ConfidenceReportResponse
+from radius_confidence.infrastructure.scoring import (
+    analysis_evidence_from_report_evidence,
+)
 from radius_confidence.interfaces.scoring import ConfidenceScorer
 from radius_confidence.interfaces.store import ConfidenceStore
 
@@ -36,21 +41,12 @@ class ConfidenceApplicationService:
     ) -> ConfidenceReportResponse:
         """Generate and persist a confidence report."""
 
-        result = self._scorer.score(command.impact, command.tests)
-        score, evidence = result[0], result[1]
-        metrics = result.metrics
-        report = ConfidenceReport(
-            id=None,
+        report = self._build_report(
             analysis_id=command.analysis_id,
-            confidence_score=score,
-            risk_level=self._risk_level(score.value),
-            summary=f"Confidence score is {score.value:.1f}.",
-            evidence=evidence,
-            recommendations=self._recommendations(score.value),
-            change_risk=metrics["change_risk"],
-            verification_confidence=metrics["verification_confidence"],
-            analysis_completeness=metrics["analysis_completeness"],
-            verification_status=metrics["verification_status"],
+            impact=command.impact,
+            tests=command.tests,
+            analysis=command.analysis,
+            source="Radius analysis",
         )
         return ConfidenceReportResponse.from_entity(self._store.save_report(report))
 
@@ -69,17 +65,34 @@ class ConfidenceApplicationService:
         test_result: TestRunResultResponse | TestRunResult,
         impact: ImpactEvidence | None = None,
     ) -> ConfidenceReportResponse:
-        """Recalculate confidence score and report from CI test run results."""
+        """Re-score an analysis after CI test results were ingested.
+
+        The change-to-test mapping recorded by the original analysis is reused.
+        If no mapping was recorded, the verdict cannot become ``verified``: a
+        CI report alone does not prove the changed code was exercised.
+        """
+
         existing = self._store.get_by_analysis_id(analysis_id)
+        analysis = (
+            analysis_evidence_from_report_evidence(existing.evidence)
+            if existing is not None
+            else None
+        )
         if impact is None:
-            # Try to get impact from existing report if present, or use safe default
             impact = ImpactEvidence(
-                affected_files=1,
-                affected_symbols=1,
-                affected_modules=1,
+                affected_files=0,
+                affected_symbols=0,
+                affected_modules=0,
                 affected_tests=test_result.total_tests,
-                dependency_depth=1,
+                dependency_depth=0,
             )
+        status = getattr(test_result, "status", None)
+        status_value = getattr(status, "value", status)
+        outcome = (
+            TestRunOutcome.ERROR
+            if status_value == "error"
+            else TestRunOutcome.COMPLETED
+        )
         test_evidence = TestEvidence(
             total_tests=test_result.total_tests,
             passed=test_result.passed,
@@ -90,27 +103,68 @@ class ConfidenceApplicationService:
                 if getattr(test_result, "coverage_percent", None) is not None
                 else None
             ),
+            run_outcome=outcome,
         )
-        result = self._scorer.score(impact, test_evidence)
+        report = self._build_report(
+            analysis_id=analysis_id,
+            impact=impact,
+            tests=test_evidence,
+            analysis=analysis,
+            source="CI test results",
+        )
+        return ConfidenceReportResponse.from_entity(self._store.replace_report(report))
+
+    def _build_report(
+        self,
+        *,
+        analysis_id: UUID,
+        impact: ImpactEvidence,
+        tests: TestEvidence,
+        analysis: AnalysisEvidence | None,
+        source: str,
+    ) -> ConfidenceReport:
+        result = self._scorer.score(impact, tests, analysis)
         score, evidence = result[0], result[1]
         metrics = result.metrics
-        report = ConfidenceReport(
+        status = metrics["verification_status"]
+        gaps = tuple(metrics.get("verification_gaps", ()))
+        return ConfidenceReport(
             id=None,
             analysis_id=analysis_id,
             confidence_score=score,
             risk_level=self._risk_level(score.value),
-            summary=f"Confidence score updated from CI test run: {score.value:.1f}.",
+            summary=self._summary(status, score.value, gaps, source),
             evidence=evidence,
-            recommendations=self._recommendations(score.value),
+            recommendations=self._recommendations(status, score.value, gaps),
             change_risk=metrics["change_risk"],
             verification_confidence=metrics["verification_confidence"],
             analysis_completeness=metrics["analysis_completeness"],
-            verification_status=metrics["verification_status"],
+            verification_status=status,
         )
-        if existing is not None and hasattr(self._store, "_reports"):
-            self._store._reports.pop(analysis_id, None)
-        return ConfidenceReportResponse.from_entity(self._store.save_report(report))
 
+    @staticmethod
+    def _summary(
+        status: str,
+        score: float,
+        gaps: tuple[str, ...],
+        source: str,
+    ) -> str:
+        verdict = {
+            VerificationStatus.VERIFIED.value: (
+                "Verified: every executable change is covered by selected tests "
+                "that ran and passed."
+            ),
+            VerificationStatus.FAILED.value: "Failed: at least one selected test failed.",
+            VerificationStatus.INSUFFICIENT_EVIDENCE.value: (
+                "Not verified: Radius does not have enough evidence to call this "
+                "change safe."
+            ),
+        }.get(status, f"Verdict: {status}.")
+        detail = f" Gaps: {'; '.join(gaps)}." if gaps else ""
+        return (
+            f"{verdict}{detail} Heuristic score {score:.1f}/100 from {source} "
+            "(not a calibrated probability)."
+        )
 
     @staticmethod
     def _risk_level(score: float) -> RiskLevel:
@@ -123,11 +177,19 @@ class ConfidenceApplicationService:
         return RiskLevel.CRITICAL
 
     @staticmethod
-    def _recommendations(score: float) -> tuple[str, ...]:
+    def _recommendations(
+        status: str,
+        score: float,
+        gaps: tuple[str, ...] = (),
+    ) -> tuple[str, ...]:
+        if status == VerificationStatus.FAILED.value:
+            return ("Block merge until the failing selected tests are fixed.",)
+        if status == VerificationStatus.INSUFFICIENT_EVIDENCE.value:
+            return (
+                "Do not treat this pull request as verified.",
+                *(f"Resolve: {gap}." for gap in gaps),
+                "Run the full test suite or add tests that exercise the unmapped changes.",
+            )
         if score >= 85:
             return ("Proceed with standard review.",)
-        if score >= 70:
-            return ("Review impacted files and confirm selected tests.",)
-        if score >= 50:
-            return ("Add focused tests before merging.",)
-        return ("Block merge until failures and coverage gaps are resolved.",)
+        return ("Selected tests passed, but the blast radius is large; review impacted files.",)

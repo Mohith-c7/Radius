@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import posixpath
 from pathlib import PurePosixPath
 
 from radius_parser.domain.entities import ParsedSourceFile
@@ -28,6 +29,29 @@ class ModuleResolver:
                 return node_id
         return None
 
+    def resolve_all(
+        self,
+        importer_path: str,
+        source: str,
+        names: tuple[str, ...] = (),
+    ) -> tuple[GraphNodeId, ...]:
+        """Resolve an import, including ``from package import submodule`` forms.
+
+        ``from shop import cart`` depends on ``shop/__init__.py`` *and* on
+        ``shop/cart.py`` when that submodule exists. Both edges are returned.
+        """
+
+        resolved: list[GraphNodeId] = []
+        package = self.resolve(importer_path, source)
+        if package is not None:
+            resolved.append(package)
+        separator = "" if source.endswith(".") else "."
+        for name in names:
+            submodule = self.resolve(importer_path, f"{source}{separator}{name}")
+            if submodule is not None and submodule not in resolved:
+                resolved.append(submodule)
+        return tuple(resolved)
+
     @classmethod
     def _build_index(
         cls,
@@ -38,20 +62,37 @@ class ModuleResolver:
             source_path = parsed_file.source_file.path.value
             path = PurePosixPath(cls._normalize_path(source_path))
             file_id = GraphNodeId(f"file:{path.as_posix()}")
-            without_suffix = path.with_suffix("").as_posix()
-            cls._put(index, file_id, path.as_posix(), without_suffix)
-            cls._put(index, file_id, without_suffix.replace("/", "."))
+            for root in cls._import_roots(path):
+                without_suffix = root.with_suffix("").as_posix()
+                cls._put(index, file_id, root.as_posix(), without_suffix)
+                cls._put(index, file_id, without_suffix.replace("/", "."))
 
-            if path.stem in {"__init__", "index"}:
-                package_path = path.parent.as_posix()
-                if package_path != ".":
-                    cls._put(
-                        index,
-                        file_id,
-                        package_path,
-                        package_path.replace("/", "."),
-                    )
+                if root.stem in {"__init__", "index"}:
+                    package_path = root.parent.as_posix()
+                    if package_path != ".":
+                        cls._put(
+                            index,
+                            file_id,
+                            package_path,
+                            package_path.replace("/", "."),
+                        )
         return index
+
+    @staticmethod
+    def _import_roots(path: PurePosixPath) -> tuple[PurePosixPath, ...]:
+        """Return the path plus the path relative to any ``src`` root.
+
+        ``packages/billing/src/billing/tax.py`` is imported as ``billing.tax``
+        in src-layout projects, so it is also indexed relative to ``src``.
+        The full repository-relative path is indexed first and wins ties.
+        """
+
+        roots = [path]
+        parts = path.parts
+        for index, part in enumerate(parts[:-1]):
+            if part == "src":
+                roots.append(PurePosixPath(*parts[index + 1 :]))
+        return tuple(roots)
 
     @classmethod
     def _candidates(cls, importer_path: str, source: str) -> tuple[str, ...]:
@@ -116,7 +157,10 @@ class ModuleResolver:
 
     @staticmethod
     def _normalize_path(path: str) -> str:
-        return PurePosixPath(path.replace("\\", "/")).as_posix()
+        # normpath collapses ``a/b/../c`` -> ``a/c`` so relative ``../`` imports
+        # can match indexed repository paths.
+        normalized = posixpath.normpath(path.replace("\\", "/"))
+        return PurePosixPath(normalized).as_posix()
 
     @staticmethod
     def _normalize_source(source: str) -> str:

@@ -14,3 +14,6 @@ class ConfidenceStore(Protocol):
 
     def get_by_analysis_id(self, analysis_id: UUID) -> ConfidenceReport | None:
         """Return confidence report by analysis id."""
+
+    def replace_report(self, report: ConfidenceReport) -> ConfidenceReport:
+        """Replace the confidence report for an analysis (e.g. after CI ingestion)."""

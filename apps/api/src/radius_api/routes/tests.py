@@ -7,8 +7,10 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import PlainTextResponse
 from radius_analysis.application import AnalysisApplicationService
 from radius_confidence.application import ConfidenceApplicationService
+from radius_confidence.domain import ImpactEvidence
 from radius_repository.application import RepositoryApplicationService
 from radius_shared.dto import success_response
+from radius_shared.errors import NotFoundError
 from radius_testing.application import TestingApplicationService
 
 from radius_api.auth import ApiPrincipal, ensure_same_organization, get_api_principal
@@ -68,8 +70,32 @@ async def ingest_test_results(
     ensure_same_organization(principal, repository.organization_id)
     body = await request.body()
     test_result = service.ingest_test_results(analysis_id, body)
-    confidence_service.recalculate_from_test_results(analysis_id, test_result)
+    confidence_service.recalculate_from_test_results(
+        analysis_id,
+        test_result,
+        impact=_stored_impact(analysis_service, analysis_id, test_result.total_tests),
+    )
     return success_response(test_result)
+
+
+def _stored_impact(
+    analysis_service: AnalysisApplicationService,
+    analysis_id: UUID,
+    total_tests: int,
+) -> ImpactEvidence | None:
+    """Reuse the analysis' measured blast radius instead of a fabricated default."""
+
+    try:
+        blast = analysis_service.get_blast_radius(analysis_id)
+    except NotFoundError:
+        return None
+    return ImpactEvidence(
+        affected_files=blast.affected_files,
+        affected_symbols=blast.affected_symbols,
+        affected_modules=blast.affected_modules,
+        affected_tests=blast.affected_tests or total_tests,
+        dependency_depth=blast.dependency_depth,
+    )
 
 
 @router.get("/results")

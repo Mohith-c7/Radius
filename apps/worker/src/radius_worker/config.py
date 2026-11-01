@@ -23,6 +23,18 @@ class WorkerSettings(DatabaseSettings):
         alias="WORKER_JOB_STALE_AFTER_SECONDS",
     )
     job_max_attempts: int = Field(default=3, alias="WORKER_JOB_MAX_ATTEMPTS")
+    execute_tests: bool = Field(
+        default=False,
+        alias="WORKER_EXECUTE_TESTS",
+        description=(
+            "Run selected tests inside the worker. Disabled by default: the "
+            "tests are pull-request-controlled code and the worker process holds "
+            "database and GitHub App credentials. Enable only when the worker "
+            "runs in an isolated sandbox with no credentials; otherwise run the "
+            "selected tests in CI and upload JUnit results."
+        ),
+    )
+    test_timeout_seconds: int = Field(default=600, alias="WORKER_TEST_TIMEOUT_SECONDS")
     dashboard_base_url: str = Field(default="", alias="DASHBOARD_BASE_URL")
     github_publish_results: bool = Field(
         default=True,

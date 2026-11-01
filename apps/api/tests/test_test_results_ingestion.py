@@ -74,7 +74,10 @@ def test_ingest_junit_xml_successful() -> None:
     conf_body = conf_response.json()
     assert conf_body["success"] is True
     conf_data = conf_body["data"]
-    assert conf_data["confidence_score"] >= 80
+    # No analysis recorded which changed files these tests exercise, so passing
+    # CI results alone must not produce a "verified"/low-risk verdict.
+    assert conf_data["verification_status"] == "insufficient_evidence"
+    assert conf_data["confidence_score"] <= 69
 
 
 def test_ingest_junit_xml_with_failures_reduces_confidence() -> None:

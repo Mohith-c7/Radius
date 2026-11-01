@@ -14,5 +14,6 @@ class TestSelector(Protocol):
         tests: tuple[TestCase, ...],
         changed_file_paths: tuple[str, ...],
         affected_file_paths: tuple[str, ...] = (),
+        full_suite_reasons: tuple[str, ...] = (),
     ) -> TestSelection:
         """Return selected tests."""

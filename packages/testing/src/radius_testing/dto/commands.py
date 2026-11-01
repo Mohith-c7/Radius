@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from uuid import UUID
 
+from radius_testing.domain.entities import TestCase
+
 
 @dataclass(frozen=True, slots=True)
 class DiscoverTestsCommand:
@@ -19,6 +21,13 @@ class SelectTestsCommand:
     analysis_id: UUID
     changed_file_paths: tuple[str, ...]
     affected_file_paths: tuple[str, ...] = ()
+    available_tests: tuple[TestCase, ...] | None = None
+    """Tests discovered in *this* repository snapshot.
+
+    When provided, selection never considers tests persisted for other
+    repositories or earlier snapshots.
+    """
+    full_suite_reasons: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

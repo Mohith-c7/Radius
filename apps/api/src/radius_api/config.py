@@ -3,6 +3,7 @@
 from functools import lru_cache
 from uuid import UUID
 
+from pydantic import Field
 from radius_shared.database.session import DatabaseSettings
 
 
@@ -15,6 +16,12 @@ class ApiSettings(DatabaseSettings):
     github_webhook_secret: str = ""
     github_default_organization_id: UUID | None = None
     cors_origins: str = ""
+    seed_demo_data: bool = Field(default=False, alias="RADIUS_SEED_DEMO_DATA")
+    """Seed illustrative demo fixtures and a demo login at startup.
+
+    Off by default and never honoured in production: the demo account uses a
+    publicly documented password and the fixtures are not real analyses.
+    """
 
 
 @lru_cache

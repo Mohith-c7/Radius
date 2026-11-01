@@ -8,6 +8,7 @@ from radius_github.publisher import (
     COMMENT_MARKER,
     GitHubAnalysisPublisher,
     GitHubAnalysisReport,
+    _check_conclusion,
 )
 
 
@@ -114,6 +115,7 @@ def test_update_in_progress_check_run_to_completed() -> None:
         risk_level="low",
         summary="High confidence run.",
         recommendations=("All clear.",),
+        verification_status="verified",
     )
 
     publisher.publish(installation_id=123, report=report)
@@ -125,6 +127,7 @@ def test_update_in_progress_check_run_to_completed() -> None:
     assert updated["status"] == "completed"
     assert updated["conclusion"] == "success"
     assert "92/100" in updated["title"]
+    assert updated["title"].startswith("Radius: Verified")
 
 
 @pytest.mark.parametrize(
@@ -173,7 +176,9 @@ def test_publish_creates_rich_comment_with_metrics_and_blast_radius() -> None:
         summary="Tests and impact look solid.",
         recommendations=("Keep test coverage high.",),
         dashboard_url="https://radius.example/analyses/8",
+        verification_status="verified",
         selected_tests_count=6,
+        discovered_tests_count=24,
         skipped_tests_count=18,
         time_saved_percent=75.0,
         affected_files=("src/auth.py", "src/tokens.py"),
@@ -190,10 +195,10 @@ def test_publish_creates_rich_comment_with_metrics_and_blast_radius() -> None:
     assert "🟢" in body
     assert "85/100" in body
 
-    # Verify test selection savings
-    assert "75.0% time saved" in body
-    assert "6 selected" in body
-    assert "18 skipped" in body
+    # Test selection is reported factually; no unmeasured "time saved" claim
+    assert "6 of 24 discovered test files selected" in body
+    assert "time saved" not in body
+    assert "not a calibrated probability" in body
 
     # Verify AI impact pruning
     assert "3 pruned" in body
@@ -244,3 +249,139 @@ def test_check_run_payload_completed() -> None:
     assert payload["conclusion"] == "success"
     assert "completed_at" in payload
     assert payload["details_url"] == "https://example.com"
+
+
+@pytest.mark.parametrize(
+    ("risk_level", "verification_status", "expected"),
+    [
+        ("low", "verified", "success"),
+        ("medium", "verified", "success"),
+        ("high", "verified", "neutral"),
+        ("critical", "verified", "neutral"),
+        ("low", "failed", "failure"),
+        ("low", "insufficient_evidence", "neutral"),
+        ("low", "unverified", "neutral"),
+        ("low", None, "neutral"),
+        ("low", "something-new", "neutral"),
+    ],
+)
+def test_check_conclusion_is_driven_by_verdict(
+    risk_level: str, verification_status: str | None, expected: str
+) -> None:
+    assert _check_conclusion(risk_level, verification_status) == expected
+
+
+def test_high_score_without_evidence_is_never_a_green_check() -> None:
+    client = FakeGitHubClient()
+    report = GitHubAnalysisReport(
+        analysis_id=uuid4(),
+        owner="acme",
+        repository_name="radius",
+        pull_request_number=11,
+        head_sha="1" * 40,
+        confidence_score=95.0,
+        risk_level="low",
+        summary="Score high but no mapping evidence.",
+        recommendations=("Do not treat this pull request as verified.",),
+        verification_status="insufficient_evidence",
+        verification_gaps=("1 changed file(s) are not reached by any discovered test",),
+        unmapped_files=("src/billing.py",),
+    )
+
+    GitHubAnalysisPublisher(client).publish(installation_id=1, report=report)
+
+    run = client.check_runs[0]
+    assert run["conclusion"] == "neutral"
+    assert run["title"].startswith("Radius: Not verified (insufficient evidence)")
+    assert "heuristic score 95/100" in run["title"]
+    body = client.comments[0]["body"]
+    assert "### Why this is not verified" in body
+    assert "- 1 changed file(s) are not reached by any discovered test" in body
+    assert "Changed files with no test evidence (1)" in body
+    assert "- `src/billing.py`" in body
+    assert "AI Impact Pruning" not in body
+
+
+def test_publish_failure_completes_check_as_neutral_not_pass() -> None:
+    client = FakeGitHubClient(check_runs=[{"id": 77, "started_at": "2026-10-01T00:00:00Z"}])
+
+    GitHubAnalysisPublisher(client).publish_failure(
+        installation_id=5,
+        owner="acme",
+        repository_name="radius",
+        head_sha="2" * 40,
+        error_summary="clone failed",
+        dashboard_url="https://radius.example/analyses/9",
+    )
+
+    assert client.check_runs == []
+    updated = client.updated_check_runs[0]
+    assert updated["check_run_id"] == 77
+    assert updated["status"] == "completed"
+    assert updated["conclusion"] == "neutral"
+    assert updated["title"] == "Radius: analysis failed"
+    assert "No verification was performed" in updated["summary"]
+    assert "clone failed" in updated["text"]
+
+
+def test_publish_failure_creates_check_when_none_exists() -> None:
+    client = FakeGitHubClient()
+
+    GitHubAnalysisPublisher(client).publish_failure(
+        installation_id=5,
+        owner="acme",
+        repository_name="radius",
+        head_sha="3" * 40,
+        error_summary="boom",
+    )
+
+    assert client.check_runs[0]["conclusion"] == "neutral"
+    assert client.updated_check_runs == []
+
+
+def test_human_comment_quoting_marker_is_not_edited() -> None:
+    client = FakeGitHubClient(
+        comments=[
+            {"id": 30, "body": f"quoting {COMMENT_MARKER}", "user": {"type": "User"}},
+            {"id": 31, "body": f"{COMMENT_MARKER}\nold", "user": {"type": "Bot"}},
+        ]
+    )
+    report = GitHubAnalysisReport(
+        analysis_id=uuid4(),
+        owner="acme",
+        repository_name="radius",
+        pull_request_number=12,
+        head_sha="4" * 40,
+        confidence_score=50.0,
+        risk_level="high",
+        summary="s",
+        recommendations=(),
+        verification_status="insufficient_evidence",
+    )
+
+    GitHubAnalysisPublisher(client).publish(installation_id=1, report=report)
+
+    assert client.comments == []
+    assert [item["comment_id"] for item in client.updated_comments] == [31]
+
+
+def test_only_human_comments_with_marker_creates_new_comment() -> None:
+    client = FakeGitHubClient(
+        comments=[{"id": 30, "body": f"quoting {COMMENT_MARKER}", "user": {"type": "User"}}]
+    )
+    report = GitHubAnalysisReport(
+        analysis_id=uuid4(),
+        owner="acme",
+        repository_name="radius",
+        pull_request_number=12,
+        head_sha="5" * 40,
+        confidence_score=50.0,
+        risk_level="high",
+        summary="s",
+        recommendations=(),
+    )
+
+    GitHubAnalysisPublisher(client).publish(installation_id=1, report=report)
+
+    assert len(client.comments) == 1
+    assert client.updated_comments == []

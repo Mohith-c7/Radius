@@ -73,6 +73,9 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Root end-to-end tests
+        run: python -m pytest tests -q
+
       - name: Build
         run: pnpm build
 

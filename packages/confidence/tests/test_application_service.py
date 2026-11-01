@@ -5,6 +5,7 @@ from uuid import uuid4
 import pytest
 from radius_confidence.application import ConfidenceApplicationService
 from radius_confidence.domain import (
+    AnalysisEvidence,
     CoveragePercent,
     ImpactEvidence,
 )
@@ -69,4 +70,5 @@ def _command(analysis_id):
             skipped=0,
             coverage_percent=CoveragePercent(90),
         ),
+        analysis=AnalysisEvidence(changed_files=1, covered_files=("src/app.py",)),
     )
