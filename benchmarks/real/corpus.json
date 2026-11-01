@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "description": "Subjects for benchmarks/real. Executed subjects are Radius's own packages, pinned to the source repo commit; sibling packages they import are provided read-only on PYTHONPATH from the same commit (git archive). The `observed` block of each executed subject is filled by `python benchmarks/real/report.py` from benchmarks/real/results/*.jsonl.",
+  "eligibility": [
+    "Python package with a pytest suite under tests/ that runs standalone (only stdlib/venv deps plus sibling radius_* sources) in under ~10 s",
+    "Baseline full suite on the pinned commit passes with 0 failing test files (otherwise ground truth is ambiguous)",
+    "No network or external services needed by the tests"
+  ],
+  "exclusion": [
+    "packages/analysis, packages/repository, packages/github, apps/*: suites depend on many sibling packages / DB / app wiring; not run in this session",
+    "packages/shared: few non-trivial modules, mostly config/DB glue",
+    "Any subject whose baseline suite fails or is flaky on two consecutive runs"
+  ],
+  "subjects": [
+    {
+      "id": "radius-parser",
+      "subject": "parser",
+      "source": "this repository",
+      "package": "packages/parser",
+      "language": "python",
+      "framework": "pytest",
+      "setup": "PYTHONPATH=<copy>/src:packages/shared/src (from same commit)",
+      "test_command": "python -m pytest -q -p no:cacheprovider -o addopts= --import-mode=importlib tests",
+      "executed": true,
+      "source_sha": "6e354274b5b42497e88c44bca9d7e6121c9e82fe",
+      "observed": {
+        "baseline_failing": [],
+        "baseline_rc": 0,
+        "baseline_seconds": 1.114,
+        "test_files": 10,
+        "source_files": 26,
+        "seed": 1,
+        "mutants_requested": 30
+      }
+    },
+    {
+      "id": "radius-graph",
+      "subject": "graph",
+      "source": "this repository",
+      "package": "packages/graph",
+      "language": "python",
+      "framework": "pytest",
+      "setup": "PYTHONPATH=<copy>/src:packages/parser/src:packages/shared/src (from same commit)",
+      "test_command": "python -m pytest -q -p no:cacheprovider -o addopts= --import-mode=importlib tests",
+      "executed": true,
+      "source_sha": "6e354274b5b42497e88c44bca9d7e6121c9e82fe",
+      "observed": {
+        "baseline_failing": [],
+        "baseline_rc": 0,
+        "baseline_seconds": 2.07,
+        "test_files": 8,
+        "source_files": 21,
+        "seed": 1,
+        "mutants_requested": 30
+      }
+    },
+    {
+      "id": "radius-confidence",
+      "subject": "confidence",
+      "source": "this repository",
+      "package": "packages/confidence",
+      "language": "python",
+      "framework": "pytest",
+      "setup": "PYTHONPATH=<copy>/src:packages/testing/src:packages/shared/src (from same commit)",
+      "test_command": "python -m pytest -q -p no:cacheprovider -o addopts= --import-mode=importlib tests",
+      "executed": true,
+      "source_sha": "6e354274b5b42497e88c44bca9d7e6121c9e82fe",
+      "observed": {
+        "baseline_failing": [],
+        "baseline_rc": 0,
+        "baseline_seconds": 2.46,
+        "test_files": 6,
+        "source_files": 17,
+        "seed": 1,
+        "mutants_requested": 30
+      }
+    },
+    {
+      "id": "radius-testing",
+      "subject": "testing",
+      "source": "this repository",
+      "package": "packages/testing",
+      "language": "python",
+      "framework": "pytest",
+      "setup": "PYTHONPATH=<copy>/src:packages/shared/src (from same commit)",
+      "test_command": "python -m pytest -q -p no:cacheprovider -o addopts= --import-mode=importlib tests",
+      "executed": true,
+      "source_sha": "6e354274b5b42497e88c44bca9d7e6121c9e82fe",
+      "observed": {
+        "baseline_failing": [],
+        "baseline_rc": 0,
+        "baseline_seconds": 7.096,
+        "test_files": 9,
+        "source_files": 25,
+        "seed": 1,
+        "mutants_requested": 30
+      }
+    }
+  ],
+  "external_candidates": [
+    {
+      "id": "bottle",
+      "git_url": "https://github.com/bottlepy/bottle",
+      "sha": null,
+      "language": "python",
+      "framework": "pytest",
+      "setup": "pip install -e . (pinned sha required)",
+      "test_command": "python -m pytest -q test",
+      "executed": false,
+      "note": "Not executed: cloning/executing external code was not permitted in this session. No numbers are reported for this subject."
+    },
+    {
+      "id": "emittery",
+      "git_url": "https://github.com/sindresorhus/emittery",
+      "sha": null,
+      "language": "typescript",
+      "framework": "ava",
+      "setup": "npm ci (pinned sha required)",
+      "test_command": "npx ava",
+      "executed": false,
+      "note": "Not executed: cloning/executing external code was not permitted in this session. No numbers are reported for this subject."
+    }
+  ]
+}

@@ -26,19 +26,18 @@ Can this Pull Request be merged safely?
 2. **Diff-Hunk Line Precision**:
    - Parses unified git diff hunks to identify exact modified line numbers.
    - Slices only symbols directly affected by modified lines, skipping untouched sibling functions in edited files.
-3. **Gemini 2.0 Flash Semantic AI Pruner**:
-   - Evaluates call-site impact to separate benign changes (docstrings, internal refactorings) from true behavioral changes, minimizing CI noise.
-   - Built with fail-safe fallback (`impacted=True`) on missing credentials or API exceptions.
-4. **Predictive Test Selection**:
-   - Maps sliced symbols to exact impacted test files across frameworks (`pytest`, `vitest`, `jest`).
-   - Cuts test run times by up to **80%** while executing only tests relevant to the pull request.
+3. **Gemini Semantic Analysis (experimental, advisory only)**:
+   - A proof-of-concept LLM call-site classifier exists, but it is **not** on the verdict path: no model output can remove tests or dependency edges from the selection (see `docs/audit/RADIUS_AUDIT.md`, P0-8).
+4. **Dependency-Graph Test Selection**:
+   - Selects test files that reach a changed file through the file-level import graph, plus naming-convention matches (`pytest`, `vitest`, `jest`).
+   - Executes only the tests the dependency graph reaches from the change (with a full-suite fallback when the graph cannot map it). No general time-saving figure is claimed; measured selection/time numbers on a small self-evaluation corpus are in [docs/benchmarks/REAL_REPO_BENCHMARK.md](docs/benchmarks/REAL_REPO_BENCHMARK.md).
    - Generates multi-framework CLI strings directly executable in local or CI runners.
 5. **Universal CI Ingestion & Dynamic Confidence Engine**:
    - Ingests standard **JUnit XML** and **JSON** test execution reports from any CI runner.
-   - Dynamically recalculates merge Confidence Scores and Risk Levels (`low`, `medium`, `high`, `critical`) based on live test outcomes.
+   - Uploads are bound to the analysed head commit and must cover the selected tests; the evidence-gated verdict (`verified` / `failed` / `insufficient_evidence`) is recomputed from all uploads. The 0-100 score is a heuristic, not a calibrated probability.
 6. **Rich GitHub App Integration**:
    - Publishes `Radius confidence` Check Runs with `in_progress` status on webhook arrival and `completed` status upon verification.
-   - Formats visual GitHub PR comments with status badges (`🟢`/`🟡`/`🟠`/`🔴`), CI time savings, and collapsible blast radius tables.
+   - Formats GitHub PR comments with the verdict, the reasons a change is not verified, and collapsible blast radius tables. The Check Run is published when the analysis completes; it is not yet re-published after CI uploads (the CI job's exit code is the merge gate for uploaded evidence).
 7. **Interactive Next.js Dashboard**:
    - Interactive SVG Graph Visualizer with layered DAG layout, pan/zoom, filter pills, and symbol inspector drawer.
    - Test Selection Hub with 1-click CLI runner command copy.
@@ -63,7 +62,7 @@ radius/
 │   ├── parser/         Tree-Sitter multi-language AST symbol & import extractors
 │   ├── repository/     Git repository clones, branch tracking, and snapshots
 │   ├── shared/         Database models, auth tokens, configuration, events
-│   └── testing/        Predictive test selector, JUnit XML parser, planners
+│   └── testing/        Graph-driven test selector, JUnit XML parser, planners
 │
 ├── docs/               Deployment, CI integration, architecture, and API docs
 ├── infra/              Alembic database migrations and docker configurations
