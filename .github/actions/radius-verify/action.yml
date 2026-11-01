@@ -1,44 +1,147 @@
 name: Radius verify
 description: >-
-  Upload JUnit results for the tests Radius selected, bound to the PR head
-  commit, so Radius can produce an evidence-gated merge verdict.
+  Run the Radius CI flow for a pull request head commit. `command: plan` waits
+  for the Radius analysis of that commit and writes the selected test files to
+  a file; `command: upload` sends the JUnit report(s) bound to the same commit
+  and reports the evidence-gated verdict. Both steps call scripts/radius_ci.py,
+  so there is a single integration.
 inputs:
+  command:
+    description: "plan | upload | verdict | resolve"
+    required: true
   api-url:
-    description: Radius API base URL.
+    description: Radius API base URL (https).
     required: true
   organization-id:
     description: Radius organization id.
     required: true
-  analysis-id:
-    description: Radius analysis id for this pull request head commit.
-    required: true
   api-key:
-    description: Radius API key (pass from a secret).
+    description: Radius API key (pass from a secret; it is only ever sent as a header).
     required: true
-  junit-path:
-    description: Path to the JUnit XML report produced by the test run.
-    required: true
+  analysis-id:
+    description: >-
+      Optional Radius analysis id. When empty the analysis is looked up from
+      repository + pull-request + commit-sha.
+    required: false
+    default: ""
+  repository:
+    description: Repository as owner/name.
+    required: false
+    default: ${{ github.repository }}
+  pull-request:
+    description: Pull request number.
+    required: false
+    default: ${{ github.event.pull_request.number }}
   commit-sha:
-    description: Commit the tests ran on; must equal the analysed head commit.
+    description: >-
+      PR head commit the tests run on; must equal the analysed head. Do not use
+      GITHUB_SHA on pull_request events (that is the merge commit).
     required: false
     default: ${{ github.event.pull_request.head.sha }}
+  junit-path:
+    description: >-
+      upload only: JUnit XML report path(s), one per line (each line is one
+      upload; Radius accumulates them).
+    required: false
+    default: ""
+  tests-file:
+    description: >-
+      plan only - where to write the selected test paths, one per line
+      (default: $RUNNER_TEMP/radius-selected-tests.txt).
+    required: false
+    default: ""
+  wait-seconds:
+    description: >-
+      How long to wait for the analysis to complete (plan default 900,
+      upload default 120 when empty).
+    required: false
+    default: ""
+  poll-interval-seconds:
+    description: Seconds between status checks.
+    required: false
+    default: "10"
+  require-verified:
+    description: >-
+      upload only: "true" fails the step unless the verdict is verified
+      (recommended when this job is a required status check). Otherwise only
+      a failed verdict fails the step.
+    required: false
+    default: "false"
+outputs:
+  analysis-id:
+    description: The resolved Radius analysis id.
+    value: ${{ steps.radius.outputs.analysis-id }}
+  tests-file:
+    description: plan - path of the file with one selected test path per line.
+    value: ${{ steps.radius.outputs.tests-file }}
+  test-count:
+    description: plan - number of selected test files.
+    value: ${{ steps.radius.outputs.test-count }}
+  has-tests:
+    description: plan - "true" when at least one test file was selected.
+    value: ${{ steps.radius.outputs.has-tests }}
+  verification-status:
+    description: upload - verified | failed | insufficient_evidence.
+    value: ${{ steps.radius.outputs.verification-status }}
 runs:
   using: composite
   steps:
-    - name: Upload test results to Radius
+    - name: Radius ${{ inputs.command }}
+      id: radius
       shell: bash
       env:
-        # Passed via env, never argv, so it does not appear in process listings or logs.
+        # Everything is passed via env, never interpolated into the script, so
+        # inputs (and repository-controlled test paths) cannot inject shell code
+        # and the key never appears in argv, process listings or logs.
         RADIUS_API_KEY: ${{ inputs.api-key }}
+        RADIUS_COMMAND: ${{ inputs.command }}
         RADIUS_API_URL: ${{ inputs.api-url }}
         RADIUS_ORG_ID: ${{ inputs.organization-id }}
         RADIUS_ANALYSIS_ID: ${{ inputs.analysis-id }}
-        RADIUS_JUNIT_PATH: ${{ inputs.junit-path }}
+        RADIUS_REPOSITORY: ${{ inputs.repository }}
+        RADIUS_PR: ${{ inputs.pull-request }}
         RADIUS_COMMIT_SHA: ${{ inputs.commit-sha }}
+        RADIUS_JUNIT_PATHS: ${{ inputs.junit-path }}
+        RADIUS_TESTS_FILE: ${{ inputs.tests-file }}
+        RADIUS_WAIT: ${{ inputs.wait-seconds }}
+        RADIUS_POLL: ${{ inputs.poll-interval-seconds }}
+        RADIUS_REQUIRE_VERIFIED: ${{ inputs.require-verified }}
       run: |
-        python "${GITHUB_ACTION_PATH}/../../../scripts/radius_ci.py" upload \
-          --api "$RADIUS_API_URL" \
-          --org "$RADIUS_ORG_ID" \
-          --analysis "$RADIUS_ANALYSIS_ID" \
-          --junit "$RADIUS_JUNIT_PATH" \
-          --commit "$RADIUS_COMMIT_SHA"
+        set -euo pipefail
+        script="${GITHUB_ACTION_PATH}/../../../scripts/radius_ci.py"
+        case "$RADIUS_COMMAND" in
+          plan|upload|verdict|resolve) ;;
+          *) echo "::error::radius-verify: command must be plan, upload, verdict or resolve" >&2; exit 2 ;;
+        esac
+        args=("$RADIUS_COMMAND" --api "$RADIUS_API_URL" --org "$RADIUS_ORG_ID"
+              --poll-interval "$RADIUS_POLL" --github-output)
+        if [ -n "$RADIUS_ANALYSIS_ID" ]; then
+          args+=(--analysis "$RADIUS_ANALYSIS_ID")
+        else
+          args+=(--repository "$RADIUS_REPOSITORY" --pr "$RADIUS_PR")
+        fi
+        if [ -n "$RADIUS_COMMIT_SHA" ]; then args+=(--commit "$RADIUS_COMMIT_SHA"); fi
+        if [ -n "$RADIUS_WAIT" ]; then args+=(--wait "$RADIUS_WAIT"); fi
+        case "$RADIUS_COMMAND" in
+          plan)
+            RADIUS_TESTS_FILE="${RADIUS_TESTS_FILE:-${RUNNER_TEMP:-.}/radius-selected-tests.txt}"
+            mkdir -p "$(dirname "$RADIUS_TESTS_FILE")"
+            args+=(--output "$RADIUS_TESTS_FILE")
+            ;;
+          upload)
+            found=0
+            while IFS= read -r junit; do
+              [ -z "$junit" ] && continue
+              args+=(--junit "$junit"); found=1
+            done <<< "$RADIUS_JUNIT_PATHS"
+            if [ "$found" -eq 0 ]; then
+              echo "::error::radius-verify: junit-path is required for command: upload" >&2
+              exit 2
+            fi
+            if [ "$RADIUS_REQUIRE_VERIFIED" = "true" ]; then args+=(--require-verified); fi
+            ;;
+          verdict)
+            if [ "$RADIUS_REQUIRE_VERIFIED" = "true" ]; then args+=(--require-verified); fi
+            ;;
+        esac
+        python3 "$script" "${args[@]}"
