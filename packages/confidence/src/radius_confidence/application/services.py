@@ -64,6 +64,7 @@ class ConfidenceApplicationService:
         analysis_id: UUID,
         test_result: TestRunResultResponse | TestRunResult,
         impact: ImpactEvidence | None = None,
+        missing_selected_tests: tuple[str, ...] = (),
     ) -> ConfidenceReportResponse:
         """Re-score an analysis after CI test results were ingested.
 
@@ -104,6 +105,7 @@ class ConfidenceApplicationService:
                 else None
             ),
             run_outcome=outcome,
+            missing_selected_tests=missing_selected_tests,
         )
         report = self._build_report(
             analysis_id=analysis_id,

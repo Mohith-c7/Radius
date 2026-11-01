@@ -10,8 +10,12 @@ from radius_confidence.application import ConfidenceApplicationService
 from radius_confidence.domain import ImpactEvidence
 from radius_repository.application import RepositoryApplicationService
 from radius_shared.dto import success_response
-from radius_shared.errors import NotFoundError
+from radius_shared.errors import ConflictError, NotFoundError
 from radius_testing.application import TestingApplicationService
+from radius_testing.infrastructure.result_matching import (
+    executed_cases,
+    unmatched_selected_tests,
+)
 
 from radius_api.auth import ApiPrincipal, ensure_same_organization, get_api_principal
 from radius_api.dependencies import (
@@ -62,20 +66,53 @@ async def ingest_test_results(
     analysis_service: Annotated[AnalysisApplicationService, Depends(get_analysis_service)],
     repository_service: Annotated[RepositoryApplicationService, Depends(get_repository_service)],
     principal: Annotated[ApiPrincipal, Depends(get_api_principal)],
+    commit_sha: str | None = Query(
+        None,
+        description=(
+            "Commit the results were produced from. When given it must equal the "
+            "analysed head commit, so results from another commit cannot verify it."
+        ),
+    ),
 ):
-    """Ingest test results and update confidence report."""
+    """Ingest test results and update confidence report.
+
+    The results only count as evidence for selected test files that the report
+    shows were executed; selected files absent from the report keep the
+    verdict at ``insufficient_evidence``.
+    """
 
     analysis = analysis_service.get_analysis(analysis_id)
     repository = repository_service.get_repository(analysis.repository_id)
     ensure_same_organization(principal, repository.organization_id)
+    if commit_sha is not None and commit_sha.strip().lower() != analysis.commit_sha.lower():
+        msg = (
+            f"Results are for commit {commit_sha[:12]}, but analysis {analysis_id} "
+            f"analysed {analysis.commit_sha[:12]}."
+        )
+        raise ConflictError(msg)
     body = await request.body()
     test_result = service.ingest_test_results(analysis_id, body)
     confidence_service.recalculate_from_test_results(
         analysis_id,
         test_result,
         impact=_stored_impact(analysis_service, analysis_id, test_result.total_tests),
+        missing_selected_tests=unmatched_selected_tests(
+            _selected_test_paths(service, analysis_id),
+            executed_cases(body),
+        ),
     )
     return success_response(test_result)
+
+
+def _selected_test_paths(
+    service: TestingApplicationService,
+    analysis_id: UUID,
+) -> tuple[str, ...]:
+    try:
+        selection = service.get_selection(analysis_id)
+    except NotFoundError:
+        return ()
+    return tuple(item.test.path for item in selection.selected_tests)
 
 
 def _stored_impact(

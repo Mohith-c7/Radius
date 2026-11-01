@@ -89,10 +89,16 @@ jobs:
           curl -X POST \
             -H "Content-Type: application/xml" \
             -H "X-Radius-Organization-Id: ${{ secrets.RADIUS_ORG_ID }}" \
-            -H "Authorization: Bearer ${{ secrets.RADIUS_API_KEY }}" \
+            -H "X-Radius-API-Key: ${{ secrets.RADIUS_API_KEY }}" \
             --data-binary @junit-results.xml \
-            "${{ secrets.RADIUS_API_BASE_URL }}/api/v1/analyses/${{ steps.radius_analysis.outputs.analysis_id }}/tests/results"
+            "${{ secrets.RADIUS_API_BASE_URL }}/api/v1/analyses/${{ steps.radius_analysis.outputs.analysis_id }}/tests/results?commit_sha=${{ github.event.pull_request.head.sha }}"
 ```
+
+**How uploaded results count as evidence**
+
+- `commit_sha` is optional but recommended: if it does not match the analysed head commit the upload is rejected with `409`, so results from another commit can never verify a PR.
+- Results only count for selected test files that the report shows were executed. Radius matches each `<testcase>` by its `file` attribute or `classname` (pytest's dotted module such as `tests.test_checkout`, or the file path used by Vitest/jest-junit). Skipped cases do not count.
+- Any selected test file missing from the report keeps the verdict at `insufficient_evidence`. Aggregate-only reports (totals without per-test entries) cannot be attributed and never verify a PR.
 
 ---
 

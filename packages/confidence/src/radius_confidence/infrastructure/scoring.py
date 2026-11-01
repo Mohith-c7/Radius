@@ -76,6 +76,15 @@ class DeterministicConfidenceScorer:
             score = self._apply_coverage_penalties(score, tests, evidence)
         score = self._apply_impact_penalties(score, impact, evidence)
         self._append_analysis_evidence(analysis, evidence)
+        for missing in tests.missing_selected_tests:
+            evidence.append(
+                ConfidenceEvidence(
+                    category=EvidenceCategory.TESTS,
+                    label="selected_test_not_in_results",
+                    message=missing,
+                    impact=EvidenceImpact.NEGATIVE,
+                )
+            )
 
         gaps = self._verification_gaps(tests, analysis)
         if tests.failed > 0:
@@ -132,6 +141,11 @@ class DeterministicConfidenceScorer:
             gaps.append("No tests were selected or collected for the changed code")
         elif needs_tests and tests.passed == 0 and tests.failed == 0:
             gaps.append("All selected tests were skipped; nothing was verified")
+        if tests.missing_selected_tests:
+            gaps.append(
+                f"{len(tests.missing_selected_tests)} selected test file(s) do not appear "
+                "in the test results"
+            )
         return tuple(gaps)
 
     @staticmethod

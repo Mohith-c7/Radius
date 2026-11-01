@@ -46,6 +46,8 @@ class TestEvidence:
     coverage_percent: CoveragePercent | None = None
     run_outcome: str = TestRunOutcome.COMPLETED
     run_detail: str | None = None
+    missing_selected_tests: tuple[str, ...] = ()
+    """Selected test files that the results do not show as executed."""
 
 
 @dataclass(frozen=True, slots=True)
