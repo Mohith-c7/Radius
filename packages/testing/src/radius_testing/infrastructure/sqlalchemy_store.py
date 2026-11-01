@@ -28,34 +28,54 @@ class SqlAlchemyTestStore:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def save_test_cases(self, tests: tuple[TestCase, ...]) -> tuple[TestCase, ...]:
-        """Persist discovered test cases by path."""
+    def save_test_cases(
+        self,
+        tests: tuple[TestCase, ...],
+        repository_id: UUID | None = None,
+    ) -> tuple[TestCase, ...]:
+        """Persist discovered test cases by (repository, path)."""
 
         for test in tests:
             row = self._session.scalar(
-                select(db_models.TestCase).where(
-                    db_models.TestCase.path == test.path.value
-                )
+                self._by_path(repository_id, test.path.value)
             )
             if row is None:
-                row = db_models.TestCase(path=test.path.value)
+                row = db_models.TestCase(
+                    id=test.id,
+                    repository_id=repository_id,
+                    path=test.path.value,
+                )
                 self._session.add(row)
-            row.id = test.id
             row.name = test.name.value
             row.framework = test.framework.value
             row.test_type = test.test_type.value
             row.target_path = test.target_path.value if test.target_path else None
             row.test_metadata = dict(test.metadata)
         self._session.flush()
-        return self.list_test_cases()
+        return self.list_test_cases(repository_id)
 
-    def list_test_cases(self) -> tuple[TestCase, ...]:
-        """Return known test cases."""
+    def list_test_cases(
+        self,
+        repository_id: UUID | None = None,
+    ) -> tuple[TestCase, ...]:
+        """Return known test cases, scoped to one repository when given."""
 
-        rows = self._session.scalars(
-            select(db_models.TestCase).order_by(db_models.TestCase.path)
-        ).all()
+        query = select(db_models.TestCase).order_by(db_models.TestCase.path)
+        if repository_id is not None:
+            query = query.where(db_models.TestCase.repository_id == repository_id)
+        rows = self._session.scalars(query).all()
         return tuple(self._test_case_to_domain(row) for row in rows)
+
+    @staticmethod
+    def _by_path(repository_id: UUID | None, path: str):
+        query = select(db_models.TestCase).where(db_models.TestCase.path == path)
+        if repository_id is None:
+            return query.where(db_models.TestCase.repository_id.is_(None))
+        return query.where(db_models.TestCase.repository_id == repository_id)
+
+    def _analysis_repository_id(self, analysis_id: UUID) -> UUID | None:
+        analysis = self._session.get(db_models.Analysis, analysis_id)
+        return analysis.repository_id if analysis is not None else None
 
     def save_selection(self, selection: TestSelection) -> TestSelection:
         """Persist test selection for one analysis."""
@@ -72,19 +92,13 @@ class SqlAlchemyTestStore:
         )
         self._session.add(row)
         self._session.flush()
+        repository_id = self._analysis_repository_id(selection.analysis_id)
         for selected in selection.selected_tests:
-            test_row = self._session.scalar(
-                select(db_models.TestCase).where(
-                    db_models.TestCase.path == selected.test_case.path.value
-                )
-            )
+            path = selected.test_case.path.value
+            test_row = self._session.scalar(self._by_path(repository_id, path))
             if test_row is None:
-                self.save_test_cases((selected.test_case,))
-                test_row = self._session.scalar(
-                    select(db_models.TestCase).where(
-                        db_models.TestCase.path == selected.test_case.path.value
-                    )
-                )
+                self.save_test_cases((selected.test_case,), repository_id)
+                test_row = self._session.scalar(self._by_path(repository_id, path))
             self._session.add(
                 db_models.SelectedTest(
                     selection_id=row.id,
@@ -93,7 +107,7 @@ class SqlAlchemyTestStore:
                 )
             )
         if selection.skipped_tests:
-            self.save_test_cases(selection.skipped_tests)
+            self.save_test_cases(selection.skipped_tests, repository_id)
         self._session.flush()
         saved = self.get_selection(selection.analysis_id)
         if saved is None:

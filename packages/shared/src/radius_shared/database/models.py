@@ -405,7 +405,11 @@ class TestCase(UuidPrimaryKeyMixin, Base):
 
     __tablename__ = "test_cases"
 
-    path: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    repository_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("repositories.id"),
+        nullable=True,
+    )
+    path: Mapped[str] = mapped_column(Text, nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     framework: Mapped[str] = mapped_column(String(100), nullable=False)
     test_type: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -414,7 +418,14 @@ class TestCase(UuidPrimaryKeyMixin, Base):
 
     selections: Mapped[list["SelectedTest"]] = relationship(back_populates="test_case")
 
-    __table_args__ = (Index("ix_test_cases_path", "path"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "repository_id",
+            "path",
+            name="uq_test_cases_repository_id_path",
+        ),
+        Index("ix_test_cases_path", "path"),
+    )
 
 
 class TestSelection(UuidPrimaryKeyMixin, Base):

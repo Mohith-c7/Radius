@@ -14,11 +14,18 @@ from radius_testing.domain.entities import (
 class TestStore(Protocol):
     """Persistence contract for test discovery and selection state."""
 
-    def save_test_cases(self, tests: tuple[TestCase, ...]) -> tuple[TestCase, ...]:
-        """Persist discovered test cases."""
+    def save_test_cases(
+        self,
+        tests: tuple[TestCase, ...],
+        repository_id: UUID | None = None,
+    ) -> tuple[TestCase, ...]:
+        """Persist discovered test cases for one repository."""
 
-    def list_test_cases(self) -> tuple[TestCase, ...]:
-        """Return known test cases."""
+    def list_test_cases(
+        self,
+        repository_id: UUID | None = None,
+    ) -> tuple[TestCase, ...]:
+        """Return known test cases, scoped to one repository when given."""
 
     def save_selection(self, selection: TestSelection) -> TestSelection:
         """Persist a test selection."""

@@ -15,6 +15,13 @@ class ApiSettings(DatabaseSettings):
     api_keys: str = ""
     github_webhook_secret: str = ""
     github_default_organization_id: UUID | None = None
+    github_single_tenant: bool = Field(default=False, alias="GITHUB_SINGLE_TENANT")
+    """Route webhooks from unknown installations to GITHUB_DEFAULT_ORGANIZATION_ID.
+
+    Only safe when exactly one organization uses this GitHub App. When false
+    (default), deliveries from installations not linked to an organization are
+    rejected instead of being filed under the default organization.
+    """
     cors_origins: str = ""
     seed_demo_data: bool = Field(default=False, alias="RADIUS_SEED_DEMO_DATA")
     """Seed illustrative demo fixtures and a demo login at startup.

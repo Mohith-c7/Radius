@@ -54,8 +54,26 @@ class AnalysisApplicationService:
     def start_analysis(
         self,
         command: StartAnalysisCommand,
+        *,
+        force: bool = False,
     ) -> AnalysisDetailResponse:
-        """Create a new analysis run and optionally enqueue processing."""
+        """Create a new analysis run and optionally enqueue processing.
+
+        Webhook redeliveries and overlapping PR events (``opened`` then
+        ``ready_for_review``) for the same head commit reuse the pending or
+        running analysis instead of enqueuing duplicate work. ``force``
+        bypasses this for explicit re-runs.
+        """
+
+        if not force:
+            find_active = getattr(self._store, "find_active", None)
+            existing = (
+                find_active(command.pull_request_id, command.commit_sha)
+                if find_active is not None
+                else None
+            )
+            if existing is not None:
+                return AnalysisDetailResponse.from_entity(existing)
 
         analysis = Analysis(
             id=None,
@@ -81,7 +99,8 @@ class AnalysisApplicationService:
                 repository_id=existing.repository_id,
                 pull_request_id=existing.pull_request_id,
                 commit_sha=existing.commit_sha.value,
-            )
+            ),
+            force=True,
         )
 
     def get_analysis(self, analysis_id: UUID) -> AnalysisDetailResponse:

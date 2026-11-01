@@ -1,4 +1,5 @@
-from uuid import UUID
+from dataclasses import replace
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from radius_shared.errors import NotFoundError, ValidationError
 
@@ -61,7 +62,20 @@ class TestingApplicationService:
             msg = f"Repository path does not exist: {command.repository_path}."
             raise ValidationError(msg)
         discovered = self._discoverer.discover(command.repository_path)
-        self._store.save_test_cases(discovered)
+        if command.repository_id is not None:
+            # Test ids are derived from the path; include the repository so two
+            # repositories with the same test path never share a row.
+            discovered = tuple(
+                replace(
+                    test,
+                    id=uuid5(
+                        NAMESPACE_URL,
+                        f"radius:test:{command.repository_id}:{test.path.value}",
+                    ),
+                )
+                for test in discovered
+            )
+        self._store.save_test_cases(discovered, command.repository_id)
         return discovered
 
     def select_tests(self, command: SelectTestsCommand) -> TestSelectionResponse:

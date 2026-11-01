@@ -57,7 +57,7 @@ import {
   uploadTestResults,
 } from "../lib/api";
 import { ConfidenceRing, OpenLink, PageHeading, Status } from "./ui";
-import { InteractiveGraphViewer, AiPruningInsightsCard } from "./interactive-graph";
+import { InteractiveGraphViewer } from "./interactive-graph";
 
 type LoadState<T> =
   | { status: "loading" }
@@ -1347,41 +1347,20 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
         <div>
           <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap", marginBottom: "8px" }}>
             <Status status={analysis.status} />
-            {confidence?.verification_status && (
+            {confidence && (
               <span
                 className="pr-chip"
-                style={{
-                  color:
-                    confidence.verification_status === "VERIFIED"
-                      ? "#64C89D"
-                      : confidence.verification_status === "FAILED"
-                        ? "#F87171"
-                        : "#FBBF24",
-                  fontWeight: 600,
-                }}
+                style={{ color: verdictPresentation(confidence.verification_status).color, fontWeight: 600 }}
               >
-                Status: {confidence.verification_status}
+                {verdictPresentation(confidence.verification_status).label}
               </span>
             )}
             {confidence?.change_risk && (
-              <span
-                className="pr-chip"
-                style={{
-                  color:
-                    confidence.change_risk === "HIGH"
-                      ? "#F87171"
-                      : confidence.change_risk === "MEDIUM"
-                        ? "#FBBF24"
-                        : "#64C89D",
-                  fontWeight: 600,
-                }}
-              >
-                Change Risk: {confidence.change_risk}
-              </span>
+              <span className="pr-chip">Change size risk: {confidence.change_risk.toLowerCase()}</span>
             )}
             {confidence?.analysis_completeness !== undefined && confidence?.analysis_completeness !== null && (
               <span className="pr-chip">
-                Completeness: {Math.round(confidence.analysis_completeness * 100)}%
+                Changed files with test evidence: {Math.round(confidence.analysis_completeness)}%
               </span>
             )}
           </div>
@@ -1391,8 +1370,14 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
             {formatDate(analysis.completed_at)}
           </p>
         </div>
-        <ConfidenceRing score={score(confidence)} />
+        <div style={{ textAlign: "center" }}>
+          <ConfidenceRing score={score(confidence)} />
+          <p className="muted" style={{ fontSize: "12px", marginTop: "6px" }}>
+            Heuristic score (not a probability)
+          </p>
+        </div>
       </section>
+      <VerdictGapsCard confidence={confidence} />
       <nav className="analysis-tabs">
         <a href="#summary">Summary</a>
         <a href="#impact">Blast radius</a>
@@ -1420,7 +1405,6 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
             height={520}
           />
         )}
-        <AiPruningInsightsCard />
       </div>
 
 
@@ -1433,6 +1417,62 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
         <TestSelectionHub tests={tests} analysisId={analysisId} />
       </div>
     </>
+  );
+}
+
+const GAP_FILE_LABELS: Record<string, string> = {
+  unmapped_changed_file: "No test reaches this changed file",
+  unanalyzed_changed_file: "File type Radius cannot analyze",
+  parse_failure: "File could not be parsed",
+  selected_test_not_in_results: "Selected test missing from CI results",
+};
+
+export function verdictPresentation(status?: string | null): { label: string; color: string } {
+  switch ((status ?? "").toLowerCase()) {
+    case "verified":
+      return { label: "Verified", color: "#64C89D" };
+    case "failed":
+      return { label: "Failed", color: "#F87171" };
+    default:
+      return { label: "Not verified (insufficient evidence)", color: "#FBBF24" };
+  }
+}
+
+function VerdictGapsCard({ confidence }: { confidence: ConfidenceReport | null }) {
+  if (!confidence) return null;
+  const gaps = confidence.evidence.filter(
+    (item) => item.category === "analysis" && item.label === "verdict_gap",
+  );
+  const files = confidence.evidence.filter((item) => item.label in GAP_FILE_LABELS);
+  if (gaps.length === 0 && files.length === 0) return null;
+  return (
+    <section className="card" style={{ marginBottom: "20px" }}>
+      <div className="card-heading">
+        <div>
+          <h2>Why this is not verified</h2>
+          <p>Radius only reports a change as verified when every changed file has passing test evidence.</p>
+        </div>
+      </div>
+      {gaps.length > 0 && (
+        <ul>
+          {gaps.map((gap, index) => (
+            <li key={`gap-${index}`}>{gap.message}</li>
+          ))}
+        </ul>
+      )}
+      {files.length > 0 && (
+        <div className="evidence">
+          {files.map((item, index) => (
+            <div className="evidence-row" key={`gap-file-${index}`}>
+              <div>
+                <strong>{item.message}</strong>
+                <p>{GAP_FILE_LABELS[item.label]}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -1451,17 +1491,17 @@ function ConfidenceEvidenceCard({
           </h2>
           <p>
             {confidence
-              ? `Why Radius scored this ${score(confidence)}/100`
+              ? `Evidence behind the heuristic score of ${score(confidence)}/100`
               : "No confidence report is available yet"}
           </p>
         </div>
       </div>
       <div className="evidence">
         {confidence?.evidence.length ? (
-          confidence.evidence.map((item) => {
+          confidence.evidence.map((item, index) => {
             const isPositive = item.impact.toLowerCase() === "positive";
             return (
-              <div className="evidence-row" key={`${item.category}-${item.label}`}>
+              <div className="evidence-row" key={`${item.category}-${item.label}-${index}`}>
                 <div>
                   <strong>{item.label}</strong>
                   <p>{item.message}</p>
@@ -1789,7 +1829,6 @@ function TestSelectionHub({
     setTimeout(() => setCopied(false), 2000);
   }
 
-  const timeSaved = tests?.time_saved_percent ?? 0;
   const selectedCount = tests?.selected_count ?? 0;
   const skippedCount = tests?.skipped_count ?? 0;
   const totalCount = tests?.total_count ?? (selectedCount + skippedCount);
@@ -1806,19 +1845,18 @@ function TestSelectionHub({
             Targeted test execution derived from sliced AST and CPG dependencies.
           </p>
         </div>
-        {timeSaved > 0 && (
+        {totalCount > 0 && (
           <span className="savings-pill">
             <Zap size={14} />
-            {timeSaved}% CI Time Saved
+            {selectedCount} of {totalCount} test files selected
           </span>
         )}
       </div>
 
       <div className="metric-grid" style={{ marginBottom: "16px" }}>
         <Metric label="Selected for run" value={selectedCount} />
-        <Metric label="Skipped (Optimized)" value={skippedCount} />
+        <Metric label="Not selected" value={skippedCount} />
         <Metric label="Discovered in repo" value={totalCount} />
-        <Metric label="Savings ratio" value={timeSaved > 0 ? `${timeSaved}%` : "0%"} />
       </div>
 
       <div className="cli-box">
@@ -1885,7 +1923,7 @@ function TestSelectionHub({
       {tests?.skipped_tests && tests.skipped_tests.length > 0 && (
         <details style={{ marginTop: "16px", cursor: "pointer" }}>
           <summary style={{ fontSize: "13px", fontWeight: 700, color: "var(--muted)" }}>
-            View {tests.skipped_tests.length} Skipped Tests (Optimized out)
+            View {tests.skipped_tests.length} Tests not selected for this change
           </summary>
           <div className="table-wrap" style={{ marginTop: "10px" }}>
             <table>
@@ -1999,7 +2037,6 @@ export function BlastRadiusData({ analysisId }: { analysisId: string }) {
         </section>
       ) : null}
 
-      <AiPruningInsightsCard />
 
 
       <section className="card">

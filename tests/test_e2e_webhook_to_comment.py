@@ -253,6 +253,7 @@ def test_e2e_webhook_to_worker_to_pr_comment(tmp_path: Path) -> None:
     app.state.settings.github_webhook_secret = webhook_secret
     # Set DEFAULT organization to Alpha
     app.state.settings.github_default_organization_id = org_alpha_id
+    app.state.settings.github_single_tenant = True
     app.state.container.session_factory = session_factory
 
     client = TestClient(app)

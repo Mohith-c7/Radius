@@ -121,3 +121,35 @@ The JUnit XML report format (`--junitxml` in pytest, `vitest run --reporter=juni
 1. **Massive CI Cost & Time Savings**: Only tests reachable from modified diff hunks and callers are executed.
 2. **Instant Developer Feedback**: In-progress check runs and PR comments keep engineers informed without leaving GitHub.
 3. **Evidence-Backed Merge Confidence**: If any test fails, Radius automatically adjusts the Confidence Score and elevates the Risk Level before code hits production.
+
+---
+
+## Running Radius-selected tests in your CI (recommended execution model)
+
+Radius does not execute pull-request code inside its own worker by default (`WORKER_EXECUTE_TESTS=false`). Instead, your CI runs the tests Radius selected and uploads the results. `scripts/radius_ci.py` (standard library only) and the composite action `.github/actions/radius-verify` implement this flow:
+
+```bash
+export RADIUS_API_KEY=...   # from a CI secret; never passed on the command line
+# 1. Ask Radius which test files to run (one path per line; empty = nothing selected)
+python scripts/radius_ci.py plan --api "$RADIUS_API_URL" --org "$RADIUS_ORG_ID" --analysis "$ANALYSIS_ID" > radius-tests.txt
+# 2. Run them with JUnit output
+[ -s radius-tests.txt ] && python -m pytest $(cat radius-tests.txt) --junitxml=junit.xml
+# 3. Upload, bound to the commit that was tested
+python scripts/radius_ci.py upload --api "$RADIUS_API_URL" --org "$RADIUS_ORG_ID" \
+  --analysis "$ANALYSIS_ID" --junit junit.xml --commit "$GITHUB_SHA"
+```
+
+Or, in GitHub Actions, after the test step:
+
+```yaml
+- uses: Mohith-c7/Radius/.github/actions/radius-verify@develop
+  if: always()
+  with:
+    api-url: ${{ secrets.RADIUS_API_BASE_URL }}
+    organization-id: ${{ secrets.RADIUS_ORG_ID }}
+    analysis-id: ${{ steps.radius_analysis.outputs.analysis_id }}
+    api-key: ${{ secrets.RADIUS_API_KEY }}
+    junit-path: junit.xml
+```
+
+The helper validates the analysis id (UUID) and commit SHA (hex), uses 30-second timeouts, refuses HTTP redirects so the API key is never forwarded to another host, and exits non-zero with the server's error message when the upload is rejected (for example `409` when the commit does not match the analysed head). If the selection is empty there is nothing to run or upload (skip step 3); the verdict then stays `insufficient_evidence` unless the change is docs-only.

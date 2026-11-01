@@ -143,7 +143,7 @@ class Phase1AnalysisOrchestrator:
         )
 
         discovered_tests = self._testing.discover_test_cases(
-            DiscoverTestsCommand(command.repository_path)
+            DiscoverTestsCommand(command.repository_path, command.repository_id)
         )
         selector = PathBasedTestSelector()
         mapping = map_changes_to_tests(

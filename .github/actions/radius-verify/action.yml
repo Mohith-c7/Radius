@@ -1,0 +1,44 @@
+name: Radius verify
+description: >-
+  Upload JUnit results for the tests Radius selected, bound to the PR head
+  commit, so Radius can produce an evidence-gated merge verdict.
+inputs:
+  api-url:
+    description: Radius API base URL.
+    required: true
+  organization-id:
+    description: Radius organization id.
+    required: true
+  analysis-id:
+    description: Radius analysis id for this pull request head commit.
+    required: true
+  api-key:
+    description: Radius API key (pass from a secret).
+    required: true
+  junit-path:
+    description: Path to the JUnit XML report produced by the test run.
+    required: true
+  commit-sha:
+    description: Commit the tests ran on; must equal the analysed head commit.
+    required: false
+    default: ${{ github.event.pull_request.head.sha }}
+runs:
+  using: composite
+  steps:
+    - name: Upload test results to Radius
+      shell: bash
+      env:
+        # Passed via env, never argv, so it does not appear in process listings or logs.
+        RADIUS_API_KEY: ${{ inputs.api-key }}
+        RADIUS_API_URL: ${{ inputs.api-url }}
+        RADIUS_ORG_ID: ${{ inputs.organization-id }}
+        RADIUS_ANALYSIS_ID: ${{ inputs.analysis-id }}
+        RADIUS_JUNIT_PATH: ${{ inputs.junit-path }}
+        RADIUS_COMMIT_SHA: ${{ inputs.commit-sha }}
+      run: |
+        python "${GITHUB_ACTION_PATH}/../../../scripts/radius_ci.py" upload \
+          --api "$RADIUS_API_URL" \
+          --org "$RADIUS_ORG_ID" \
+          --analysis "$RADIUS_ANALYSIS_ID" \
+          --junit "$RADIUS_JUNIT_PATH" \
+          --commit "$RADIUS_COMMIT_SHA"

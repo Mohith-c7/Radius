@@ -12,6 +12,7 @@ class DiscoverTestsCommand:
     """Command to discover tests in a repository snapshot."""
 
     repository_path: Path
+    repository_id: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)

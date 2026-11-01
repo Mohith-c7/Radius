@@ -20,10 +20,10 @@ from radius_repository.dto import (
     UpsertBranchCommand,
     UpsertPullRequestCommand,
 )
-from radius_shared.config import RuntimeEnvironment
 from radius_shared.database import models as db_models
 from radius_shared.dto import success_response
 from radius_shared.errors import AccessDeniedError, ValidationError
+from radius_shared.logging import get_logger
 
 from radius_api.dependencies import (
     get_analysis_service,
@@ -36,6 +36,8 @@ from radius_api.schemas.github_webhooks import (
     GitHubRepositoryPayload,
     GitHubWebhookResult,
 )
+
+LOGGER = get_logger(__name__)
 
 router = APIRouter(prefix="/webhooks/github", tags=["github-webhooks"])
 
@@ -68,7 +70,20 @@ async def handle_github_webhook(
     body_hash = hashlib.sha256(body).hexdigest()
     scope = f"github_webhook:{event}"
     payload = json.loads(body)
+    if event == "ping":
+        # A ping carries no tenant context; acknowledge it without resolving one.
+        result = GitHubWebhookResult(
+            deliveryId=delivery_id,
+            event=event,
+            action=payload.get("action"),
+        )
+        return JSONResponse(
+            status_code=status.HTTP_202_ACCEPTED,
+            content=jsonable_encoder(success_response(result)),
+        )
     org_id = _resolve_webhook_organization_id(request, payload, repository_service)
+    # Repositories created while handling this delivery belong to this tenant.
+    request.state.radius_webhook_org_id = org_id
     existing = replay_or_validate(
         idempotency_store,
         org_id,
@@ -272,11 +287,13 @@ def _connect_repository(
     if existing is not None:
         return existing
 
-    organization_id = _resolve_webhook_organization_id(
-        request,
-        {"repository": {"id": payload.id}},
-        repository_service,
-    )
+    organization_id = getattr(request.state, "radius_webhook_org_id", None)
+    if organization_id is None:
+        organization_id = _resolve_webhook_organization_id(
+            request,
+            {"repository": {"id": payload.id}},
+            repository_service,
+        )
     repository = repository_service.connect_repository(
         ConnectRepositoryCommand(
             organization_id=organization_id,
@@ -303,15 +320,18 @@ def _validate_signature(
     body: bytes,
     signature: str | None,
 ) -> None:
-    secret = request.app.state.settings.github_webhook_secret
-    is_production = (
-        request.app.state.settings.environment == RuntimeEnvironment.PRODUCTION
-    )
+    settings = request.app.state.settings
+    secret = settings.github_webhook_secret
     if not secret:
-        if is_production:
-            msg = "GitHub webhook secret must be configured in production."
-            raise AccessDeniedError(msg)
-        return
+        # Fail closed: an unsigned endpoint lets anyone enqueue analyses and
+        # register repositories. Only an explicit dev/test opt-in skips this.
+        if getattr(settings, "insecure_dev_mode", False):
+            return
+        msg = (
+            "GitHub webhook secret is not configured. Set GITHUB_WEBHOOK_SECRET, "
+            "or RADIUS_ALLOW_INSECURE_DEV=true for local development only."
+        )
+        raise AccessDeniedError(msg)
     if signature is None:
         msg = "Missing GitHub webhook signature."
         raise AccessDeniedError(msg)
@@ -330,7 +350,14 @@ def _resolve_webhook_organization_id(
     payload: dict[str, Any] | None = None,
     repository_service: RepositoryApplicationService | None = None,
 ) -> UUID:
-    """Resolve organization from existing repo or installation, falling back to default."""
+    """Resolve the tenant for a delivery.
+
+    Order: the organization that already owns the repository, then the
+    organization linked to the delivery's GitHub App installation. The
+    configured default organization is used only in explicit single-tenant
+    mode; otherwise an unknown installation is rejected so one customer's
+    repositories are never filed under another organization.
+    """
     if payload and repository_service:
         repo_data = payload.get("repository")
         if isinstance(repo_data, dict) and repo_data.get("id"):
@@ -351,12 +378,16 @@ def _resolve_webhook_organization_id(
                 if org is not None:
                     return org.id
 
-    organization_id = request.app.state.settings.github_default_organization_id
-    if organization_id is not None:
-        return organization_id
+    settings = request.app.state.settings
+    if getattr(settings, "github_single_tenant", False):
+        organization_id = settings.github_default_organization_id
+        if organization_id is not None:
+            return organization_id
+        msg = "GITHUB_DEFAULT_ORGANIZATION_ID is required when GITHUB_SINGLE_TENANT is enabled."
+        raise ValidationError(msg)
 
-    msg = "GITHUB_DEFAULT_ORGANIZATION_ID is required for GitHub webhooks."
-    raise ValidationError(msg)
+    msg = "Unknown GitHub installation; connect it to an organization first."
+    raise AccessDeniedError(msg)
 
 
 def _webhook_organization_id(request: Request) -> UUID:
@@ -388,8 +419,20 @@ def _record_installation_id(
             payload=payload,
             repository_service=repository_service,
         )
-    except ValidationError:
+    except (ValidationError, AccessDeniedError):
         return
     organization = session.get(db_models.Organization, org_id)
-    if organization is not None:
-        organization.github_installation_id = int(installation["id"])
+    if organization is None:
+        return
+    installation_id = int(installation["id"])
+    if organization.github_installation_id is None:
+        organization.github_installation_id = installation_id
+    elif organization.github_installation_id != installation_id:
+        # Never silently re-point an organization at another installation:
+        # its tokens would then be used for this organization's repositories.
+        LOGGER.warning(
+            "Ignoring GitHub installation %s for organization %s already linked to %s",
+            installation_id,
+            org_id,
+            organization.github_installation_id,
+        )

@@ -507,22 +507,9 @@ export function AiPruningInsightsCard({
 }: {
   items?: AiPruningItem[];
 }) {
-  const defaultItems: AiPruningItem[] = [
-    {
-      symbol: "format_iso_timestamp",
-      file: "packages/shared/src/utils.py",
-      decision: "pruned",
-      reason: "Docstring and type annotation formatting update. Runtime AST control-flow unchanged.",
-    },
-    {
-      symbol: "generate_action_token",
-      file: "apps/api/src/app/auth.py",
-      decision: "retained",
-      reason: "Modified expiration delta calculation directly affects authentication token validity.",
-    },
-  ];
-
-  const displayItems = items && items.length > 0 ? items : defaultItems;
+  // No fabricated sample data: render nothing unless real pruning results exist.
+  if (!items || items.length === 0) return null;
+  const displayItems = items;
   const prunedCount = displayItems.filter((i) => i.decision === "pruned").length;
   const percentSaved = displayItems.length > 0 ? Math.round((prunedCount / displayItems.length) * 100) : 0;
 
