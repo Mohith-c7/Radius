@@ -1,7 +1,7 @@
 # Product and Go-To-Market
 
 **Status:** Proposed hypotheses to be tested with design partners (PL-06). Date: 2026-11-02.
-Competitor facts below come from public pages and third-party reviews read on 2026-11-02; some sources are competitor or affiliate content, and funding/adoption claims are unverified. Re-verify before any external use.
+Competitor facts below come from public pages and third-party reviews read on 2026-11-02; some sources are competitor or affiliate content, and funding/adoption claims are unverified. Re-verify before any external use. EP-01 (2026-11-02) re-checked the AgentProof, ScopeProof, Verik, SlopGate, TestSprite and Mutahunter rows against their repository/vendor pages; see `literature/related-work.md` section (d). The academic neighbours (SWE-ABS, AgentLens, etc.) are in `literature/`.
 
 ---
 
@@ -31,12 +31,13 @@ Not claimed: correctness guarantees, replacing CI, replacing reviewers, generati
 
 | Tool | What it is | Overlap | Radius' difference |
 |---|---|---|---|
-| **TestSprite** | AI generates and runs end-to-end tests (browser/API), MCP + CLI + GitHub Action, cloud execution, credits | Verifies agent code via tests, MCP distribution | Radius judges the **strength and coverage of evidence against intent**, works with any tests (including TestSprite's), is deterministic and self-hostable, and has a manager layer. Reported TestSprite limits: cloud-only, web/REST focus, false positives, unpredictable credit cost. |
+| **TestSprite** (company-reported: $6.7M seed Oct 2025 led by Trilogy Equity Partners, 35,000+ users; not independently verified) | AI generates and runs end-to-end tests (browser/API), MCP + CLI + GitHub Action, cloud execution, credits | Verifies agent code via tests, MCP distribution | Radius judges the **strength and coverage of evidence against intent**, works with any tests (including TestSprite's), is deterministic and self-hostable, and has a manager layer. Reported TestSprite limits: cloud-only, web/REST focus, false positives, unpredictable credit cost. |
 | **PR-Agent (Qodo), CodeRabbit** | LLM PR review comments | PR surface | They give opinions; Radius gives auditable evidence and does not depend on an LLM for the verdict |
-| **AgentProof** (OSS) | Maps issue to acceptance criteria and checks for passing execution evidence; re-prompt | Closest conceptually | Radius adds evidence-quality (mutation, assertion strength, independence), tamper detection, calibration, process signals, manager layer |
-| **Verik** (OSS, Apache-2.0) | CLI checking agent edits with deterministic rules | Tamper rules, snapshots | Radius links findings to intent and quantifies evidence strength; platform + dashboard |
-| **SlopGate** (OSS) | AST checks for test tampering, hallucinated packages | Tamper rules | Same as above |
-| **Mutation tools (Stryker, mutmut, PIT, Mutahunter)** | Measure test strength | Ingredient | Radius scopes mutation to the changed symbols tied to criteria and turns it into a PR verdict |
+| **AgentProof** (github.com/RengGyu/AgentProof; name is shared by at least four unrelated repos) | Maps issue to acceptance criteria; a criterion is "met" only with linked passing execution evidence read from GitHub check metadata (does not run tests itself); deterministic, optional LLM adapter; short re-prompt. License not stated (no LICENSE file seen), 0 stars on 2026-11-02 | Closest conceptually | Radius adds evidence-quality (mutation, assertion strength, independence), tamper detection, calibration, process signals, manager layer. A different `GenRamzi/AgentProof` (Apache-2.0) re-runs tests on BASE/HEAD, uses fail-to-pass proof tests and integrity rules, and lists mutation as a future phase |
+| **ScopeProof** (github.com/YuzeJ21/Scope-Proof) | Reviewer-confirmed criteria mapped to implementation/test candidates in a PR, evidence levels E0-E4, never executes PR code. Evaluation-only use policy, no OSS license | Criteria-to-evidence idea | Radius runs and scores evidence strength; ScopeProof is static candidate retrieval plus human acceptance |
+| **Verik** (OSS, Apache-2.0 confirmed; TypeScript CLI, 23 deterministic checks incl. deleted tests and tautological assertions, runs build/tests) | CLI checking agent edits with deterministic rules | Tamper rules, snapshots | Radius links findings to intent and quantifies evidence strength; platform + dashboard |
+| **SlopGate** (OSS, Apache-2.0 confirmed on PyPI; Python CLI and GitHub Action; test-tamper guard, phantom symbols, reproduction gate, slop-to-logic ratio) | AST checks for test tampering, hallucinated packages | Tamper rules | Same as above |
+| **Mutation tools (Stryker, mutmut, PIT, Mutahunter)** (Mutahunter is AGPL-3.0: do not copy or link; the others were not re-checked) | Measure test strength | Ingredient | Radius scopes mutation to the changed symbols tied to criteria and turns it into a PR verdict |
 
 Defensible differentiators (to be proven by the evaluation): (1) intent-to-evidence traceability, (2) evidence-quality weighting, (3) calibrated trust with abstention, (4) process verification, (5) manager-level aggregate view, (6) self-hostable and deterministic.
 
