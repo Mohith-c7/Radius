@@ -23,20 +23,24 @@ Endpoint: `POST /api/v1/webhooks/github` (the older `/api/v1/github/webhooks` in
 | Event | What Radius does |
 | --- | --- |
 | `ping` | Acknowledged (202), no tenant lookup |
-| `installation` (`created`), `installation_repositories` (`added`) | Connects the listed repositories. Always delivered to an App; you do not subscribe to them |
+| `installation` (`created`), `installation_repositories` (`added`) | Connects the listed repositories (reactivating ones that were removed earlier) and marks the organization's installation `active`. Installation payloads carry no default branch, so a provisional `main` is stored until the first push/PR delivery corrects it. Always delivered to an App; you do not subscribe to them |
+| `installation` `deleted` | Marks the organization's installation `deleted` (`organizations.github_installation_status`) and **disconnects every repository of that organization** (rows, PRs and analyses are kept: inactive, never hard-deleted). Queued-not-started analyses are cancelled. Later `push`/`pull_request` deliveries get `202` with `ignored: true, ignoredReason: installation_deleted`. Reinstalling (a new `installation.created`, possibly under a new installation id) reactivates it |
+| `installation` `suspend` / `unsuspend` | `suspend`: status `suspended`, queued-not-started analyses cancelled, repositories stay connected; deliveries are ignored with `installation_suspended`. `unsuspend`: back to `active` |
+| `installation_repositories` `removed` | Disconnects just those repositories (only if they belong to the delivery's organization), cancels their queued-not-started analyses; later deliveries get `ignoredReason: repository_disconnected`. Running jobs are never killed |
 | `push` | Upserts the branch's latest commit. No analysis |
 | `pull_request` `opened`, `reopened`, `synchronize`, `ready_for_review` (non-draft) | Upserts the PR and starts (or reuses) an analysis for the head SHA |
-| `pull_request` other actions (`edited`, `closed`, `labeled`, draft, ...) | Upserts the PR (title, status) and returns `ignored: true`; no analysis |
+| `pull_request` `closed` (merged or not) | Upserts the PR, returns `ignored: true`, and **cancels queued-not-started analyses** for that PR (`cancelledAnalysisIds` in the response). A running analysis is never killed; it finishes and publishes. Reopening starts a fresh analysis |
+| `pull_request` other actions (`edited`, `labeled`, draft, ...) | Upserts the PR (title, status) and returns `ignored: true`; no analysis |
 | `issues`, `issue_comment`, `check_run` | **Accepted and ignored** (202, `ignored: true`) |
 
-**Mismatch to know about:** the F-06 task lists `issues`, `issue_comment`, `check_run` events and `issues: read`. Nothing in the code acts on them or calls an issues-read endpoint (PR comments use the Issues comments API, which `pull_requests: write` covers for PRs). `app-manifest.json` includes them anyway so that real payloads can be captured as fixtures; `--minimal` drops them. Either choice validates the same behaviour.
+**`issues: read` and the `issues` / `issue_comment` / `check_run` events are deliberate, but not used by today's code.** Nothing in the webhook handler acts on them yet, and nothing calls an issues-read endpoint (PR comments use the Issues comments API, which `pull_requests: write` already covers for PRs). They stay in `app-manifest.json` because task IN-02 (intent ingestion, `docs/research/tasks/IN-intent.md`) will need them: it fetches linked issues (`fixes|closes|resolves #n`, issue URLs) through the App, which requires `issues: read`, and refetches on `issues.edited`. Adding a permission later forces every installation owner to re-approve the App, so it is requested now. Today the events are accepted and ignored (202, `ignored: true`), and capturing their real payloads gives IN-02 ready-made fixtures. `--minimal` drops them for a strictly least-privilege validation run; that validates the same current behaviour, but a minimal App must be updated (and re-approved) before IN-02 is tried live.
 
 Permissions actually exercised: `checks: write` (create/update/list Check Runs), `pull_requests: write` (comments), `contents: read` (clone via installation token), `metadata: read`.
 
 Publishing facts that shape the assertions:
 
 - The check run is named `Radius confidence`. There is one per head SHA; republishing the same SHA updates it, a new push creates a new one on the new SHA (GitHub scopes check runs to a commit).
-- `publish_in_progress` exists but is **not called by the worker**, so there is no `in_progress` check run during analysis; the check appears once, already `completed`.
+- The worker opens the `Radius confidence` check run as `in_progress` when it starts a job (best-effort: a publish failure is logged and never fails the analysis; skipped when `GITHUB_PUBLISH_RESULTS=false`), then completes the **same** run: with the verdict on success, or `neutral` ("analysis failed") when the final attempt fails or the result cannot be published. A job that is retried keeps the one run `in_progress` until the last attempt. A job cancelled before it starts never creates a check run.
 - The PR comment contains `<!-- radius-confidence-report -->` and is edited in place (only bot-authored comments are edited).
 - Conclusion is `success` only for a `verified` verdict with low/medium risk; otherwise `neutral` (a sandbox repo with no tests will normally be `neutral`, which is correct, not a failure).
 
@@ -206,5 +210,5 @@ Manual redelivery and manual duplicate check:
 | Delivery 403 `Unknown GitHub installation` | `GITHUB_SINGLE_TENANT` is not `true` in the API container |
 | Delivery 500 on the first repo insert | The organization row for `GITHUB_DEFAULT_ORGANIZATION_ID` does not exist (section 5) |
 | Analysis runs but nothing appears on GitHub | `GITHUB_PUBLISH_RESULTS=false`, or `GITHUB_APP_ID`/`GITHUB_APP_PRIVATE_KEY` empty in the worker; publish errors are logged as "Could not publish GitHub Check Run or PR comment" |
-| Worker fails cloning a private repo | See "unverified until live" in `REPORT_TEMPLATE.md`: the clone sends `Authorization: Bearer <installation token>`; GitHub normally expects Basic auth with `x-access-token` for git over HTTPS |
+| Worker fails cloning a private repo | The clone authenticates with HTTP Basic, username `x-access-token`, password = the installation token (GitHub's documented git-over-HTTPS form). The token is handed to git through the child process environment (`GIT_CONFIG_*`, scoped to the remote's origin), so it is not on the command line, in `.git/config` or in logs. Check the App has `contents: read` and is installed on the repository; confirm live (section 7) |
 | Check run stays missing for a draft PR | Drafts are ignored until `ready_for_review` |

@@ -103,6 +103,39 @@ class AnalysisApplicationService:
             force=True,
         )
 
+    def cancel_queued(
+        self,
+        *,
+        reason: str,
+        pull_request_id: UUID | None = None,
+        repository_id: UUID | None = None,
+    ) -> list[UUID]:
+        """Cancel analyses that are queued but have not started.
+
+        Only ``pending`` analyses whose job the queue confirms was never
+        started are cancelled; a running analysis is never touched. Returns the
+        cancelled analysis ids.
+        """
+
+        if pull_request_id is None and repository_id is None:
+            msg = "cancel_queued needs a pull request or repository scope."
+            raise ValidationError(msg)
+        cancel_job = getattr(self._pipeline, "cancel_queued", None)
+        cancelled: list[UUID] = []
+        for analysis in self._store.list(
+            repository_id=repository_id,
+            pull_request_id=pull_request_id,
+            status=AnalysisStatus.PENDING,
+        ):
+            if analysis.id is None:
+                continue
+            if cancel_job is not None and not cancel_job(analysis.id, reason):
+                continue
+            analysis.cancel()
+            self._store.update_status(analysis.id, analysis.status)
+            cancelled.append(analysis.id)
+        return cancelled
+
     def get_analysis(self, analysis_id: UUID) -> AnalysisDetailResponse:
         """Return an analysis summary with changed-file evidence."""
 

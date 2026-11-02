@@ -50,7 +50,7 @@ def test_revision_chain_has_single_head() -> None:
     assert module.revision == "20261102_0011"
     assert module.down_revision == "20261102_0010"
     script = ScriptDirectory(str(_root() / "infra/database/migrations"))
-    assert script.get_heads() == ["20261102_0011"]
+    assert len(script.get_heads()) == 1  # later migrations may extend the chain
 
 
 def test_upgrade_creates_tables_matching_models_and_downgrade_drops_them() -> None:

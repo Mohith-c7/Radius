@@ -48,10 +48,10 @@ Expected results come from the code as verified offline (see `RUNBOOK.md` sectio
 
 Known from offline review (confirm or close live):
 
-1. `installation`/`installation_repositories` sync records `default_branch` as `main` regardless of the real default (`github_webhooks.py`, `_handle_installation_sync`); later PR deliveries do not correct it because an existing repository is returned unchanged.
-2. `publish_in_progress` is never called by the worker, so there is no in-progress check while analysis runs.
-3. Clone auth header is `Authorization: Bearer <token>` (`runner.py`, `_github_clone_headers`); unverified against GitHub git over HTTPS.
-4. Closing a PR does not complete or cancel an in-flight analysis/check run.
-5. `installation` `deleted`/`removed` and `installation_repositories` `removed` are not handled.
+1. ~~Installation sync hardcoded `default_branch=main`~~ Fixed offline: installation payloads carry no default branch, so a provisional `main` is stored and the first push/PR delivery corrects it; confirm live.
+2. ~~`publish_in_progress` never called~~ Fixed offline: the worker opens the in-progress check at job start; confirm live (Checks tab shows In progress, then completes the same run).
+3. ~~Clone auth used Bearer~~ Fixed offline: Basic `x-access-token:<token>` via the child environment (`runner.py`, `local_git.py`); confirm against real GitHub (private repo clone) and close.
+4. ~~Closing a PR did not cancel analyses~~ Fixed offline for queued-not-started analyses (running ones intentionally finish); confirm live.
+5. ~~Installation/repository removal not handled~~ Fixed offline (inactive, queued work cancelled, 2xx ignore); confirm live by uninstalling the sandbox App, and note that migration `20261102_0011` must be applied.
 
 ## Notes and follow-ups

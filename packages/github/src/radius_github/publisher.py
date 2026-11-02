@@ -12,6 +12,14 @@ CHECK_RUN_NAME = "Radius confidence"
 COMMENT_MARKER = "<!-- radius-confidence-report -->"
 
 
+class CommentPublishError(Exception):
+    """The Check Run was completed but the PR comment could not be written.
+
+    Lets callers tell "result is visible on the check" from "nothing was
+    published", so they never overwrite a completed check with a failure.
+    """
+
+
 @dataclass(frozen=True, slots=True)
 class GitHubAnalysisReport:
     """Data needed to publish one analysis result."""
@@ -221,30 +229,33 @@ class GitHubAnalysisPublisher:
                 check_run_id=int(check_run["id"]),
             )
 
-        existing_comment = _existing_radius_comment(
-            self._client.list_issue_comments(
-                token=token,
-                owner=report.owner,
-                repo=report.repository_name,
-                issue_number=report.pull_request_number,
+        try:
+            existing_comment = _existing_radius_comment(
+                self._client.list_issue_comments(
+                    token=token,
+                    owner=report.owner,
+                    repo=report.repository_name,
+                    issue_number=report.pull_request_number,
+                )
             )
-        )
-        comment_args = {
-            "token": token,
-            "owner": report.owner,
-            "repo": report.repository_name,
-            "body": body,
-        }
-        if existing_comment is None:
-            self._client.create_issue_comment(
-                **comment_args,
-                issue_number=report.pull_request_number,
-            )
-        else:
-            self._client.update_issue_comment(
-                **comment_args,
-                comment_id=int(existing_comment["id"]),
-            )
+            comment_args = {
+                "token": token,
+                "owner": report.owner,
+                "repo": report.repository_name,
+                "body": body,
+            }
+            if existing_comment is None:
+                self._client.create_issue_comment(
+                    **comment_args,
+                    issue_number=report.pull_request_number,
+                )
+            else:
+                self._client.update_issue_comment(
+                    **comment_args,
+                    comment_id=int(existing_comment["id"]),
+                )
+        except Exception as exc:
+            raise CommentPublishError(str(exc)) from exc
 
 
 def _check_conclusion(risk_level: str, verification_status: str | None = None) -> str:

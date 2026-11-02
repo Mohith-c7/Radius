@@ -1,3 +1,4 @@
+import base64
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -133,7 +134,11 @@ def test_github_clone_headers_use_stored_installation_id() -> None:
             github_client=github_client,
         )
 
-        assert headers == ("Authorization: Bearer clone-token",)
+        # Basic auth, username x-access-token, token as password (GitHub's
+        # git-over-HTTPS contract); the raw token is not in the header text.
+        expected = base64.b64encode(b"x-access-token:clone-token").decode()
+        assert headers == (f"Authorization: Basic {expected}",)
+        assert "clone-token" not in headers[0]
         assert github_client.installation_ids == [12345]
 
 

@@ -11,7 +11,7 @@ from radius_shared.database import enums as db_enums
 from radius_shared.database import models as db_models
 from radius_shared.observability import current_traceparent, span
 from radius_shared.redaction import redact_secrets
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 LOGGER = logging.getLogger(__name__)
@@ -32,6 +32,7 @@ _TERMINAL_ANALYSIS_STATUSES = frozenset(
 )
 
 EXHAUSTED_ATTEMPTS_ERROR = "Job exceeded maximum retry attempts."
+CANCELLED_PREFIX = "Cancelled: "
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,6 +141,66 @@ class SqlAlchemyAnalysisJobQueue:
         self._session.flush()
         _log_transition(row, "claimed")
         return self._to_dto(row)
+
+    def cancel_queued(self, analysis_id: UUID, reason: str) -> bool:
+        """Cancel a job that has not started; never touch a claimed one.
+
+        Returns ``True`` when nothing is left to run (the job was pending with
+        zero attempts, or no job exists) and ``False`` when a worker already
+        claimed it (running) or has attempted it (a retry whose in-progress
+        check is already on GitHub; it is left to finish and complete that
+        check). The state change is one conditional UPDATE, so it cannot race
+        ``claim_next``. The cancelled job is stored as ``completed`` with
+        ``last_error = "Cancelled: ..."`` (the ``analysisjobstatus`` enum has no
+        cancelled member and adding one needs a Postgres enum migration).
+        """
+
+        if self._session.scalar(
+            select(db_models.AnalysisJob.id).where(
+                db_models.AnalysisJob.analysis_id == analysis_id
+            )
+        ) is None:
+            return True
+        result = self._session.execute(
+            update(db_models.AnalysisJob)
+            .where(
+                db_models.AnalysisJob.analysis_id == analysis_id,
+                db_models.AnalysisJob.status == db_enums.AnalysisJobStatus.PENDING,
+                db_models.AnalysisJob.attempts == 0,
+            )
+            .values(
+                status=db_enums.AnalysisJobStatus.COMPLETED,
+                last_error=_safe_error(f"{CANCELLED_PREFIX}{reason}"),
+                locked_at=None,
+            )
+            .execution_options(synchronize_session="fetch")
+        )
+        self._session.flush()
+        cancelled = bool(result.rowcount)
+        if cancelled:
+            LOGGER.info(
+                "Analysis job cancelled",
+                extra={"analysis_id": str(analysis_id), "outcome": "cancelled"},
+            )
+        return cancelled
+
+    def skip_claimed(self, analysis_id: UUID, reason: str) -> None:
+        """Finish a just-claimed job without running it (analysis no longer wanted).
+
+        The analysis is cancelled unless it is already terminal; the job ends
+        ``completed`` with ``last_error = "Cancelled: ..."``.
+        """
+
+        row = self._require_job(analysis_id)
+        row.status = db_enums.AnalysisJobStatus.COMPLETED
+        row.last_error = _safe_error(f"{CANCELLED_PREFIX}{reason}")
+        row.locked_at = None
+        analysis = self._session.get(db_models.Analysis, analysis_id)
+        if analysis is not None and analysis.status not in _TERMINAL_ANALYSIS_STATUSES:
+            analysis.status = db_enums.AnalysisStatus.CANCELLED
+            analysis.completed_at = datetime.now(UTC)
+        self._session.flush()
+        _log_transition(row, "cancelled")
 
     def complete(self, analysis_id: UUID) -> None:
         """Mark an analysis job completed."""

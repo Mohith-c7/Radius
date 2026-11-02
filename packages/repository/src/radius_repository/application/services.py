@@ -109,6 +109,18 @@ class RepositoryApplicationService:
         )
         return RepositoryResponse.from_entity(repository)
 
+    def reconnect_repository(self, repository_id: UUID) -> RepositoryResponse:
+        """Mark a previously disconnected repository connected again."""
+
+        if self._store.get_by_id(repository_id) is None:
+            msg = f"Repository {repository_id} was not found."
+            raise NotFoundError(msg)
+        repository = self._store.update_status(
+            repository_id,
+            RepositoryStatus.CONNECTED,
+        )
+        return RepositoryResponse.from_entity(repository)
+
     def update_default_branch(
         self,
         repository_id: UUID,

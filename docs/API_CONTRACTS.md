@@ -408,6 +408,20 @@ Repository
 
 Ping
 
+Behavior notes
+
+pull_request opened / reopened / synchronize / ready_for_review (non-draft) start or reuse an analysis for the head SHA.
+
+pull_request closed (merged or not) responds 202 with ignored true and cancelledAnalysisIds: the analyses that were queued but not started are cancelled (analysis status cancelled). Running analyses are never cancelled. Reopening starts a new analysis.
+
+The default branch comes from the delivery (repository.default_branch, else pull_request.base.repo.default_branch). Installation payloads do not carry it, so repositories connected by installation / installation_repositories store a provisional main until the first push or pull_request delivery corrects it.
+
+installation deleted: the organization's installation is marked deleted, all its repositories are disconnected (status disconnected, history kept) and their queued analyses are cancelled. installation suspend / unsuspend toggle a suspended state (repositories stay connected). installation_repositories removed disconnects only the listed repositories of the delivering organization; added reconnects them. A removal for an installation Radius does not know responds 202 ignored (ignoredReason unknown_installation), not 4xx.
+
+push and pull_request deliveries for a disconnected repository or a suspended/deleted installation respond 202 with ignored true and ignoredReason (repository_disconnected, installation_suspended, installation_deleted); nothing is created or queued.
+
+Response data fields: ignoredReason (string or null),  deliveryId, event, action, ignored, repositoryId, pullRequestId, analysisId, cancelledAnalysisIds (array, empty unless something was cancelled).
+
 Events Produced
 
 RepositoryUpdated

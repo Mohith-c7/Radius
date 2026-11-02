@@ -17,9 +17,11 @@ from radius_repository.application import RepositoryApplicationService
 from radius_repository.domain import RepositoryVisibility
 from radius_repository.dto import (
     ConnectRepositoryCommand,
+    RepositoryListQuery,
     UpsertBranchCommand,
     UpsertPullRequestCommand,
 )
+from radius_shared.database import enums as db_enums
 from radius_shared.database import models as db_models
 from radius_shared.dto import success_response
 from radius_shared.errors import AccessDeniedError, ValidationError
@@ -41,6 +43,9 @@ from radius_api.schemas.github_webhooks import (
 LOGGER = get_logger(__name__)
 
 router = APIRouter(prefix="/webhooks/github", tags=["github-webhooks"])
+
+#: Stored only until a push/pull_request delivery reports the real default branch.
+_PROVISIONAL_DEFAULT_BRANCH = "main"
 
 _ANALYSIS_PR_ACTIONS = {"opened", "reopened", "synchronize", "ready_for_review"}
 
@@ -83,7 +88,24 @@ async def handle_github_webhook(
             status_code=status.HTTP_202_ACCEPTED,
             content=jsonable_encoder(success_response(result)),
         )
-    org_id = _resolve_webhook_organization_id(request, payload, repository_service)
+    try:
+        org_id = _resolve_webhook_organization_id(request, payload, repository_service)
+    except AccessDeniedError:
+        if _is_removal_event(event, payload):
+            # Nothing of ours to deactivate; a 4xx would only make GitHub
+            # flag a failed delivery for an installation we never linked.
+            ignored = GitHubWebhookResult(
+                deliveryId=delivery_id,
+                event=event,
+                action=payload.get("action"),
+                ignored=True,
+                ignoredReason="unknown_installation",
+            )
+            return JSONResponse(
+                status_code=status.HTTP_202_ACCEPTED,
+                content=jsonable_encoder(success_response(ignored)),
+            )
+        raise
     # Repositories created while handling this delivery belong to this tenant.
     request.state.radius_webhook_org_id = org_id
     update_correlation(organization_id=org_id)
@@ -142,7 +164,12 @@ def _handle_payload(
             delivery_id,
             payload,
             repository_service,
+            analysis_service,
         )
+    if event in ("push", "pull_request"):
+        inactive = _installation_inactive_reason(request)
+        if inactive is not None:
+            return _ignored_inactive(delivery_id, event, action, inactive)
     if event == "push":
         return _handle_push(
             request,
@@ -166,20 +193,167 @@ def _handle_payload(
     )
 
 
+_REMOVAL_ACTIONS = {
+    "installation": {"deleted", "suspend"},
+    "installation_repositories": {"removed"},
+}
+
+
+def _is_removal_event(event: str, payload: dict[str, Any]) -> bool:
+    return payload.get("action") in _REMOVAL_ACTIONS.get(event, set())
+
+
+def _ignored_inactive(
+    delivery_id: str,
+    event: str,
+    action: str | None,
+    reason: str,
+    repository_id: str | None = None,
+) -> GitHubWebhookResult:
+    return GitHubWebhookResult(
+        deliveryId=delivery_id,
+        event=event,
+        action=action,
+        ignored=True,
+        ignoredReason=reason,
+        repositoryId=repository_id,
+    )
+
+
+def _installation_status(request: Request) -> str:
+    """Stored installation status of the delivery's organization (SQL mode)."""
+
+    session = getattr(request.state, "radius_db_session", None)
+    org_id = getattr(request.state, "radius_webhook_org_id", None)
+    if session is None or org_id is None:
+        return db_enums.GitHubInstallationStatus.ACTIVE.value
+    organization = session.get(db_models.Organization, org_id)
+    if organization is None:
+        return db_enums.GitHubInstallationStatus.ACTIVE.value
+    return organization.github_installation_status
+
+
+def _set_installation_status(
+    request: Request,
+    status_value: db_enums.GitHubInstallationStatus,
+) -> None:
+    session = getattr(request.state, "radius_db_session", None)
+    org_id = getattr(request.state, "radius_webhook_org_id", None)
+    if session is None or org_id is None:
+        return
+    organization = session.get(db_models.Organization, org_id)
+    if organization is not None:
+        organization.github_installation_status = status_value.value
+        session.flush()
+
+
+def _installation_inactive_reason(request: Request) -> str | None:
+    current = _installation_status(request)
+    if current == db_enums.GitHubInstallationStatus.ACTIVE.value:
+        return None
+    return f"installation_{current}"
+
+
+def _deactivate_repository(
+    repository_id: UUID,
+    repository_service: RepositoryApplicationService,
+    analysis_service: AnalysisApplicationService,
+    reason: str,
+) -> list[str]:
+    """Mark a repository inactive (history kept) and drop its queued work."""
+
+    cancelled = analysis_service.cancel_queued(
+        repository_id=repository_id,
+        reason=reason,
+    )
+    repository_service.disconnect_repository(repository_id)
+    return [str(item) for item in cancelled]
+
+
 def _handle_installation_sync(
     request: Request,
     event: str,
     delivery_id: str,
     payload: dict[str, Any],
     repository_service: RepositoryApplicationService,
+    analysis_service: AnalysisApplicationService,
 ) -> GitHubWebhookResult:
     action = payload.get("action")
+    org_id = getattr(request.state, "radius_webhook_org_id", None)
+    cancelled: list[str] = []
+
+    if event == "installation" and action in ("deleted", "suspend"):
+        deleted = action == "deleted"
+        _set_installation_status(
+            request,
+            db_enums.GitHubInstallationStatus.DELETED
+            if deleted
+            else db_enums.GitHubInstallationStatus.SUSPENDED,
+        )
+        reason = f"GitHub installation was {'removed' if deleted else 'suspended'}."
+        for repo in repository_service.list_repositories(
+            RepositoryListQuery(organization_id=org_id)
+        ):
+            if repo.id is None or repo.status == "disconnected":
+                continue
+            if deleted:
+                cancelled += _deactivate_repository(
+                    UUID(str(repo.id)), repository_service, analysis_service, reason
+                )
+            else:
+                # Suspended: keep the repositories connected (they come back on
+                # unsuspend) but drop work that has not started.
+                cancelled += [
+                    str(item)
+                    for item in analysis_service.cancel_queued(
+                        repository_id=UUID(str(repo.id)), reason=reason
+                    )
+                ]
+        return GitHubWebhookResult(
+            deliveryId=delivery_id,
+            event=event,
+            action=action,
+            cancelledAnalysisIds=cancelled,
+        )
+
+    if event == "installation" and action == "unsuspend":
+        _set_installation_status(request, db_enums.GitHubInstallationStatus.ACTIVE)
+        return GitHubWebhookResult(deliveryId=delivery_id, event=event, action=action)
+
+    if event == "installation_repositories" and action == "removed":
+        for removed in payload.get("repositories_removed", []):
+            existing = repository_service.get_by_github_repository_id(
+                int(removed.get("id", 0))
+            )
+            # Only this tenant's repositories; never another organization's.
+            if (
+                existing is None
+                or existing.id is None
+                or existing.organization_id != org_id
+                or existing.status == "disconnected"
+            ):
+                continue
+            cancelled += _deactivate_repository(
+                UUID(str(existing.id)),
+                repository_service,
+                analysis_service,
+                "Repository was removed from the GitHub installation.",
+            )
+        return GitHubWebhookResult(
+            deliveryId=delivery_id,
+            event=event,
+            action=action,
+            cancelledAnalysisIds=cancelled,
+        )
+
     repos = []
     if event == "installation" and action == "created":
         repos = payload.get("repositories", [])
+        # A (re)installation makes the organization's installation usable again.
+        _set_installation_status(request, db_enums.GitHubInstallationStatus.ACTIVE)
     elif event == "installation_repositories" and action == "added":
         repos = payload.get("repositories_added", [])
-        
+
     for repo in repos:
         full_name = repo.get("full_name", "")
         owner_login = full_name.split("/")[0] if "/" in full_name else ""
@@ -190,14 +364,20 @@ def _handle_installation_sync(
             "owner": {"login": owner_login},
             "private": repo.get("private", False),
             "html_url": f"https://github.com/{full_name}",
-            "default_branch": "main",
+            # Installation payloads do not carry the default branch. Leave it
+            # unknown: a new row gets a provisional value and the first push or
+            # pull_request delivery (which does carry it) corrects the row.
+            "default_branch": repo.get("default_branch"),
             "clone_url": f"https://github.com/{full_name}.git",
         }
-        _connect_repository(
+        connected = _connect_repository(
             request,
             GitHubRepositoryPayload.model_validate(repo_payload),
             repository_service,
         )
+        if connected.status == "disconnected" and connected.id is not None:
+            # Re-added after removal: history is intact, so just reactivate.
+            repository_service.reconnect_repository(UUID(str(connected.id)))
     return GitHubWebhookResult(deliveryId=delivery_id, event=event, action=action)
 
 
@@ -212,6 +392,10 @@ def _handle_push(
         GitHubRepositoryPayload.model_validate(payload["repository"]),
         repository_service,
     )
+    if repository.status == "disconnected":
+        return _ignored_inactive(
+            delivery_id, "push", None, "repository_disconnected", str(repository.id)
+        )
     ref = str(payload.get("ref", ""))
     branch_name = ref.removeprefix("refs/heads/") or repository.default_branch
     repository_service.upsert_branch(
@@ -236,14 +420,28 @@ def _handle_pull_request(
     analysis_service: AnalysisApplicationService,
 ) -> GitHubWebhookResult:
     action = payload.get("action")
-    repository = _connect_repository(
-        request,
-        GitHubRepositoryPayload.model_validate(payload["repository"]),
-        repository_service,
-    )
     pull_request_payload = GitHubPullRequestPayload.model_validate(
         payload["pull_request"]
     )
+    repository_payload = GitHubRepositoryPayload.model_validate(payload["repository"])
+    if repository_payload.default_branch is None:
+        # Fall back to the PR's base repository object.
+        base_repo = pull_request_payload.base.repo
+        if base_repo is not None and base_repo.default_branch:
+            repository_payload = repository_payload.model_copy(
+                update={"default_branch": base_repo.default_branch}
+            )
+    repository = _connect_repository(request, repository_payload, repository_service)
+    if repository.status == "disconnected":
+        # Removed from the installation (or manually disconnected): accept the
+        # delivery and do nothing. 2xx so GitHub does not mark it failed.
+        return _ignored_inactive(
+            delivery_id,
+            "pull_request",
+            action,
+            "repository_disconnected",
+            str(repository.id),
+        )
     pull_request = repository_service.upsert_pull_request(
         UpsertPullRequestCommand(
             repository_id=UUID(str(repository.id)),
@@ -257,8 +455,20 @@ def _handle_pull_request(
             merged_at=pull_request_payload.merged_at,
         )
     )
+    cancelled: list[str] = []
+    if action == "closed":
+        # A closed/merged PR no longer needs verification: drop work that has
+        # not started. Running jobs are left to finish (never killed).
+        cancelled = [
+            str(item)
+            for item in analysis_service.cancel_queued(
+                pull_request_id=UUID(str(pull_request.id)),
+                reason="Pull request was closed before the analysis started.",
+            )
+        ]
     if action not in _ANALYSIS_PR_ACTIONS or pull_request_payload.draft:
         return GitHubWebhookResult(
+            cancelledAnalysisIds=cancelled,
             deliveryId=delivery_id,
             event="pull_request",
             action=action,
@@ -290,6 +500,17 @@ def _connect_repository(
 ):
     existing = repository_service.get_by_github_repository_id(payload.id)
     if existing is not None:
+        # An existing row is stale when a delivery that really carries the
+        # default branch disagrees with it (e.g. the provisional value written
+        # by the installation sync, or a rename on GitHub).
+        if (
+            payload.default_branch
+            and existing.default_branch != payload.default_branch
+        ):
+            return repository_service.update_default_branch(
+                UUID(str(existing.id)),
+                payload.default_branch,
+            )
         return existing
 
     organization_id = getattr(request.state, "radius_webhook_org_id", None)
@@ -305,7 +526,7 @@ def _connect_repository(
             github_repository_id=payload.id,
             name=payload.name,
             owner=payload.owner.login,
-            default_branch=payload.default_branch,
+            default_branch=payload.default_branch or _PROVISIONAL_DEFAULT_BRANCH,
             clone_url=payload.clone_url,
             visibility=(
                 RepositoryVisibility.PRIVATE
@@ -431,6 +652,14 @@ def _record_installation_id(
         return
     installation_id = int(installation["id"])
     if organization.github_installation_id is None:
+        organization.github_installation_id = installation_id
+    elif (
+        organization.github_installation_id != installation_id
+        and organization.github_installation_status
+        == db_enums.GitHubInstallationStatus.DELETED.value
+    ):
+        # The previous installation was removed; this organization has been
+        # installed again under a new installation id.
         organization.github_installation_id = installation_id
     elif organization.github_installation_id != installation_id:
         # Never silently re-point an organization at another installation:

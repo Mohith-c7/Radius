@@ -59,16 +59,25 @@ class FakeGitHubClient:
     def create_installation_token(self, installation_id: int) -> Token:
         return Token(FAKE_TOKEN)
 
-    def list_check_runs_for_ref(self, **kwargs):
-        return []
+    # Stateful like GitHub: runs are found again by (head sha, name) and
+    # updated in place, so "one check run per commit" is observable.
+    def list_check_runs_for_ref(self, *, ref, check_name, **_):
+        return [
+            run
+            for run in self.check_runs
+            if run["head_sha"] == ref and run["name"] == check_name
+        ]
 
     def create_check_run(self, **kwargs):
-        self.check_runs.append(kwargs)
-        return {"id": 1}
+        run = {**kwargs, "id": len(self.check_runs) + 1}
+        self.check_runs.append(run)
+        return run
 
-    def update_check_run(self, **kwargs):  # pragma: no cover - not exercised
+    def update_check_run(self, *, check_run_id, **kwargs):
+        run = next(r for r in self.check_runs if r["id"] == check_run_id)
+        run.update(kwargs)
         self.updated.append(kwargs)
-        return {"id": kwargs["check_run_id"]}
+        return run
 
 
 def _session_factory() -> sessionmaker[Session]:
@@ -205,7 +214,9 @@ def test_non_final_crash_requeues_without_failing_analysis(tmp_path) -> None:
     assert analysis.status == db_enums.AnalysisStatus.PENDING
     assert job.status == db_enums.AnalysisJobStatus.PENDING
     assert job.attempts == 1
-    assert github.check_runs == []
+    # The retry is pending, so the one check run stays in progress (not stuck:
+    # the next attempt, or the final failure, completes this same run).
+    assert [run["status"] for run in github.check_runs] == ["in_progress"]
 
 
 def test_max_attempts_exhausted_marks_analysis_failed(tmp_path) -> None:
