@@ -88,6 +88,33 @@ Each endpoint specifies the required role.
 
 ---
 
+## HTTP limits and rate limiting
+
+Every response carries security headers (`X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`, `Referrer-Policy`, `Cache-Control: no-store`, ...). See `docs/security/HTTP_HARDENING.md`.
+
+Failures produced before routing use the standard envelope:
+
+| Status | `error.code` | When | Notes |
+|---|---|---|---|
+| 413 | `PAYLOAD_TOO_LARGE` | body over the cap (1 MiB default, 25 MiB webhook, 20 MiB test-report upload) | `meta.max_bytes` |
+| 415 | `UNSUPPORTED_MEDIA_TYPE` | POST/PUT/PATCH with a body that is not `application/json` (or `+json`) | not applied to webhook and test-report upload |
+| 429 | `RATE_LIMITED` | token bucket empty | `Retry-After`, `meta.retry_after_seconds`, `meta.bucket` |
+
+    HTTP/1.1 429 Too Many Requests
+    Retry-After: 29
+    RateLimit-Limit: 10
+    RateLimit-Remaining: 0
+    RateLimit-Reset: 60
+    RateLimit-Policy: 10;w=60
+
+    {"success": false, "data": null,
+     "error": {"code": "RATE_LIMITED", "message": "Too many requests. Retry after the interval in Retry-After."},
+     "meta": {"retry_after_seconds": 29, "bucket": "auth"}}
+
+Rate limited routes also return `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` (seconds until the bucket is full) and `RateLimit-Policy` (`<requests>;w=<window>`) on success. Names follow draft-ietf-httpapi-ratelimit-headers (the `-07` field names); the draft may change. `/health` and `/ready` are never limited. Existing intent size errors keep `422 PAYLOAD_TOO_LARGE` for bodies over 256 KiB.
+
+---
+
 ## POST /repositories
 
 ### Purpose

@@ -1,0 +1,1 @@
+The API now sends security headers on every response, enforces an explicit CORS allow-list, request body-size limits and content-type checks, and rate-limits requests per API key and per IP with `Retry-After`/`RateLimit-*` headers. The dashboard sets a per-request nonce-based Content-Security-Policy. See `docs/security/HTTP_HARDENING.md` for the settings.

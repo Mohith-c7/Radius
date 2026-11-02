@@ -73,6 +73,12 @@ class _Metrics:
             "PLACEHOLDER: LLM spend in USD. Nothing records to it yet.",
             registry=self.registry,
         )
+        self.rate_limited = Counter(
+            "radius_http_rate_limited_total",
+            "HTTP requests rejected with 429 by the rate limiter.",
+            ["bucket"],
+            registry=self.registry,
+        )
         self.queue_depth_provider: QueueDepthProvider | None = None
         self.registry.register(_QueueDepthCollector(self))
 
@@ -170,6 +176,13 @@ def record_retry() -> None:
 def record_sandbox_kill(reason: str = "timeout") -> None:
     if _METRICS is not None:
         _METRICS.sandbox_kills.labels(reason).inc()
+
+
+def record_rate_limited(bucket: str) -> None:
+    """Count one throttled request (fixed, low-cardinality bucket name)."""
+
+    if _METRICS is not None:
+        _METRICS.rate_limited.labels(bucket).inc()
 
 
 def record_llm_cost(usd: float) -> None:
