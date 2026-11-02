@@ -151,6 +151,8 @@ CASES = [
       {"src/shop.py": "import requests\n\n\ndef get(u):\n    return requests.get(u, verify=False)\n"}, ["T015:tls_verify_disabled"]),
     c("t015-secret", "T015", {"src/shop.py": SRC},
       {"src/shop.py": SRC + '\nAPI_KEY = "sk_live_9f8a7b6c5d4e"\n'}, ["T015:hardcoded_secret"]),
+    c("t015-env-var-name", "T015", {"src/shop.py": SRC},
+      {"src/shop.py": SRC + '\nGEMINI_API_KEY_ENV = "GEMINI_API_KEY"\n'}, []),
     c("t015-sql-fstring", "T015", {"src/shop.py": "def q(db, n):\n    return db.execute('select 1')\n"},
       {"src/shop.py": "def q(db, n):\n    return db.execute(f'select {n}')\n"}, ["T015:sql_interpolation"]),
     c("t015-verify-true", "T015", {"src/shop.py": "import requests\n\n\ndef get(u):\n    return requests.get(u)\n"},
