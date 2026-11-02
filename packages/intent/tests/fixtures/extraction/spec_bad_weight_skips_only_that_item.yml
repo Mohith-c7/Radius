@@ -1,0 +1,11 @@
+version: 1
+criteria:
+  - text: "good one"
+  - text: "zero weight"
+    weight: 0
+  - text: "too heavy"
+    weight: 1.5
+  - text: "string weight"
+    weight: high
+  - text: "another good"
+    weight: 0.25

@@ -1,0 +1,16 @@
+---
+version: 1
+criteria:
+- id: A.1
+  text: |
+    Multi line literal
+    criterion text
+  paths:
+    - src/a/**
+    - src/b/**
+  tests:
+  - tests/test_a.py
+- id: A_2
+  text: >
+    Folded text that
+    is joined
