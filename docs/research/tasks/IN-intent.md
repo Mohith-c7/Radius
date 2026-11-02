@@ -4,7 +4,7 @@ Goal: capture what a change is *supposed* to do as a set of confirmable, testabl
 
 ---
 
-### IN-01 Intent domain model   [ ]
+### IN-01 Intent domain model   [x]
 - Owner type: agent-ok
 - Depends on: F-01
 - Branch: `feature/intent-domain-model`

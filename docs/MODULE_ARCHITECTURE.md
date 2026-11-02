@@ -540,6 +540,40 @@ Adaptive scoring
 
 ---
 
+# Intent Domain (research, DEC-007)
+
+Package: `packages/intent` (import name `radius_intent`).
+
+Purpose
+
+Capture what a change is supposed to do as confirmable, testable criteria with provenance (DESIGN section 6.1, RQ1).
+
+---
+
+Inputs
+
+Raw intent sources (PR title/body, issues, commits, spec file, agent prompt, comments), supplied through the `IntentSourceFetcher` port.
+
+---
+
+Outputs
+
+`IntentSnapshot`: immutable, versioned, ordered `Criterion` set with `Provenance` and `Span` into each source; snapshot diffs by stable criterion id.
+
+---
+
+Responsibilities
+
+Domain model and invariants only (IN-01). Ports: `IntentSourceFetcher`, `CriterionExtractor`, `TestabilityRater`. The domain layer imports only the standard library and itself (AST test plus import-linter contract).
+
+---
+
+Non Responsibilities
+
+Persistence, HTTP, LLM calls, ingestion, extraction (IN-02 to IN-08).
+
+---
+
 # Presentation Domain
 
 Purpose
