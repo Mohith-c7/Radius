@@ -32,3 +32,25 @@ pnpm --filter @radius/dashboard dev
 
 The API allows browser requests from the local dashboard origins
 `http://localhost:3000` and `http://localhost:3001`.
+
+## Intent panel (IN-11)
+
+The analysis detail page (`/analyses/{id}#intent`) includes the Intent panel: criteria
+extracted from the PR, issues, specs and agent prompts, with provenance and testability, which a
+reviewer can confirm, reject, edit, add to, rebuild and compare across versions.
+
+- Code: `components/intent-panel.tsx` (UI), `lib/intent.ts` (API client), `lib/intent-model.ts`
+  (pure logic: state machine, span highlighting, validation, error mapping), `components/intent-panel.css`.
+- All calls go through the server proxy `app/api/radius/[...path]`. `lib/proxy.ts` allowlists only the
+  intent routes and methods and forwards `If-Match` and `X-Radius-Actor` (the signed-in user as `user:<id>`)
+  on intent writes only, after validating them. The API key never reaches the browser.
+- Intent text is untrusted: it is rendered as plain text only, never as HTML or markdown.
+- Tests: `npm test` covers the client (ETag/If-Match, error mapping), proxy allowlist and header rules,
+  and the pure model (span highlighting incl. emoji/RTL/XSS payloads, state legality, formatting).
+- To see it locally: start the API with the in-memory backend, create an analysis, submit a source
+  (`POST /api/v1/analyses/{id}/intent/sources` with `{"kind":"spec_file","text":"version: 1
+criteria:
+  - text: \"Users can log in\"
+"}`),
+  then open the analysis in the dashboard. With no intent yet the panel shows the empty state, where
+  "Add intent / spec" does the same from the UI.

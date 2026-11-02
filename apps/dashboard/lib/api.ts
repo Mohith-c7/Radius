@@ -223,6 +223,76 @@ export async function radiusFetch<T>(
   return envelope.data;
 }
 
+/** Error from the Radius API (through the proxy) with the API error code, e.g. INTENT_STALE. */
+export class RadiusApiError extends Error {
+  readonly status: number;
+  readonly code: string | null;
+  constructor(message: string, status: number, code: string | null) {
+    super(message);
+    this.name = "RadiusApiError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
+export type RadiusResult<T> = {
+  data: T;
+  status: number;
+  /** Strong ETag of the response, when the API sent one (intent routes). */
+  etag: string | null;
+  meta: Record<string, unknown>;
+};
+
+/**
+ * Like radiusFetch but keeps the status, ETag and meta, accepts the intent
+ * concurrency/audit headers, and throws a RadiusApiError carrying the API
+ * error code (INTENT_STALE, INTENT_NOT_FOUND, ...). `ifMatch` and `actor` are
+ * forwarded by the server proxy only after validation (lib/proxy.ts).
+ */
+export async function radiusRequest<T>(
+  path: string,
+  init: RequestInit & { idempotencyKey?: string; ifMatch?: string | null; actor?: string | null } = {},
+): Promise<RadiusResult<T>> {
+  const { idempotencyKey, ifMatch, actor, headers, body, ...requestInit } = init;
+  const requestHeaders = new Headers(headers);
+  requireOrganizationId();
+  if (idempotencyKey) requestHeaders.set("Idempotency-Key", idempotencyKey);
+  if (ifMatch) requestHeaders.set("If-Match", ifMatch);
+  if (actor) requestHeaders.set("X-Radius-Actor", actor);
+  if (body && !requestHeaders.has("Content-Type")) {
+    requestHeaders.set("Content-Type", "application/json");
+  }
+  const response = await fetch(apiUrl(path), {
+    cache: "no-store",
+    ...requestInit,
+    body,
+    headers: requestHeaders,
+  });
+  let envelope: ApiEnvelope<T> | null = null;
+  try {
+    envelope = (await response.json()) as ApiEnvelope<T>;
+  } catch {
+    envelope = null;
+  }
+  if (!response.ok || !envelope || !envelope.success) {
+    const apiError = envelope?.error;
+    throw new RadiusApiError(
+      apiError?.message || `Radius API request failed (${response.status})`,
+      response.status,
+      typeof apiError?.code === "string" ? apiError.code : null,
+    );
+  }
+  if (envelope.data === null) {
+    throw new RadiusApiError("Radius API returned an empty data payload.", response.status, null);
+  }
+  return {
+    data: envelope.data,
+    status: response.status,
+    etag: response.headers.get("ETag"),
+    meta: envelope.meta ?? {},
+  };
+}
+
 export function listRepositories() {
   return radiusFetch<Repository[]>("/repositories");
 }

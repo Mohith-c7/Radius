@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   MAX_BODY_BYTES,
   buildUpstreamHeaders,
+  IF_MATCH_PATTERN,
   buildUpstreamUrl,
   checkRoute,
   loadProxyConfig,
@@ -39,7 +40,10 @@ async function handle(request: NextRequest, ctx: { params: Promise<{ path: strin
   try {
     upstream = await fetch(buildUpstreamUrl(config, path, request.nextUrl.search), {
       method: request.method,
-      headers: buildUpstreamHeaders(config, request.headers),
+      headers: buildUpstreamHeaders(config, request.headers, {
+        segments: path,
+        method: request.method,
+      }),
       body: body && body.byteLength > 0 ? body : undefined,
       cache: "no-store",
       redirect: "error",
@@ -50,13 +54,15 @@ async function handle(request: NextRequest, ctx: { params: Promise<{ path: strin
   }
 
   const text = await upstream.text();
-  return new NextResponse(text, {
-    status: upstream.status,
-    headers: {
-      "Content-Type": upstream.headers.get("content-type") ?? "application/json",
-      "Cache-Control": "no-store",
-    },
-  });
+  const responseHeaders: Record<string, string> = {
+    "Content-Type": upstream.headers.get("content-type") ?? "application/json",
+    "Cache-Control": "no-store",
+    "X-Content-Type-Options": "nosniff",
+  };
+  // Intent reads/writes return a strong ETag the client sends back as If-Match.
+  const etag = upstream.headers.get("etag");
+  if (etag && IF_MATCH_PATTERN.test(etag)) responseHeaders.ETag = etag;
+  return new NextResponse(text, { status: upstream.status, headers: responseHeaders });
 }
 
 export { handle as GET, handle as POST, handle as PATCH, handle as DELETE };

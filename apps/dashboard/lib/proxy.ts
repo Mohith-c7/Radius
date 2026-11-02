@@ -15,6 +15,15 @@ const ALLOWED: Array<{ pattern: RegExp; methods: readonly string[] }> = [
   { pattern: new RegExp(`^analyses/${ID}/rerun$`), methods: ["POST"] },
   { pattern: new RegExp(`^analyses/${ID}/(blast-radius|confidence|tests|graph)$`), methods: ["GET"] },
   { pattern: new RegExp(`^analyses/${ID}/tests/results$`), methods: ["GET", "POST"] },
+  // Intent API (IN-08 / IN-11): exactly these routes and methods.
+  { pattern: new RegExp(`^analyses/${ID}/intent$`), methods: ["GET"] },
+  { pattern: new RegExp(`^analyses/${ID}/intent/(snapshots|diff)$`), methods: ["GET"] },
+  { pattern: new RegExp(`^analyses/${ID}/intent/snapshots/${ID}$`), methods: ["GET"] },
+  { pattern: new RegExp(`^analyses/${ID}/intent/sources$`), methods: ["GET", "POST"] },
+  { pattern: new RegExp(`^analyses/${ID}/intent/rebuild$`), methods: ["POST"] },
+  { pattern: new RegExp(`^analyses/${ID}/intent/criteria$`), methods: ["POST"] },
+  { pattern: new RegExp(`^analyses/${ID}/intent/criteria/${ID}$`), methods: ["PATCH"] },
+  { pattern: new RegExp(`^analyses/${ID}/intent/criteria/${ID}/history$`), methods: ["GET"] },
 ];
 
 export type ProxyConfig = {
@@ -46,6 +55,21 @@ export function checkRoute(segments: string[], method: string): "ok" | "not_foun
   return rule.methods.includes(method.toUpperCase()) ? "ok" : "method";
 }
 
+// "*" or one or more strong ETags ("<token>"); weak validators are not accepted.
+export const IF_MATCH_PATTERN =
+  /^(\*|"[A-Za-z0-9_-]{1,128}"(\s*,\s*"[A-Za-z0-9_-]{1,128}"){0,9})$/;
+// Same pattern the API enforces for X-Radius-Actor.
+export const ACTOR_PATTERN = /^[A-Za-z0-9_.@:+-]{1,128}$/;
+
+function isIntentWrite(segments: string[] | undefined, method: string | undefined): boolean {
+  return (
+    !!segments &&
+    segments[0] === "analyses" &&
+    segments[2] === "intent" &&
+    ["POST", "PATCH"].includes((method ?? "").toUpperCase())
+  );
+}
+
 const FORWARDED_CONTENT_TYPES = ["application/json", "application/xml", "text/xml"];
 
 /** Build upstream URL; only the configured base is ever used. */
@@ -58,13 +82,25 @@ export function buildUpstreamUrl(config: ProxyConfig, segments: string[], search
  * Build upstream headers from scratch (allowlist). Client cookies, Authorization,
  * Host, X-Radius-* and anything else sent by the browser are NOT forwarded.
  */
-export function buildUpstreamHeaders(config: ProxyConfig, incoming: Headers): Headers {
+export function buildUpstreamHeaders(
+  config: ProxyConfig,
+  incoming: Headers,
+  route: { segments?: string[]; method?: string } = {},
+): Headers {
   const headers = new Headers();
   headers.set("Accept", "application/json");
   if (config.organizationId) headers.set("X-Radius-Organization-Id", config.organizationId);
   if (config.apiKey) headers.set("X-Radius-API-Key", config.apiKey);
   const idem = incoming.get("idempotency-key");
   if (idem && /^[A-Za-z0-9_-]{8,128}$/.test(idem)) headers.set("Idempotency-Key", idem);
+  if (isIntentWrite(route.segments, route.method)) {
+    // Concurrency and audit headers: only on intent writes, only validated
+    // values. No other client-supplied X-Radius-* header is ever forwarded.
+    const ifMatch = incoming.get("if-match");
+    if (ifMatch && IF_MATCH_PATTERN.test(ifMatch)) headers.set("If-Match", ifMatch);
+    const actor = incoming.get("x-radius-actor");
+    if (actor && ACTOR_PATTERN.test(actor)) headers.set("X-Radius-Actor", actor);
+  }
   const ct = (incoming.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
   if (FORWARDED_CONTENT_TYPES.includes(ct)) headers.set("Content-Type", ct);
   return headers;

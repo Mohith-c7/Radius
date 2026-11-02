@@ -130,7 +130,7 @@ Goal: capture what a change is *supposed* to do as a set of confirmable, testabl
 - Goal: run extraction over the gold set and report precision, recall, F1 (exact and fuzzy match), span accuracy, testability accuracy, per source type and per extractor (deterministic, LLM-assisted).
 - Acceptance: one command prints a table and writes JSON; results are stored with `algo_version`; CI runs a small subset.
 
-### IN-11 Dashboard Intent panel and confirmation   [ ]
+### IN-11 Dashboard Intent panel and confirmation   [x]
 - Owner type: agent-ok
 - Depends on: IN-08
 - Branch: `feature/dashboard-intent-panel`
