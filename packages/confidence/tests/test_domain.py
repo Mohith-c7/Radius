@@ -38,3 +38,24 @@ def test_evidence_and_report_require_content() -> None:
             evidence=(),
             recommendations=("Proceed.",),
         )
+
+
+def test_report_score_kind_is_uncalibrated_heuristic() -> None:
+    from radius_confidence.domain import CURRENT_SCORE_KIND, ScoreKind
+
+    report = ConfidenceReport(
+        id=None,
+        analysis_id=uuid4(),
+        confidence_score=ConfidenceScore(90),
+        risk_level="low",
+        summary="Good",
+        evidence=(
+            ConfidenceEvidence(
+                category=EvidenceCategory.TESTS, label="tests", message="ok"
+            ),
+        ),
+        recommendations=("Proceed.",),
+    )
+
+    assert CURRENT_SCORE_KIND is ScoreKind.HEURISTIC_UNCALIBRATED
+    assert report.score_kind.value == "heuristic_uncalibrated"

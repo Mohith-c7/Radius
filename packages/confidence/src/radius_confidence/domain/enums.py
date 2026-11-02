@@ -35,6 +35,22 @@ class VerificationStatus(StrEnum):
     INSUFFICIENT_EVIDENCE = "insufficient_evidence"
 
 
+class ScoreKind(StrEnum):
+    """How the 0-100 confidence score should be interpreted.
+
+    The v1 score is a heuristic built from fixed penalties; it is not a
+    calibrated probability. Once calibration (CA-*) ships and the feature flag
+    (VD-07) exists, switch ``CURRENT_SCORE_KIND`` -- call sites read only that.
+    """
+
+    HEURISTIC_UNCALIBRATED = "heuristic_uncalibrated"
+    CALIBRATED = "calibrated"
+
+
+#: Single source of truth for the kind of score Radius currently emits.
+CURRENT_SCORE_KIND = ScoreKind.HEURISTIC_UNCALIBRATED
+
+
 class EvidenceImpact(StrEnum):
     """Evidence score impact."""
 

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { scoreKindLabel } from "../lib/score-kind";
 import { AlertCircle, ArrowUpRight, CheckCircle2, Clock3 } from "lucide-react";
 
 export function PageHeading({
@@ -51,13 +52,16 @@ export function Status({ status }: { status: string }) {
 export function ConfidenceRing({
   score,
   size = "large",
+  scoreKind,
 }: {
   score: number;
   size?: "large" | "small";
+  scoreKind?: string | null;
 }) {
   return (
     <div
       className={`confidence-ring ${size}`}
+      title={scoreKindLabel(scoreKind).tooltip}
       style={{ "--score": `${score * 3.6}deg` } as React.CSSProperties}
     >
       <div>

@@ -34,7 +34,7 @@ Can this Pull Request be merged safely?
    - Generates multi-framework CLI strings directly executable in local or CI runners.
 5. **Universal CI Ingestion & Dynamic Confidence Engine**:
    - Ingests standard **JUnit XML** and **JSON** test execution reports from any CI runner.
-   - Uploads are bound to the analysed head commit and must cover the selected tests; the evidence-gated verdict (`verified` / `failed` / `insufficient_evidence`) is recomputed from all uploads. The 0-100 score is a heuristic, not a calibrated probability.
+   - Uploads are bound to the analysed head commit and must cover the selected tests; the evidence-gated verdict (`verified` / `failed` / `insufficient_evidence`) is recomputed from all uploads. The 0-100 score is an uncalibrated heuristic, not a calibrated probability; the API labels it with `score_kind="heuristic_uncalibrated"` and the PR comment, Check Run and dashboard repeat the label.
 6. **Rich GitHub App Integration**:
    - Publishes `Radius confidence` Check Runs with `in_progress` status on webhook arrival and `completed` status upon verification.
    - Formats GitHub PR comments with the verdict, the reasons a change is not verified, and collapsible blast radius tables. The Check Run is published when the analysis completes; it is not yet re-published after CI uploads (the CI job's exit code is the merge gate for uploaded evidence).

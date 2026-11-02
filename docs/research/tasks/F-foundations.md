@@ -139,7 +139,7 @@ Goal: make the existing prototype trustworthy enough to build on. Fixes the gaps
 - Acceptance: injected flaky test is detected and not counted as strong evidence; deterministic outputs.
 - Tests: seeded flaky fixtures.
 
-### F-12 Deprecate the heuristic score (flagged)   [ ]
+### F-12 Deprecate the heuristic score (flagged)   [x]
 - Owner type: agent-ok
 - Depends on: VD-07 (flag mechanism)
 - Branch: `feature/confidence-deprecate-score`

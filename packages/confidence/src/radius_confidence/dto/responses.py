@@ -7,6 +7,7 @@ from datetime import datetime
 from uuid import UUID
 
 from radius_confidence.domain.entities import ConfidenceEvidence, ConfidenceReport
+from radius_confidence.domain.enums import CURRENT_SCORE_KIND
 
 __all__ = [
     "CoverageArtifactResponse",
@@ -114,6 +115,7 @@ class ConfidenceReportResponse:
     analysis_completeness: float
     verification_status: str
     generated_at: datetime
+    score_kind: str = CURRENT_SCORE_KIND.value
 
     @classmethod
     def from_entity(cls, report: ConfidenceReport) -> ConfidenceReportResponse:
@@ -135,4 +137,5 @@ class ConfidenceReportResponse:
             analysis_completeness=report.analysis_completeness,
             verification_status=report.verification_status,
             generated_at=report.generated_at,
+            score_kind=report.score_kind.value,
         )

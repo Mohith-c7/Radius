@@ -73,6 +73,8 @@ export type ConfidenceReport = {
   id: UUID | null;
   analysis_id: UUID;
   confidence_score: number;
+  /** "heuristic_uncalibrated" until calibration ships (F-12). */
+  score_kind?: string | null;
   risk_level: string;
   summary: string;
   evidence: ConfidenceEvidence[];
