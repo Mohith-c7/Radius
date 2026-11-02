@@ -25,7 +25,7 @@ Goal: compute and publish a deterministic, explainable, per-criterion verdict. S
 - Acceptance: state transition table tested; UIM computed with weights; fixtures reproduce expected states.
 - Contract: see design/VERDICT_V2_SLICE.md (docs/research/design/; Verdict v2 alpha: states, flags, UIM and intent coverage in 3.9; criterion_support table is Beta (migration 0018))
 
-### VD-03 Verdict rules v2 and justification tree   [ ]
+### VD-03 Verdict rules v2 and justification tree   [x]
 - Owner type: agent-ok
 - Depends on: VD-02, EV-02
 - Branch: `feature/verdict-rules-v2`
@@ -54,7 +54,7 @@ Goal: compute and publish a deterministic, explainable, per-criterion verdict. S
 - Goal: a human with the right role can waive a criterion or rule with a reason and expiry; waivers appear in the PR comment and in reports; expired waivers stop applying.
 - Acceptance: waiver requires role + reason; expiry enforced; audit log entries; cannot waive `contradicted` evidence without a higher role (policy).
 
-### VD-06 PR comment and Check Run v2, republish after CI   [ ]
+### VD-06 PR comment and Check Run v2, republish after CI   [x] (renderer and in-place upsert plan; worker publish wiring is VS-08)
 - Owner type: agent-ok
 - Depends on: VD-03, IN-12
 - Branch: `feature/github-publish-v2`
@@ -75,7 +75,7 @@ Goal: compute and publish a deterministic, explainable, per-criterion verdict. S
 - Research hook: shadow-mode data is free evaluation data.
 - Contract: see design/VERDICT_V2_SLICE.md (docs/research/design/; Verdict v2 alpha: alpha flag RADIUS_FEATURE_VERDICT_V2 = off|shadow|on in 1.3 (task VD-07-lite))
 
-### VD-08 Explainability renderer   [ ]
+### VD-08 Explainability renderer   [~] (template-based per-criterion text and Why line done; justification-node mapping for every sentence and i18n strings remain)
 - Owner type: agent-ok
 - Depends on: VD-03
 - Branch: `feature/verdict-explain`
