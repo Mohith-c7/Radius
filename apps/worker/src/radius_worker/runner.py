@@ -1,5 +1,6 @@
 """Worker runtime shell."""
 
+import base64
 import time
 import traceback
 from collections.abc import Callable
@@ -567,7 +568,22 @@ def _github_clone_headers(
         settings=settings,
     )
     token = github_client.create_installation_token(installation_id).token
-    return (f"Authorization: Bearer {token}",)
+    return (_git_basic_auth_header(token),)
+
+
+def _git_basic_auth_header(token: str) -> str:
+    """Git-over-HTTPS auth for a GitHub App installation token.
+
+    GitHub's smart-HTTP git endpoints take HTTP Basic auth with the username
+    ``x-access-token`` and the installation token as the password (documented as
+    ``git clone https://x-access-token:TOKEN@github.com/owner/repo.git``); a
+    ``Bearer`` header is only valid for the REST API. The header is passed to
+    git through the child process environment (see ``LocalGitRepositoryClient``),
+    never on argv, in ``.git/config`` or in the remote URL.
+    """
+
+    credentials = base64.b64encode(f"x-access-token:{token}".encode()).decode("ascii")
+    return f"Authorization: Basic {credentials}"
 
 
 def _publish_github_result(

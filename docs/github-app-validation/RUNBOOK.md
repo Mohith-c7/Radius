@@ -206,5 +206,5 @@ Manual redelivery and manual duplicate check:
 | Delivery 403 `Unknown GitHub installation` | `GITHUB_SINGLE_TENANT` is not `true` in the API container |
 | Delivery 500 on the first repo insert | The organization row for `GITHUB_DEFAULT_ORGANIZATION_ID` does not exist (section 5) |
 | Analysis runs but nothing appears on GitHub | `GITHUB_PUBLISH_RESULTS=false`, or `GITHUB_APP_ID`/`GITHUB_APP_PRIVATE_KEY` empty in the worker; publish errors are logged as "Could not publish GitHub Check Run or PR comment" |
-| Worker fails cloning a private repo | See "unverified until live" in `REPORT_TEMPLATE.md`: the clone sends `Authorization: Bearer <installation token>`; GitHub normally expects Basic auth with `x-access-token` for git over HTTPS |
+| Worker fails cloning a private repo | The clone authenticates with HTTP Basic, username `x-access-token`, password = the installation token (GitHub's documented git-over-HTTPS form). The token is handed to git through the child process environment (`GIT_CONFIG_*`, scoped to the remote's origin), so it is not on the command line, in `.git/config` or in logs. Check the App has `contents: read` and is installed on the repository; confirm live (section 7) |
 | Check run stays missing for a draft PR | Drafts are ignored until `ready_for_review` |
