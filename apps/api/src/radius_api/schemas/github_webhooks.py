@@ -17,9 +17,19 @@ class GitHubRepositoryPayload(BaseModel):
     id: int
     name: str
     private: bool = False
-    default_branch: str = Field(default="main")
+    #: ``None`` when the payload does not carry it (installation payloads list
+    #: only id/name/full_name/private). Never defaulted to a guess here, so the
+    #: handler can tell "unknown" from "explicitly main".
+    default_branch: str | None = None
     clone_url: str
     owner: GitHubUserPayload
+
+
+class GitHubRepositoryDefaultBranchPayload(BaseModel):
+    """The only field read from a PR branch's embedded repository object."""
+
+    id: int | None = None
+    default_branch: str | None = None
 
 
 class GitHubPullRequestBranchPayload(BaseModel):
@@ -27,6 +37,9 @@ class GitHubPullRequestBranchPayload(BaseModel):
 
     ref: str
     sha: str
+    #: The repository this branch belongs to (full repository object in real
+    #: deliveries); used as a default-branch source for a PR's base repo.
+    repo: GitHubRepositoryDefaultBranchPayload | None = None
 
 
 class GitHubPullRequestPayload(BaseModel):

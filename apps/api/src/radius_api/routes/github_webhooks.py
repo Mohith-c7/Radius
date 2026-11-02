@@ -42,6 +42,9 @@ LOGGER = get_logger(__name__)
 
 router = APIRouter(prefix="/webhooks/github", tags=["github-webhooks"])
 
+#: Stored only until a push/pull_request delivery reports the real default branch.
+_PROVISIONAL_DEFAULT_BRANCH = "main"
+
 _ANALYSIS_PR_ACTIONS = {"opened", "reopened", "synchronize", "ready_for_review"}
 
 
@@ -190,7 +193,10 @@ def _handle_installation_sync(
             "owner": {"login": owner_login},
             "private": repo.get("private", False),
             "html_url": f"https://github.com/{full_name}",
-            "default_branch": "main",
+            # Installation payloads do not carry the default branch. Leave it
+            # unknown: a new row gets a provisional value and the first push or
+            # pull_request delivery (which does carry it) corrects the row.
+            "default_branch": repo.get("default_branch"),
             "clone_url": f"https://github.com/{full_name}.git",
         }
         _connect_repository(
@@ -236,14 +242,18 @@ def _handle_pull_request(
     analysis_service: AnalysisApplicationService,
 ) -> GitHubWebhookResult:
     action = payload.get("action")
-    repository = _connect_repository(
-        request,
-        GitHubRepositoryPayload.model_validate(payload["repository"]),
-        repository_service,
-    )
     pull_request_payload = GitHubPullRequestPayload.model_validate(
         payload["pull_request"]
     )
+    repository_payload = GitHubRepositoryPayload.model_validate(payload["repository"])
+    if repository_payload.default_branch is None:
+        # Fall back to the PR's base repository object.
+        base_repo = pull_request_payload.base.repo
+        if base_repo is not None and base_repo.default_branch:
+            repository_payload = repository_payload.model_copy(
+                update={"default_branch": base_repo.default_branch}
+            )
+    repository = _connect_repository(request, repository_payload, repository_service)
     pull_request = repository_service.upsert_pull_request(
         UpsertPullRequestCommand(
             repository_id=UUID(str(repository.id)),
@@ -290,6 +300,17 @@ def _connect_repository(
 ):
     existing = repository_service.get_by_github_repository_id(payload.id)
     if existing is not None:
+        # An existing row is stale when a delivery that really carries the
+        # default branch disagrees with it (e.g. the provisional value written
+        # by the installation sync, or a rename on GitHub).
+        if (
+            payload.default_branch
+            and existing.default_branch != payload.default_branch
+        ):
+            return repository_service.update_default_branch(
+                UUID(str(existing.id)),
+                payload.default_branch,
+            )
         return existing
 
     organization_id = getattr(request.state, "radius_webhook_org_id", None)
@@ -305,7 +326,7 @@ def _connect_repository(
             github_repository_id=payload.id,
             name=payload.name,
             owner=payload.owner.login,
-            default_branch=payload.default_branch,
+            default_branch=payload.default_branch or _PROVISIONAL_DEFAULT_BRANCH,
             clone_url=payload.clone_url,
             visibility=(
                 RepositoryVisibility.PRIVATE
