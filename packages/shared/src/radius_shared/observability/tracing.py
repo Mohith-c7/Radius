@@ -5,11 +5,10 @@ is unavailable or disabled every helper here is a cheap no-op, so callers can
 wrap code in :func:`span` unconditionally.
 
 Trace context crosses the job queue through a *carrier*: the W3C
-``traceparent`` captured at enqueue time. ``analysis_jobs`` has no column or
-payload for it (a migration is out of scope for F-10), so
-:class:`TraceCarrierStore` keeps it in process memory. That links api and
-worker spans when they share a process (tests, single-process dev) but NOT
-across separate processes; see docs/OBSERVABILITY.md.
+``traceparent`` captured at enqueue time and persisted in
+``analysis_jobs.traceparent`` so it survives process boundaries.
+:class:`TraceCarrierStore` is a legacy in-process helper, no longer used by the
+queue. See docs/OBSERVABILITY.md.
 """
 
 from __future__ import annotations
@@ -144,8 +143,13 @@ def continue_trace(traceparent: str | None) -> Iterator[None]:
     if not OTEL_AVAILABLE or not traceparent:
         yield
         return
-    ctx = _propagator.extract({"traceparent": traceparent})
-    token = otel_context.attach(ctx)
+    try:
+        ctx = _propagator.extract({"traceparent": traceparent})
+        token = otel_context.attach(ctx)
+    except Exception:  # malformed carrier: fall back to a fresh trace
+        LOGGER.debug("Ignoring invalid traceparent")
+        yield
+        return
     try:
         yield
     finally:

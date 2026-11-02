@@ -217,3 +217,21 @@ def test_metrics_render_expected_series_when_enabled() -> None:
         assert "radius_llm_cost_usd_total" in text
     finally:
         metrics.configure_metrics(False)
+
+
+@pytest.mark.parametrize("bad", ["garbage", "00-xyz-abc-01", "", None])
+def test_continue_trace_ignores_invalid_traceparent(bad) -> None:
+    pytest.importorskip("opentelemetry.sdk")
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+        InMemorySpanExporter,
+    )
+
+    exporter = InMemorySpanExporter()
+    assert configure_tracing(span_exporter=exporter) is True
+    try:
+        with continue_trace(bad), span("fresh"):
+            pass
+        (fresh,) = exporter.get_finished_spans()
+        assert fresh.parent is None
+    finally:
+        reset_tracing()

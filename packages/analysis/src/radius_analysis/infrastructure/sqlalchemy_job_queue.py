@@ -9,7 +9,7 @@ from uuid import UUID
 
 from radius_shared.database import enums as db_enums
 from radius_shared.database import models as db_models
-from radius_shared.observability import TRACE_CARRIERS, current_traceparent, span
+from radius_shared.observability import current_traceparent, span
 from radius_shared.redaction import redact_secrets
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -44,6 +44,7 @@ class AnalysisJob:
     attempts: int
     last_error: str | None
     locked_at: datetime | None
+    traceparent: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,9 +74,9 @@ class SqlAlchemyAnalysisJobQueue:
         """Create a pending job idempotently for an analysis."""
 
         with span("queue.enqueue"):
-            # Remember the caller's trace so the worker can continue it. There is
-            # no column for this (no migration in F-10), so it is process-local.
-            TRACE_CARRIERS.put(analysis_id, current_traceparent())
+            # Persist the caller's trace so a worker in another process can
+            # continue it (``analysis_jobs.traceparent``; NULL when tracing is off).
+            traceparent = current_traceparent()
             row = self._session.scalar(
                 select(db_models.AnalysisJob).where(
                     db_models.AnalysisJob.analysis_id == analysis_id
@@ -87,6 +88,7 @@ class SqlAlchemyAnalysisJobQueue:
                         analysis_id=analysis_id,
                         status=db_enums.AnalysisJobStatus.PENDING,
                         attempts=0,
+                        traceparent=traceparent,
                     )
                 )
             elif row.status == db_enums.AnalysisJobStatus.FAILED:
@@ -97,6 +99,8 @@ class SqlAlchemyAnalysisJobQueue:
                 row.attempts = 0
                 row.last_error = None
                 row.locked_at = None
+                # A fresh run starts from the re-enqueuing caller's trace.
+                row.traceparent = traceparent
             self._session.flush()
 
     def depth_by_status(self) -> dict[str, int]:
@@ -312,6 +316,7 @@ class SqlAlchemyAnalysisJobQueue:
             attempts=row.attempts,
             last_error=row.last_error,
             locked_at=row.locked_at,
+            traceparent=row.traceparent,
         )
 
 
