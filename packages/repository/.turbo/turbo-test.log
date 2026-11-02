@@ -1,6 +1,0 @@
-
-> @radius/repository@0.1.0 test D:\Radius\packages\repository
-> python -m pytest tests
-
-...............                                                          [100%]
-15 passed in 2.71s
