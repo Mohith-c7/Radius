@@ -74,7 +74,7 @@ Goal: be where agent-driven teams already work, so verification happens before a
 - Goal: stable interface to add tamper/security rules as separate packages; signed/pinned rule packs; sandboxed evaluation; community contribution guide.
 - Acceptance: example third-party rule pack; plugins cannot execute arbitrary code outside the rule sandbox; versioned API.
 
-### IT-09 Public API docs and scoped keys   [ ]
+### IT-09 Public API docs and scoped keys   [~] (scoped, rotatable, hashed keys done by PRD-12; published OpenAPI docs and CI-run examples remain)
 - Owner type: agent-ok
 - Depends on: VD-03
 - Branch: `feature/api-public`
