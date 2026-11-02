@@ -13,10 +13,11 @@ Goal: a verification product must itself be trustworthy. Template and rules: `..
 - Goal: STRIDE-style model of the whole system: assets (customer code, tokens, traces), actors (malicious PR author, malicious agent, curious tenant, compromised dependency), entry points (webhooks, uploads, LLM inputs, MCP tools), trust boundaries (API, worker, sandbox, LLM provider).
 - Acceptance: documented risks with mitigations mapped to tasks; reviewed by a second person.
 
-### QS-02 Prompt-injection test suite   [ ]
+### QS-02 Prompt-injection test suite   [x]
 - Owner type: agent-ok
-- When: with IN-04
+- When: with IN-04 (harness and corpus pulled forward so IN-04 can register against them; IN-04 adds its adapter in `tests/security/prompt_injection/pi_registry.py`)
 - Depends on: IN-04
+- Docs: `docs/security/PROMPT_INJECTION.md`; code: `packages/shared/src/radius_shared/llm_guard/`; suite: `tests/security/prompt_injection/` (corpus v1, 98 cases). Regression rule stays open: every future bypass adds a corpus case.
 - Branch: `feature/security-prompt-injection`
 - Size: M
 - Goal: corpus of adversarial PR bodies/issues/commit messages/trajectories ("ignore instructions", fake system messages, hidden unicode, markdown tricks, oversized inputs, instructions to mark a PR verified) run against every LLM-using component.

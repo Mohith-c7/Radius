@@ -77,6 +77,7 @@ ignore = ["E501", "B008"]
 addopts = "-q --import-mode=importlib"
 markers = [
   "sandbox_adversarial: hostile payloads that run ONLY inside the hardened sandbox container (needs docker + the sandbox image; select with -m sandbox_adversarial)",
+  "prompt_injection: LLM prompt-injection suite (QS-02); deterministic stub models, no network (select with -m prompt_injection)",
 ]
 filterwarnings = [
   "ignore::FutureWarning:google.generativeai.*",
