@@ -152,7 +152,7 @@ Status key: **NEW** = not in the research plan. **EXT** = extends an existing ta
 - Acceptance: reuse lint passes; notices file generated in release.
 - Tests/verification: CI. Header-only bulk change: schedule when no large PRs are open.
 
-### PRD-12 API key lifecycle   [ ]   EXT of IT-09
+### PRD-12 API key lifecycle   [x]   EXT of IT-09
 - Owner type: pair
 - Depends on: IT-09 design
 - Branch: `feature/api-key-lifecycle`

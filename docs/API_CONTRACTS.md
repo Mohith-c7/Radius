@@ -810,3 +810,19 @@ The frontend, CLI, GitHub integration, and future SDKs should all rely on these 
 ## Machine-readable contract and stability
 
 The generated OpenAPI 3.1 document is [`api/openapi.json`](api/openapi.json); regenerate it with `python scripts/export_openapi.py`. Stability levels, the breaking-change definition and the deprecation policy are in [`api/STABILITY.md`](api/STABILITY.md). A typed Python client for the stable routes lives in [`clients/python`](../clients/python/README.md).
+
+## API keys (`/api/v1/api-keys`)
+
+Managed API key administration. Every route needs the `admin` scope and only ever sees the caller's organization (`X-Radius-Organization-Id`). Keys look like `rdk_<8 hex>_<secret>`; the secret is returned once and cannot be retrieved later. See `docs/security/API_KEYS.md`.
+
+| Method and path | Purpose | Success |
+|---|---|---|
+| `POST /api-keys` | Body `{name, scopes[], expires_at?}`. Create a key. | 201 `{key, token}` |
+| `GET /api-keys` | List keys (prefix, scopes, expiry, revoked, `last_used_at`; never the secret). | 200 list |
+| `POST /api-keys/{id}/rotate` | Body `{overlap_seconds?}` (default 86400, max 30 days). New key with the same name and scopes; the old key keeps working until the overlap ends. | 201 `{key, token, replaced}` |
+| `DELETE /api-keys/{id}` | Revoke immediately (idempotent). | 200 key |
+| `GET /api-keys/audit` | Create, rotate and revoke events with the acting key or `legacy-env-key`. | 200 list |
+
+Errors: 403 for missing or insufficient credentials (the same message for unknown, expired, revoked and wrong-organization keys), 404 for a key id from another organization, 422 for invalid scopes, past expiry, bad overlap, or when `RADIUS_API_KEY_PEPPER` is unset.
+
+Existing routes now also require a scope: `read` for GET, `write` for other mutations, `ci-upload` for `POST /analyses/{id}/tests/results` and `POST /coverage`. The GitHub webhook keeps its own HMAC auth.

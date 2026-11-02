@@ -32,6 +32,7 @@ from radius_api.middleware.security_headers import SecurityHeadersMiddleware
 from radius_api.observability import configure_api_observability
 from radius_api.openapi_contract import install_openapi_contract
 from radius_api.routes.analyses import router as analyses_router
+from radius_api.routes.api_keys import router as api_keys_router
 from radius_api.routes.confidence import router as confidence_router
 from radius_api.routes.coverage import router as coverage_router
 from radius_api.routes.github_webhooks import router as github_webhooks_router
@@ -57,6 +58,17 @@ def should_seed_demo_data(settings) -> bool:
         )
         return False
     return True
+
+
+def warn_deprecated_api_keys(settings) -> None:
+    """Log (never print key material) that env-var API keys are deprecated."""
+
+    if getattr(settings, "api_keys", "").strip():
+        LOGGER.warning(
+            "API_KEYS is DEPRECATED: static, unscoped, unhashed keys. Create "
+            "managed keys via /api/v1/api-keys (set RADIUS_API_KEY_PEPPER) and "
+            "remove API_KEYS. See docs/security/API_KEYS.md."
+        )
 
 
 async def radius_error_handler(
@@ -88,6 +100,7 @@ def create_app() -> FastAPI:
 
     settings = get_api_settings()
     configure_logging(settings.log_level)
+    warn_deprecated_api_keys(settings)
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         DomainBase.metadata.create_all(bind=auth_engine)
@@ -131,6 +144,7 @@ def create_app() -> FastAPI:
         create_verdict_v2_router(documented=settings.verdict_v2_mode != VerdictV2Mode.OFF),
         prefix="/api/v1",
     )
+    app.include_router(api_keys_router, prefix="/api/v1")
     app.include_router(github_webhooks_router, prefix="/api/v1")
     app.include_router(auth_router)
     install_openapi_contract(app)

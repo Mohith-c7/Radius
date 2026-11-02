@@ -77,6 +77,7 @@ from radius_testing.infrastructure import (
 from radius_worker.queue import InMemoryAnalysisQueue
 from sqlalchemy.orm import Session, sessionmaker
 
+from radius_api.api_keys import InMemoryApiKeyStore
 from radius_api.idempotency import (
     InMemoryIdempotencyStore,
     SqlAlchemyIdempotencyStore,
@@ -129,6 +130,7 @@ class AppContainer:
     intent_repository: InMemoryIntentRepository = field(
         default_factory=InMemoryIntentRepository
     )
+    api_key_store: InMemoryApiKeyStore = field(default_factory=InMemoryApiKeyStore)
     #: Verdict v2 alpha store and republish outbox (memory backend).
     verdict_v2_repository: InMemoryVerdictV2Repository = field(
         default_factory=InMemoryVerdictV2Repository
