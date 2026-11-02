@@ -1,6 +1,8 @@
 """FastAPI dependency wiring for Radius services."""
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import Request
@@ -22,6 +24,14 @@ from radius_confidence.infrastructure import (
     SqlAlchemyCoverageStore,
 )
 from radius_graph.infrastructure import InMemoryGraphStore, SqlAlchemyGraphStore
+from radius_intent.application import IntentSnapshotService
+from radius_intent.infrastructure import (
+    InMemoryIntentRepository,
+    ManualCriterionExtractor,
+    SqlAlchemyIntentRepository,
+)
+from radius_intent.infrastructure.extraction import DeterministicCriterionExtractor
+from radius_intent.interfaces import CriterionExtractor, IntentRepository
 from radius_repository.application import RepositoryApplicationService
 from radius_repository.infrastructure import (
     InMemoryRepositoryStore,
@@ -46,6 +56,7 @@ from radius_api.idempotency import (
     InMemoryIdempotencyStore,
     SqlAlchemyIdempotencyStore,
 )
+from radius_api.intent_management import IntentManagementService
 
 
 @dataclass(slots=True)
@@ -68,6 +79,19 @@ class AppContainer:
     idempotency_store: InMemoryIdempotencyStore = field(
         default_factory=InMemoryIdempotencyStore
     )
+    intent_repository: InMemoryIntentRepository = field(
+        default_factory=InMemoryIntentRepository
+    )
+    #: Criterion extractors used by the intent snapshot service, in priority
+    #: order for ties. Append here to add one (for example the IN-04 LLM
+    #: extractor); the API layer does not care which extractors run.
+    intent_extractors: tuple[CriterionExtractor, ...] = field(
+        default_factory=lambda: (
+            ManualCriterionExtractor(),
+            DeterministicCriterionExtractor(),
+        )
+    )
+    clock: Callable[[], datetime] = lambda: datetime.now(UTC)
     session_factory: sessionmaker[Session] | None = None
 
     def repository_service(self) -> RepositoryApplicationService:
@@ -109,6 +133,18 @@ class AppContainer:
             confidence_store=self.confidence_store,
             coverage_store=self.coverage_store,
         )
+
+
+def build_intent_service(
+    container: AppContainer, repository: IntentRepository
+) -> IntentManagementService:
+    """Wire the intent management service over ``repository``."""
+
+    return IntentManagementService(
+        repository,
+        IntentSnapshotService(repository, container.intent_extractors),
+        clock=container.clock,
+    )
 
 
 def get_container(request: Request) -> AppContainer:
@@ -259,6 +295,24 @@ def get_coverage_service(request: Request):
             confidence_store=SqlAlchemyConfidenceStore(session),
             coverage_store=SqlAlchemyCoverageStore(session),
         )
+    except Exception:
+        failed = True
+        raise
+    finally:
+        _release_request_session(request, failed=failed)
+
+
+def get_intent_service(request: Request):
+    """Return the intent management service (one SQL session per request)."""
+
+    container = get_container(request)
+    if container.session_factory is None:
+        yield build_intent_service(container, container.intent_repository)
+        return
+    session = _acquire_request_session(request, container)
+    failed = False
+    try:
+        yield build_intent_service(container, SqlAlchemyIntentRepository(session))
     except Exception:
         failed = True
         raise

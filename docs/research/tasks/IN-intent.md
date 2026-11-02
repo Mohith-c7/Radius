@@ -102,7 +102,7 @@ Goal: capture what a change is *supposed* to do as a set of confirmable, testabl
 - Acceptance: upgrade and downgrade tested; org-scoped queries only; migration applies on top of 0009 in CI.
 - Tests: repository tests; tenant isolation tests.
 
-### IN-08 Intent API   [ ]
+### IN-08 Intent API   [x]
 - Owner type: agent-ok
 - Depends on: IN-06, IN-07
 - Branch: `feature/intent-api`
@@ -110,6 +110,7 @@ Goal: capture what a change is *supposed* to do as a set of confirmable, testabl
 - Goal: endpoints `GET/PUT /analyses/{id}/intent`, `POST /analyses/{id}/intent/confirm`, `GET /analyses/{id}/criteria`.
 - Steps: request/response models; validation (editing criteria text creates `origin=human`); rate limits; OpenAPI + `docs/API_CONTRACTS.md`.
 - Acceptance: contract tests; unauthorized and cross-tenant access return 404/403 as per existing conventions.
+- Delivered: see `docs/API_CONTRACTS.md` (Intent APIs). Paths differ from the sketch above (`GET /analyses/{id}/intent`, `POST .../intent/sources`, `PATCH .../intent/criteria/{id}` with `action`, `POST .../intent/criteria`). Cross-tenant access returns 404. Rate limiting and weight edits are follow-ups.
 
 ### IN-09 Gold annotation set for RQ1   [ ]
 - Owner type: human-required

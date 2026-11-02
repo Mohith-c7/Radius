@@ -362,6 +362,121 @@ Recommendations
 
 ---
 
+# Intent APIs
+
+Read and manage what a change is supposed to do: criteria with provenance, versioned snapshots and human confirmation (IN-08). Base path `/analyses/{analysisId}/intent`.
+
+Conventions
+
+- Auth and tenancy as everywhere (`X-Radius-Organization-Id`, `X-Radius-API-Key`). Unlike other analysis routes, an analysis that belongs to another organization is indistinguishable from a missing one: **404 `ANALYSIS_NOT_FOUND`** (never 403), so ids cannot be probed across tenants. Missing credentials stay 403.
+- Requests use camelCase and reject unknown fields; responses use snake_case (like analyses). Pydantic shape errors (missing field, wrong type, unknown field) return FastAPI's default 422; domain validation errors use the envelope with the codes below.
+- Intent text is untrusted data. It is sanitized before storage (`radius_shared.llm_guard.sanitize_untrusted`: hidden/bidi/control characters, HTML comments and secrets removed), never executed, bounded (64 KiB UTF-8 per source, 2000 characters per criterion, 256 KiB per request body) and returned as JSON strings. Responses carry `X-Content-Type-Options: nosniff` and `Cache-Control: no-store`. **Clients must escape the text before rendering it as HTML.**
+- Optimistic concurrency: reads return an `ETag` (strong; changes on a new snapshot version and on any criterion decision). Writes accept `If-Match` (an ETag, a list, or `*`); a mismatch returns **409 `INTENT_STALE`**. Without `If-Match` the write applies to the latest snapshot.
+- Audit actor: `org:<organizationId>`. Send `X-Radius-Actor: <label>` (`[A-Za-z0-9_.@:+-]{1,128}`, for example the dashboard user) to record `org:<id>/<label>`. The label is not verified by Radius.
+- Logs contain ids, lengths and a SHA-256 prefix of intent text, never the text.
+
+Error codes (in addition to the table below)
+
+| Status | Code | When |
+|---|---|---|
+| 404 | `ANALYSIS_NOT_FOUND` | unknown analysis or another organization's |
+| 404 | `INTENT_NOT_FOUND` | no snapshot yet (the dashboard empty state) |
+| 404 | `INTENT_SNAPSHOT_NOT_FOUND`, `CRITERION_NOT_FOUND` | unknown snapshot / criterion |
+| 409 | `INTENT_STALE` | `If-Match` does not match the current ETag |
+| 409 | `ILLEGAL_STATE_TRANSITION` | for example confirming a rejected criterion |
+| 409 | `INTENT_NO_SOURCES` | rebuild before any source was submitted |
+| 409 | `DUPLICATE_CRITERION` | manual text equals a `.radius/intent.yml` criterion |
+| 409 | `INTENT_BUILD_CONFLICT` | concurrent builds exhausted their retries; retry |
+| 422 | `INTENT_SPEC_INVALID` | `.radius/intent.yml` errors, message lists `line N: ...` |
+| 422 | `INTENT_SOURCE_TOO_LARGE`, `PAYLOAD_TOO_LARGE`, `INTENT_TEXT_TOO_LONG` | size limits |
+| 422 | `INTENT_SOURCE_EMPTY`, `INTENT_TEXT_EMPTY`, `INTENT_SOURCE_ID_INVALID`, `INTENT_SNAPSHOT_REF_INVALID`, `INTENT_ACTOR_INVALID`, `INTENT_TOO_MANY_SOURCES`, `INTENT_SOURCE_KIND_NOT_ALLOWED` | other validation |
+
+---
+
+## GET /analyses/{analysisId}/intent
+
+Latest snapshot. Header `ETag`.
+
+    {
+      "success": true,
+      "data": {
+        "id": "7c0e...", "analysis_id": "a951...", "version": 2,
+        "parent_snapshot_id": "52fd...", "created_at": "2026-11-02T10:00:00Z",
+        "criteria_count": 2, "state_counts": {"confirmed": 1, "proposed": 1},
+        "source_count": 1, "etag": "\"3f9a...\"",
+        "criteria": [{
+          "id": "crit_9b1c...", "text": "Users must be able to reset their password",
+          "origin": {"method": "deterministic", "extractor_version": "det-extract-v1",
+                     "source_kind": "pr_body", "source_id": "pr-body",
+                     "source_hash": "e3b0...", "retrieved_at": "2026-11-02T10:00:00Z"},
+          "span": {"source_id": "pr-body", "start": 24, "end": 67},
+          "weight": 1.0, "testability": "unrated", "testability_rationale": null,
+          "state": "confirmed", "hints": {"paths": [], "tests": [], "label": null}
+        }],
+        "sources": [{"kind": "pr_body", "source_id": "pr-body", "raw_text_hash": "e3b0...",
+                     "length": 98, "truncated": false, "suspicious_content_removed": false,
+                     "fetched_at": "2026-11-02T10:00:00Z"}]
+      },
+      "meta": {}
+    }
+
+`state` is one of `proposed`, `confirmed`, `rejected`, `edited`, `needs_reconfirmation`, `orphaned`. `origin.method` is `deterministic`, `llm` or `human`. A span indexes into the stored (sanitized) text of its source: fetch it with `GET .../intent/sources`.
+
+## GET /analyses/{analysisId}/intent/snapshots
+
+History, newest first, summaries only (`id`, `version`, `parent_snapshot_id`, `created_at`, `criteria_count`, `state_counts`, `source_count`). Query `limit` (1-100, default 20) and `cursor` (versions below it); `meta.nextCursor` is the cursor of the next page or `null`.
+
+## GET /analyses/{analysisId}/intent/snapshots/{snapshotId}
+
+One snapshot (same shape as the latest). 404 when it belongs to another analysis.
+
+## GET /analyses/{analysisId}/intent/diff?from=&to=
+
+`from` / `to` are snapshot ids or version numbers. Returns `added`, `removed`, `changed` (with `changed_fields`), `state_changed`, `moved` and `sources_added|removed|changed`.
+
+## GET /analyses/{analysisId}/intent/sources
+
+Current sources with their sanitized `text` (for highlighting spans).
+
+## POST /analyses/{analysisId}/intent/sources
+
+Submit or replace a source and rebuild.
+
+    {"kind": "spec_file", "sourceId": "intent.yml",
+     "text": "version: 1\ncriteria:\n  - text: \"Users can log in\"\n"}
+
+`kind`: `agent_prompt`, `spec_file` (content of `.radius/intent.yml`), `pr_body`, `pr_title`, `issue`. `sourceId` is optional (`[A-Za-z0-9_.:-]{1,64}`, default per kind); the same kind and id replaces the earlier text, other ids add sources (at most 50 per analysis). Returns 201 when a new snapshot version was created and 200 when the criteria did not change (`created: false`; resubmitting identical text is a no-op). The response has `snapshot`, `created`, `report` (build diagnostics, carry-over events) and `sanitization` (`removed` / `flagged` finding codes; flagged findings such as `injection_phrase` are advisory, the text is stored inert). Human decisions carry over to the new version per the snapshot rules in `packages/intent/README.md`.
+
+A bad `.radius/intent.yml` returns 422 (line numbers refer to the submitted text):
+
+    {"success": false, "error": {"code": "INTENT_SPEC_INVALID",
+      "message": "Invalid .radius/intent.yml: line 4: weight must be a number in (0, 1] [spec_invalid_weight]"}}
+
+## POST /analyses/{analysisId}/intent/rebuild
+
+Re-run extraction over the stored sources. Idempotent (`created: false` when nothing changed). 409 `INTENT_NO_SOURCES` when empty.
+
+## PATCH /analyses/{analysisId}/intent/criteria/{criterionId}
+
+    {"action": "confirm"}
+    {"action": "reject", "reason": "out of scope"}
+    {"action": "reopen"}
+    {"action": "edit", "text": "Users must reset their password within 1 hour"}
+
+Applies the domain state machine to the criterion of the latest snapshot and appends an audit row (actor, time, reason). `edit` keeps the criterion id, span and origin and sets `state: edited`. `text` is required for `edit` and rejected otherwise. Weight edits are not supported yet (unknown field, 422). Returns `criterion`, `snapshot_id`, `snapshot_version` and the new `etag`.
+
+## POST /analyses/{analysisId}/intent/criteria
+
+    {"text": "Audit logs are kept for 90 days", "reason": "from the design review"}
+
+Adds a human-authored criterion (`origin.method = human`, source kind `comment`), confirmed on creation. It is stored as a source, so it survives rebuilds and wins over an identical extracted statement. 201 when new, 200 when the same text already exists (idempotent).
+
+## GET /analyses/{analysisId}/intent/criteria/{criterionId}/history
+
+Audit trail across all snapshots, oldest first: `snapshot_id`, `snapshot_version`, `old_state`, `new_state`, `actor`, `changed_at`, `old_text`, `new_text`, `reason`. System carry-over rows have actor `system:intent-snapshots`.
+
+---
+
 # Dashboard APIs
 
 ---
@@ -505,6 +620,14 @@ PULL_REQUEST_NOT_FOUND
 ANALYSIS_NOT_FOUND
 
 INVALID_GITHUB_SIGNATURE
+
+INTENT_NOT_FOUND
+
+INTENT_STALE
+
+ILLEGAL_STATE_TRANSITION
+
+INTENT_SPEC_INVALID
 
 ACCESS_DENIED
 

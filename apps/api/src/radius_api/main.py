@@ -35,6 +35,7 @@ from radius_api.routes.github_webhooks import router as github_webhooks_router
 from radius_api.routes.graph import router as graph_router
 from radius_api.routes.health import queue_depth_provider
 from radius_api.routes.health import router as health_router
+from radius_api.routes.intent import router as intent_router
 from radius_api.routes.repositories import router as repositories_router
 from radius_api.routes.tests import router as tests_router
 
@@ -131,6 +132,7 @@ def create_app() -> FastAPI:
     app.include_router(tests_router, prefix="/api/v1")
     app.include_router(confidence_router, prefix="/api/v1")
     app.include_router(coverage_router, prefix="/api/v1")
+    app.include_router(intent_router, prefix="/api/v1")
     app.include_router(github_webhooks_router, prefix="/api/v1")
     app.include_router(auth_router)
 
