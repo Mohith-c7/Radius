@@ -272,6 +272,29 @@ Risk Levels:
 
 ---
 
+## Intent tables (IN-07, migration `20261102_0011`)
+
+Models: `radius_shared.database.intent`. Repository: `radius_intent.infrastructure` (`SqlAlchemyIntentRepository`, `InMemoryIntentRepository`). Every table has a non-null `organization_id` FK (indexed) and every repository query filters by it; writes additionally verify that the analysis belongs to the organization (`analyses -> repositories.organization_id`). Enum-like columns (`kind`, `state`, `testability`, `extraction_method`) are plain strings validated by the domain, so new values need no migration. FKs use the default `NO ACTION` like the rest of the schema; nothing in the intent layer is deleted.
+
+| Table | Purpose and key columns |
+|-------|-------------------------|
+| intent_sources | One row per fetched text version: `analysis_id`, `kind`, `source_ref`, `text` (<= 64 KiB UTF-8, enforced by the repository; ingestion truncates and sets `truncated`), `raw_text_hash`, `truncated`, `suspicious_content_removed`, `fetched_at`. Unique `(analysis_id, kind, source_ref, raw_text_hash)`: an edited source adds a row, so old snapshots keep the text their spans index into. |
+| intent_snapshots | `analysis_id`, `version`, `parent_snapshot_id` (self FK), `content_hash`, `created_at`. Unique `(analysis_id, version)` and `(analysis_id, content_hash)` (idempotent saves). |
+| intent_snapshot_sources | Ordered association snapshot -> source rows (`position`). |
+| intent_criteria | `snapshot_id`, `criterion_id` (stable `crit_...`), `position`, `text`, `normalized_text`, `source_row_id`, `origin_retrieved_at`, `extraction_method`, `extractor_version`, `span_start`, `span_end`, `weight`, `testability`, `testability_rationale`, `state`, `hints` (JSON, reserved for linking hints, unused by the domain today). Unique `(snapshot_id, criterion_id)` and `(snapshot_id, position)`; checks on span and weight. |
+| intent_criterion_state_changes | Append-only audit: `(snapshot_id, criterion_id)` composite FK, `sequence`, `old_state`, `new_state`, `old_text`/`new_text` (edits), `actor`, `reason`, `changed_at`. Unique `(snapshot_id, criterion_id, sequence)`. |
+
+```text
+Analysis 1 ── * IntentSource
+Analysis 1 ── * IntentSnapshot ── * IntentCriterion ── * IntentCriterionStateChange
+IntentSnapshot * ── * IntentSource (intent_snapshot_sources)
+IntentSnapshot 0..1 ── parent IntentSnapshot
+```
+
+Mutability: a snapshot's set of criteria never changes after it is saved; only a criterion's `state` (and wording on edit) changes, and each change appends an audit row. Indexes: `organization_id` on every table, `analysis_id` on sources and snapshots, `snapshot_id` on criteria, sources links and audit.
+
+---
+
 # Relationships
 
 ```text

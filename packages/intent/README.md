@@ -1,8 +1,8 @@
 # Radius Intent Package
 
-Owns the intent layer: what a change is supposed to do, as confirmable, testable criteria with provenance (`docs/research/DESIGN.md` 6.1, RQ1). IN-01 delivers the pure domain model and ports only. No persistence, HTTP or LLM calls.
+Owns the intent layer: what a change is supposed to do, as confirmable, testable criteria with provenance (`docs/research/DESIGN.md` 6.1, RQ1). IN-01 delivered the pure domain model and ports; IN-07 adds persistence. No HTTP or LLM calls yet.
 
-Layout follows DEC-003/DEC-007: `domain/` (pure), `interfaces/` (ports), `application/` and `infrastructure/` (empty until IN-02+).
+Layout follows DEC-003/DEC-007: `domain/` (pure), `interfaces/` (ports), `application/` (empty until IN-02+) and `infrastructure/` (repositories).
 
 ## Formal model
 
@@ -28,6 +28,18 @@ Enforced in constructors; all raise subclasses of `IntentDomainError` (a `ValueE
 ## Ports (`radius_intent.interfaces`)
 
 `IntentSourceFetcher.fetch(analysis_id, kind, reference) -> IntentSource | None` (absent is `None`, not an error), `CriterionExtractor.extract(source) -> tuple[Criterion, ...]`, `TestabilityRater.rate(criterion) -> TestabilityAssessment`.
+
+## Persistence (IN-07)
+
+Port: `radius_intent.interfaces.IntentRepository` (plus `CriterionStateChange` and the `IntentPersistenceError` family). Adapters in `radius_intent.infrastructure`: `SqlAlchemyIntentRepository(session)` (PostgreSQL and SQLite; flushes, caller commits) and `InMemoryIntentRepository` (tests/dev, `STORAGE_BACKEND=memory`). Tables and migration: `docs/DATABASE_DESIGN.md`, `radius_shared.database.intent`, revision `20261102_0011`.
+
+- Every method takes `organization_id` first and filters by it; another organization's data behaves like missing data (`None`/empty/`NotFound`). SQL writes also check the analysis belongs to the organization (`AnalysisNotFoundError`).
+- `save_sources(org, analysis_id, sources)`: idempotent per `(kind, source_id, raw_text_hash)`; text over 64 KiB UTF-8 or containing NUL raises `SourceTooLargeError` (ingestion should truncate first and set `truncated`).
+- `save_snapshot(org, snapshot)`: sources must be saved first (`SourceNotFoundError`). Idempotent on a content hash (analysis, version, parent, sources, criteria and their fields; not the snapshot id or `created_at`): saving the same content again returns the stored snapshot, with any later confirmations. Different content under the same id or `(analysis, version)` raises `SnapshotConflictError`. The parent must exist in the same analysis.
+- `get_snapshot`, `get_latest_snapshot` (highest version), `list_snapshots` (version ascending). Criteria and sources keep their saved order.
+- `record_state_change(org, snapshot_id, criterion_id, new_state, actor=, changed_at=, new_text=, reason=)`: applies the domain transition rules, updates the criterion (state, and wording for `EDITED`, which requires `new_text`) and appends an audit row; `list_state_changes` reads the trail ordered by `(changed_at, criterion_id, sequence)`.
+- `analysis_id`, `snapshot_id` and `parent_snapshot_id` must be canonical lowercase UUID strings (they are UUID foreign keys); IN-06 must mint snapshot ids with `uuid4()`. Datetimes must be timezone-aware and come back in UTC.
+- Test the SQL adapter against PostgreSQL with `INTENT_TEST_POSTGRES_URL=postgresql+psycopg://... pytest packages/intent/tests/test_persistence.py` on a database migrated with `alembic upgrade head` (rolled back after each test).
 
 ## Domain purity
 

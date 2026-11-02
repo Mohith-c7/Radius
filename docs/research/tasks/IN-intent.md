@@ -92,7 +92,7 @@ Goal: capture what a change is *supposed* to do as a set of confirmable, testabl
 - Steps: create snapshot on any source change; carry over human confirmations when a criterion's normalized text is unchanged; mark criteria removed/added/changed; expose a diff.
 - Acceptance: editing the PR description creates a new snapshot without losing confirmations on unchanged criteria; older assessments still reference their original snapshot.
 
-### IN-07 Persistence and migration   [ ]
+### IN-07 Persistence and migration   [x]
 - Owner type: agent-ok
 - Depends on: IN-01
 - Branch: `feature/intent-persistence`
