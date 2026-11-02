@@ -1,0 +1,130 @@
+[importlinter]
+root_packages =
+    radius_evidence
+    radius_confidence
+    radius_github
+    radius_analysis
+    radius_intent
+    radius_linking
+    radius_testing
+    radius_graph
+include_external_packages = True
+
+[importlinter:contract:evidence-domain-is-pure]
+name = Evidence domain and application import only the standard library and themselves
+type = forbidden
+source_modules =
+    radius_evidence.domain
+    radius_evidence.application
+forbidden_modules =
+    radius_evidence.infrastructure
+    radius_shared
+    radius_analysis
+    radius_intent
+    radius_linking
+    radius_testing
+    radius_graph
+    radius_confidence
+    radius_github
+    radius_repository
+    radius_parser
+    sqlalchemy
+    fastapi
+    pydantic
+    httpx
+    requests
+    psycopg
+    alembic
+    google
+    anthropic
+    openai
+    yaml
+
+[importlinter:contract:evidence-never-imports-producers]
+name = radius_evidence never imports producers, confidence or github
+type = forbidden
+source_modules =
+    radius_evidence
+forbidden_modules =
+    radius_analysis
+    radius_intent
+    radius_linking
+    radius_testing
+    radius_graph
+    radius_confidence
+    radius_github
+
+[importlinter:contract:verdict-v2-domain-is-pure]
+name = Verdict v2 domain imports only the standard library and radius_evidence.domain
+type = forbidden
+source_modules =
+    radius_confidence.verdict_v2.domain
+forbidden_modules =
+    radius_evidence.application
+    radius_evidence.infrastructure
+    radius_confidence.verdict_v2.application
+    radius_confidence.verdict_v2.infrastructure
+    radius_shared
+    radius_analysis
+    radius_intent
+    radius_linking
+    radius_testing
+    radius_graph
+    radius_github
+    sqlalchemy
+    fastapi
+    pydantic
+    httpx
+    requests
+    psycopg
+    alembic
+    yaml
+
+[importlinter:contract:confidence-v1-does-not-import-verdict-v2]
+name = Confidence v1 never imports verdict_v2 (v1 stays independent)
+type = forbidden
+source_modules =
+    radius_confidence.domain
+    radius_confidence.application
+    radius_confidence.infrastructure
+    radius_confidence.dto
+    radius_confidence.interfaces
+forbidden_modules =
+    radius_confidence.verdict_v2
+    radius_evidence
+
+[importlinter:contract:github-verdict-v2-has-no-domain-imports]
+name = radius_github.verdict_v2 imports only the standard library and radius_github
+type = forbidden
+source_modules =
+    radius_github.verdict_v2
+forbidden_modules =
+    radius_evidence
+    radius_confidence
+    radius_shared
+    radius_analysis
+    radius_intent
+    radius_linking
+    radius_testing
+    radius_graph
+    sqlalchemy
+    fastapi
+    pydantic
+    requests
+    psycopg
+    alembic
+    yaml
+
+[importlinter:contract:producers-never-import-verdict-v2]
+name = Producers never import radius_evidence or the verdict v2 packages
+type = forbidden
+source_modules =
+    radius_analysis
+    radius_intent
+    radius_linking
+    radius_testing
+    radius_graph
+forbidden_modules =
+    radius_evidence
+    radius_confidence.verdict_v2
+    radius_github.verdict_v2
