@@ -78,7 +78,8 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
-          cache: pnpm
+          # No `cache: pnpm` here: this job never installs packages, so there is no
+          # store to save and setup-node >= 7 fails its post step on a missing path.
 
       - name: pnpm audit
         # pnpm audit exits non-zero when anything is reported; the gate below
