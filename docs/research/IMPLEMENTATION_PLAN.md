@@ -187,3 +187,9 @@ EP-01 Literature review; EP-02 Hypotheses and pre-registration; EP-03 Datasets; 
 | Novelty claim fails | Literature review early (EP-01); adjust claim to the proven gap |
 | Prompt injection / sandbox escape | QS-02, QS-03; verdict never depends on an LLM |
 | Adoption is low | Design partners (PL-06), MCP/Action distribution (IT-03/04), clear demo value in under 5 minutes |
+
+---
+
+## 8. Production-readiness track (PRD-xx)
+
+A researched gap analysis against OSS, supply-chain, security and accessibility standards lives in [../production-readiness/AUDIT.md](../production-readiness/AUDIT.md). Its build-ready backlog (`PRD-01` to `PRD-36`, in waves, with a v1.0 definition-of-done checklist) is [../production-readiness/BACKLOG.md](../production-readiness/BACKLOG.md). The backlog cross-references the QS-, IT-, PL- and MG- tasks it relies on and does not duplicate them; the v1.0 checklist is an additional gate beside M7.
