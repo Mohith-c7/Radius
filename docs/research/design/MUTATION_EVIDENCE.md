@@ -35,10 +35,13 @@ A deliberately small set. Rationale: the "sufficient operator" literature (Offut
 | `EXC` | exception removal | `raise ...` to `pass` | error paths asserted only loosely |
 | `CALL` | call removal | statement `f(...)` to `pass` | side effects nobody checks |
 | `ARG` | argument swap | first two positional arguments swapped | wrong argument order |
+| `CALLX` (opt-in, not in the default set) | call to operand | `x.lower()` to `x`, `f(x)` to `x` | the only operator that changes a *computed value* through a call chain; added after the fixture run showed the default set lets weak tests look strong (below) |
 
 Deliberately omitted: statement deletion in general (too many trivial survivors), decorator/lambda/comprehension operators, inheritance and async operators, type-annotation mutation, and LLM-generated mutants (non-deterministic; also `Mutahunter` is AGPL-3.0 and must not be copied or linked, QS-13). Engine ports: the design allows `mutmut`/`cosmic-ray` adapters (EV-04 step 1) but their licences must be checked first (QS-13); the spike implements its own minimal engine, which is also what makes seeds and ids fully controllable.
 
 **Determinism.** Mutants are sorted by `(path, line, col, operator, replacement, id)`. The id is `sha1(path|operator|span|description|replacement)[:12]`, independent of enumeration order and of Python hash randomisation. `mutant_hash = sha256(mutated module text)` is the cache identity.
+
+**Operator gap found by the fixture run** (`../evaluation/MUTATION_FIXTURES.md`): with the default set, truthiness-only tests kill most mutants because most mutants crash or return `None`; no mutant removes `.strip().lower()`. `CALLX` exposes such survivors (post hoc, exploratory). The default set used for RQ2 must be decided before the pre-registration freeze (open decision D1), and survivors must be shown, not only a score.
 
 **Observed in the fixture run** (not a general claim): `ARG` mutants such as `round(2, x)` fail with a `TypeError` under almost any test that calls the function, so they say little about assertion quality. Proposed tiers for sampling priority: tier A `ROR`, `AOR`, `BOOL`, `CRM`, `EXC`, `RET`, `NEG`; tier B `CON`, `CALL`; tier C `ARG`. The operator set used for the RQ2 predictor is frozen at pre-registration (Section 12).
 
