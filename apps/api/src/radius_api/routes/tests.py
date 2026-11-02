@@ -13,6 +13,10 @@ from radius_confidence.domain import ImpactEvidence
 from radius_repository.application import RepositoryApplicationService
 from radius_shared.dto import success_response
 from radius_shared.errors import ConflictError, NotFoundError, ValidationError
+from radius_shared.logging import get_logger
+from radius_shared.redaction import redact_secrets
+from radius_shared.verdict_v2_flag import VerdictV2Mode
+from radius_shared.verdict_v2_repository import VerdictV2Repository
 from radius_testing.application import TestingApplicationService
 from radius_testing.domain.flakiness import FlakinessConfig
 
@@ -22,7 +26,10 @@ from radius_api.dependencies import (
     get_confidence_service,
     get_repository_service,
     get_testing_service,
+    get_verdict_v2_repository,
 )
+
+LOGGER = get_logger(__name__)
 
 router = APIRouter(prefix="/analyses/{analysis_id}/tests", tags=["tests"])
 
@@ -65,6 +72,7 @@ async def ingest_test_results(
     analysis_service: Annotated[AnalysisApplicationService, Depends(get_analysis_service)],
     repository_service: Annotated[RepositoryApplicationService, Depends(get_repository_service)],
     principal: Annotated[ApiPrincipal, Depends(get_api_principal)],
+    verdicts: Annotated[VerdictV2Repository, Depends(get_verdict_v2_repository)],
     commit_sha: str | None = Query(
         None,
         description=(
@@ -155,9 +163,36 @@ async def ingest_test_results(
         skipped_selected_tests=skipped,
         contradictory_tests=ingestion.contradictory_cases,
     )
+    _request_verdict_v2_republish(request, verdicts, repository.organization_id, analysis_id)
     return success_response(
         replace(ingestion, verification_status=report.verification_status)
     )
+
+
+def _request_verdict_v2_republish(
+    request: Request,
+    verdicts: VerdictV2Repository,
+    organization_id: UUID,
+    analysis_id: UUID,
+) -> None:
+    """VS-07: ask the worker to recompute and republish verdict v2 after CI results.
+
+    One upsert into the outbox (replays collapse). No-op with the flag off. The
+    API holds no GitHub credentials and makes no network call here; a failure
+    must never fail the CI upload, so it is logged and swallowed.
+    """
+
+    mode = getattr(request.app.state.settings, "verdict_v2_mode", VerdictV2Mode.OFF)
+    if mode == VerdictV2Mode.OFF:
+        return
+    try:
+        verdicts.enqueue_request(organization_id, analysis_id, "ci_results")
+    except Exception as exc:
+        LOGGER.warning(
+            "Could not enqueue verdict v2 republish: %s",
+            redact_secrets(exc),
+            extra={"analysis_id": str(analysis_id)},
+        )
 
 
 _CLOSED_ANALYSIS_STATUSES = frozenset({"failed", "cancelled"})
