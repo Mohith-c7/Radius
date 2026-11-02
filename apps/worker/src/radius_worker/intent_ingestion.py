@@ -143,7 +143,9 @@ def _ingest(
     repo = SqlAlchemyIntentRepository(session)
     service = IntentIngestionService(
         repo,
-        IntentSnapshotService(repo, default_extractors()),
+        IntentSnapshotService(
+            repo, default_extractors(settings.intent_extraction_mode)
+        ),
         clock=clock,
     )
     collector = GitHubIntentCollector(

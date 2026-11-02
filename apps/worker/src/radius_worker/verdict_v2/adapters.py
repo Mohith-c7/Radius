@@ -137,6 +137,30 @@ def criterion_provenance(
     return crit, hint
 
 
+#: Extractor version prefix of criteria inferred from ordinary PR text (summary mode).
+INFERRED_EXTRACTOR_PREFIX = "det-extract-summary"
+#: Blocking degraded marker (R2d): inferred criteria nobody confirmed are in the analysis.
+UNCONFIRMED_INFERRED_MARKER = "unconfirmed_inferred_intent"
+
+
+def has_unconfirmed_inferred_intent(criteria: Iterable[Any]) -> bool:
+    """True when a live criterion came from summary-mode extraction and is not confirmed.
+
+    Such criteria are the PR author's own words, read heuristically. While one is present
+    the verdict cannot be ``verified`` (the marker is a blocking degraded reason, R2d);
+    a human confirming or editing it (lifecycle ``confirmed`` / ``edited``) lifts the block.
+    """
+
+    for c in criteria:
+        life = _enum_value(getattr(c, "state", "proposed"))
+        if life in DROPPED_LIFECYCLE or life in _CONFIRMED_LIFECYCLE:
+            continue
+        version = str(getattr(getattr(c, "origin", None), "extractor_version", "") or "")
+        if version.startswith(INFERRED_EXTRACTOR_PREFIX):
+            return True
+    return False
+
+
 def criterion_inputs(
     criteria: Iterable[Any],
     *,

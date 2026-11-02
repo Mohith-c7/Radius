@@ -34,7 +34,7 @@ BEHAVIORAL_TESTABILITY: frozenset[str] = frozenset({"behavioral_testable", "test
 
 #: Degraded markers that block a verdict (R2d): exact or ``prefix*`` forms.
 BLOCKING_DEGRADED_EXACT: frozenset[str] = frozenset(
-    {"truncated", "policy_invalid", "policy_unreadable"}
+    {"truncated", "policy_invalid", "policy_unreadable", "unconfirmed_inferred_intent"}
 )
 BLOCKING_DEGRADED_PREFIXES: tuple[str, ...] = ("unsupported_language:", "snapshot_missing:")
 

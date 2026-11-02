@@ -437,6 +437,11 @@ def derive_intent(
     if sources:
         if mode == "bullets":
             criteria = tuple(rate_criteria(bullet_criteria(sources)))
+        elif mode == "summary":
+            from radius_intent.infrastructure.extraction import ExtractionConfig
+
+            summary = DeterministicCriterionExtractor(ExtractionConfig(mode="summary"))
+            criteria = tuple(rate_criteria(summary.extract_sources(sources).criteria))
         else:
             report = DeterministicCriterionExtractor().extract_sources(sources)
             criteria = tuple(rate_criteria(report.criteria))
@@ -999,7 +1004,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ap.add_argument(
         "--intent-mode",
-        choices=("deterministic", "bullets"),
+        choices=("deterministic", "bullets", "summary"),
         default="deterministic",
         help="deterministic: production extractor; bullets: labelled sensitivity mode "
         "(title + top-level bullets become proposed criteria)",

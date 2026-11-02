@@ -57,3 +57,7 @@ Until calibration and a policy engine exist:
 * `author_hint_cap`: `VerdictV2Config(link=LinkMapping(author_hint_cap=...))`. A value of 1.0 removes the cap but the flag and reason are kept.
 * `min_intent_coverage`: `RuleConfig.min_intent_coverage` (default 0.50).
 * Check Run conclusions: `RADIUS_VERDICT_V2_CHECK_CONCLUSIONS` (`advisory` default, `strict`), worker setting.
+
+## Summary-mode inferred criteria (DEC-032)
+
+With `RADIUS_INTENT_EXTRACTION_MODE=summary`, the PR author's title and bullets become proposed criteria. An author could therefore write easy-to-satisfy bullets ("Adds a retry") that the lexical linker then matches to the PR's own tests. Mitigations: such criteria are `author_pr_body`, weight 0.5, carry no `tests:` hints, and while any is unconfirmed the verdict cannot be `verified` (blocking degraded reason `unconfirmed_inferred_intent`, R2d). Not stopped: the author can still make the verdict worse or noisier with many bullets (capped at 12 per source), and a confirming human still sees only the author's wording. Default mode is `sections`, where none of this applies.
