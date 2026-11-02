@@ -1,0 +1,6442 @@
+{
+  "components": {
+    "responses": {
+      "BadRequest": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "default": {
+                "value": {
+                  "data": null,
+                  "error": {
+                    "code": "BAD_REQUEST",
+                    "message": "The request could not be processed."
+                  },
+                  "meta": {},
+                  "success": false
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        },
+        "description": "Malformed request."
+      },
+      "Conflict": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "default": {
+                "value": {
+                  "data": null,
+                  "error": {
+                    "code": "CONFLICT",
+                    "message": "Analysis is still pending; wait until it is completed."
+                  },
+                  "meta": {},
+                  "success": false
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        },
+        "description": "State conflict: stale `If-Match`, illegal state transition, results for a superseded commit, or an analysis that is not completed."
+      },
+      "Forbidden": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "default": {
+                "value": {
+                  "data": null,
+                  "error": {
+                    "code": "FORBIDDEN",
+                    "message": "Invalid Radius API key for organization."
+                  },
+                  "meta": {},
+                  "success": false
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        },
+        "description": "Missing or invalid API key or organization, or a resource of another organization."
+      },
+      "NotFound": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "default": {
+                "value": {
+                  "data": null,
+                  "error": {
+                    "code": "NOT_FOUND",
+                    "message": "Analysis 0b8a3f6e-6c52-4d1e-9a4b-2f4f7a1d9c33 was not found."
+                  },
+                  "meta": {},
+                  "success": false
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        },
+        "description": "Resource not found (also returned for resources of other organizations)."
+      },
+      "PayloadTooLarge": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "default": {
+                "value": {
+                  "data": null,
+                  "error": {
+                    "code": "PAYLOAD_TOO_LARGE",
+                    "message": "Request body exceeds the allowed size."
+                  },
+                  "meta": {},
+                  "success": false
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        },
+        "description": "Request body exceeds the size limit."
+      },
+      "RateLimited": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "default": {
+                "value": {
+                  "data": null,
+                  "error": {
+                    "code": "RATE_LIMITED",
+                    "message": "Too many requests."
+                  },
+                  "meta": {},
+                  "success": false
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        },
+        "description": "Rate limit exceeded. Wait `Retry-After` seconds, then retry.",
+        "headers": {
+          "RateLimit-Limit": {
+            "description": "Requests allowed in the window.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          "RateLimit-Remaining": {
+            "description": "Requests left in the window.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          "RateLimit-Reset": {
+            "description": "Seconds until the window resets.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          "Retry-After": {
+            "description": "Whole seconds to wait before retrying (at least 1).",
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "default": {
+                "value": {
+                  "data": null,
+                  "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "Not authenticated."
+                  },
+                  "meta": {},
+                  "success": false
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        },
+        "description": "Session missing or expired (dashboard session endpoints)."
+      },
+      "UnsupportedMediaType": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "default": {
+                "value": {
+                  "data": null,
+                  "error": {
+                    "code": "UNSUPPORTED_MEDIA_TYPE",
+                    "message": "Content-Type must be application/json."
+                  },
+                  "meta": {},
+                  "success": false
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        },
+        "description": "Body is not JSON where JSON is required."
+      },
+      "ValidationFailed": {
+        "content": {
+          "application/json": {
+            "examples": {
+              "default": {
+                "value": {
+                  "data": null,
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "commit_sha query parameter is required."
+                  },
+                  "meta": {},
+                  "success": false
+                }
+              }
+            },
+            "schema": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                },
+                {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              ]
+            }
+          }
+        },
+        "description": "Validation failed. Request-shape errors use FastAPI's `detail` list; domain validation errors use the error envelope."
+      }
+    },
+    "schemas": {
+      "AddCriterionRequest": {
+        "additionalProperties": false,
+        "description": "Add a human-authored criterion (confirmed on creation).",
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional audit note.",
+            "title": "Reason"
+          },
+          "text": {
+            "description": "The criterion statement, at most 2000 characters.",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "AddCriterionRequest",
+        "type": "object"
+      },
+      "Analysis": {
+        "description": "One verification run of a pull request head commit.",
+        "examples": [
+          {
+            "blast_radius": null,
+            "changed_files": [],
+            "commit_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "completed_at": "2026-01-15T10:00:42Z",
+            "created_at": "2026-01-15T10:00:00Z",
+            "id": "0b8a3f6e-6c52-4d1e-9a4b-2f4f7a1d9c33",
+            "pull_request_id": "a8cbea24-972c-41d7-9e19-50c2382b182f",
+            "repository_id": "c3f0a9d2-1c0b-4f5e-8b8a-0d6a5e2f9b10",
+            "started_at": "2026-01-15T10:00:00Z",
+            "status": "completed"
+          }
+        ],
+        "properties": {
+          "blast_radius": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "changed_files": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "commit_sha": {
+            "type": "string"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "pull_request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "repository_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "running",
+              "completed",
+              "failed",
+              "cancelled"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "repository_id",
+          "pull_request_id",
+          "commit_sha",
+          "status",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "ApiResponse_BuildResultView_": {
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BuildResultView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "meta": {
+            "additionalProperties": true,
+            "title": "Meta",
+            "type": "object"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "ApiResponse[BuildResultView]",
+        "type": "object"
+      },
+      "ApiResponse_CriterionResultView_": {
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CriterionResultView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "meta": {
+            "additionalProperties": true,
+            "title": "Meta",
+            "type": "object"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "ApiResponse[CriterionResultView]",
+        "type": "object"
+      },
+      "ApiResponse_HealthResponse_": {
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HealthResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "meta": {
+            "additionalProperties": true,
+            "title": "Meta",
+            "type": "object"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "ApiResponse[HealthResponse]",
+        "type": "object"
+      },
+      "ApiResponse_SnapshotDiffView_": {
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SnapshotDiffView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "meta": {
+            "additionalProperties": true,
+            "title": "Meta",
+            "type": "object"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "ApiResponse[SnapshotDiffView]",
+        "type": "object"
+      },
+      "ApiResponse_SnapshotView_": {
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SnapshotView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "meta": {
+            "additionalProperties": true,
+            "title": "Meta",
+            "type": "object"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "ApiResponse[SnapshotView]",
+        "type": "object"
+      },
+      "ApiResponse_list_CriterionChangeView__": {
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CriterionChangeView"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "meta": {
+            "additionalProperties": true,
+            "title": "Meta",
+            "type": "object"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "ApiResponse[list[CriterionChangeView]]",
+        "type": "object"
+      },
+      "ApiResponse_list_SnapshotSummaryView__": {
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SnapshotSummaryView"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "meta": {
+            "additionalProperties": true,
+            "title": "Meta",
+            "type": "object"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "ApiResponse[list[SnapshotSummaryView]]",
+        "type": "object"
+      },
+      "ApiResponse_list_SourceDetailView__": {
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SourceDetailView"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "meta": {
+            "additionalProperties": true,
+            "title": "Meta",
+            "type": "object"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "ApiResponse[list[SourceDetailView]]",
+        "type": "object"
+      },
+      "BuildReportView": {
+        "description": "Diagnostics of one build.",
+        "properties": {
+          "absent_sources": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Absent Sources",
+            "type": "array"
+          },
+          "carry_events": {
+            "items": {
+              "$ref": "#/components/schemas/CarryEventView"
+            },
+            "title": "Carry Events",
+            "type": "array"
+          },
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticView"
+            },
+            "title": "Diagnostics",
+            "type": "array"
+          }
+        },
+        "required": [
+          "diagnostics",
+          "carry_events",
+          "absent_sources"
+        ],
+        "title": "BuildReportView",
+        "type": "object"
+      },
+      "BuildResultView": {
+        "description": "Outcome of a write that rebuilt the snapshot.",
+        "properties": {
+          "created": {
+            "description": "False when the sources produced no change (no new version).",
+            "title": "Created",
+            "type": "boolean"
+          },
+          "report": {
+            "$ref": "#/components/schemas/BuildReportView"
+          },
+          "sanitization": {
+            "$ref": "#/components/schemas/SanitizationView"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/SnapshotView"
+          }
+        },
+        "required": [
+          "snapshot",
+          "created",
+          "report",
+          "sanitization"
+        ],
+        "title": "BuildResultView",
+        "type": "object"
+      },
+      "CarryEventView": {
+        "description": "What happened to a criterion that carried a human decision.",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "criterion_id": {
+            "title": "Criterion Id",
+            "type": "string"
+          },
+          "previous_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Id"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "criterion_id",
+          "previous_id",
+          "state"
+        ],
+        "title": "CarryEventView",
+        "type": "object"
+      },
+      "ConfidenceReport": {
+        "description": "Deterministic confidence report and evidence-gated verification status.",
+        "examples": [
+          {
+            "analysis_completeness": 100.0,
+            "analysis_id": "0b8a3f6e-6c52-4d1e-9a4b-2f4f7a1d9c33",
+            "change_risk": "medium",
+            "confidence_score": 72.5,
+            "evidence": [
+              {
+                "category": "tests",
+                "impact": "positive",
+                "label": "Selected tests",
+                "message": "12 of 14 selected tests executed and passed.",
+                "value": 85.7
+              }
+            ],
+            "generated_at": "2026-01-15T10:01:10Z",
+            "id": "7d9c1c7a-0e3f-4a0c-b6a5-4f0a1c2d3e4f",
+            "recommendations": [
+              "Add tests for src/auth/reset.py::issue_token."
+            ],
+            "risk_level": "medium",
+            "score_kind": "uncalibrated_heuristic",
+            "summary": "Selected tests passed; two changed symbols have no covering test.",
+            "verification_confidence": 72.5,
+            "verification_status": "insufficient_evidence"
+          }
+        ],
+        "properties": {
+          "analysis_completeness": {
+            "type": "number"
+          },
+          "analysis_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "change_risk": {
+            "type": "string"
+          },
+          "confidence_score": {
+            "description": "0-100, an uncalibrated heuristic.",
+            "type": "number"
+          },
+          "evidence": {
+            "items": {
+              "description": "One piece of evidence behind the score.",
+              "properties": {
+                "category": {
+                  "type": "string"
+                },
+                "impact": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "value": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "category",
+                "label",
+                "message",
+                "impact"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recommendations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "risk_level": {
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ],
+            "type": "string"
+          },
+          "score_kind": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "verification_confidence": {
+            "type": "number"
+          },
+          "verification_status": {
+            "description": "Evidence-gated verdict, for example verified, failed or insufficient_evidence. Treat unknown values as not verified.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "analysis_id",
+          "confidence_score",
+          "risk_level",
+          "summary",
+          "verification_status"
+        ],
+        "type": "object"
+      },
+      "ConnectRepositoryRequest": {
+        "description": "Request to connect a repository.",
+        "properties": {
+          "cloneUrl": {
+            "title": "Cloneurl",
+            "type": "string"
+          },
+          "defaultBranch": {
+            "default": "main",
+            "title": "Defaultbranch",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "organizationId": {
+            "format": "uuid",
+            "title": "Organizationid",
+            "type": "string"
+          },
+          "owner": {
+            "title": "Owner",
+            "type": "string"
+          },
+          "repositoryId": {
+            "title": "Repositoryid",
+            "type": "integer"
+          },
+          "visibility": {
+            "default": "private",
+            "title": "Visibility",
+            "type": "string"
+          }
+        },
+        "required": [
+          "organizationId",
+          "repositoryId",
+          "name",
+          "owner",
+          "cloneUrl"
+        ],
+        "title": "ConnectRepositoryRequest",
+        "type": "object"
+      },
+      "CriterionActionRequest": {
+        "additionalProperties": false,
+        "description": "Confirm, reject, reopen or edit one criterion.",
+        "properties": {
+          "action": {
+            "enum": [
+              "confirm",
+              "reject",
+              "edit",
+              "reopen"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional audit note.",
+            "title": "Reason"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "New wording; required for (only) edit.",
+            "title": "Text"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "title": "CriterionActionRequest",
+        "type": "object"
+      },
+      "CriterionChangeView": {
+        "description": "One audit row.",
+        "properties": {
+          "actor": {
+            "title": "Actor",
+            "type": "string"
+          },
+          "changed_at": {
+            "format": "date-time",
+            "title": "Changed At",
+            "type": "string"
+          },
+          "criterion_id": {
+            "title": "Criterion Id",
+            "type": "string"
+          },
+          "new_state": {
+            "title": "New State",
+            "type": "string"
+          },
+          "new_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Text"
+          },
+          "old_state": {
+            "title": "Old State",
+            "type": "string"
+          },
+          "old_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Old Text"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "snapshot_id": {
+            "title": "Snapshot Id",
+            "type": "string"
+          },
+          "snapshot_version": {
+            "title": "Snapshot Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "snapshot_id",
+          "snapshot_version",
+          "criterion_id",
+          "old_state",
+          "new_state",
+          "actor",
+          "changed_at",
+          "old_text",
+          "new_text",
+          "reason"
+        ],
+        "title": "CriterionChangeView",
+        "type": "object"
+      },
+      "CriterionDeltaView": {
+        "description": "A criterion present in both snapshots that differs.",
+        "properties": {
+          "changed_fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed Fields",
+            "type": "array"
+          },
+          "criterion_id": {
+            "title": "Criterion Id",
+            "type": "string"
+          },
+          "state_after": {
+            "title": "State After",
+            "type": "string"
+          },
+          "state_before": {
+            "title": "State Before",
+            "type": "string"
+          },
+          "text_after": {
+            "title": "Text After",
+            "type": "string"
+          },
+          "text_before": {
+            "title": "Text Before",
+            "type": "string"
+          }
+        },
+        "required": [
+          "criterion_id",
+          "changed_fields",
+          "text_before",
+          "text_after",
+          "state_before",
+          "state_after"
+        ],
+        "title": "CriterionDeltaView",
+        "type": "object"
+      },
+      "CriterionResultView": {
+        "description": "Outcome of a criterion write.",
+        "properties": {
+          "created": {
+            "default": false,
+            "title": "Created",
+            "type": "boolean"
+          },
+          "criterion": {
+            "$ref": "#/components/schemas/CriterionView"
+          },
+          "etag": {
+            "title": "Etag",
+            "type": "string"
+          },
+          "snapshot_id": {
+            "title": "Snapshot Id",
+            "type": "string"
+          },
+          "snapshot_version": {
+            "title": "Snapshot Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "criterion",
+          "snapshot_id",
+          "snapshot_version",
+          "etag"
+        ],
+        "title": "CriterionResultView",
+        "type": "object"
+      },
+      "CriterionSummaryView": {
+        "description": "Compact criterion in a diff.",
+        "properties": {
+          "criterion_id": {
+            "title": "Criterion Id",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "criterion_id",
+          "text",
+          "state",
+          "source"
+        ],
+        "title": "CriterionSummaryView",
+        "type": "object"
+      },
+      "CriterionView": {
+        "description": "One criterion with provenance.",
+        "properties": {
+          "hints": {
+            "$ref": "#/components/schemas/HintsView"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/OriginView"
+          },
+          "span": {
+            "$ref": "#/components/schemas/SpanView"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "testability": {
+            "title": "Testability",
+            "type": "string"
+          },
+          "testability_rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Testability Rationale"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "weight": {
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "origin",
+          "span",
+          "weight",
+          "testability",
+          "state",
+          "hints"
+        ],
+        "title": "CriterionView",
+        "type": "object"
+      },
+      "DiagnosticView": {
+        "description": "Something noteworthy about a build (never aborts it).",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "code",
+          "source",
+          "detail"
+        ],
+        "title": "DiagnosticView",
+        "type": "object"
+      },
+      "Envelope": {
+        "description": "Success envelope `{success, data, error, meta}` wrapping every JSON payload.",
+        "properties": {
+          "data": {
+            "description": "Payload; its shape is given per operation."
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorBody"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "meta": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "type": "object"
+      },
+      "ErrorBody": {
+        "description": "Error detail. Branch on `code`, never on `message`.",
+        "properties": {
+          "code": {
+            "description": "Stable machine-readable code.",
+            "type": "string"
+          },
+          "message": {
+            "description": "Human text; may change.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "ErrorEnvelope": {
+        "description": "Every failure raised by the application uses this envelope.",
+        "examples": [
+          {
+            "data": null,
+            "error": {
+              "code": "NOT_FOUND",
+              "message": "Analysis 0b8a3f6e-6c52-4d1e-9a4b-2f4f7a1d9c33 was not found."
+            },
+            "meta": {},
+            "success": false
+          }
+        ],
+        "properties": {
+          "data": {
+            "type": "null"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "meta": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "success": {
+            "const": false
+          }
+        },
+        "required": [
+          "success",
+          "error"
+        ],
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "description": "Typed error payload returned by Radius APIs.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ErrorResponse",
+        "type": "object"
+      },
+      "ForgotPassword": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "ForgotPassword",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "description": "Typed response returned by the health endpoint.",
+        "properties": {
+          "environment": {
+            "title": "Environment",
+            "type": "string"
+          },
+          "service": {
+            "title": "Service",
+            "type": "string"
+          },
+          "status": {
+            "const": "ok",
+            "title": "Status",
+            "type": "string"
+          },
+          "storage": {
+            "title": "Storage",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "service",
+          "environment",
+          "storage"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "HintsView": {
+        "description": "Author-supplied linking hints.",
+        "properties": {
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "paths": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Paths",
+            "type": "array"
+          },
+          "tests": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Tests",
+            "type": "array"
+          }
+        },
+        "title": "HintsView",
+        "type": "object"
+      },
+      "Login": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 256,
+            "minLength": 8,
+            "title": "Password",
+            "type": "string"
+          },
+          "remember": {
+            "default": false,
+            "title": "Remember",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "Login",
+        "type": "object"
+      },
+      "OriginView": {
+        "description": "Provenance of a criterion.",
+        "properties": {
+          "extractor_version": {
+            "title": "Extractor Version",
+            "type": "string"
+          },
+          "method": {
+            "enum": [
+              "deterministic",
+              "llm",
+              "human"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "retrieved_at": {
+            "format": "date-time",
+            "title": "Retrieved At",
+            "type": "string"
+          },
+          "source_hash": {
+            "title": "Source Hash",
+            "type": "string"
+          },
+          "source_id": {
+            "title": "Source Id",
+            "type": "string"
+          },
+          "source_kind": {
+            "title": "Source Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "method",
+          "extractor_version",
+          "source_kind",
+          "source_id",
+          "source_hash",
+          "retrieved_at"
+        ],
+        "title": "OriginView",
+        "type": "object"
+      },
+      "ResetPassword": {
+        "properties": {
+          "password": {
+            "maxLength": 256,
+            "minLength": 8,
+            "title": "Password",
+            "type": "string"
+          },
+          "token": {
+            "maxLength": 512,
+            "minLength": 20,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "password"
+        ],
+        "title": "ResetPassword",
+        "type": "object"
+      },
+      "SanitizationView": {
+        "description": "What the sanitizer did to submitted text (codes only).",
+        "properties": {
+          "flagged": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Flagged",
+            "type": "array"
+          },
+          "removed": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Removed",
+            "type": "array"
+          }
+        },
+        "required": [
+          "removed",
+          "flagged"
+        ],
+        "title": "SanitizationView",
+        "type": "object"
+      },
+      "Signup": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 256,
+            "minLength": 8,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password",
+          "name"
+        ],
+        "title": "Signup",
+        "type": "object"
+      },
+      "SnapshotDiffView": {
+        "description": "Difference between two snapshots.",
+        "properties": {
+          "added": {
+            "items": {
+              "$ref": "#/components/schemas/CriterionSummaryView"
+            },
+            "title": "Added",
+            "type": "array"
+          },
+          "changed": {
+            "items": {
+              "$ref": "#/components/schemas/CriterionDeltaView"
+            },
+            "title": "Changed",
+            "type": "array"
+          },
+          "from_snapshot_id": {
+            "title": "From Snapshot Id",
+            "type": "string"
+          },
+          "from_version": {
+            "title": "From Version",
+            "type": "integer"
+          },
+          "moved": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Moved",
+            "type": "array"
+          },
+          "removed": {
+            "items": {
+              "$ref": "#/components/schemas/CriterionSummaryView"
+            },
+            "title": "Removed",
+            "type": "array"
+          },
+          "sources_added": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sources Added",
+            "type": "array"
+          },
+          "sources_changed": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sources Changed",
+            "type": "array"
+          },
+          "sources_removed": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sources Removed",
+            "type": "array"
+          },
+          "state_changed": {
+            "items": {
+              "$ref": "#/components/schemas/CriterionDeltaView"
+            },
+            "title": "State Changed",
+            "type": "array"
+          },
+          "to_snapshot_id": {
+            "title": "To Snapshot Id",
+            "type": "string"
+          },
+          "to_version": {
+            "title": "To Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "from_snapshot_id",
+          "to_snapshot_id",
+          "from_version",
+          "to_version",
+          "added",
+          "removed",
+          "changed",
+          "state_changed",
+          "moved",
+          "sources_added",
+          "sources_removed",
+          "sources_changed"
+        ],
+        "title": "SnapshotDiffView",
+        "type": "object"
+      },
+      "SnapshotSummaryView": {
+        "description": "One snapshot in the history list.",
+        "properties": {
+          "analysis_id": {
+            "title": "Analysis Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "criteria_count": {
+            "title": "Criteria Count",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "parent_snapshot_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Snapshot Id"
+          },
+          "source_count": {
+            "title": "Source Count",
+            "type": "integer"
+          },
+          "state_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "State Counts",
+            "type": "object"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "analysis_id",
+          "version",
+          "parent_snapshot_id",
+          "created_at",
+          "criteria_count",
+          "state_counts",
+          "source_count"
+        ],
+        "title": "SnapshotSummaryView",
+        "type": "object"
+      },
+      "SnapshotView": {
+        "description": "A full snapshot.",
+        "properties": {
+          "analysis_id": {
+            "title": "Analysis Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "criteria": {
+            "items": {
+              "$ref": "#/components/schemas/CriterionView"
+            },
+            "title": "Criteria",
+            "type": "array"
+          },
+          "criteria_count": {
+            "title": "Criteria Count",
+            "type": "integer"
+          },
+          "etag": {
+            "title": "Etag",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "parent_snapshot_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Snapshot Id"
+          },
+          "source_count": {
+            "title": "Source Count",
+            "type": "integer"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceSummaryView"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "state_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "State Counts",
+            "type": "object"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "analysis_id",
+          "version",
+          "parent_snapshot_id",
+          "created_at",
+          "criteria_count",
+          "state_counts",
+          "source_count",
+          "etag",
+          "criteria",
+          "sources"
+        ],
+        "title": "SnapshotView",
+        "type": "object"
+      },
+      "SourceDetailView": {
+        "description": "A source including its sanitized text (for span highlighting).",
+        "properties": {
+          "fetched_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fetched At"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "length": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Characters of stored text; null if the text is unavailable.",
+            "title": "Length"
+          },
+          "raw_text_hash": {
+            "title": "Raw Text Hash",
+            "type": "string"
+          },
+          "source_id": {
+            "title": "Source Id",
+            "type": "string"
+          },
+          "suspicious_content_removed": {
+            "title": "Suspicious Content Removed",
+            "type": "boolean"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "source_id",
+          "raw_text_hash",
+          "length",
+          "truncated",
+          "suspicious_content_removed",
+          "fetched_at",
+          "text"
+        ],
+        "title": "SourceDetailView",
+        "type": "object"
+      },
+      "SourceSummaryView": {
+        "description": "A source a snapshot cites, without its text.",
+        "properties": {
+          "fetched_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fetched At"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "length": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Characters of stored text; null if the text is unavailable.",
+            "title": "Length"
+          },
+          "raw_text_hash": {
+            "title": "Raw Text Hash",
+            "type": "string"
+          },
+          "source_id": {
+            "title": "Source Id",
+            "type": "string"
+          },
+          "suspicious_content_removed": {
+            "title": "Suspicious Content Removed",
+            "type": "boolean"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "source_id",
+          "raw_text_hash",
+          "length",
+          "truncated",
+          "suspicious_content_removed",
+          "fetched_at"
+        ],
+        "title": "SourceSummaryView",
+        "type": "object"
+      },
+      "SpanView": {
+        "description": "Half-open character range in a source text.",
+        "properties": {
+          "end": {
+            "title": "End",
+            "type": "integer"
+          },
+          "source_id": {
+            "title": "Source Id",
+            "type": "string"
+          },
+          "start": {
+            "title": "Start",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "source_id",
+          "start",
+          "end"
+        ],
+        "title": "SpanView",
+        "type": "object"
+      },
+      "StartAnalysisRequest": {
+        "description": "Request to start an analysis.",
+        "properties": {
+          "commitSha": {
+            "title": "Commitsha",
+            "type": "string"
+          },
+          "pullRequestId": {
+            "format": "uuid",
+            "title": "Pullrequestid",
+            "type": "string"
+          },
+          "repositoryId": {
+            "format": "uuid",
+            "title": "Repositoryid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "repositoryId",
+          "pullRequestId",
+          "commitSha"
+        ],
+        "title": "StartAnalysisRequest",
+        "type": "object"
+      },
+      "SubmitIntentSourceRequest": {
+        "additionalProperties": false,
+        "description": "Submit or replace one intent source of an analysis.",
+        "properties": {
+          "kind": {
+            "description": "agent_prompt, spec_file (.radius/intent.yml), pr_body, pr_title or issue.",
+            "enum": [
+              "agent_prompt",
+              "spec_file",
+              "pr_body",
+              "pr_title",
+              "issue"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "sourceId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Identity of the source within its kind (default per kind). Submitting the same kind and sourceId replaces the earlier text.",
+            "title": "Sourceid"
+          },
+          "text": {
+            "description": "Source text, at most 64 KiB (UTF-8).",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "text"
+        ],
+        "title": "SubmitIntentSourceRequest",
+        "type": "object"
+      },
+      "TestIngestion": {
+        "description": "Counts aggregated over every upload of the analysis plus this upload.",
+        "examples": [
+          {
+            "analysis_id": "0b8a3f6e-6c52-4d1e-9a4b-2f4f7a1d9c33",
+            "contradictory_cases": [],
+            "coverage_percent": null,
+            "duration_ms": 5120,
+            "failed": 0,
+            "id": "e2a4c6d8-0a1b-4c3d-8e5f-6a7b8c9d0e1f",
+            "output": "",
+            "passed": 14,
+            "selected_tests": null,
+            "skipped": 0,
+            "status": "passed",
+            "total_tests": 14,
+            "upload": {
+              "body_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+              "commit_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "duplicate": false,
+              "failed": 0,
+              "id": "f1e2d3c4-b5a6-4978-8a9b-0c1d2e3f4a5b",
+              "passed": 14,
+              "reported_cases": 14,
+              "skipped": 0,
+              "status": "passed",
+              "total_tests": 14
+            },
+            "upload_count": 1,
+            "verification_status": "verified"
+          }
+        ],
+        "properties": {
+          "analysis_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "contradictory_cases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "coverage_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "duration_ms": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "output": {
+            "type": "string"
+          },
+          "passed": {
+            "type": "integer"
+          },
+          "selected_tests": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "skipped": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          },
+          "total_tests": {
+            "type": "integer"
+          },
+          "upload": {
+            "type": "object"
+          },
+          "upload_count": {
+            "type": "integer"
+          },
+          "verification_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "analysis_id",
+          "status",
+          "total_tests",
+          "passed",
+          "failed",
+          "skipped"
+        ],
+        "type": "object"
+      },
+      "UpdateRepositoryRequest": {
+        "description": "Request to update a repository configuration.",
+        "properties": {
+          "defaultBranch": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Defaultbranch",
+            "type": "string"
+          }
+        },
+        "required": [
+          "defaultBranch"
+        ],
+        "title": "UpdateRepositoryRequest",
+        "type": "object"
+      },
+      "UserResponse": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "email_verified": {
+            "title": "Email Verified",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "organization_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Organization Id"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email",
+          "email_verified",
+          "role"
+        ],
+        "title": "UserResponse",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "VerifyToken": {
+        "properties": {
+          "token": {
+            "maxLength": 512,
+            "minLength": 20,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "VerifyToken",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "GitHubWebhookSignature": {
+        "description": "HMAC-SHA256 of the raw body with the GitHub App webhook secret.",
+        "in": "header",
+        "name": "X-Hub-Signature-256",
+        "type": "apiKey"
+      },
+      "RadiusApiKey": {
+        "description": "API key of the organization named in `X-Radius-Organization-Id`. Required unless the deployment runs in explicit insecure-dev mode.",
+        "in": "header",
+        "name": "X-Radius-API-Key",
+        "type": "apiKey"
+      },
+      "RadiusOrganization": {
+        "description": "UUID of the calling organization. Sent together with the API key.",
+        "in": "header",
+        "name": "X-Radius-Organization-Id",
+        "type": "apiKey"
+      },
+      "RadiusSession": {
+        "description": "Dashboard session cookie. Internal.",
+        "in": "cookie",
+        "name": "radius_session",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "Software verification API for Radius.\n\n**Envelope.** JSON payloads are wrapped as `{success, data, error, meta}`. Failures use\nthe shared `ErrorEnvelope`; branch on `error.code`.\n\n**Authentication.** Send `X-Radius-Organization-Id` and `X-Radius-API-Key` on every\nnon-health route. Both are declared as security schemes, not repeated as parameters.\n\n**Stability.** Every tag and operation carries `x-stability` (`stable`, `beta`, `alpha`\nor `internal`). The policy lives in `docs/api/STABILITY.md`. Clients must ignore unknown\nresponse fields.\n\n**Pagination.** List endpoints return the full array, except intent snapshot history\nwhich takes `limit` and `cursor`. Cursors are opaque.\n\n**Concurrency.** Intent reads return an `ETag`; intent writes accept `If-Match` and\nanswer 409 `INTENT_STALE` on a mismatch. `Idempotency-Key` makes creates replay-safe.\n\n**Rate limits.** 429 carries `Retry-After` and `RateLimit-*` headers.\n\n**Deprecation.** Deprecated operations are flagged `deprecated: true` and answer with\n`Deprecation` and `Sunset` headers.\n",
+    "license": {
+      "identifier": "Apache-2.0",
+      "name": "Apache-2.0"
+    },
+    "title": "Radius API",
+    "version": "0.1.0",
+    "x-stability-policy": "docs/api/STABILITY.md"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/analyses": {
+      "get": {
+        "description": "List analyses with optional filters.",
+        "operationId": "list_analyses",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "repositoryId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Repositoryid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pullRequestId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Pullrequestid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "default": {
+                    "value": {
+                      "data": [
+                        {
+                          "blast_radius": null,
+                          "changed_files": [],
+                          "commit_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                          "completed_at": "2026-01-15T10:00:42Z",
+                          "created_at": "2026-01-15T10:00:00Z",
+                          "id": "0b8a3f6e-6c52-4d1e-9a4b-2f4f7a1d9c33",
+                          "pull_request_id": "a8cbea24-972c-41d7-9e19-50c2382b182f",
+                          "repository_id": "c3f0a9d2-1c0b-4f5e-8b8a-0d6a5e2f9b10",
+                          "started_at": "2026-01-15T10:00:00Z",
+                          "status": "completed"
+                        }
+                      ],
+                      "error": null,
+                      "meta": {},
+                      "success": true
+                    }
+                  }
+                },
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Envelope"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "items": {
+                            "$ref": "#/components/schemas/Analysis"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "List Analyses",
+        "tags": [
+          "analyses"
+        ],
+        "x-stability": "stable"
+      },
+      "post": {
+        "description": "Start a manual analysis run.",
+        "operationId": "start_analysis",
+        "parameters": [
+          {
+            "description": "Client-chosen key; replaying the same key with the same body returns the first response instead of creating a second resource.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "examples": {
+                "default": {
+                  "value": {
+                    "commitSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "pullRequestId": "a8cbea24-972c-41d7-9e19-50c2382b182f",
+                    "repositoryId": "c3f0a9d2-1c0b-4f5e-8b8a-0d6a5e2f9b10"
+                  }
+                }
+              },
+              "schema": {
+                "$ref": "#/components/schemas/StartAnalysisRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "default": {
+                    "value": {
+                      "data": {
+                        "blast_radius": null,
+                        "changed_files": [],
+                        "commit_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                        "completed_at": "2026-01-15T10:00:42Z",
+                        "created_at": "2026-01-15T10:00:00Z",
+                        "id": "0b8a3f6e-6c52-4d1e-9a4b-2f4f7a1d9c33",
+                        "pull_request_id": "a8cbea24-972c-41d7-9e19-50c2382b182f",
+                        "repository_id": "c3f0a9d2-1c0b-4f5e-8b8a-0d6a5e2f9b10",
+                        "started_at": "2026-01-15T10:00:00Z",
+                        "status": "completed"
+                      },
+                      "error": null,
+                      "meta": {},
+                      "success": true
+                    }
+                  }
+                },
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Envelope"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/Analysis"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Start Analysis",
+        "tags": [
+          "analyses"
+        ],
+        "x-stability": "stable"
+      }
+    },
+    "/api/v1/analyses/lookup": {
+      "get": {
+        "description": "Resolve the newest analysis for a pull request head commit.\n\nLets CI find the analysis for ``(repository, PR number, head SHA)``\nwithout knowing Radius-internal ids. Scoped to the caller's\norganization; returns 404 when Radius has not (yet) created an analysis\nfor that commit, so callers can poll.",
+        "operationId": "lookup_analysis",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "pullRequest",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Pullrequest",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "commitSha",
+            "required": true,
+            "schema": {
+              "title": "Commitsha",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repository as owner/name (e.g. GITHUB_REPOSITORY).",
+            "in": "query",
+            "name": "repository",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Repository as owner/name (e.g. GITHUB_REPOSITORY).",
+              "title": "Repository"
+            }
+          },
+          {
+            "in": "query",
+            "name": "repositoryId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Repositoryid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "default": {
+                    "value": {
+                      "data": {
+                        "blast_radius": null,
+                        "changed_files": [],
+                        "commit_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                        "completed_at": "2026-01-15T10:00:42Z",
+                        "created_at": "2026-01-15T10:00:00Z",
+                        "id": "0b8a3f6e-6c52-4d1e-9a4b-2f4f7a1d9c33",
+                        "pull_request_id": "a8cbea24-972c-41d7-9e19-50c2382b182f",
+                        "repository_id": "c3f0a9d2-1c0b-4f5e-8b8a-0d6a5e2f9b10",
+                        "started_at": "2026-01-15T10:00:00Z",
+                        "status": "completed"
+                      },
+                      "error": null,
+                      "meta": {},
+                      "success": true
+                    }
+                  }
+                },
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Envelope"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/Analysis"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Lookup Analysis",
+        "tags": [
+          "analyses"
+        ],
+        "x-stability": "stable"
+      }
+    },
+    "/api/v1/analyses/{analysis_id}": {
+      "get": {
+        "description": "Return one analysis.",
+        "operationId": "get_analysis",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "default": {
+                    "value": {
+                      "data": {
+                        "blast_radius": null,
+                        "changed_files": [],
+                        "commit_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                        "completed_at": "2026-01-15T10:00:42Z",
+                        "created_at": "2026-01-15T10:00:00Z",
+                        "id": "0b8a3f6e-6c52-4d1e-9a4b-2f4f7a1d9c33",
+                        "pull_request_id": "a8cbea24-972c-41d7-9e19-50c2382b182f",
+                        "repository_id": "c3f0a9d2-1c0b-4f5e-8b8a-0d6a5e2f9b10",
+                        "started_at": "2026-01-15T10:00:00Z",
+                        "status": "completed"
+                      },
+                      "error": null,
+                      "meta": {},
+                      "success": true
+                    }
+                  }
+                },
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Envelope"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/Analysis"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Get Analysis",
+        "tags": [
+          "analyses"
+        ],
+        "x-stability": "stable"
+      }
+    },
+    "/api/v1/analyses/{analysis_id}/blast-radius": {
+      "get": {
+        "description": "Return blast-radius summary for an analysis.",
+        "operationId": "get_blast_radius",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Get Blast Radius",
+        "tags": [
+          "analyses"
+        ],
+        "x-stability": "beta"
+      }
+    },
+    "/api/v1/analyses/{analysis_id}/confidence": {
+      "get": {
+        "description": "Return confidence report for an analysis.",
+        "operationId": "get_confidence",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "default": {
+                    "value": {
+                      "data": {
+                        "analysis_completeness": 100.0,
+                        "analysis_id": "0b8a3f6e-6c52-4d1e-9a4b-2f4f7a1d9c33",
+                        "change_risk": "medium",
+                        "confidence_score": 72.5,
+                        "evidence": [
+                          {
+                            "category": "tests",
+                            "impact": "positive",
+                            "label": "Selected tests",
+                            "message": "12 of 14 selected tests executed and passed.",
+                            "value": 85.7
+                          }
+                        ],
+                        "generated_at": "2026-01-15T10:01:10Z",
+                        "id": "7d9c1c7a-0e3f-4a0c-b6a5-4f0a1c2d3e4f",
+                        "recommendations": [
+                          "Add tests for src/auth/reset.py::issue_token."
+                        ],
+                        "risk_level": "medium",
+                        "score_kind": "uncalibrated_heuristic",
+                        "summary": "Selected tests passed; two changed symbols have no covering test.",
+                        "verification_confidence": 72.5,
+                        "verification_status": "insufficient_evidence"
+                      },
+                      "error": null,
+                      "meta": {},
+                      "success": true
+                    }
+                  }
+                },
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Envelope"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ConfidenceReport"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Get Confidence",
+        "tags": [
+          "confidence"
+        ],
+        "x-stability": "stable"
+      }
+    },
+    "/api/v1/analyses/{analysis_id}/graph": {
+      "get": {
+        "description": "Return graph metadata and artifact for an analysis.",
+        "operationId": "get_graph",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Get Graph",
+        "tags": [
+          "graph"
+        ],
+        "x-stability": "beta"
+      }
+    },
+    "/api/v1/analyses/{analysis_id}/graph/edges": {
+      "get": {
+        "description": "Return graph edges for an analysis.",
+        "operationId": "get_graph_edges",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Get Graph Edges",
+        "tags": [
+          "graph"
+        ],
+        "x-stability": "beta"
+      }
+    },
+    "/api/v1/analyses/{analysis_id}/graph/nodes": {
+      "get": {
+        "description": "Return graph nodes for an analysis.",
+        "operationId": "get_graph_nodes",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Get Graph Nodes",
+        "tags": [
+          "graph"
+        ],
+        "x-stability": "beta"
+      }
+    },
+    "/api/v1/analyses/{analysis_id}/intent": {
+      "get": {
+        "description": "Return the latest snapshot: criteria with provenance, state and sources.\n\n404 `INTENT_NOT_FOUND` means no intent has been recorded yet.",
+        "operationId": "get_intent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_SnapshotView_"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "ETag": {
+                "description": "Opaque version of the snapshot; send it back as `If-Match` on the next write.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid organization credentials."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Analysis, snapshot or criterion not found (also for other organizations)."
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Latest intent snapshot",
+        "tags": [
+          "intent"
+        ],
+        "x-stability": "beta"
+      }
+    },
+    "/api/v1/analyses/{analysis_id}/intent/criteria": {
+      "post": {
+        "description": "Add a criterion authored by a human (`origin.method = human`).\n\nIt is confirmed on creation and survives rebuilds. Adding the same text\nagain is idempotent (200).",
+        "operationId": "add_criterion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "ETag from a previous read; a mismatch returns 409 INTENT_STALE.",
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ETag from a previous read; a mismatch returns 409 INTENT_STALE.",
+              "title": "If-Match"
+            }
+          },
+          {
+            "description": "Optional label of the human acting (for example a username); recorded in the audit trail under the authenticated organization. Not verified by Radius.",
+            "in": "header",
+            "name": "X-Radius-Actor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional label of the human acting (for example a username); recorded in the audit trail under the authenticated organization. Not verified by Radius.",
+              "title": "X-Radius-Actor"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "examples": {
+                "default": {
+                  "value": {
+                    "reason": "From support.",
+                    "text": "Reset links expire after one hour"
+                  }
+                }
+              },
+              "schema": {
+                "$ref": "#/components/schemas/AddCriterionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_CriterionResultView_"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "ETag": {
+                "description": "Opaque version of the snapshot; send it back as `If-Match` on the next write.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid organization credentials."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Analysis, snapshot or criterion not found (also for other organizations)."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Stale If-Match, illegal state transition or conflict."
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Add a manual criterion",
+        "tags": [
+          "intent"
+        ],
+        "x-stability": "beta"
+      }
+    },
+    "/api/v1/analyses/{analysis_id}/intent/criteria/{criterion_id}": {
+      "patch": {
+        "description": "Apply a human decision through the domain state machine (audited).\n\nIllegal moves (for example confirming a rejected criterion) return 409\n`ILLEGAL_STATE_TRANSITION`. Weight edits are not supported yet.",
+        "operationId": "update_criterion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "criterion_id",
+            "required": true,
+            "schema": {
+              "title": "Criterion Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "ETag from a previous read; a mismatch returns 409 INTENT_STALE.",
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ETag from a previous read; a mismatch returns 409 INTENT_STALE.",
+              "title": "If-Match"
+            }
+          },
+          {
+            "description": "Optional label of the human acting (for example a username); recorded in the audit trail under the authenticated organization. Not verified by Radius.",
+            "in": "header",
+            "name": "X-Radius-Actor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional label of the human acting (for example a username); recorded in the audit trail under the authenticated organization. Not verified by Radius.",
+              "title": "X-Radius-Actor"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "examples": {
+                "default": {
+                  "value": {
+                    "action": "confirm",
+                    "reason": "Matches the ticket."
+                  }
+                }
+              },
+              "schema": {
+                "$ref": "#/components/schemas/CriterionActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_CriterionResultView_"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "ETag": {
+                "description": "Opaque version of the snapshot; send it back as `If-Match` on the next write.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid organization credentials."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Analysis, snapshot or criterion not found (also for other organizations)."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Stale If-Match, illegal state transition or conflict."
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Confirm, reject, reopen or edit a criterion",
+        "tags": [
+          "intent"
+        ],
+        "x-stability": "beta"
+      }
+    },
+    "/api/v1/analyses/{analysis_id}/intent/criteria/{criterion_id}/history": {
+      "get": {
+        "description": "Return every state change of the criterion across snapshots, oldest first.",
+        "operationId": "criterion_history",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "criterion_id",
+            "required": true,
+            "schema": {
+              "title": "Criterion Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_list_CriterionChangeView__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid organization credentials."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Analysis, snapshot or criterion not found (also for other organizations)."
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Audit trail of a criterion",
+        "tags": [
+          "intent"
+        ],
+        "x-stability": "beta"
+      }
+    },
+    "/api/v1/analyses/{analysis_id}/intent/diff": {
+      "get": {
+        "description": "Return what changed between two snapshots (added, removed, changed).",
+        "operationId": "diff_snapshots",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Snapshot id or version number.",
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "description": "Snapshot id or version number.",
+              "title": "From",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Snapshot id or version number.",
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "description": "Snapshot id or version number.",
+              "title": "To",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_SnapshotDiffView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid organization credentials."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Analysis, snapshot or criterion not found (also for other organizations)."
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Diff two snapshots",
+        "tags": [
+          "intent"
+        ],
+        "x-stability": "beta"
+      }
+    },
+    "/api/v1/analyses/{analysis_id}/intent/rebuild": {
+      "post": {
+        "description": "Re-run extraction over the stored sources. Idempotent.\n\n409 `INTENT_NO_SOURCES` when nothing has been submitted yet.",
+        "operationId": "rebuild",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "ETag from a previous read; a mismatch returns 409 INTENT_STALE.",
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ETag from a previous read; a mismatch returns 409 INTENT_STALE.",
+              "title": "If-Match"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_BuildResultView_"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "ETag": {
+                "description": "Opaque version of the snapshot; send it back as `If-Match` on the next write.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid organization credentials."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Analysis, snapshot or criterion not found (also for other organizations)."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Stale If-Match, illegal state transition or conflict."
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Rebuild from stored sources",
+        "tags": [
+          "intent"
+        ],
+        "x-stability": "beta"
+      }
+    },
+    "/api/v1/analyses/{analysis_id}/intent/snapshots": {
+      "get": {
+        "description": "Return snapshot summaries, newest first, with cursor pagination.",
+        "operationId": "list_snapshots",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Return versions below this one (meta.nextCursor).",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Return versions below this one (meta.nextCursor).",
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_list_SnapshotSummaryView__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid organization credentials."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Analysis, snapshot or criterion not found (also for other organizations)."
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Snapshot history (newest first)",
+        "tags": [
+          "intent"
+        ],
+        "x-stability": "beta"
+      }
+    },
+    "/api/v1/analyses/{analysis_id}/intent/snapshots/{snapshot_id}": {
+      "get": {
+        "description": "Return one snapshot of the analysis.",
+        "operationId": "get_snapshot",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "snapshot_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Snapshot Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_SnapshotView_"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "ETag": {
+                "description": "Opaque version of the snapshot; send it back as `If-Match` on the next write.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid organization credentials."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Analysis, snapshot or criterion not found (also for other organizations)."
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "One snapshot",
+        "tags": [
+          "intent"
+        ],
+        "x-stability": "beta"
+      }
+    },
+    "/api/v1/analyses/{analysis_id}/intent/sources": {
+      "get": {
+        "description": "Return the sources the latest snapshot is built from, text included.\n\nCriterion spans index into this text. The text is untrusted: escape it\nbefore rendering.",
+        "operationId": "list_sources",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_list_SourceDetailView__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid organization credentials."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Analysis, snapshot or criterion not found (also for other organizations)."
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Current sources with sanitized text",
+        "tags": [
+          "intent"
+        ],
+        "x-stability": "beta"
+      },
+      "post": {
+        "description": "Store the text (agent prompt, `.radius/intent.yml`, PR body ...) and rebuild.\n\nThe text is sanitized (hidden characters, comments and secrets removed),\nnever executed, and replaces an earlier submission with the same kind and\n`sourceId`. A new snapshot version is created only when the criteria\nchange; resubmitting identical text is a no-op (`created: false`).\n`.radius/intent.yml` errors return 422 with line numbers.",
+        "operationId": "submit_source",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "ETag from a previous read; a mismatch returns 409 INTENT_STALE.",
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ETag from a previous read; a mismatch returns 409 INTENT_STALE.",
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "examples": {
+                "default": {
+                  "value": {
+                    "kind": "pr_body",
+                    "text": "## Acceptance Criteria\n- Users must reset password\n"
+                  }
+                }
+              },
+              "schema": {
+                "$ref": "#/components/schemas/SubmitIntentSourceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "default": {
+                    "value": {
+                      "data": {
+                        "created": true,
+                        "report": {
+                          "absent_sources": [],
+                          "carry_events": [],
+                          "diagnostics": []
+                        },
+                        "sanitization": {
+                          "flagged": [],
+                          "removed": []
+                        },
+                        "snapshot": {
+                          "analysis_id": "0b8a3f6e-6c52-4d1e-9a4b-2f4f7a1d9c33",
+                          "created_at": "2026-01-15T10:00:05Z",
+                          "criteria": [
+                            {
+                              "hints": {
+                                "label": null,
+                                "paths": [],
+                                "tests": []
+                              },
+                              "id": "crit_d4e9ed19ee7d4d9c077c7176f41fbfb2",
+                              "origin": {
+                                "extractor_version": "det-extract-v1",
+                                "method": "deterministic",
+                                "retrieved_at": "2026-01-15T10:00:05Z",
+                                "source_hash": "56e9f73f0c4ce8ba3fcfea4caf057402794ada0be540c2d37ef44ae9345bd00f",
+                                "source_id": "pr-body",
+                                "source_kind": "pr_body"
+                              },
+                              "span": {
+                                "end": 50,
+                                "source_id": "pr-body",
+                                "start": 25
+                              },
+                              "state": "proposed",
+                              "testability": "behavioral_testable",
+                              "testability_rationale": null,
+                              "text": "Users must reset password",
+                              "weight": 1.0
+                            }
+                          ],
+                          "criteria_count": 1,
+                          "etag": "\"13475645d350f0f98a75c066\"",
+                          "id": "d33464d8-bb3c-485c-8527-35b5e407b075",
+                          "parent_snapshot_id": null,
+                          "source_count": 1,
+                          "sources": [],
+                          "state_counts": {
+                            "proposed": 1
+                          },
+                          "version": 1
+                        }
+                      },
+                      "error": null,
+                      "meta": {},
+                      "success": true
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_BuildResultView_"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "ETag": {
+                "description": "Opaque version of the snapshot; send it back as `If-Match` on the next write.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid organization credentials."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Analysis, snapshot or criterion not found (also for other organizations)."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Stale If-Match, illegal state transition or conflict."
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Submit or replace an intent source",
+        "tags": [
+          "intent"
+        ],
+        "x-stability": "beta"
+      }
+    },
+    "/api/v1/analyses/{analysis_id}/rerun": {
+      "post": {
+        "description": "Create a new analysis from an existing one.",
+        "operationId": "rerun_analysis",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Client-chosen key; replaying the same key with the same body returns the first response instead of creating a second resource.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "default": {
+                    "value": {
+                      "data": {
+                        "blast_radius": null,
+                        "changed_files": [],
+                        "commit_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                        "completed_at": "2026-01-15T10:00:42Z",
+                        "created_at": "2026-01-15T10:00:00Z",
+                        "id": "0b8a3f6e-6c52-4d1e-9a4b-2f4f7a1d9c33",
+                        "pull_request_id": "a8cbea24-972c-41d7-9e19-50c2382b182f",
+                        "repository_id": "c3f0a9d2-1c0b-4f5e-8b8a-0d6a5e2f9b10",
+                        "started_at": "2026-01-15T10:00:00Z",
+                        "status": "completed"
+                      },
+                      "error": null,
+                      "meta": {},
+                      "success": true
+                    }
+                  }
+                },
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Envelope"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/Analysis"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Rerun Analysis",
+        "tags": [
+          "analyses"
+        ],
+        "x-stability": "stable"
+      }
+    },
+    "/api/v1/analyses/{analysis_id}/tests": {
+      "get": {
+        "description": "Return selected tests for an analysis.",
+        "operationId": "get_selected_tests",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Format"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Get Selected Tests",
+        "tags": [
+          "tests"
+        ],
+        "x-stability": "stable"
+      }
+    },
+    "/api/v1/analyses/{analysis_id}/tests/flaky": {
+      "get": {
+        "description": "Return tests whose flakiness score (F-11) is at or above the threshold.\n\nTenant-scoped through the analysis' repository. Deterministic for a given\nhistory; see ``docs/FLAKY_TESTS.md`` for the score definition.",
+        "operationId": "get_flaky_tests",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 200,
+              "minimum": 2,
+              "title": "Window",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "minComparable",
+            "required": false,
+            "schema": {
+              "default": 3,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Mincomparable",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "threshold",
+            "required": false,
+            "schema": {
+              "default": 0.2,
+              "exclusiveMinimum": 0.0,
+              "maximum": 1.0,
+              "title": "Threshold",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Get Flaky Tests Api V1 Analyses  Analysis Id  Tests Flaky Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "List quarantined (flaky) tests of the analysis' repository",
+        "tags": [
+          "tests"
+        ],
+        "x-stability": "beta"
+      }
+    },
+    "/api/v1/analyses/{analysis_id}/tests/history": {
+      "get": {
+        "description": "Return test execution history for an analysis.",
+        "operationId": "get_test_history",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Get Test History Api V1 Analyses  Analysis Id  Tests History Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Get test execution history",
+        "tags": [
+          "tests"
+        ],
+        "x-stability": "beta"
+      }
+    },
+    "/api/v1/analyses/{analysis_id}/tests/recent": {
+      "get": {
+        "description": "Return recent test executions of one repository in the caller's organization.\n\nAuthenticated and tenant-scoped: an unscoped listing would expose every\norganization's test runs.",
+        "operationId": "get_recent_executions",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "repositoryId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Repositoryid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Get Recent Executions Api V1 Analyses  Analysis Id  Tests Recent Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Get recent test executions across analyses",
+        "tags": [
+          "tests"
+        ],
+        "x-stability": "beta"
+      }
+    },
+    "/api/v1/analyses/{analysis_id}/tests/results": {
+      "get": {
+        "description": "Return saved test run result for an analysis.",
+        "operationId": "get_test_run_result",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Get Test Run Result",
+        "tags": [
+          "tests"
+        ],
+        "x-stability": "stable"
+      },
+      "post": {
+        "description": "Ingest one CI test report and re-score the analysis.\n\nEvidence binding (any violation leaves the verdict untouched):\n\n* ``commit_sha`` is required (422) and must equal the analysed head (409).\n* The analysis must be completed (pending/running/failed/cancelled \u2192 409)\n  and must be the latest analysis\n  of its pull request; results for a superseded head are stale (409).\n* A malformed or empty report is rejected (422) before anything is stored.\n\nUploads accumulate: every distinct report for the analysis is kept, a\nfailure in any upload is sticky, executed cases are unioned when matching\nselected tests, and replaying an identical body is idempotent. Selected\ntest files absent from (or only skipped in) the results keep the verdict at\n``insufficient_evidence``.",
+        "operationId": "ingest_test_results",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required. Commit the results were produced from; it must equal the analysed head commit, so results from another commit cannot verify it.",
+            "in": "query",
+            "name": "commit_sha",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Required. Commit the results were produced from; it must equal the analysed head commit, so results from another commit cannot verify it.",
+              "title": "Commit Sha"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            },
+            "application/xml": {
+              "schema": {
+                "type": "string"
+              }
+            },
+            "text/xml": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "description": "One CI test report: JUnit XML or Radius JSON, at most 20 MiB. Bound to `commit_sha`; replaying an identical body is idempotent.",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "default": {
+                    "value": {
+                      "data": {
+                        "analysis_id": "0b8a3f6e-6c52-4d1e-9a4b-2f4f7a1d9c33",
+                        "contradictory_cases": [],
+                        "coverage_percent": null,
+                        "duration_ms": 5120,
+                        "failed": 0,
+                        "id": "e2a4c6d8-0a1b-4c3d-8e5f-6a7b8c9d0e1f",
+                        "output": "",
+                        "passed": 14,
+                        "selected_tests": null,
+                        "skipped": 0,
+                        "status": "passed",
+                        "total_tests": 14,
+                        "upload": {
+                          "body_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+                          "commit_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                          "duplicate": false,
+                          "failed": 0,
+                          "id": "f1e2d3c4-b5a6-4978-8a9b-0c1d2e3f4a5b",
+                          "passed": 14,
+                          "reported_cases": 14,
+                          "skipped": 0,
+                          "status": "passed",
+                          "total_tests": 14
+                        },
+                        "upload_count": 1,
+                        "verification_status": "verified"
+                      },
+                      "error": null,
+                      "meta": {},
+                      "success": true
+                    }
+                  }
+                },
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Envelope"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/TestIngestion"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Ingest Test Results",
+        "tags": [
+          "tests"
+        ],
+        "x-stability": "stable"
+      }
+    },
+    "/api/v1/analyses/{analysis_id}/tests/statistics": {
+      "get": {
+        "description": "Return test execution statistics for an analysis.",
+        "operationId": "get_test_statistics",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Get Test Statistics Api V1 Analyses  Analysis Id  Tests Statistics Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Get test execution statistics",
+        "tags": [
+          "tests"
+        ],
+        "x-stability": "beta"
+      }
+    },
+    "/api/v1/auth/forgot-password": {
+      "post": {
+        "description": "Request a password-reset email. Always accepted (no enumeration).",
+        "operationId": "forgot_password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPassword"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [],
+        "summary": "Forgot Password",
+        "tags": [
+          "authentication"
+        ],
+        "x-stability": "internal"
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "description": "Exchange credentials for a session cookie.",
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Login"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [],
+        "summary": "Login",
+        "tags": [
+          "authentication"
+        ],
+        "x-stability": "internal"
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "description": "End the current session.",
+        "operationId": "logout",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusSession": []
+          }
+        ],
+        "summary": "Logout",
+        "tags": [
+          "authentication"
+        ],
+        "x-stability": "internal"
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "description": "Return the signed-in dashboard user.",
+        "operationId": "me",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusSession": []
+          }
+        ],
+        "summary": "Me",
+        "tags": [
+          "authentication"
+        ],
+        "x-stability": "internal"
+      }
+    },
+    "/api/v1/auth/oauth/{provider}": {
+      "get": {
+        "description": "Begin an OAuth sign-in with the named provider.",
+        "operationId": "oauth_start",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "title": "Provider",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [],
+        "summary": "Oauth Start",
+        "tags": [
+          "authentication"
+        ],
+        "x-stability": "internal"
+      }
+    },
+    "/api/v1/auth/oauth/{provider}/callback": {
+      "get": {
+        "description": "OAuth provider redirect target; completes sign-in.",
+        "operationId": "oauth_callback",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "title": "Code",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": true,
+            "schema": {
+              "title": "State",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "radius_oauth_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Radius Oauth State"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [],
+        "summary": "Oauth Callback",
+        "tags": [
+          "authentication"
+        ],
+        "x-stability": "internal"
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "description": "Rotate the session cookie.",
+        "operationId": "refresh",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusSession": []
+          }
+        ],
+        "summary": "Refresh",
+        "tags": [
+          "authentication"
+        ],
+        "x-stability": "internal"
+      }
+    },
+    "/api/v1/auth/resend-verification": {
+      "post": {
+        "description": "Send the email-verification message again.",
+        "operationId": "resend_verification",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusSession": []
+          }
+        ],
+        "summary": "Resend Verification",
+        "tags": [
+          "authentication"
+        ],
+        "x-stability": "internal"
+      }
+    },
+    "/api/v1/auth/reset-password": {
+      "post": {
+        "description": "Set a new password using a reset token.",
+        "operationId": "reset_password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPassword"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [],
+        "summary": "Reset Password",
+        "tags": [
+          "authentication"
+        ],
+        "x-stability": "internal"
+      }
+    },
+    "/api/v1/auth/signup": {
+      "post": {
+        "description": "Create a dashboard account and start a session.",
+        "operationId": "signup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Signup"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [],
+        "summary": "Signup",
+        "tags": [
+          "authentication"
+        ],
+        "x-stability": "internal"
+      }
+    },
+    "/api/v1/auth/verify-email": {
+      "post": {
+        "description": "Confirm an email address using a verification token.",
+        "operationId": "verify_email",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyToken"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [],
+        "summary": "Verify Email",
+        "tags": [
+          "authentication"
+        ],
+        "x-stability": "internal"
+      }
+    },
+    "/api/v1/coverage": {
+      "post": {
+        "description": "Ingest normalized coverage artifacts produced by CI.",
+        "operationId": "ingest_coverage",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Analysis-Id",
+            "required": true,
+            "schema": {
+              "title": "X-Analysis-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Ingest Coverage",
+        "tags": [
+          "coverage"
+        ],
+        "x-stability": "beta"
+      }
+    },
+    "/api/v1/coverage/analysis/{analysis_id}": {
+      "get": {
+        "description": "Return aggregate coverage for one analysis.",
+        "operationId": "get_coverage_for_analysis",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Get Coverage For Analysis",
+        "tags": [
+          "coverage"
+        ],
+        "x-stability": "beta"
+      }
+    },
+    "/api/v1/coverage/analysis/{analysis_id}/report": {
+      "get": {
+        "description": "Return the full normalized coverage report for one analysis.",
+        "operationId": "get_coverage_report",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Get Coverage Report",
+        "tags": [
+          "coverage"
+        ],
+        "x-stability": "beta"
+      }
+    },
+    "/api/v1/coverage/artifact": {
+      "get": {
+        "description": "Return coverage lines for a specific source file.",
+        "operationId": "get_coverage_for_artifact",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "file_path",
+            "required": true,
+            "schema": {
+              "title": "File Path",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Get Coverage For Artifact",
+        "tags": [
+          "coverage"
+        ],
+        "x-stability": "beta"
+      }
+    },
+    "/api/v1/coverage/symbol": {
+      "get": {
+        "description": "Return tests that executed a specific symbol.",
+        "operationId": "get_tests_for_symbol",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "file_path",
+            "required": true,
+            "schema": {
+              "title": "File Path",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "symbol",
+            "required": true,
+            "schema": {
+              "title": "Symbol",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Get Tests For Symbol",
+        "tags": [
+          "coverage"
+        ],
+        "x-stability": "beta"
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "description": "Return service health metadata.",
+        "operationId": "get_health",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_HealthResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [],
+        "summary": "Get Health",
+        "tags": [
+          "health"
+        ],
+        "x-stability": "stable"
+      }
+    },
+    "/api/v1/ready": {
+      "get": {
+        "description": "Return readiness after checking the database and the job queue.\n\nWith SQL storage this runs ``select 1`` and reads the ``analysis_jobs``\ntable (the durable queue). With memory storage the in-process queue is\nchecked. Any failure yields 503 with the usual error envelope; the\nexception detail is logged, not returned.",
+        "operationId": "get_readiness",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_HealthResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [],
+        "summary": "Get Readiness",
+        "tags": [
+          "health"
+        ],
+        "x-stability": "stable"
+      }
+    },
+    "/api/v1/repositories": {
+      "get": {
+        "description": "List repositories for an organization.",
+        "operationId": "list_repositories",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "organizationId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Organizationid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "visibility",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Visibility"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "List Repositories",
+        "tags": [
+          "repositories"
+        ],
+        "x-stability": "stable"
+      },
+      "post": {
+        "description": "Connect a repository to Radius.",
+        "operationId": "connect_repository",
+        "parameters": [
+          {
+            "description": "Client-chosen key; replaying the same key with the same body returns the first response instead of creating a second resource.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectRepositoryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Connect Repository",
+        "tags": [
+          "repositories"
+        ],
+        "x-stability": "stable"
+      }
+    },
+    "/api/v1/repositories/{repository_id}": {
+      "delete": {
+        "description": "Disconnect one repository.",
+        "operationId": "disconnect_repository",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repository_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Repository Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Disconnect Repository",
+        "tags": [
+          "repositories"
+        ],
+        "x-stability": "stable"
+      },
+      "get": {
+        "description": "Return one repository.",
+        "operationId": "get_repository",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repository_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Repository Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Get Repository",
+        "tags": [
+          "repositories"
+        ],
+        "x-stability": "stable"
+      },
+      "patch": {
+        "description": "Update repository configuration such as default branch.",
+        "operationId": "update_repository",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repository_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Repository Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRepositoryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Update Repository",
+        "tags": [
+          "repositories"
+        ],
+        "x-stability": "stable"
+      }
+    },
+    "/api/v1/repositories/{repository_id}/pull-requests": {
+      "get": {
+        "description": "List all pull requests for one repository.",
+        "operationId": "list_pull_requests",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repository_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Repository Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "List Pull Requests",
+        "tags": [
+          "repositories"
+        ],
+        "x-stability": "stable"
+      }
+    },
+    "/api/v1/repositories/{repository_id}/pull-requests/{github_pr_number}": {
+      "get": {
+        "description": "Return a pull request by repository ID and GitHub PR number.",
+        "operationId": "get_pull_request_by_number",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repository_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Repository Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "github_pr_number",
+            "required": true,
+            "schema": {
+              "title": "Github Pr Number",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Get Pull Request By Number",
+        "tags": [
+          "repositories"
+        ],
+        "x-stability": "stable"
+      }
+    },
+    "/api/v1/repositories/{repository_id}/sync-pull-requests": {
+      "post": {
+        "description": "Sync open pull requests from GitHub and optionally trigger automatic scoring.",
+        "operationId": "sync_pull_requests",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repository_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Repository Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "auto_analyze",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Auto Analyze",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Sync Pull Requests",
+        "tags": [
+          "repositories"
+        ],
+        "x-stability": "stable"
+      }
+    },
+    "/api/v1/webhooks/github": {
+      "post": {
+        "description": "Handle signed GitHub webhook deliveries.",
+        "operationId": "handle_github_webhook",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-GitHub-Event",
+            "required": true,
+            "schema": {
+              "title": "X-Github-Event",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-GitHub-Delivery",
+            "required": true,
+            "schema": {
+              "title": "X-Github-Delivery",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Hub-Signature-256",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hub-Signature-256"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "GitHubWebhookSignature": []
+          }
+        ],
+        "summary": "Handle Github Webhook",
+        "tags": [
+          "github-webhooks"
+        ],
+        "x-stability": "internal"
+      }
+    }
+  },
+  "tags": [
+    {
+      "description": "Analyses (verification runs) of a pull request head commit.",
+      "name": "analyses",
+      "x-stability": "stable"
+    },
+    {
+      "description": "Dashboard session endpoints. Internal; not part of the client contract.",
+      "name": "authentication",
+      "x-stability": "internal"
+    },
+    {
+      "description": "Evidence-gated confidence report and verification status of an analysis.",
+      "name": "confidence",
+      "x-stability": "stable"
+    },
+    {
+      "description": "Per-test coverage ingestion and queries (shape may still change).",
+      "name": "coverage",
+      "x-stability": "beta"
+    },
+    {
+      "description": "GitHub App webhook receiver. Called by GitHub only; not a client API.",
+      "name": "github-webhooks",
+      "x-stability": "internal"
+    },
+    {
+      "description": "Dependency graph of an analysis (shape may still change).",
+      "name": "graph",
+      "x-stability": "beta"
+    },
+    {
+      "description": "Liveness and readiness probes. No authentication.",
+      "name": "health",
+      "x-stability": "stable"
+    },
+    {
+      "description": "Intent snapshots, sources and criteria with ETag/If-Match concurrency.",
+      "name": "intent",
+      "x-stability": "beta"
+    },
+    {
+      "description": "Connected repositories and their pull requests.",
+      "name": "repositories",
+      "x-stability": "stable"
+    },
+    {
+      "description": "Test selection and CI test-result upload for an analysis.",
+      "name": "tests",
+      "x-stability": "stable"
+    }
+  ],
+  "x-radius-contract": 1
+}

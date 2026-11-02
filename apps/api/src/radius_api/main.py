@@ -30,6 +30,7 @@ from radius_api.dependencies import AppContainer, configure_sql_storage
 from radius_api.middleware.hardening import install_http_hardening
 from radius_api.middleware.security_headers import SecurityHeadersMiddleware
 from radius_api.observability import configure_api_observability
+from radius_api.openapi_contract import install_openapi_contract
 from radius_api.routes.analyses import router as analyses_router
 from radius_api.routes.confidence import router as confidence_router
 from radius_api.routes.coverage import router as coverage_router
@@ -132,6 +133,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(github_webhooks_router, prefix="/api/v1")
     app.include_router(auth_router)
+    install_openapi_contract(app)
 
     return app
 
