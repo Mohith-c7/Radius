@@ -52,6 +52,6 @@ Known from offline review (confirm or close live):
 2. ~~`publish_in_progress` never called~~ Fixed offline: the worker opens the in-progress check at job start; confirm live (Checks tab shows In progress, then completes the same run).
 3. ~~Clone auth used Bearer~~ Fixed offline: Basic `x-access-token:<token>` via the child environment (`runner.py`, `local_git.py`); confirm against real GitHub (private repo clone) and close.
 4. ~~Closing a PR did not cancel analyses~~ Fixed offline for queued-not-started analyses (running ones intentionally finish); confirm live.
-5. `installation` `deleted`/`removed` and `installation_repositories` `removed` are not handled.
+5. ~~Installation/repository removal not handled~~ Fixed offline (inactive, queued work cancelled, 2xx ignore); confirm live by uninstalling the sandbox App, and note that migration `20261102_0011` must be applied.
 
 ## Notes and follow-ups

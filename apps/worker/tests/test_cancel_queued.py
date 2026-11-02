@@ -134,3 +134,40 @@ def test_worker_skips_a_claimed_job_whose_analysis_was_cancelled() -> None:
         assert job.status == db_enums.AnalysisJobStatus.COMPLETED
         assert job.last_error.startswith("Cancelled:")
         assert session.get(Analysis, analysis_id).status == db_enums.AnalysisStatus.CANCELLED
+
+
+def _run_skipped(factory) -> None:
+    runtime = SqlAlchemyWorkerRuntime(
+        session_factory=factory,
+        repository_cache_dir=Path("cache"),
+        git_client=ExplodingGit(),
+        settings=worker_runner.WorkerSettings(GITHUB_PUBLISH_RESULTS=False),
+        github_client=object(),
+    )
+    assert runtime.run_once() is True
+
+
+def test_worker_skips_jobs_of_a_disconnected_repository() -> None:
+    factory = _factory()
+    analysis_id = _persist(factory)
+    with factory() as session:
+        repo = session.scalar(select(Repository))
+        repo.status = db_enums.RepositoryStatus.DISCONNECTED
+        session.commit()
+    _run_skipped(factory)
+    with factory() as session:
+        assert session.get(Analysis, analysis_id).status == db_enums.AnalysisStatus.CANCELLED
+        assert "disconnected" in session.scalar(select(AnalysisJob)).last_error
+
+
+def test_worker_skips_jobs_of_a_removed_or_suspended_installation() -> None:
+    for status in ("deleted", "suspended"):
+        factory = _factory()
+        analysis_id = _persist(factory)
+        with factory() as session:
+            session.scalar(select(Organization)).github_installation_status = status
+            session.commit()
+        _run_skipped(factory)
+        with factory() as session:
+            assert session.get(Analysis, analysis_id).status == db_enums.AnalysisStatus.CANCELLED
+            assert status in session.scalar(select(AnalysisJob)).last_error

@@ -1,0 +1,67 @@
+{
+  "action": "suspend",
+  "installation": {
+    "id": 55001122,
+    "client_id": "Iv1.example",
+    "account": {
+      "login": "radius-sandbox-owner",
+      "id": 1001,
+      "node_id": "U_1001",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?v=4",
+      "url": "https://api.github.com/users/radius-sandbox-owner",
+      "html_url": "https://github.com/radius-sandbox-owner",
+      "type": "User",
+      "site_admin": false
+    },
+    "repository_selection": "selected",
+    "app_id": 1234567,
+    "app_slug": "radius-sandbox-app",
+    "target_id": 1001,
+    "target_type": "User",
+    "permissions": {
+      "checks": "write",
+      "contents": "read",
+      "issues": "read",
+      "metadata": "read",
+      "pull_requests": "write"
+    },
+    "events": [
+      "check_run",
+      "issue_comment",
+      "issues",
+      "pull_request",
+      "push"
+    ],
+    "suspended_at": "2026-11-02T10:00:00Z",
+    "suspended_by": {
+      "login": "radius-sandbox-owner",
+      "id": 1001,
+      "node_id": "U_1001",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?v=4",
+      "url": "https://api.github.com/users/radius-sandbox-owner",
+      "html_url": "https://github.com/radius-sandbox-owner",
+      "type": "User",
+      "site_admin": false
+    }
+  },
+  "repositories": [
+    {
+      "id": 912345678,
+      "node_id": "R_kgDOexample",
+      "name": "radius-sandbox",
+      "full_name": "radius-sandbox-owner/radius-sandbox",
+      "private": true
+    }
+  ],
+  "requester": null,
+  "sender": {
+    "login": "radius-sandbox-owner",
+    "id": 1001,
+    "node_id": "U_1001",
+    "avatar_url": "https://avatars.githubusercontent.com/u/1001?v=4",
+    "url": "https://api.github.com/users/radius-sandbox-owner",
+    "html_url": "https://github.com/radius-sandbox-owner",
+    "type": "User",
+    "site_admin": false
+  }
+}

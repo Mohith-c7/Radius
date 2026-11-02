@@ -49,6 +49,14 @@ class Organization(UuidPrimaryKeyMixin, TimestampMixin, Base):
         unique=True,
         nullable=True,
     )
+    #: ``active`` | ``suspended`` | ``deleted`` (see GitHubInstallationStatus).
+    #: Rows are never deleted when an installation is removed.
+    github_installation_status: Mapped[str] = mapped_column(
+        String(32),
+        default="active",
+        server_default="active",
+        nullable=False,
+    )
 
     users: Mapped[list["User"]] = relationship(back_populates="organization")
     repositories: Mapped[list["Repository"]] = relationship(

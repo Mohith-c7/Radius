@@ -23,7 +23,10 @@ Endpoint: `POST /api/v1/webhooks/github` (the older `/api/v1/github/webhooks` in
 | Event | What Radius does |
 | --- | --- |
 | `ping` | Acknowledged (202), no tenant lookup |
-| `installation` (`created`), `installation_repositories` (`added`) | Connects the listed repositories. Always delivered to an App; you do not subscribe to them |
+| `installation` (`created`), `installation_repositories` (`added`) | Connects the listed repositories (reactivating ones that were removed earlier) and marks the organization's installation `active`. Installation payloads carry no default branch, so a provisional `main` is stored until the first push/PR delivery corrects it. Always delivered to an App; you do not subscribe to them |
+| `installation` `deleted` | Marks the organization's installation `deleted` (`organizations.github_installation_status`) and **disconnects every repository of that organization** (rows, PRs and analyses are kept: inactive, never hard-deleted). Queued-not-started analyses are cancelled. Later `push`/`pull_request` deliveries get `202` with `ignored: true, ignoredReason: installation_deleted`. Reinstalling (a new `installation.created`, possibly under a new installation id) reactivates it |
+| `installation` `suspend` / `unsuspend` | `suspend`: status `suspended`, queued-not-started analyses cancelled, repositories stay connected; deliveries are ignored with `installation_suspended`. `unsuspend`: back to `active` |
+| `installation_repositories` `removed` | Disconnects just those repositories (only if they belong to the delivery's organization), cancels their queued-not-started analyses; later deliveries get `ignoredReason: repository_disconnected`. Running jobs are never killed |
 | `push` | Upserts the branch's latest commit. No analysis |
 | `pull_request` `opened`, `reopened`, `synchronize`, `ready_for_review` (non-draft) | Upserts the PR and starts (or reuses) an analysis for the head SHA |
 | `pull_request` `closed` (merged or not) | Upserts the PR, returns `ignored: true`, and **cancels queued-not-started analyses** for that PR (`cancelledAnalysisIds` in the response). A running analysis is never killed; it finishes and publishes. Reopening starts a fresh analysis |
@@ -31,6 +34,8 @@ Endpoint: `POST /api/v1/webhooks/github` (the older `/api/v1/github/webhooks` in
 | `issues`, `issue_comment`, `check_run` | **Accepted and ignored** (202, `ignored: true`) |
 
 **Mismatch to know about:** the F-06 task lists `issues`, `issue_comment`, `check_run` events and `issues: read`. Nothing in the code acts on them or calls an issues-read endpoint (PR comments use the Issues comments API, which `pull_requests: write` covers for PRs). `app-manifest.json` includes them anyway so that real payloads can be captured as fixtures; `--minimal` drops them. Either choice validates the same behaviour.
+
+Worker side: a claimed job whose analysis was cancelled, whose repository is disconnected, or whose organization's installation is not `active` is skipped without cloning or publishing (the job ends `completed` with `last_error` starting `Cancelled:`; the `analysisjobstatus` enum has no cancelled member, and adding one would need a Postgres enum migration). This needs migration `20261102_0011` (`alembic upgrade head`).
 
 Permissions actually exercised: `checks: write` (create/update/list Check Runs), `pull_requests: write` (comments), `contents: read` (clone via installation token), `metadata: read`.
 

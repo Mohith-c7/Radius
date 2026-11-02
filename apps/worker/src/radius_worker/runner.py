@@ -659,6 +659,22 @@ def _skip_reason(session: Session, analysis_id) -> str | None:
     analysis = session.get(db_models.Analysis, analysis_id)
     if analysis is not None and analysis.status == db_enums.AnalysisStatus.CANCELLED:
         return "Analysis was cancelled before it started."
+    repository = (
+        session.get(db_models.Repository, analysis.repository_id)
+        if analysis is not None
+        else None
+    )
+    if repository is None:
+        return None
+    if repository.status == db_enums.RepositoryStatus.DISCONNECTED:
+        return "Repository is disconnected from Radius."
+    organization = session.get(db_models.Organization, repository.organization_id)
+    if (
+        organization is not None
+        and organization.github_installation_status
+        != db_enums.GitHubInstallationStatus.ACTIVE.value
+    ):
+        return f"GitHub installation is {organization.github_installation_status}."
     return None
 
 
