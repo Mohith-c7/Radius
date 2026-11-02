@@ -15,7 +15,7 @@ Goal: connect criteria to the code that implements them, and code to the tests/e
 - Tests: table-driven on fixtures; mutation of formatting must not change the symbol set.
 - Done: `radius_analysis.symbol_changes` in `packages/analysis`; contract and change-kind semantics in `packages/analysis/README.md`. Consumers: EV-02 reads `change_kind`, `is_behavioral`, `old_range`, `hunks`, `notes`; LK-02/LK-03 read `symbol_id`, `key`, `new_range`, `old_symbol_id`, `new_body_hash`.
 
-### LK-02 Criterion-to-symbol linkers   [ ]
+### LK-02 Criterion-to-symbol linkers   [x]
 - Owner type: pair
 - Depends on: IN-03, LK-01
 - Branch: `feature/linking-criterion-symbol`
@@ -30,6 +30,7 @@ Goal: connect criteria to the code that implements them, and code to the tests/e
 - Out of scope: deciding if the code is correct.
 - Acceptance: Top-k hit rate and MRR measured on the gold set (LK-07); every non-explicit link has provenance; links outside changed+blast set are not created.
 - Tests: per-method unit tests; determinism tests (same inputs, same ranking); embedding cache tests.
+- Done: `packages/linking` (`radius_linking`, DEC-026). Deterministic linkers `explicit`, `lexical` (BM25), `identifier`, `structural`, the `change_prior` modifier, a noisy-OR combination and an optional default-off, guarded LLM re-ranker that can only re-order existing candidates. Contract and limits in `packages/linking/README.md`. Consumers: LK-05 persists `LinkSet.links` / `by_linker` (`criterion_id`, `symbol_id`, `linker`, `score`, `rank`, `evidence`, `algo_versions`) into `criterion_symbol_link`; LK-06 replaces `combine_scores` (it receives per-linker scores and reasons in `by_linker`); LK-07 uses `radius_linking.application.evaluate` and `scripts/link_eval.py`. Not done (follow-ups in the README): embedding linker, quote-verified `llm_verified` method, blast-radius candidates beyond the changed set.
 
 ### LK-03 Symbol-to-test linkers (incl. dynamic coverage contexts)   [~]
 - Owner type: pair

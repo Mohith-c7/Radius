@@ -46,7 +46,7 @@ jobs:
       RADIUS_REQUIRE_SANDBOX_TESTS: "true"
       NEXT_PUBLIC_RADIUS_API_BASE_URL: http://localhost:8000
       NEXT_PUBLIC_RADIUS_ORGANIZATION_ID: 00000000-0000-0000-0000-000000000000
-      PYTHONPATH: apps/api/src:apps/worker/src:packages/analysis/src:packages/confidence/src:packages/graph/src:packages/parser/src:packages/repository/src:packages/shared/src:packages/testing/src:packages/github/src:packages/intent/src
+      PYTHONPATH: apps/api/src:apps/worker/src:packages/analysis/src:packages/confidence/src:packages/graph/src:packages/parser/src:packages/repository/src:packages/shared/src:packages/testing/src:packages/github/src:packages/intent/src:packages/linking/src
 
     steps:
       - name: Checkout
@@ -90,6 +90,9 @@ jobs:
 
       - name: Import contracts (intent domain purity)
         run: lint-imports --config packages/intent/.importlinter
+
+      - name: Import contracts (linking domain purity)
+        run: lint-imports --config packages/linking/.importlinter
 
       - name: Typecheck
         run: pnpm typecheck

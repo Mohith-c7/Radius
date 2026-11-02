@@ -54,6 +54,7 @@ Run: `PYTHONPATH=<as in ci.yml> python -m pytest tests/security/prompt_injection
 |---|---|---|
 | `reference-guarded` | `pi_harness.GuardedCriteriaFeature` | Reference wiring. |
 | `intent-extract-llm (IN-04)` | `pi_intent_extract.IntentExtractAdapter` | Drives the real `radius_intent.infrastructure.llm.LlmCriterionExtractor` with the stub models behind the provider port (no SDK, no network). Ingestion is simulated by using the sanitised text as `IntentSource.text`. Emits the criteria it produced in the strict schema, so `check_outcome` re-validates every quote against the evidence. |
+| `link-rerank-llm (LK-02)` | `pi_link_rerank.LinkRerankAdapter` | Drives the real `radius_linking.infrastructure.rerank.LlmReranker` with the stub models behind the provider port. The case text is the criterion and is also planted in a candidate file path (names and paths are untrusted). Asserts that no non-candidate symbol and no planted secret can come out of the re-rank, and re-validates the data blocks. |
 
 IN-04 runs against every corpus case with both stub models. The IN-04 unit tests add per-item dropping, caps, the egress gate, caching and the merge policy (`packages/intent/tests/test_llm_extraction.py`).
 

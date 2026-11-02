@@ -17,10 +17,12 @@ from __future__ import annotations
 
 from pi_harness import FeatureFactory, GuardedCriteriaFeature, NaiveCriteriaFeature
 from pi_intent_extract import IntentExtractAdapter
+from pi_link_rerank import LinkRerankAdapter
 
 REGISTERED_FEATURES: dict[str, FeatureFactory] = {
     "reference-guarded": GuardedCriteriaFeature,
     "intent-extract-llm (IN-04)": IntentExtractAdapter,
+    "link-rerank-llm (LK-02)": LinkRerankAdapter,
 }
 
 KNOWN_BAD_FEATURES: dict[str, FeatureFactory] = {

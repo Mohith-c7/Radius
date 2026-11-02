@@ -640,6 +640,40 @@ Persistence, HTTP, LLM calls, ingestion, extraction (IN-02 to IN-08).
 
 ---
 
+# Linking Domain (research, DEC-026)
+
+Package: `packages/linking` (import name `radius_linking`).
+
+Purpose
+
+Link criteria to the changed symbols that plausibly implement them (DESIGN section 6.2, RQ1), with a score and an explanation per link (LK-02).
+
+---
+
+Inputs
+
+`CriterionInput` (text, testability rationale, `paths` / `tests` hints; adapted from an IN-01 `Criterion`), `SymbolDoc` (a changed symbol plus its searchable text; built from the LK-01 `SymbolChangeSet` and `SnapshotReader`), optionally a `NeighborPort` (call-graph proximity from `radius_graph.PythonSymbolGraph`) and a `Reranker`.
+
+---
+
+Outputs
+
+`LinkSet(snapshot_id, changeset_ref, links, by_linker, algo_versions, config, diagnostics)`: combined ranked `Link(criterion_id, symbol_id, linker, score, evidence, rank)` plus every linker's own links. Deterministic order and JSON; no persistence (LK-05).
+
+---
+
+Responsibilities
+
+Deterministic linkers (explicit hints, BM25 lexical, identifier/phrase, structural proximity), the change-kind prior, the documented combination, an optional default-off guarded LLM re-ranker, and evaluation hooks (Top-k, MRR, ablation). `domain/` is pure (import-linter contract and AST test); `application/` depends on the domain only; `infrastructure/` holds the linkers, symbol documents, neighbours and rerankers.
+
+---
+
+Non Responsibilities
+
+Persistence and the IEG (LK-05), calibration of link confidence (LK-06), the RQ1 gold set and results (LK-07), symbol-to-test linking (LK-03), judging whether the code is correct.
+
+---
+
 # Presentation Domain
 
 Purpose
