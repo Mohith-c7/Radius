@@ -22,7 +22,7 @@ How to read it.
   (`RADIUS_LLM_*`) silently fall back to their default on a bad number.
 
 
-Variables documented: **122** (13 secret, 8 feature flags).
+Variables documented: **124** (13 secret, 9 feature flags).
 
 ## Core, API, GitHub and observability
 
@@ -70,6 +70,7 @@ Variables documented: **122** (13 secret, 8 feature flags).
 | `RADIUS_LOG_LEVEL` | LogLevel | `INFO` | api, worker | no | - | Structured log level: DEBUG, INFO, WARNING, ERROR or CRITICAL. |
 | `RADIUS_MAX_BODY_BYTES` | int | `1048576` | api | no | - | Default request body cap in bytes; over it the API answers 413. |
 | `RADIUS_METRICS_ENABLED` | bool | `false` | api, worker | no | - | Expose Prometheus metrics (`/metrics` on the API, plus the worker port). Off by default. |
+| `RADIUS_MUTATION_ALLOW_LOCAL` | bool | `unset` | library | no | - | Dev/tests only: allows the mutation prototype's local subprocess runner, which executes code on the host and is unsafe for untrusted repositories. Never set in production. |
 | `RADIUS_OTEL_SERVICE_NAME` | str | `radius` | api, worker | no | - | OpenTelemetry service name. |
 | `RADIUS_OTLP_ENDPOINT` | str | `empty` | api, worker | no | - | OTLP/HTTP traces endpoint, e.g. ``http://localhost:4318/v1/traces``. Empty means spans are created but not exported anywhere. |
 | `RADIUS_RATE_LIMIT_AUTH` | str | `10/60` | api | no | - | Token bucket for auth routes, `<requests>/<window seconds>`. In memory, per replica. |
@@ -129,6 +130,7 @@ Variables documented: **122** (13 secret, 8 feature flags).
 | `RADIUS_FEATURE_COVERAGE_CONTEXTS` | bool | `false` | worker | no | feature flag, off by default | LK-03: allow the dynamic coverage-context symbol-to-test linker, which runs the selected tests under coverage.py inside the hardened sandbox (never on the worker host). Off by default; not wired into the pipeline until LK-05, so it only gates the library entry point. |
 | `RADIUS_FEATURE_GEMINI_PRUNER` | bool | `false` | none (legacy) | no | legacy opt-in, not on the live path | Explicit opt-in for the legacy Gemini SemanticPruner. The pruner is not called by the live analysis pipeline (only by `scripts/run_phase2_poc.py` and tests). |
 | `RADIUS_FEATURE_INTENT_INGESTION` | bool | `false` | api, worker | no | feature flag, off until live validation | IN-02: store PR title/body (and refreshed issue text) from webhook payloads. The API makes no GitHub API calls for this (it holds no App credentials); the worker fetches issues, commits and the spec file. OFF by default until the live GitHub validation (F-06) has happened; set true for that run. |
+| `RADIUS_FEATURE_MUTATION` | bool | `false` | library | no | feature flag, off by default | EV-04/05 mutation-evidence prototype library flag (`radius_testing.mutation`). Library only: nothing in the worker calls it yet. |
 | `RADIUS_FEATURE_SYMBOL_CHANGES` | bool | `false` | worker | no | feature flag, off by default | LK-01: extract the changed symbols (function/method/class, with change kinds) for the diff and log their counts. Nothing is persisted yet (LK-05); failures never affect the analysis. |
 | `RADIUS_FEATURE_SYMBOL_IMPACT` | bool | `false` | worker | no | feature flag, off by default | F-08: narrow test selection and blast radius to tests that can reach the changed Python symbols. Falls back to file-level impact whenever symbol information is missing or low-confidence. |
 | `RADIUS_FEATURE_TAMPER_RULES` | bool | `false` | worker | no | feature flag, off by default | EV-02: run the deterministic tamper rules (weakened or disabled tests, CI/config weakening, hallucinated dependencies) on the diff and log finding counts. Nothing is persisted yet (EV-01/LK-05); failures never affect the analysis. |
