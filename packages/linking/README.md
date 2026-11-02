@@ -124,6 +124,52 @@ Machinery in `radius_linking.domain.calibration` (pure Python, deterministic): `
 - LK-05 (IEG, persistence): persist chains as `(analysis, criterion_id, symbol_id, test_id)` rows with `chain_score`, `raw_chain_score`, `specificity`, `test_status`, `score_kind`, `reasons` and the two hop payloads (`c2s`, `s2t`) as JSON; persist per-criterion `link_confidence`, `raw_link_confidence`, `unlinked_reason`, `suspicious`, `score_kind`; store `SupportLinkSet.algo_version`, `config` and `calibration` for reproducibility. A (symbol, test) pair is shared across criteria; `s2t.components` carries provenance.
 - Verdict layer: `l(c, e)` in `S(c) = 1 - prod(1 - lambda * q * l)` (DESIGN 6.4) is `ChainLink.chain_score` for evidence test `e`; `link_confidence` is a criterion-level summary, not a replacement for the per-test `l(c, e)`. Treat `unlinked_reason` as a state input (`untested_change` means no evidence, `tests_without_symbol` is a flag). Never present `link_confidence_uncalibrated` as a probability. A passing test that exercises the code is not evidence that it checks this criterion: evidence quality `q` (LK-04 assertions, mutation) must multiply on top.
 
+## Criterion-to-test relevance `r_ct` (VS-04, `criterion-test-relevance-v1`)
+
+LK-03 links a symbol to its tests, per function. When one function implements several criteria, every test of it would support every criterion (finding F4 of `VERDICT_V2_SLICE.md`: on fixture 08 the untested criterion C4 got credit from three unrelated tests). `radius_linking.application.relevance` estimates, for a `(criterion, test)` pair connected through a changed symbol, how relevant the test is to THAT criterion: `CriterionTestRelevance(criterion_id, test_id, r_ct, reasons, symbol_ids, rank)` in [0, 1]. Deterministic, offline, no LLM.
+
+Entry points: `score_relevance(criteria, test_docs, connections, config)`, `connected_pairs(c2s_links, s2t_edges)` (combined criterion -> symbol links x combined symbol -> test edges, as `build_support_links` uses), `relevance_from_links(...)`, `relevant_tests(set, criterion_id, threshold=0.3)`.
+
+Inputs are plain data (`radius_linking.domain.relevance`): `TestDoc(test_id, name, docstring, param_ids, assertions, literals)` with `AssertionFact(subject, expected, kind, symbol_names, exception_type)`. `AssertionFact.from_assertion_dict` adapts the `to_dict()` shape of an LK-04 `AssertionRecord`; `radius_linking` imports neither `radius_testing` nor `radius_evidence`.
+
+### Signals
+
+| Reason code | Signal |
+| --- | --- |
+| `lexical_overlap` | normalised BM25 (`sum(term score) / sum(per-term ceiling) * 1.5`, clamped to 1) of the criterion terms against the test document: name x3, docstring x2, assertion expected values x2, exception types x2, parametrize ids, subjects, asserted names, literals x1. Same tokenizer as LK-02, plus synonym and number-word canonicalisation (`raises`/`rejects`/`invalid`, `eight` -> `8`). Terms naming the connecting symbol are removed from the query |
+| `assertion_subject` | weighted share of criterion anchors found in what the test asserts: exception names (1.0), HTTP status codes (1.0), quoted tokens (1.0), code identifiers (0.7), numbers (0.5) |
+| `exception_match` | the criterion is about an error and the test asserts an exception: 0.4, or 1.0 when the exception type matches |
+| `explicit_hint` | a `tests` hint (`.radius/intent.yml`; test id, bare test name, or test file) gives `r_ct = 1.0` and is exempt from every penalty. A hinted test needs no symbol connection |
+| `name_convention` | share of the `test_<behavior>` name words (symbol terms removed) that occur in the criterion |
+| `specificity_penalty` | factor `max(0.5, 1 / (1 + 0.15 * max(0, n - 2)))`, `n` = criteria the test relates to with `r >= 0.3` (same shape as the LK-06 chain specificity) |
+| `behavior_mismatch` | criterion is about an error but the test checks none: x0.25; test checks an error but the criterion states normal behaviour without a constraint word (`needs`, `at least`, `must`, ...): x0.6 |
+| `exception_type_mismatch` | the criterion names an exception type and the test expects another specific one: x0.3 |
+| `asserts_other_symbols` | the test's assertions name callables, none of which is a connected symbol: x0.3 |
+| `no_signal`, `below_floor` | gate outcomes, both give exactly 0.0 |
+
+### Rule
+
+```
+fired = signals with 0 < s_i >= signal_floor (0.1)           none fired -> r_ct = 0.0 (reason no_signal)
+pos   = 1 - prod_{i fired} (1 - w_i * s_i)                   w: assertion/exception 0.9, lexical 0.7, name 0.6
+r0    = pos * prod(negative factors)
+r_ct  = r0 * specificity(test)                               r_ct < r_floor (0.05) -> 0.0 (reason below_floor)
+hint  -> r_ct = 1.0
+```
+
+Monotone non-decreasing in every positive signal and weight, the factors only lower the score, and all constants are in `RelevanceConfig` (recorded in `RelevanceSet.config`). Output is ranked per criterion by `(-r_ct, test_id)`, independent of input order, with exact JSON round trip. The BM25 corpus is the `test_docs` passed in, so `idf` depends on it: pin the corpus (all test functions of the test files touched or exercised).
+
+### Evaluation hook (fixture sanity, not a research result)
+
+`python scripts/relevance_eval.py [--threshold 0.3] [--json] [--out FILE]` builds `TestDoc`s from the F-14 fixtures with a light `ast` extractor, connects every test that calls a criterion's gold symbol to that criterion (the F4 situation) and scores precision/recall of `r_ct >= threshold` against the gold `links[].tests`, next to the symbol-only baseline "every connected test gets credit". On the 8 fixtures (in-sample, constants set while looking at them): 17 of 29 gold pairs found, 0 false pairs, precision 1.0, recall 0.586; the baseline has precision 0.40, recall 0.97. Fixture 08: all 4 gold pairs found, C4 (untested) gets 0.0 from all 4 other tests; fixture 02: C2 (no real test) gets at most 0.077 (below 0.3) from the two weak tests.
+
+### Limits
+
+- Lexical and assertion evidence only: no semantics. Fixture 05 (both criteria) and part of 01 C1, 02 C1, 03 C2 are missed because the criterion words appear neither in the test name nor in its assertions; a `tests:` hint is the fix in practice. Missing credit is preferred to false credit.
+- Borderline scores exist (for example 04 C1 at 0.300); the threshold and constants are not tuned on held-out data and not calibrated probabilities.
+- Specificity counts criteria, not shared evidence terms. English-centric stemming and synonyms (small hand-written table). Quoted anchors without a letter or digit (`'-'`) cannot be matched.
+- Assertion facts are only as good as the supplied extractor; with no `AssertionFact`s the name, docstring and literal signals still work and the assertion-based penalties are off.
+
 ## Contracts for later tasks
 
 - LK-05 (IEG, persistence): store `LinkSet.links` (and optionally `by_linker`) as `criterion_symbol_link` rows keyed by `(criterion_id, symbol_id, linker)`; keep `algo_versions`, `config`, `changeset_ref` for reproducibility. `linker` values: `explicit`, `lexical`, `identifier`, `structural`, `change_prior`, `rerank`, `combined`. The design-doc method names (`explicit_ref`, `bm25`, `embedding`, `llm_verified`) map to `explicit`, `lexical`, (not built), `rerank`.
@@ -144,4 +190,4 @@ Machinery in `radius_linking.domain.calibration` (pure Python, deterministic): `
 
 Embedding linker with a per-symbol-hash cache; quote-verified `llm_verified` method; blast-radius candidates; code-egress policy for sending code spans to the re-ranker; durable cost ledger; TypeScript call graph; learn linker weights on the LK-07 gold set.
 
-LK-06 follow-ups: fit and ship calibrators on the LK-07 gold set (held-out, split by repo); a criterion-test relevance signal (LK-04 assertions) so a test that exercises a symbol but checks something else does not raise a criterion's link confidence; sensitivity sweep of the chain constants on gold labels; learn `status_factors` and `decay` instead of fixing them; temperature scaling and conformal wrappers for RQ3.
+LK-06 follow-ups: fit and ship calibrators on the LK-07 gold set (held-out, split by repo); a criterion-test relevance signal (done in VS-04, `r_ct`; wiring it into `ChainLink` is VS-05); sensitivity sweep of the chain constants on gold labels; learn `status_factors` and `decay` instead of fixing them; temperature scaling and conformal wrappers for RQ3.
