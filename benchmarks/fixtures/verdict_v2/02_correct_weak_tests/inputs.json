@@ -58,7 +58,9 @@
         }
       },
       "stage_a": {
+        "added_test_ids": [],
         "agent_signal": false,
+        "agent_signal_by_test": {},
         "algo_versions": {
           "assertions": "test-assertions-v1",
           "assertions_producer": "fixture-ast-v1",
@@ -74,10 +76,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "value_equality",
                 "line": 5,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": []
               }
             ],
@@ -107,10 +115,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "none_check",
                 "line": 13,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/emails.py::normalize_email#function@68af8ce23055"
                 ]
@@ -144,10 +158,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "truthiness",
                 "line": 9,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/emails.py::normalize_email#function@68af8ce23055"
                 ]
@@ -215,42 +235,50 @@
               {
                 "code": "symbol_name",
                 "detail": "identifier: anchor 'normalize_email': exact name normalize_email",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_summary",
                 "detail": "lexical: matched 7/7 query terms in src/emails.py::normalize_email; coverage=1.00",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'email' bm25=0.527",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'normalize' bm25=0.487",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'lowercase' bm25=0.396",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'surround' bm25=0.396",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'trim' bm25=0.396",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "change_kind",
                 "detail": "change_prior: added (behavioural)",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               }
             ],
             "score": 0.899059,
@@ -268,32 +296,38 @@
               {
                 "code": "exception",
                 "detail": "identifier: anchor 'ValueError': uses ValueError",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_summary",
                 "detail": "lexical: matched 3/4 query terms in src/emails.py::normalize_email; coverage=0.75",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'address' bm25=0.288",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'error' bm25=0.288",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'value' bm25=0.288",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "change_kind",
                 "detail": "change_prior: added (behavioural)",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               }
             ],
             "score": 0.639614,
@@ -422,7 +456,9 @@
         }
       },
       "stage_a": {
+        "added_test_ids": [],
         "agent_signal": false,
+        "agent_signal_by_test": {},
         "algo_versions": {
           "assertions": "test-assertions-v1",
           "assertions_producer": "fixture-ast-v1",
@@ -436,10 +472,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "value_equality",
                 "line": 5,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": []
               }
             ],
@@ -469,10 +511,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "none_check",
                 "line": 13,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/emails.py::normalize_email#function@68af8ce23055"
                 ]
@@ -506,10 +554,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "truthiness",
                 "line": 9,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/emails.py::normalize_email#function@68af8ce23055"
                 ]
@@ -575,7 +629,8 @@
               {
                 "code": "gold_label",
                 "detail": "expected.json links[]",
-                "ref": "src/emails.py::normalize_email"
+                "ref": "src/emails.py::normalize_email",
+                "rule_id": null
               }
             ],
             "score": 1.0,
@@ -591,7 +646,8 @@
               {
                 "code": "gold_label",
                 "detail": "expected.json links[]",
-                "ref": "src/emails.py::normalize_email"
+                "ref": "src/emails.py::normalize_email",
+                "rule_id": null
               }
             ],
             "score": 1.0,

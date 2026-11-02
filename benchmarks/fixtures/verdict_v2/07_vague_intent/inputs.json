@@ -58,7 +58,9 @@
         }
       },
       "stage_a": {
+        "added_test_ids": [],
         "agent_signal": false,
+        "agent_signal_by_test": {},
         "algo_versions": {
           "assertions": "test-assertions-v1",
           "assertions_producer": "fixture-ast-v1",
@@ -74,10 +76,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "value_equality",
                 "line": 6,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/report.py::summarize#function@9bd76f92f0b1"
                 ]
@@ -112,10 +120,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "comparison_bound",
                 "line": 11,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/report.py::top#function@6f91edeb5f0a"
                 ]
@@ -182,17 +196,20 @@
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'report' bm25=0.182",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_summary",
                 "detail": "lexical: matched 1/3 query terms in src/report.py::top; coverage=0.33",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "change_kind",
                 "detail": "change_prior: added (behavioural)",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               }
             ],
             "score": 0.218182,
@@ -209,17 +226,20 @@
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'report' bm25=0.182",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_summary",
                 "detail": "lexical: matched 1/3 query terms in src/report.py::summarize; coverage=0.33",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "change_kind",
                 "detail": "change_prior: modified_body (behavioural)",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               }
             ],
             "score": 0.212727,
@@ -236,17 +256,20 @@
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'report' bm25=0.182",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_summary",
                 "detail": "lexical: matched 1/3 query terms in src/report.py::top; coverage=0.33",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "change_kind",
                 "detail": "change_prior: added (behavioural)",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               }
             ],
             "score": 0.218182,
@@ -263,17 +286,20 @@
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'report' bm25=0.182",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_summary",
                 "detail": "lexical: matched 1/3 query terms in src/report.py::summarize; coverage=0.33",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "change_kind",
                 "detail": "change_prior: modified_body (behavioural)",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               }
             ],
             "score": 0.212727,
@@ -409,7 +435,9 @@
         }
       },
       "stage_a": {
+        "added_test_ids": [],
         "agent_signal": false,
+        "agent_signal_by_test": {},
         "algo_versions": {
           "assertions": "test-assertions-v1",
           "assertions_producer": "fixture-ast-v1",
@@ -423,10 +451,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "value_equality",
                 "line": 6,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/report.py::summarize#function@9bd76f92f0b1"
                 ]
@@ -461,10 +495,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "comparison_bound",
                 "line": 11,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/report.py::top#function@6f91edeb5f0a"
                 ]
@@ -530,7 +570,8 @@
               {
                 "code": "gold_label",
                 "detail": "expected.json links[]",
-                "ref": "src/report.py::summarize"
+                "ref": "src/report.py::summarize",
+                "rule_id": null
               }
             ],
             "score": 1.0,
@@ -546,7 +587,8 @@
               {
                 "code": "gold_label",
                 "detail": "expected.json links[]",
-                "ref": "src/report.py::summarize"
+                "ref": "src/report.py::summarize",
+                "rule_id": null
               }
             ],
             "score": 1.0,

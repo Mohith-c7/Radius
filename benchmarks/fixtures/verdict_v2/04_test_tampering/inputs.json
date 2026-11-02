@@ -58,7 +58,9 @@
         }
       },
       "stage_a": {
+        "added_test_ids": [],
         "agent_signal": false,
+        "agent_signal_by_test": {},
         "algo_versions": {
           "assertions": "test-assertions-v1",
           "assertions_producer": "fixture-ast-v1",
@@ -74,10 +76,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "value_equality",
                 "line": 21,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": []
               }
             ],
@@ -107,10 +115,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": false,
+                "dead": false,
+                "in_loop": false,
                 "kind": "tautology",
                 "line": 11,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/stock.py::reserve#function@a48d0d633b96"
                 ]
@@ -141,10 +155,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "none_check",
                 "line": 7,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/stock.py::reserve#function@a48d0d633b96"
                 ]
@@ -176,10 +196,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "exception_type",
                 "line": 16,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/stock.py::reserve#function@a48d0d633b96"
                 ]
@@ -213,10 +239,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "value_equality",
                 "line": 25,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": []
               }
             ],
@@ -290,22 +322,26 @@
               {
                 "code": "bm25_summary",
                 "detail": "lexical: matched 2/6 query terms in src/stock.py::reserve; coverage=0.33",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'stock' bm25=0.510",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'reserve' bm25=0.487",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "change_kind",
                 "detail": "change_prior: modified_body (behavioural)",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               }
             ],
             "score": 0.36871,
@@ -322,27 +358,32 @@
               {
                 "code": "bm25_summary",
                 "detail": "lexical: matched 3/7 query terms in src/stock.py::reserve; coverage=0.43",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'stock' bm25=0.510",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'qty' bm25=0.487",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'reserve' bm25=0.487",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "change_kind",
                 "detail": "change_prior: modified_body (behavioural)",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               }
             ],
             "score": 0.391935,
@@ -359,22 +400,26 @@
               {
                 "code": "bm25_summary",
                 "detail": "lexical: matched 2/8 query terms in src/stock.py::reserve; coverage=0.25",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'qty' bm25=0.487",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'reserve' bm25=0.487",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "change_kind",
                 "detail": "change_prior: modified_body (behavioural)",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               }
             ],
             "score": 0.3375,
@@ -592,7 +637,9 @@
         }
       },
       "stage_a": {
+        "added_test_ids": [],
         "agent_signal": false,
+        "agent_signal_by_test": {},
         "algo_versions": {
           "assertions": "test-assertions-v1",
           "assertions_producer": "fixture-ast-v1",
@@ -606,10 +653,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "value_equality",
                 "line": 21,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": []
               }
             ],
@@ -639,10 +692,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": false,
+                "dead": false,
+                "in_loop": false,
                 "kind": "tautology",
                 "line": 11,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/stock.py::reserve#function@a48d0d633b96"
                 ]
@@ -673,10 +732,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "none_check",
                 "line": 7,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/stock.py::reserve#function@a48d0d633b96"
                 ]
@@ -708,10 +773,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "exception_type",
                 "line": 16,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/stock.py::reserve#function@a48d0d633b96"
                 ]
@@ -745,10 +816,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "value_equality",
                 "line": 25,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": []
               }
             ],
@@ -821,7 +898,8 @@
               {
                 "code": "gold_label",
                 "detail": "expected.json links[]",
-                "ref": "src/stock.py::reserve"
+                "ref": "src/stock.py::reserve",
+                "rule_id": null
               }
             ],
             "score": 1.0,
@@ -837,7 +915,8 @@
               {
                 "code": "gold_label",
                 "detail": "expected.json links[]",
-                "ref": "src/stock.py::reserve"
+                "ref": "src/stock.py::reserve",
+                "rule_id": null
               }
             ],
             "score": 1.0,
@@ -853,7 +932,8 @@
               {
                 "code": "gold_label",
                 "detail": "expected.json links[]",
-                "ref": "src/stock.py::reserve"
+                "ref": "src/stock.py::reserve",
+                "rule_id": null
               }
             ],
             "score": 1.0,

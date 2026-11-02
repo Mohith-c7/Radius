@@ -58,7 +58,9 @@
         }
       },
       "stage_a": {
+        "added_test_ids": [],
         "agent_signal": false,
+        "agent_signal_by_test": {},
         "algo_versions": {
           "assertions": "test-assertions-v1",
           "assertions_producer": "fixture-ast-v1",
@@ -74,10 +76,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "value_equality",
                 "line": 11,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/durations.py::parse_duration#function@0415bc6a85f5"
                 ]
@@ -110,10 +118,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "exception_type",
                 "line": 28,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/durations.py::parse_duration#function@0415bc6a85f5"
                 ]
@@ -142,10 +156,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "exception_type",
                 "line": 23,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/durations.py::parse_duration#function@0415bc6a85f5"
                 ]
@@ -176,10 +196,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "value_equality",
                 "line": 15,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/durations.py::parse_duration#function@0415bc6a85f5"
                 ]
@@ -211,10 +237,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "value_equality",
                 "line": 19,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/durations.py::parse_duration#function@0415bc6a85f5"
                 ]
@@ -248,10 +280,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "value_equality",
                 "line": 7,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": []
               }
             ],
@@ -318,37 +356,44 @@
               {
                 "code": "symbol_name",
                 "detail": "identifier: anchor 'parse_duration': exact name parse_duration",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_summary",
                 "detail": "lexical: matched 4/8 query terms in src/durations.py::parse_duration; coverage=0.50",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'parse' bm25=1.519",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term '2h30m' bm25=0.954",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'duration' bm25=0.728",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'unit' bm25=0.612",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "change_kind",
                 "detail": "change_prior: added (behavioural)",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               }
             ],
             "score": 0.862114,
@@ -365,17 +410,20 @@
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'duration' bm25=0.684",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_summary",
                 "detail": "lexical: matched 1/8 query terms in src/durations.py::<module>; coverage=0.50",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "change_kind",
                 "detail": "change_prior: modified_body (behavioural)",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               }
             ],
             "score": 0.047967,
@@ -393,37 +441,44 @@
               {
                 "code": "exception",
                 "detail": "identifier: anchor 'ValueError': uses ValueError",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_summary",
                 "detail": "lexical: matched 4/7 query terms in src/durations.py::parse_duration; coverage=0.57",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'text' bm25=0.954",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'error' bm25=0.612",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'unit' bm25=0.612",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'value' bm25=0.612",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "change_kind",
                 "detail": "change_prior: added (behavioural)",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               }
             ],
             "score": 0.587387,
@@ -684,7 +739,9 @@
         }
       },
       "stage_a": {
+        "added_test_ids": [],
         "agent_signal": false,
+        "agent_signal_by_test": {},
         "algo_versions": {
           "assertions": "test-assertions-v1",
           "assertions_producer": "fixture-ast-v1",
@@ -698,10 +755,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "value_equality",
                 "line": 11,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/durations.py::parse_duration#function@0415bc6a85f5"
                 ]
@@ -734,10 +797,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "exception_type",
                 "line": 28,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/durations.py::parse_duration#function@0415bc6a85f5"
                 ]
@@ -766,10 +835,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "exception_type",
                 "line": 23,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/durations.py::parse_duration#function@0415bc6a85f5"
                 ]
@@ -800,10 +875,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "value_equality",
                 "line": 15,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/durations.py::parse_duration#function@0415bc6a85f5"
                 ]
@@ -835,10 +916,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "value_equality",
                 "line": 19,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/durations.py::parse_duration#function@0415bc6a85f5"
                 ]
@@ -872,10 +959,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "value_equality",
                 "line": 7,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": []
               }
             ],
@@ -940,7 +1033,8 @@
               {
                 "code": "gold_label",
                 "detail": "expected.json links[]",
-                "ref": "src/durations.py::parse_duration"
+                "ref": "src/durations.py::parse_duration",
+                "rule_id": null
               }
             ],
             "score": 1.0,
@@ -956,7 +1050,8 @@
               {
                 "code": "gold_label",
                 "detail": "expected.json links[]",
-                "ref": "src/durations.py::parse_duration"
+                "ref": "src/durations.py::parse_duration",
+                "rule_id": null
               }
             ],
             "score": 1.0,
@@ -1255,7 +1350,7 @@
           "path": "requirements.txt",
           "reason": "new dependency `pytimeparse-ultra` is not in a lockfile or the known-package list and its import in `src/durations.py` is wrapped in try/except ImportError, so a missing package would go unnoticed; verify it exists on the registry",
           "rule_id": "T012",
-          "severity": "high",
+          "severity": "medium",
           "symbol": null,
           "test_id": null
         }

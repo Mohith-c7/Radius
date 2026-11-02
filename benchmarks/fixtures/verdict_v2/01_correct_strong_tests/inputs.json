@@ -58,7 +58,9 @@
         }
       },
       "stage_a": {
+        "added_test_ids": [],
         "agent_signal": false,
+        "agent_signal_by_test": {},
         "algo_versions": {
           "assertions": "test-assertions-v1",
           "assertions_producer": "fixture-ast-v1",
@@ -74,10 +76,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "value_equality",
                 "line": 19,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/pricing.py::apply_discount#function@cccaf79e2824"
                 ]
@@ -111,10 +119,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "value_equality",
                 "line": 11,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/pricing.py::apply_discount#function@cccaf79e2824"
                 ]
@@ -147,10 +161,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "exception_type",
                 "line": 27,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/pricing.py::apply_discount#function@cccaf79e2824"
                 ]
@@ -183,10 +203,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "exception_type",
                 "line": 32,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/pricing.py::apply_discount#function@cccaf79e2824"
                 ]
@@ -220,10 +246,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "value_equality",
                 "line": 23,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/pricing.py::apply_discount#function@cccaf79e2824"
                 ]
@@ -257,10 +289,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "value_equality",
                 "line": 15,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/pricing.py::apply_discount#function@cccaf79e2824"
                 ]
@@ -293,10 +331,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "value_equality",
                 "line": 7,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": []
               }
             ],
@@ -366,47 +410,56 @@
               {
                 "code": "symbol_name",
                 "detail": "identifier: anchor 'apply_discount': exact name apply_discount",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_summary",
                 "detail": "lexical: matched 7/8 query terms in src/pricing.py::apply_discount; coverage=0.88",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "number",
                 "detail": "identifier: anchor '2': numeric literal 2",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'percent' bm25=0.510",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'apply' bm25=0.487",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'discount' bm25=0.487",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'price' bm25=0.487",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term '2' bm25=0.452",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "change_kind",
                 "detail": "change_prior: added (behavioural)",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               }
             ],
             "score": 0.91371,
@@ -424,47 +477,56 @@
               {
                 "code": "exception",
                 "detail": "identifier: anchor 'ValueError': uses ValueError",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_summary",
                 "detail": "lexical: matched 6/8 query terms in src/pricing.py::apply_discount; coverage=0.75",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "number",
                 "detail": "identifier: anchor '0': numeric literal 0",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'percent' bm25=0.510",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term '0' bm25=0.487",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term '100' bm25=0.487",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'inclusive' bm25=0.396",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "bm25_term",
                 "detail": "lexical: term 'error' bm25=0.288",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               },
               {
                 "code": "change_kind",
                 "detail": "change_prior: added (behavioural)",
-                "ref": null
+                "ref": null,
+                "rule_id": null
               }
             ],
             "score": 0.760695,
@@ -665,7 +727,9 @@
         }
       },
       "stage_a": {
+        "added_test_ids": [],
         "agent_signal": false,
+        "agent_signal_by_test": {},
         "algo_versions": {
           "assertions": "test-assertions-v1",
           "assertions_producer": "fixture-ast-v1",
@@ -679,10 +743,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "value_equality",
                 "line": 19,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/pricing.py::apply_discount#function@cccaf79e2824"
                 ]
@@ -716,10 +786,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "value_equality",
                 "line": 11,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/pricing.py::apply_discount#function@cccaf79e2824"
                 ]
@@ -752,10 +828,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "exception_type",
                 "line": 27,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/pricing.py::apply_discount#function@cccaf79e2824"
                 ]
@@ -788,10 +870,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "exception_type",
                 "line": 32,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/pricing.py::apply_discount#function@cccaf79e2824"
                 ]
@@ -825,10 +913,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "value_equality",
                 "line": 23,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/pricing.py::apply_discount#function@cccaf79e2824"
                 ]
@@ -862,10 +956,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "value_equality",
                 "line": 15,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": [
                   "python:src/pricing.py::apply_discount#function@cccaf79e2824"
                 ]
@@ -898,10 +998,16 @@
             "algo_version": "test-assertions-v1",
             "assertions": [
               {
+                "circular": false,
                 "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
                 "kind": "value_equality",
                 "line": 7,
+                "mock_only": false,
                 "note": null,
+                "property_based": false,
+                "swallowed": false,
                 "target_symbol_ids": []
               }
             ],
@@ -969,7 +1075,8 @@
               {
                 "code": "gold_label",
                 "detail": "expected.json links[]",
-                "ref": "src/pricing.py::apply_discount"
+                "ref": "src/pricing.py::apply_discount",
+                "rule_id": null
               }
             ],
             "score": 1.0,
@@ -985,7 +1092,8 @@
               {
                 "code": "gold_label",
                 "detail": "expected.json links[]",
-                "ref": "src/pricing.py::apply_discount"
+                "ref": "src/pricing.py::apply_discount",
+                "rule_id": null
               }
             ],
             "score": 1.0,
