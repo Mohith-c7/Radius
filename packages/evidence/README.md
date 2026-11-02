@@ -2,9 +2,7 @@
 
 Typed contracts and (later) pure functions that turn validated outcomes into per-criterion support for the **Verdict v2 alpha**. Design: [`docs/research/design/VERDICT_V2_SLICE.md`](../../docs/research/design/VERDICT_V2_SLICE.md); decisions: DEC-027.
 
-Status: **VS-00 contract scaffold plus the scoring core** (EV-08 `quality.py`, VD-01 `support.py`, VD-02 `states.py`). The other algorithms are owned by later tasks (see the ownership map in design section 2.3).
-
-Status: VS-00 contracts plus the first feature wave (EV-01, EV-06, EV-07, EV-03-lite). `q(e)` (EV-08), the IEG, `S(c)` and states are owned by other tasks (design section 2.3).
+Status: VS-00 contracts, the scoring core (EV-08 `quality.py`, VD-01 `support.py`, VD-02 `states.py`), the IEG builder (LK-05) and the first feature wave (EV-01, EV-06, EV-07, EV-03-lite). Algorithm ownership: design section 2.3.
 
 ## Layout
 
@@ -12,16 +10,9 @@ Status: VS-00 contracts plus the first feature wave (EV-01, EV-06, EV-07, EV-03-
 | --- | --- | --- |
 | `domain/enums.py`, `domain/model.py`, `domain/config.py`, `domain/inputs.py`, `domain/versions.py`, `domain/serialization.py` | VS-00 (contract) | Frozen after VS-00; changing a field name or default needs a contract-change PR approved by the architect. |
 | `domain/ieg.py`, `application/ieg_builder.py` | LK-05 | IEG types, `validate_ieg`, `IegIndex` queries, and the pure builder. |
-| `domain/quality.py` | EV-08 | `EvidenceQuality` (alias `QualityBreakdown`), `ChainRef`. |
-| `domain/support.py` | VD-01 | `SupportResult`. |
-| `domain/states.py` | VD-02 | `CriterionStateResult`, `UimResult`. |
-
-| `domain/ieg.py` | LK-05 | IEG node / edge / graph types (builder and queries to come). |
 | `domain/quality.py` | EV-08 | `EvidenceQuality` (alias `QualityBreakdown`), `ChainRef`, link mapping, the `q(e, c)` combiner, `evidence_quality_row`. |
 | `domain/support.py` | VD-01 | `SupportResult`, `compute_support`, `support_reasons`. |
 | `domain/states.py` | VD-02 | `CriterionStateResult`, `UimResult`, `evaluate_criterion`, `compute_uim`, `intent_coverage`. |
-| `domain/strength.py`, `freshness.py`, `independence.py` | EV-06, EV-07, EV-03 | Not created yet. |
-
 | `domain/strength.py` | EV-06 | `a_static` and `explain_a_static` (reason codes). |
 | `domain/freshness.py` | EV-07 | Head-SHA binding, blob-level staleness, optional decay hook (off). |
 | `domain/independence.py` | EV-03-lite | Independence factor and agent-trailer detector. |

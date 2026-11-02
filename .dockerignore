@@ -25,3 +25,15 @@ htmlcov
 pnpm-debug.log*
 Thumbs.db
 .DS_Store
+
+# PRD-08: keep build contexts small and out of image layers.
+# Do not add uv.lock, pyproject.toml, pnpm-lock.yaml (needed for locked installs).
+docs
+benchmarks
+tests
+**/tests
+.gitignore
+.gitattributes
+*.docx
+*.sarif
+.trivycache
