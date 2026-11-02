@@ -30,6 +30,7 @@ from .report import (
     Severity,
 )
 from .spec_file import extract_spec
+from .summary import extract_summary
 from .text import (
     comment_is_suspicious,
     has_invisible_characters,
@@ -145,6 +146,16 @@ class DeterministicCriterionExtractor:
             extract_spec(lines, source.source_id, collector)
         else:
             MarkdownScanner(lines, self.config, self._compiled, collector).scan(masked)
+            if self.config.mode == "summary" and source.kind in (
+                IntentSourceKind.PR_BODY,
+                IntentSourceKind.PR_TITLE,
+            ):
+                extract_summary(
+                    lines,
+                    source.kind is IntentSourceKind.PR_TITLE,
+                    self.config,
+                    collector,
+                )
 
         entries: list[Entry] = []
         for cand in sorted(
@@ -163,7 +174,8 @@ class DeterministicCriterionExtractor:
                 source,
                 Span(source.source_id, cand.start, cand.end),
                 extraction_method=ExtractionMethod.DETERMINISTIC,
-                extractor_version=DETERMINISTIC_EXTRACTOR_VERSION,
+                extractor_version=cand.extractor_version
+                or DETERMINISTIC_EXTRACTOR_VERSION,
                 text=cand.text,
                 weight=cand.weight,
                 hints=cand.hints,

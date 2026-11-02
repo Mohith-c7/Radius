@@ -32,6 +32,18 @@ DEFAULT_TABLE_COLUMN_PATTERN = (
     r"|expected(?: (?:behaviou?r|results?|outcomes?))?"
 )
 
+#: Extraction modes. ``sections`` (default) is the original behaviour; ``summary``
+#: additionally proposes low-weight criteria from ordinary PR text (opt-in).
+EXTRACTION_MODES = ("sections", "summary")
+DEFAULT_EXTRACTION_MODE = "sections"
+
+
+def normalize_mode(value: str | None) -> str:
+    """Return a known mode; anything unknown or empty falls back to ``sections``."""
+    cleaned = (value or "").strip().lower()
+    return cleaned if cleaned in EXTRACTION_MODES else DEFAULT_EXTRACTION_MODE
+
+
 #: Higher wins when near-duplicates from several sources are merged.
 SOURCE_PRIORITY: dict[IntentSourceKind, int] = {
     IntentSourceKind.SPEC_FILE: 100,
@@ -62,6 +74,9 @@ class ExtractionConfig:
     max_item_chars: int = 2000
     max_sentence_chars: int = 400
     max_list_depth: int = 64
+    mode: str = DEFAULT_EXTRACTION_MODE
+    summary_max_criteria: int = 12
+    summary_max_chars: int = 300
 
     def __post_init__(self) -> None:
         if not 0 < self.similarity_threshold <= 1:
@@ -71,9 +86,13 @@ class ExtractionConfig:
             self.max_item_chars,
             self.max_sentence_chars,
             self.max_list_depth,
+            self.summary_max_criteria,
+            self.summary_max_chars,
         )
         if min(limits) < 1:
             raise ValueError("Limits must be >= 1.")
+        if self.mode not in EXTRACTION_MODES:
+            raise ValueError(f"mode must be one of {EXTRACTION_MODES}.")
         for pattern in (
             self.section_pattern,
             self.excluded_pattern,

@@ -366,3 +366,21 @@ Decision:
 3. No fifth verdict value. `not_applicable` is a reason code on `insufficient_evidence`, because a new enum value would change the contract, the API schema, the dashboard and every consumer, and `verified` would repeat the vacuous pass. The Check Run stays `neutral` (it is `neutral` for every non-R1 outcome, also with `strict`). The rule list grows from 12 to 13 (14 to 15 with a policy); `R2e` is added to the justification schema enum (additive: readers that validate the enum must learn the id). Contract version unchanged.
 
 Consequences: docs and CI PRs now read "insufficient evidence" (neutral, never red) instead of "supported by static evidence"; the 8 fixtures are unchanged (all have criteria). Residual: the not-applicable test uses the paths of the changed-symbol list (a file with no symbol is invisible), and a PR that is genuinely fine but unspecified is still `insufficient_evidence` until criteria are confirmed; that is the intended message, not a defect.
+
+## DEC-032: Opt-in `summary` intent extraction mode; unconfirmed inferred criteria block `verified`
+
+Context: the replay of 2026-11 (`docs/research/evaluation/REPLAY_2026-11.md`, F1) found that the deterministic extractor yields 0 criteria on all 29 of this repository's PRs, so the intent layer contributes nothing on ordinary PR text. The `bullets` sensitivity pass was a crude upper bound (83 criteria, unknown precision) and not product behaviour.
+
+Decision:
+
+1. `RADIUS_INTENT_EXTRACTION_MODE` (worker setting) = `sections` (default, unchanged behaviour) | `summary` (opt-in; unknown values mean `sections`). `summary` adds, for the PR title and PR body only, deterministic (no LLM) proposals: a conventional-commit title (feat, fix, perf, revert, security) whose subject reads as behaviour, and bullets under Summary / Changes / What / Why / Description / Overview headings that read as behaviour (leading verb such as adds, fixes, rejects; a modal such as must or should; or a marker such as now, no longer, never). Test-plan bullets count only if phrased as a requirement. Boilerplate, checkbox templates, "Generated with", "Co-Authored-By", links-only lines, headings, over-long lines (300 characters), duplicates and anything beyond 12 per source are skipped with a diagnostic. Each criterion records the matching rule in its trace, has extractor version `det-extract-summary-v1`, weight 0.5 (low extraction confidence), no hints, and state `proposed`.
+2. Provenance stays `author_pr_body`. Because the existing author-trust logic caps only `tests:` hints (and these criteria have none), it would not stop an unconfirmed inferred criterion from being `supported` and the verdict `verified`. So the worker adds the degraded marker `unconfirmed_inferred_intent` whenever a live criterion with a `det-extract-summary` version is neither confirmed nor edited, and R2d treats it as blocking: the verdict is at best `insufficient_evidence` until a human confirms or edits the criterion in the intent panel. Rules R1 and R3 still apply, so `failed` and `needs_review` are unaffected. The marker never appears in `sections` mode, so sections behaviour and the 8 fixtures are unchanged.  R2e is unaffected: a PR with zero in-scope criteria has no inferred criterion, so the marker is absent and R2e decides.
+3. Not a research result: recall and precision on this repository's own, author-written PR text are in `docs/research/evaluation/EXTRACTION_SUMMARY_MODE.md` with their limits.
+
+| Option | Trade-off |
+| --- | --- |
+| Do nothing | Intent layer stays empty on ordinary PRs. |
+| Make `bullets` the product behaviour | High recall, unknown and visibly low precision. |
+| **Opt-in `summary` plus a verified block** | Modest recall, higher precision, cannot inflate a verdict; cost: summary mode yields no `verified` without human confirmation. |
+
+Consequences: no migration and no contract field (the marker is an existing-format degraded string). Default off. Revisit after IN-09/IN-10 gold data exists.

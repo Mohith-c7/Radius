@@ -147,7 +147,12 @@ def _ingest(
         # The rater makes criteria testable (docs/API_CONTRACTS.md: ratings are computed
         # when the snapshot is built); without it every criterion stays ``unrated`` and
         # Verdict v2 rule R2a (no behavioral_testable criterion) fires for every PR.
-        IntentSnapshotService(repo, default_extractors(), rater=DeterministicTestabilityRater()),
+        IntentSnapshotService(
+            repo,
+            default_extractors(settings.intent_extraction_mode),
+            rater=DeterministicTestabilityRater(),
+        ),
+
         clock=clock,
     )
     collector = GitHubIntentCollector(

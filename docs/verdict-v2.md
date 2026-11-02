@@ -144,3 +144,7 @@ With `.radius/policy.yml` on the base branch, `mode: blocking` maps every unveri
 Per-case test results must be uploaded from CI. Linking a criterion to its tests is lexical unless you add `tests:` hints in `.radius/intent.yml`; a criterion with no linked test is reported as such, never credited. Thresholds are hypotheses that have not been calibrated, and `needs_review` is reached only through the rules above, not through a calibrated abstention band.
 
 Design and rationale: `docs/research/design/VERDICT_V2_SLICE.md`.
+
+## Optional: inferred criteria from ordinary PR text (`RADIUS_INTENT_EXTRACTION_MODE=summary`)
+
+By default (`sections`) the extractor reads only acceptance-style sections, checklists, Gherkin and spec files, which finds nothing in typical PR descriptions. The worker setting `RADIUS_INTENT_EXTRACTION_MODE=summary` (default `sections`) also proposes criteria from a conventional-commit PR title and from behavioural bullets under Summary, Changes, What, Why or Description headings (DEC-032). They are the author's own words read by fixed rules, so they are `proposed`, weight 0.5, provenance `author_pr_body`, and show the `unconfirmed` flag. While any such criterion is unconfirmed the verdict cannot be `verified`: the analysis carries the blocking degraded reason `unconfirmed_inferred_intent` (rule R2d). Confirm or edit the criterion in the intent panel to lift it. The mode is a recall experiment, not a measured improvement; see `docs/research/evaluation/EXTRACTION_SUMMARY_MODE.md`.

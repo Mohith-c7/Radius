@@ -33,6 +33,8 @@ from radius_intent.domain import Criterion, IntentSource, Testability
 from radius_intent.infrastructure.extraction import (
     DETERMINISTIC_EXTRACTOR_VERSION,
     DeterministicCriterionExtractor,
+    ExtractionConfig,
+    normalize_mode,
 )
 from radius_intent.infrastructure.llm import (
     PROMPT_VERSION,
@@ -110,7 +112,9 @@ def fake_lines_handler(request: LlmRequest) -> str:
             quote = line[offset:].strip()
             if len(quote) < 12 or quote.startswith("#"):
                 continue
-            q_start = start + offset + (len(line[offset:]) - len(line[offset:].lstrip()))
+            q_start = (
+                start + offset + (len(line[offset:]) - len(line[offset:].lstrip()))
+            )
             items.append(
                 {
                     "source_id": source_id,
@@ -207,7 +211,9 @@ def build_provider(
         responses = data.get("responses", data) if isinstance(data, dict) else None
         if not isinstance(responses, dict):
             raise ConfigError("recordings must be a JSON object of responses")
-        return ReplayProvider(responses, model_id=str(data.get("model", "replay-model")))
+        return ReplayProvider(
+            responses, model_id=str(data.get("model", "replay-model"))
+        )
     if ptype == "anthropic":
         if not allow_real_llm or env.get(ENV_ALLOW_REAL, "") != "1":
             raise RealProviderNotAllowed(
@@ -277,12 +283,14 @@ class HarnessExtractor:
 class DeterministicHarness(HarnessExtractor):
     def __init__(self, spec: ExtractorSpec, *, rate: bool) -> None:
         super().__init__(spec, rate=rate)
-        self._ex = DeterministicCriterionExtractor()
+        self._mode = normalize_mode(str(spec.options.get("mode", "")))
+        self._ex = DeterministicCriterionExtractor(ExtractionConfig(mode=self._mode))
 
     def describe(self) -> dict[str, Any]:
         return {
             **super().describe(),
             "extractor_version": DETERMINISTIC_EXTRACTOR_VERSION,
+            "mode": self._mode,
         }
 
     def extract(self, case: EvalCase) -> ExtractionOutcome:
@@ -423,7 +431,11 @@ def list_kinds() -> list[KindInfo]:
             "Deterministic criteria plus LLM proposals (production merge)",
             True,
             ("provider", "analysis_token_cap", "org_token_cap"),
-            {"extractor": DETERMINISTIC_EXTRACTOR_VERSION, "prompt": PROMPT_VERSION, **tx},
+            {
+                "extractor": DETERMINISTIC_EXTRACTOR_VERSION,
+                "prompt": PROMPT_VERSION,
+                **tx,
+            },
         ),
         KindInfo("oracle", "Sanity baseline: returns the gold spans (F1 = 1)"),
         KindInfo("null", "Sanity baseline: returns nothing (recall = 0)"),
@@ -453,7 +465,9 @@ def build_extractor(
     if spec.kind in ("llm", "combined"):
         options = spec.options.get("provider")
         if not isinstance(options, Mapping):
-            raise ConfigError(f"extractor {spec.extractor_id!r} needs a 'provider' object")
+            raise ConfigError(
+                f"extractor {spec.extractor_id!r} needs a 'provider' object"
+            )
         provider = provider_factory(
             options, allow_real_llm=allow_real_llm, environ=environ, base_dir=base_dir
         )
