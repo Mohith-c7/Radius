@@ -1,0 +1,122 @@
+{"id":"b01","text":"Users can reset their password via an emailed link","label":"behavioral_testable"}
+{"id":"b02","text":"The API returns 404 when the user does not exist","label":"behavioral_testable"}
+{"id":"b03","text":"An error message is shown when the password is shorter than 8 characters","label":"behavioral_testable"}
+{"id":"b04","text":"POST /api/v1/orders must reject requests without an Authorization header with status 401","label":"behavioral_testable"}
+{"id":"b05","text":"When the cart is empty, the checkout button is disabled","label":"behavioral_testable"}
+{"id":"b06","text":"If the upload exceeds 10 MB then the server responds with HTTP 413","label":"behavioral_testable"}
+{"id":"b07","text":"The export endpoint should return a CSV file with a header row","label":"behavioral_testable"}
+{"id":"b08","text":"Scenario: Successful login: Given a registered user; When they submit valid credentials; Then they are redirected to the dashboard","label":"behavioral_testable","source":"pr_body"}
+{"id":"b09","text":"Scenario: Expired token: Given an expired token; When the client calls /api/me; Then the API returns 401","label":"behavioral_testable"}
+{"id":"b10","text":"parse_config() raises ValueError when the file is empty","label":"behavioral_testable"}
+{"id":"b11","text":"The job must retry failed deliveries up to 3 times","label":"behavioral_testable"}
+{"id":"b12","text":"Deleting a project also deletes its API keys","label":"behavioral_testable"}
+{"id":"b13","text":"The search box should not accept more than 100 characters","label":"behavioral_testable"}
+{"id":"b14","text":"Emails are sent to the assignee when a ticket is reassigned","label":"behavioral_testable"}
+{"id":"b15","text":"The CLI exits with code 2 when the flag --strict is set and a warning is found","label":"behavioral_testable"}
+{"id":"b16","text":"Users with the viewer role cannot delete comments","label":"behavioral_testable"}
+{"id":"b17","text":"The report lists every failed test with its file name and line number","label":"behavioral_testable"}
+{"id":"b18","text":"Duplicate invoices are rejected with a validation error","label":"behavioral_testable"}
+{"id":"b19","text":"The webhook handler ignores events whose signature does not match","label":"behavioral_testable"}
+{"id":"b20","text":"The password reset token expires after 15 minutes","label":"behavioral_testable"}
+{"id":"b21","text":"GET /health returns 200 with {\"status\": \"ok\"}","label":"behavioral_testable"}
+{"id":"b22","text":"Saving a profile with an invalid email shows an inline error","label":"behavioral_testable"}
+{"id":"b23","text":"The sort order of the results is by created_at descending","label":"behavioral_testable"}
+{"id":"b24","text":"Pagination returns at most 50 items per page","label":"behavioral_testable"}
+{"id":"b25","text":"The retry decorator logs a warning on each failed attempt","label":"behavioral_testable"}
+{"id":"b26","text":"Given a user without a subscription, when they open the premium page, then they see the upgrade prompt","label":"behavioral_testable"}
+{"id":"b27","text":"The function normalize_path must collapse repeated slashes","label":"behavioral_testable"}
+{"id":"b28","text":"Clicking Cancel closes the dialog without saving changes","label":"behavioral_testable"}
+{"id":"b29","text":"Rate limited clients receive a 429 response with a Retry-After header","label":"behavioral_testable"}
+{"id":"b30","text":"Passwords must be hashed with bcrypt before they are stored","label":"behavioral_testable"}
+{"id":"b31","text":"The scheduler skips jobs whose dependencies have failed","label":"behavioral_testable"}
+{"id":"b32","text":"The login form works","label":"behavioral_testable","tests":["tests/test_login.py::test_login_form"]}
+{"id":"b33","text":"Imported rows with duplicate emails are merged","label":"behavioral_testable","source":"spec_file"}
+{"id":"b34","text":"The dashboard shows the number of open pull requests","label":"behavioral_testable"}
+{"id":"b35","text":"Unauthenticated requests to /admin are redirected to /login","label":"behavioral_testable"}
+{"id":"b36","text":"The tokenizer must not split quoted strings","label":"behavioral_testable"}
+{"id":"b37","text":"Closing the issue triggers a notification to the reporter","label":"behavioral_testable"}
+{"id":"b38","text":"The API rejects payloads larger than 1 MB","label":"behavioral_testable"}
+{"id":"s01","text":"Rename UserService to AccountService across the codebase","label":"structural_checkable"}
+{"id":"s02","text":"Bump requests from 2.31.0 to 2.32.0","label":"structural_checkable"}
+{"id":"s03","text":"Move the helpers from utils.py into the new `common/` package","label":"structural_checkable"}
+{"id":"s04","text":"Remove the deprecated `legacy_login` function","label":"structural_checkable"}
+{"id":"s05","text":"Update the README with the new installation steps","label":"structural_checkable"}
+{"id":"s06","text":"Refactor the payment module into smaller files without changing behavior","label":"structural_checkable"}
+{"id":"s07","text":"Deprecate the v1 endpoints in the OpenAPI document","label":"structural_checkable"}
+{"id":"s08","text":"Add type hints to all public functions in the api package","label":"structural_checkable"}
+{"id":"s09","text":"Pin the Node version to 22 in .nvmrc","label":"structural_checkable"}
+{"id":"s10","text":"Upgrade pytest to 9.2.0 in pyproject.toml","label":"structural_checkable"}
+{"id":"s11","text":"Extract the retry logic into a separate function","label":"structural_checkable"}
+{"id":"s12","text":"Reformat the code base with ruff format","label":"structural_checkable"}
+{"id":"s13","text":"Document the new environment variables in docs/DEPLOYMENT.md","label":"structural_checkable"}
+{"id":"s14","text":"Delete the unused config file settings_old.yml","label":"structural_checkable"}
+{"id":"s15","text":"Drop support for Python 3.9 in the CI matrix","label":"structural_checkable"}
+{"id":"s16","text":"Migrate the lockfile to pnpm 9","label":"structural_checkable"}
+{"id":"s17","text":"Rename the `user_id` column to `account_id` in the models","label":"structural_checkable"}
+{"id":"s18","text":"Add a CHANGELOG entry for the 1.4.0 release","label":"structural_checkable"}
+{"id":"s19","text":"Split the large config module into per-environment files","label":"structural_checkable"}
+{"id":"s20","text":"Update dependencies in package.json to the latest minor versions","label":"structural_checkable"}
+{"id":"s21","text":"Rename the module and update all imports","label":"structural_checkable"}
+{"id":"s22","text":"Move the Dockerfile into the infra directory","label":"structural_checkable"}
+{"id":"s23","text":"Remove the commented-out code in the parser","label":"structural_checkable"}
+{"id":"s24","text":"Add docstrings to the public classes","label":"structural_checkable"}
+{"id":"n01","text":"The search endpoint responds within 200 ms at p95","label":"non_functional_measurable"}
+{"id":"n02","text":"Pages must pass Lighthouse accessibility with a score of at least 90","label":"non_functional_measurable"}
+{"id":"n03","text":"The page loads in under 2 seconds on a 4G connection","label":"non_functional_measurable"}
+{"id":"n04","text":"All form controls meet WCAG 2.1 AA contrast ratios","label":"non_functional_measurable"}
+{"id":"n05","text":"Memory usage stays below 512 MB during the import","label":"non_functional_measurable"}
+{"id":"n06","text":"The service handles 1000 requests per second with p99 latency under 500 ms","label":"non_functional_measurable"}
+{"id":"n07","text":"No high severity findings are reported by bandit","label":"non_functional_measurable"}
+{"id":"n08","text":"Test coverage must be at least 90% for the intent package","label":"non_functional_measurable"}
+{"id":"n09","text":"Startup time is below 3 seconds on the CI runner","label":"non_functional_measurable"}
+{"id":"n10","text":"The bundle size must not exceed 250 KB","label":"non_functional_measurable"}
+{"id":"n11","text":"The build finishes within 5 minutes","label":"non_functional_measurable"}
+{"id":"n12","text":"The app passes the axe accessibility scan with zero violations","label":"non_functional_measurable"}
+{"id":"n13","text":"No critical CVEs reported by trivy for the container image","label":"non_functional_measurable"}
+{"id":"n14","text":"Throughput of the ingest worker is at least 500 events per second","label":"non_functional_measurable"}
+{"id":"n15","text":"API p95 latency must stay under 300 ms in the k6 load test","label":"non_functional_measurable"}
+{"id":"v01","text":"The UI should be intuitive and clean","label":"subjective_or_vague"}
+{"id":"v02","text":"Improve performance","label":"subjective_or_vague"}
+{"id":"v03","text":"Make the code better","label":"subjective_or_vague"}
+{"id":"v04","text":"Error handling should be robust","label":"subjective_or_vague"}
+{"id":"v05","text":"The system should be fast and scalable","label":"subjective_or_vague"}
+{"id":"v06","text":"Clean up the code","label":"subjective_or_vague"}
+{"id":"v07","text":"TBD","label":"subjective_or_vague"}
+{"id":"v08","text":"Should be secure","label":"subjective_or_vague"}
+{"id":"v09","text":"The new design must look modern and polished","label":"subjective_or_vague"}
+{"id":"v10","text":"Make it easier to use","label":"subjective_or_vague"}
+{"id":"v11","text":"Handle edge cases appropriately","label":"subjective_or_vague"}
+{"id":"v12","text":"The experience should feel seamless","label":"subjective_or_vague"}
+{"id":"v13","text":"Improve the user experience of the settings page","label":"subjective_or_vague"}
+{"id":"v14","text":"Optimize the database queries as needed","label":"subjective_or_vague"}
+{"id":"v15","text":"The API should be reliable and handle errors etc","label":"subjective_or_vague"}
+{"id":"v16","text":"Fix the bug","label":"subjective_or_vague"}
+{"id":"v17","text":"The page should load quickly","label":"subjective_or_vague"}
+{"id":"v18","text":"Support various file formats and so on","label":"subjective_or_vague"}
+{"id":"v19","text":"The code should be maintainable and follow best practices","label":"subjective_or_vague"}
+{"id":"v20","text":"TODO: define acceptance criteria","label":"subjective_or_vague"}
+{"id":"v21","text":"It should work well","label":"subjective_or_vague"}
+{"id":"v22","text":"Make the dashboard nicer","label":"subjective_or_vague"}
+{"id":"v23","text":"Better logging","label":"subjective_or_vague"}
+{"id":"v24","text":"The system should be accessible","label":"subjective_or_vague"}
+{"id":"v25","text":"Ideally the sync would be somewhat faster","label":"subjective_or_vague"}
+{"id":"x01","text":"Legal must approve the updated terms of service wording","label":"untestable_external"}
+{"id":"x02","text":"The new onboarding flow should increase customer satisfaction","label":"untestable_external"}
+{"id":"x03","text":"Product owner signs off on the final copy","label":"untestable_external"}
+{"id":"x04","text":"The integration works with the third-party payment provider in production","label":"untestable_external"}
+{"id":"x05","text":"Marketing approves the landing page design","label":"untestable_external"}
+{"id":"x06","text":"The change must be GDPR compliant as confirmed by the compliance team","label":"untestable_external"}
+{"id":"x07","text":"Real users adopt the new search within a month","label":"untestable_external"}
+{"id":"x08","text":"Design review confirms the layout matches the brand","label":"untestable_external"}
+{"id":"x09","text":"Stakeholders agree on the pricing change","label":"untestable_external"}
+{"id":"x10","text":"Conversion on the checkout page improves over time","label":"untestable_external"}
+{"id":"x11","text":"The vendor confirms the API contract in their live environment","label":"untestable_external"}
+{"id":"x12","text":"Manual QA verifies the release on real devices","label":"untestable_external"}
+{"id":"l01","text":"El sistema debe enviar un correo cuando el pedido es enviado","label":"behavioral_testable","lang":"es"}
+{"id":"l02","text":"Le système doit être rapide et agréable à utiliser","label":"subjective_or_vague","lang":"fr"}
+{"id":"l03","text":"Die Anwendung soll benutzerfreundlich sein","label":"subjective_or_vague","lang":"de"}
+{"id":"l04","text":"システムは速く、使いやすいものにする","label":"subjective_or_vague","lang":"ja"}
+{"id":"l05","text":"O sistema deve retornar 404 quando o usuário não existe","label":"behavioral_testable","lang":"pt"}
+{"id":"l06","text":"请把 `auth.py` 重命名为 `login.py`","label":"structural_checkable","lang":"zh"}
+{"id":"l07","text":"Het systeem moet sneller zijn","label":"subjective_or_vague","lang":"nl"}
+{"id":"l08","text":"Wir brauchen eine bessere Fehlerbehandlung","label":"subjective_or_vague","lang":"de"}

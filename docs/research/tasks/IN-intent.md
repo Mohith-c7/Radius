@@ -73,7 +73,7 @@ Goal: capture what a change is *supposed* to do as a set of confirmable, testabl
 - Tests: mocked provider tests; injection suite; schema violation tests; cache-hit tests.
 - Research hook: ablation "deterministic vs LLM-assisted" (EP-12); record model/prompt versions.
 
-### IN-05 Testability rating   [ ]
+### IN-05 Testability rating   [x]
 - Owner type: agent-ok
 - Depends on: IN-03
 - Branch: `feature/intent-testability`

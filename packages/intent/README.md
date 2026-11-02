@@ -1,6 +1,6 @@
 # Radius Intent Package
 
-Owns the intent layer: what a change is supposed to do, as confirmable, testable criteria with provenance (`docs/research/DESIGN.md` 6.1, RQ1). IN-01 delivered the pure domain model and ports; IN-07 added persistence; IN-03 adds deterministic (LLM-free) criterion extraction; IN-06 adds the snapshot service (versioning, carry-over of human decisions, diffs). IN-04 adds an optional, default-off, guarded LLM extractor behind a provider port. No HTTP yet.
+Owns the intent layer: what a change is supposed to do, as confirmable, testable criteria with provenance (`docs/research/DESIGN.md` 6.1, RQ1). IN-01 delivered the pure domain model and ports; IN-07 added persistence; IN-03 adds deterministic (LLM-free) criterion extraction; IN-06 adds the snapshot service (versioning, carry-over of human decisions, diffs). IN-04 adds an optional, default-off, guarded LLM extractor behind a provider port. IN-05 adds deterministic testability rating. No HTTP yet.
 
 Layout follows DEC-003/DEC-007: `domain/` (pure), `interfaces/` (ports), `application/` (use cases: domain + ports only) and `infrastructure/` (repositories in IN-07, `extraction/` in IN-03).
 
@@ -16,7 +16,7 @@ A *criterion* is `c = (id, text, norm, origin, span, w, t, r, st, h)` where `h =
 
 - `norm = normalize(text)`: Unicode NFKC, drop format characters (category Cf, e.g. zero-width and bidi controls), casefold, collapse whitespace; non-empty and idempotent.
 - `id = "crit_" + sha256("crit-id-v1" NUL "<kind>:<source id>" NUL norm)[:32]`. Fixed at creation, stable under edits, re-weighting, rating and state changes; independent of the source hash, so unrelated edits to a source keep ids. Changing the derivation requires bumping `CRITERION_ID_ALGO` (plan 1.6).
-- `w` in (0, 1]; `t` in {unrated, testable, vague, non_functional}; `r` optional non-blank rationale.
+- `w` in (0, 1]; `t` in {unrated, behavioral_testable, structural_checkable, non_functional_measurable, subjective_or_vague, untestable_external} (IN-05; the IN-01 names `testable`, `vague`, `non_functional` remain as aliases and still parse); `r` optional non-blank rationale.
 - `st` in {proposed, confirmed, rejected, edited, needs_reconfirmation, orphaned} with allowed transitions: proposed -> {confirmed, rejected, edited}; edited -> {confirmed, rejected, edited, needs_reconfirmation, orphaned}; confirmed -> {edited, rejected, needs_reconfirmation, orphaned}; needs_reconfirmation -> {confirmed, rejected, edited, orphaned}; orphaned -> {rejected}; rejected -> {proposed}. `needs_reconfirmation` and `orphaned` are set only by the IN-06 service (below); state is a plain string column, so no migration was needed.
 
 An *intent snapshot* is `(id, analysis_id, version, created_at, [c1..cn], refs, parent)`: ordered criteria with pairwise distinct ids, every criterion citing a source ref present in `refs` at the same hash; `version = 1` iff no parent. `diff(old, new)` matches by id: `added = new \ old`, `removed = old \ new`, `changed = {id : old[id] != new[id]}` (any field).
@@ -196,3 +196,61 @@ out.criteria  # deterministic criteria first, unchanged; then surviving LLM prop
 ### Limitations (IN-04)
 
 No quality numbers exist yet: the gold set (IN-09) and metrics (IN-10) come later, so nothing is claimed about recall or precision. Models are poor at counting characters, so correct quotes with wrong offsets are dropped rather than repaired (repairing would let an injected sentence pass as a quote); a quote-only schema needs a guard change and is a follow-up. The grounding check is word-based and English-oriented. A malicious but verbatim-quoted, URL-free proposal is still accepted as `proposed` (bounded: low weight, human confirmation required). The org cap is per process, not per billing period.
+
+
+## Testability rating (IN-05)
+
+`radius_intent.infrastructure.testability.DeterministicTestabilityRater` implements the `TestabilityRater` port with fixed rules: no LLM, network, clock or randomness. The result is a pure function of `(criterion text, hints, source kind, word lists)`. Rule set version: `TESTABILITY_RULES_VERSION = "testability-rules-v1"` (bump on any rule, weight, threshold or default word-list change).
+
+```python
+rater = DeterministicTestabilityRater()  # or DeterministicTestabilityRater(load_wordlists("my.json"))
+assessment = rater.rate(criterion)  # port: rating + rationale
+result = rater.explain(criterion)  # rating, confidence, reasons, rewrite_hints
+rated = rate_criteria(extractor.extract(source))  # pipeline step for IN-06
+```
+
+### Categories (`Testability`)
+
+| Rating | Meaning | Evidence it can get |
+|---|---|---|
+| `behavioral_testable` | Observable behavior with inputs/outputs or conditions | tests |
+| `structural_checkable` | refactor, rename, move, config, dependency, docs: checkable by diff or static analysis | diff, AST or lockfile checks (EV-13) |
+| `non_functional_measurable` | performance, security, accessibility with a threshold or a named tool | benchmark or scanner output |
+| `subjective_or_vague` | "clean", "intuitive", "better", "robust" without a measure; TBD; no cue found | none: ask the author |
+| `untestable_external` | needs human, product or legal judgment, or a live external system | none: a person decides |
+| `unrated` | not rated yet (IN-01 default) | |
+
+### Output
+
+`TestabilityResult`: `rating`, `confidence` (`high`/`medium`/`low`, derived from rule margins, not a probability), `reasons` (ordered: rules supporting the rating first, then by weight and position; each has `rule_id`, group, weight and the matched `spans`), `summary` (one human line), `rewrite_hints` (for vague and external ratings, for example "Add a measurable threshold (for example 'p95 latency under 200 ms') or name the tool and standard that checks it."), `scores` and `rules_version`. `rationale()` is stored in `Criterion.testability_rationale`: the summary, the first hint ("Try: ..."), and a tag such as `[testability-rules-v1; confidence=medium; rules=http_status,observable_verb]`. `to_dict()` is JSON-serializable.
+
+### Rules (`testability-rules-v1`)
+
+Each fired rule adds its weight to a group; a fixed precedence then decides. Word lists live in `infrastructure/testability/wordlists.json` (schema `testability-wordlists-v1`, checked by `validate_wordlists`; entries are lowercased, de-duplicated and sorted, so file order never matters). A custom file can be passed to `load_wordlists(path)`.
+
+| Group | Rule ids (weight) |
+|---|---|
+| behavioral | `gherkin_scenario` (3), `explicit_test_hint` (3, `tests` in `.radius/intent.yml`), `path_hint` (1), `spec_file_origin` (1), `http_status` (3), `observable_verb` (2), `error_wording` (2), `quantity_threshold` (2), `code_reference` (2), `condition_clause` (1), `result_clause` (1), `modal_verb` (1), `passive_requirement` (1), `comparator` (1), `negation` (1), `literal_value` (1) |
+| structural | `structural_verb` (3), `docs_config_edit` (3: a leading imperative such as "Update the README"), `version_number` (2, only with a structural verb), `structural_noun` (1) |
+| non_functional | `nfr_term` (3), `time_budget` (3), `measure_tool` (3) |
+| vague | `placeholder` (4), `vague_adjective` (3 per distinct word, at most 2 counted), `weasel_word` (2 per distinct word, at most 2), `too_short` (2) |
+| external | `external_judgment` (3), `live_system` (3) |
+| meta (weight 0) | `non_english_fallback`, `text_truncated`, `no_testable_signal`, `nfr_without_threshold` |
+
+Decision, first match wins (b/s/n/v/x are the group scores): (1) `placeholder` and no explicit evidence -> vague; (2) `x >= 3`, `x + 1 >= b` and no linked test -> `untestable_external`; (3) `n >= 3` and no explicit evidence (HTTP status, Gherkin, linked test): with a quantity, time budget or named tool -> `non_functional_measurable`, otherwise behavioral at low confidence if `b >= 4` and `b > v`, else vague (`nfr_without_threshold`); (4) `s >= 3`, `s >= b`, `s - v >= 2` and not a when/then frame -> `structural_checkable`; (5) `b >= 2` and `b > v` -> `behavioral_testable`; (6) otherwise vague. Confidence is `high` only for large margins (for example `b >= 6` with margin >= 3), `low` for a single weak cue, for no cue at all, and always for non-English text; truncated text caps at `medium`.
+
+Origin and hints: a Gherkin scenario (the extractor's `Scenario: ...` text), a linked test in `.radius/intent.yml` and a `spec_file` origin raise the behavioral score. A linked test does not rescue placeholder text.
+
+### Pipeline integration point (IN-06)
+
+`rate_criteria(criteria, rater=None) -> tuple[Criterion, ...]` and `rate_criteria_report(...) -> RatingReport` (criteria plus per-criterion `TestabilityResult`, `counts()`, `needs_clarification()`). They only call `Criterion.with_testability`, so ids, text, spans, weights, hints and confirmation state are untouched, order is preserved and re-rating is idempotent. IN-06's snapshot service should call it on the extractor output before building the snapshot; `testability` and `testability_rationale` are already persisted by IN-07 (plain strings, no migration). Changing rules requires bumping `TESTABILITY_RULES_VERSION` and re-rating.
+
+### How other tasks use it
+
+- IN-12 (missing intent and author prompts): `subjective_or_vague` and `untestable_external` criteria are the ones to ask about; `rewrite_hints` is the clarification text and the rule ids are the reason codes.
+- EV-13 (non-behavioral evidence): `structural_checkable` routes a criterion to diff, AST or lockfile evidence instead of tests; `non_functional_measurable` routes it to benchmark or scanner evidence. Radius should report `subjective_or_vague` and `untestable_external` criteria as "not mechanically testable" instead of looking for test evidence.
+- IN-10: `evaluate(cases, rater) -> AccuracyReport` (accuracy, per-label precision and recall, confusion, accuracy per confidence band, mistakes) and `load_labeled(path)` read JSONL lines `{"id","text","label","source"?,"tests"?,"lang"?}`.
+
+### Limitations
+
+English word lists only; other languages get language-neutral cues (code references, quantities, HTTP status codes) at low confidence and otherwise land in `subjective_or_vague` with the hint to add an English summary or a linked test. Rule-based: ambiguous words ("remove", "update", "secure", "split") can mislead, an imperative "Update ..." or "Remove ..." about runtime data may be read as a structural edit, and a criterion that mixes behavior and a vague adjective is rated by the larger score. Only the first 4000 characters are analysed. Weights and thresholds were set by hand and checked on `tests/fixtures/testability/labeled.jsonl` (122 criteria, developed against it) and `labeled_holdout.jsonl` (30 criteria written afterwards by the same author, not used for tuning). These are development sanity checks by one author, not a research result: the gold set is IN-09 and the measurement is IN-10. The documented known misses are listed in `tests/test_testability_cases.py`.

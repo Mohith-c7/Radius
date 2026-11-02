@@ -489,3 +489,25 @@ def test_criterion_carries_hints_without_changing_its_id():
     assert hinted.hints.label == "C1" and hinted.id == plain.id
     assert plain.with_hints(hinted.hints).hints == hinted.hints
     assert hinted.edit("New wording").hints == hinted.hints
+
+
+def test_testability_categories_and_legacy_aliases():
+    assert {t.value for t in Testability} == {
+        "unrated",
+        "behavioral_testable",
+        "structural_checkable",
+        "non_functional_measurable",
+        "subjective_or_vague",
+        "untestable_external",
+    }
+    assert Testability.TESTABLE is Testability.BEHAVIORAL_TESTABLE
+    assert Testability.VAGUE is Testability.SUBJECTIVE_OR_VAGUE
+    assert Testability.NON_FUNCTIONAL is Testability.NON_FUNCTIONAL_MEASURABLE
+    # strings stored before IN-05 still parse
+    assert Testability("testable") is Testability.BEHAVIORAL_TESTABLE
+    assert Testability("vague") is Testability.SUBJECTIVE_OR_VAGUE
+    assert Testability("non_functional") is Testability.NON_FUNCTIONAL_MEASURABLE
+    with pytest.raises(ValueError):
+        Testability("nonsense")
+    with pytest.raises(ValueError):
+        Testability(3)
