@@ -31,6 +31,7 @@ from radius_parser.application import ParserApplicationService
 from radius_parser.dto import ParseRepositoryCommand
 from radius_parser.extractors.typescript import TypeScriptExtractor
 from radius_shared.logging import get_logger
+from radius_shared.observability import stage
 from radius_testing.application import TestingApplicationService
 from radius_testing.dto import (
     DiscoverTestsCommand,
@@ -133,7 +134,8 @@ class Phase1AnalysisOrchestrator:
         return result
 
     def _execute(self, command: ExecuteAnalysisCommand) -> AnalysisExecutionResult:
-        changes = self._analyze_changes(command)
+        with stage("analyze_changes"):
+            changes = self._analyze_changes(command)
         changed_paths = tuple(item.path for item in changes.changed_files)
 
         # NOTE: the experimental LLM "semantic pruning" step is intentionally
@@ -141,9 +143,10 @@ class Phase1AnalysisOrchestrator:
         # tests) from the blast radius based on an unvalidated model judgment,
         # which is a false-safety risk. See docs/audit/RADIUS_AUDIT.md.
 
-        parse_result = self._parser.parse_repository_result(
-            ParseRepositoryCommand(repository_path=command.repository_path)
-        )
+        with stage("parse"):
+            parse_result = self._parser.parse_repository_result(
+                ParseRepositoryCommand(repository_path=command.repository_path)
+            )
         if parse_result.parse_failures:
             LOGGER.warning(
                 "Some source files could not be parsed",
@@ -152,18 +155,20 @@ class Phase1AnalysisOrchestrator:
                     "parse_failures": len(parse_result.parse_failures),
                 },
             )
-        graph_response = self._graph.build_graph(
-            BuildGraphCommand(
-                repository_id=command.repository_id,
-                analysis_id=command.analysis_id,
-                parse_result=parse_result,
+        with stage("build_graph"):
+            graph_response = self._graph.build_graph(
+                BuildGraphCommand(
+                    repository_id=command.repository_id,
+                    analysis_id=command.analysis_id,
+                    parse_result=parse_result,
+                )
             )
-        )
         graph_snapshot = self._require_graph_snapshot(command.analysis_id)
         dependents = file_dependents(graph_snapshot.graph, changed_paths)
-        discovered_tests = self._testing.discover_test_cases(
-            DiscoverTestsCommand(command.repository_path, command.repository_id)
-        )
+        with stage("discover_tests"):
+            discovered_tests = self._testing.discover_test_cases(
+                DiscoverTestsCommand(command.repository_path, command.repository_id)
+            )
         symbol_evidence: dict[str, tuple[str, ...]] | None = None
         changed_symbols: tuple[str, ...] = ()
         symbol_scope: tuple[str, ...] | None = None
@@ -200,53 +205,57 @@ class Phase1AnalysisOrchestrator:
             },
             parse_failures=frozenset(parse_result.parse_failures),
         )
-        selection = self._testing.select_tests(
-            SelectTestsCommand(
-                analysis_id=command.analysis_id,
-                changed_file_paths=changed_paths,
-                affected_file_paths=affected_paths,
-                available_tests=discovered_tests,
-                full_suite_reasons=mapping.full_suite_reasons,
-                changed_symbols=changed_symbols,
-                symbol_evidence=symbol_evidence,
+        with stage("select_tests"):
+            selection = self._testing.select_tests(
+                SelectTestsCommand(
+                    analysis_id=command.analysis_id,
+                    changed_file_paths=changed_paths,
+                    affected_file_paths=affected_paths,
+                    available_tests=discovered_tests,
+                    full_suite_reasons=mapping.full_suite_reasons,
+                    changed_symbols=changed_symbols,
+                    symbol_evidence=symbol_evidence,
+                )
             )
-        )
         self._testing.plan_test_run(PlanTestRunCommand(command.analysis_id))
-        test_evidence = self._run_or_defer_tests(command, selection.selected_count)
+        with stage("run_tests"):
+            test_evidence = self._run_or_defer_tests(command, selection.selected_count)
 
-        blast_radius = self._analysis.compute_blast_radius(
-            ComputeBlastRadiusCommand(
-                analysis_id=command.analysis_id,
-                graph_snapshot=graph_snapshot,
-                changed_file_paths=changed_paths,
-                affected_test_paths=tuple(
-                    item.test.path for item in selection.selected_tests
-                ),
-                symbol_affected_file_paths=symbol_scope,
+        with stage("blast_radius"):
+            blast_radius = self._analysis.compute_blast_radius(
+                ComputeBlastRadiusCommand(
+                    analysis_id=command.analysis_id,
+                    graph_snapshot=graph_snapshot,
+                    changed_file_paths=changed_paths,
+                    affected_test_paths=tuple(
+                        item.test.path for item in selection.selected_tests
+                    ),
+                    symbol_affected_file_paths=symbol_scope,
+                )
             )
-        )
-        confidence = self._confidence.generate_report(
-            GenerateConfidenceReportCommand(
-                analysis_id=command.analysis_id,
-                impact=ImpactEvidence(
-                    affected_files=blast_radius.affected_files,
-                    affected_symbols=blast_radius.affected_symbols,
-                    affected_modules=blast_radius.affected_modules,
-                    affected_tests=blast_radius.affected_tests,
-                    dependency_depth=blast_radius.dependency_depth,
+        with stage("confidence"):
+            confidence = self._confidence.generate_report(
+                GenerateConfidenceReportCommand(
+                    analysis_id=command.analysis_id,
+                    impact=ImpactEvidence(
+                        affected_files=blast_radius.affected_files,
+                        affected_symbols=blast_radius.affected_symbols,
+                        affected_modules=blast_radius.affected_modules,
+                        affected_tests=blast_radius.affected_tests,
+                        dependency_depth=blast_radius.dependency_depth,
+                    ),
+                    tests=test_evidence,
+                    analysis=AnalysisEvidence(
+                        changed_files=len(changed_paths),
+                        covered_files=mapping.covered_files,
+                        unmapped_files=mapping.unmapped_files,
+                        unanalyzed_files=mapping.unanalyzed_files,
+                        non_executable_files=mapping.non_executable_files,
+                        parse_failures=mapping.parse_failures,
+                        full_suite_fallback_reasons=mapping.full_suite_reasons,
+                    ),
                 ),
-                tests=test_evidence,
-                analysis=AnalysisEvidence(
-                    changed_files=len(changed_paths),
-                    covered_files=mapping.covered_files,
-                    unmapped_files=mapping.unmapped_files,
-                    unanalyzed_files=mapping.unanalyzed_files,
-                    non_executable_files=mapping.non_executable_files,
-                    parse_failures=mapping.parse_failures,
-                    full_suite_fallback_reasons=mapping.full_suite_reasons,
-                ),
-            ),
-        )
+            )
         LOGGER.info(
             "Analysis completed",
             extra={

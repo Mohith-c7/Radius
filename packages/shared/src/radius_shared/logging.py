@@ -6,7 +6,9 @@ from datetime import UTC, datetime
 from typing import Any
 
 from radius_shared.config import LogLevel
-from radius_shared.redaction import redact_secrets
+from radius_shared.observability.context import get_correlation_context
+from radius_shared.observability.tracing import current_trace_id
+from radius_shared.redaction import redact_secrets, redact_structure
 
 _STANDARD_RECORD_KEYS = set(logging.makeLogRecord({}).__dict__)
 
@@ -29,11 +31,32 @@ class JsonFormatter(logging.Formatter):
 
         if record.exc_info:
             payload["exception"] = redact_secrets(self.formatException(record.exc_info))
+        # Correlation ids from contextvars; explicit ``extra`` wins below.
+        payload.update(get_correlation_context())
+        trace_id = current_trace_id()
+        if trace_id is not None:
+            payload["trace_id"] = trace_id
         for key, value in record.__dict__.items():
             if key not in _STANDARD_RECORD_KEYS and not key.startswith("_"):
-                payload[key] = redact_secrets(value) if isinstance(value, str) else value
+                payload[key] = redact_structure(value, key=key)
 
         return json.dumps(payload, separators=(",", ":"), default=str)
+
+
+class RedactingFilter(logging.Filter):
+    """Scrub secrets from a record's message, args and extras in place.
+
+    The JSON formatter already redacts its output; this filter protects any
+    other handler attached to the same logger (plain text, third-party).
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.msg = redact_secrets(record.getMessage())
+        record.args = None
+        for key, value in list(record.__dict__.items()):
+            if key not in _STANDARD_RECORD_KEYS and not key.startswith("_"):
+                setattr(record, key, redact_structure(value, key=key))
+        return True
 
 
 def configure_logging(level: LogLevel | str = LogLevel.INFO) -> None:
@@ -45,6 +68,7 @@ def configure_logging(level: LogLevel | str = LogLevel.INFO) -> None:
 
     handler = logging.StreamHandler()
     handler.setFormatter(JsonFormatter())
+    handler.addFilter(RedactingFilter())
     root_logger.addHandler(handler)
 
 

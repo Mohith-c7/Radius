@@ -31,6 +31,8 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+      args:
+        RADIUS_EXTRAS: ${RADIUS_EXTRAS:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -44,6 +46,9 @@ services:
       API_KEYS: ${API_KEYS:-}
       GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-}
       GITHUB_DEFAULT_ORGANIZATION_ID: ${GITHUB_DEFAULT_ORGANIZATION_ID:-}
+      RADIUS_TRACING_ENABLED: ${RADIUS_TRACING_ENABLED:-false}
+      RADIUS_OTLP_ENDPOINT: ${RADIUS_OTLP_ENDPOINT:-}
+      RADIUS_METRICS_ENABLED: ${RADIUS_METRICS_ENABLED:-false}
     ports:
       - "8000:8000"
     healthcheck:
@@ -60,6 +65,8 @@ services:
     build:
       context: .
       dockerfile: apps/worker/Dockerfile
+      args:
+        RADIUS_EXTRAS: ${RADIUS_EXTRAS:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -81,6 +88,10 @@ services:
       GITHUB_API_VERSION: ${GITHUB_API_VERSION:-2026-03-10}
       GITHUB_TIMEOUT_SECONDS: ${GITHUB_TIMEOUT_SECONDS:-10}
       DASHBOARD_BASE_URL: ${DASHBOARD_BASE_URL:-http://localhost:3000}
+      RADIUS_TRACING_ENABLED: ${RADIUS_TRACING_ENABLED:-false}
+      RADIUS_OTLP_ENDPOINT: ${RADIUS_OTLP_ENDPOINT:-}
+      RADIUS_METRICS_ENABLED: ${RADIUS_METRICS_ENABLED:-false}
+      RADIUS_WORKER_METRICS_PORT: ${RADIUS_WORKER_METRICS_PORT:-0}
     volumes:
       - radius-repository-cache:/var/lib/radius/repositories
 
@@ -98,6 +109,25 @@ services:
       RADIUS_API_BASE_URL: ${RADIUS_API_BASE_URL:-http://api:8000}
     ports:
       - "3000:3000"
+
+  # Optional local observability stack: docker compose --profile observability up
+  # See docs/OBSERVABILITY.md. Not started by default.
+  jaeger:
+    profiles: ["observability"]
+    image: jaegertracing/all-in-one:1.62.0
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686" # Jaeger UI
+      - "4318:4318" # OTLP/HTTP receiver
+
+  prometheus:
+    profiles: ["observability"]
+    image: prom/prometheus:v2.55.1
+    volumes:
+      - ./infra/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
 
 volumes:
   radius-postgres-data:

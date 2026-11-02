@@ -38,6 +38,16 @@ from radius_shared.database.session import (
 )
 from radius_shared.errors import NotFoundError, ValidationError
 from radius_shared.logging import configure_logging, get_logger
+from radius_shared.observability import (
+    TRACE_CARRIERS,
+    ObservabilitySettings,
+    bind_correlation,
+    configure_tracing,
+    continue_trace,
+    span,
+    stage,
+)
+from radius_shared.observability import metrics as obs_metrics
 from radius_shared.redaction import redact_secrets
 from radius_testing.application import TestingApplicationService
 from radius_testing.infrastructure import (
@@ -75,9 +85,23 @@ def run_worker() -> None:
 
     settings = WorkerSettings()
     configure_logging(settings.log_level)
+    configure_observability()
     runtime = create_sql_worker_runtime(settings)
+    if obs_metrics.metrics_enabled():
+        obs_metrics.set_queue_depth_provider(runtime.queue_depths)
     print("Radius worker ready")
     runtime.run_loop(poll_interval_seconds=settings.poll_interval_seconds)
+
+
+def configure_observability(settings: ObservabilitySettings | None = None) -> None:
+    """Enable optional tracing/metrics from env settings (default: off)."""
+
+    settings = settings or ObservabilitySettings()
+    if settings.service_name == "radius":
+        settings = settings.model_copy(update={"service_name": "radius-worker"})
+    configure_tracing(settings)
+    if obs_metrics.configure_metrics(settings.metrics_enabled):
+        obs_metrics.start_metrics_server(settings.worker_metrics_port)
 
 
 @dataclass(slots=True)
@@ -96,6 +120,52 @@ class SqlAlchemyWorkerRuntime:
         job = self._claim_job()
         if job is None:
             return False
+        organization_id = self._organization_id(job.analysis_id)
+        traceparent = TRACE_CARRIERS.pop(job.analysis_id)
+        started = time.perf_counter()
+        outcome = "completed"
+        with (
+            bind_correlation(
+                analysis_id=job.analysis_id,
+                job_id=job.id,
+                organization_id=organization_id,
+            ),
+            continue_trace(traceparent),
+            span("worker.job", **{"radius.attempt": job.attempts}),
+        ):
+            try:
+                self._run_claimed_job(job)
+            except Exception:
+                outcome = "failed"
+                raise
+            finally:
+                obs_metrics.observe_job(time.perf_counter() - started, outcome)
+        return True
+
+    def queue_depths(self) -> dict[str, int]:
+        """Jobs per status, for the queue-depth gauge."""
+
+        with self.session_factory() as session:
+            return self._queue(session).depth_by_status()
+
+    def _organization_id(self, analysis_id):
+        """Best-effort org id for log correlation; never fails the job."""
+
+        try:
+            with self.session_factory() as session:
+                analysis = session.get(db_models.Analysis, analysis_id)
+                repository = (
+                    session.get(db_models.Repository, analysis.repository_id)
+                    if analysis is not None
+                    else None
+                )
+                return repository.organization_id if repository else None
+        except Exception:
+            return None
+
+    def _run_claimed_job(self, job) -> None:
+        """Execute one claimed job inside its correlation/trace context."""
+
         try:
             with self.session_factory() as session:
                 orchestrator = _create_sql_orchestrator(session, self.settings)
@@ -133,7 +203,6 @@ class SqlAlchemyWorkerRuntime:
                 "outcome": "completed",
             },
         )
-        return True
 
     def _record_job_failure(self, job, exc: Exception) -> None:
         """Persist a failed attempt; on the final attempt fail the analysis too.
@@ -167,6 +236,7 @@ class SqlAlchemyWorkerRuntime:
                 queue.mark_analysis_failed(job.analysis_id)
             else:
                 queue.requeue(job.analysis_id, error)
+                obs_metrics.record_retry()
             session.commit()
             if final_attempt:
                 _publish_github_failure(
@@ -507,10 +577,11 @@ def _publish_github_result(
             settings=settings,
         )
         report = _github_report(session, analysis_id, settings)
-        GitHubAnalysisPublisher(github_client).publish(
-            installation_id=installation_id,
-            report=report,
-        )
+        with stage("publish"):
+            GitHubAnalysisPublisher(github_client).publish(
+                installation_id=installation_id,
+                report=report,
+            )
         LOGGER.info(
             "Successfully published GitHub Check Run and PR comment",
             extra={"analysis_id": str(analysis_id), "pr_number": report.pull_request_number},

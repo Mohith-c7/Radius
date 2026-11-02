@@ -24,6 +24,7 @@ from radius_shared.database import models as db_models
 from radius_shared.dto import success_response
 from radius_shared.errors import AccessDeniedError, ValidationError
 from radius_shared.logging import get_logger
+from radius_shared.observability import span, update_correlation
 
 from radius_api.dependencies import (
     get_analysis_service,
@@ -65,6 +66,7 @@ async def handle_github_webhook(
 ):
     """Handle signed GitHub webhook deliveries."""
 
+    update_correlation(delivery_id=delivery_id)
     body = await request.body()
     _validate_signature(request, body, signature)
     body_hash = hashlib.sha256(body).hexdigest()
@@ -84,6 +86,7 @@ async def handle_github_webhook(
     org_id = _resolve_webhook_organization_id(request, payload, repository_service)
     # Repositories created while handling this delivery belong to this tenant.
     request.state.radius_webhook_org_id = org_id
+    update_correlation(organization_id=org_id)
     existing = replay_or_validate(
         idempotency_store,
         org_id,
@@ -98,14 +101,16 @@ async def handle_github_webhook(
         )
 
     _record_installation_id(request, payload, repository_service)
-    result = _handle_payload(
-        request,
-        event,
-        delivery_id,
-        payload,
-        repository_service,
-        analysis_service,
-    )
+    with span("webhook.handle", **{"github.event": event}):
+        result = _handle_payload(
+            request,
+            event,
+            delivery_id,
+            payload,
+            repository_service,
+            analysis_service,
+        )
+    LOGGER.info("Webhook delivery handled", extra={"github_event": event})
     response = success_response(result)
     response_body = jsonable_encoder(response)
     idempotency_store.save(

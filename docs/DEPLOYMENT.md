@@ -65,6 +65,10 @@ The Next.js web console is available at `http://localhost:3000`.
 | **`GITHUB_WEBHOOK_SECRET`** | Shared secret configured in the GitHub App webhook settings. | `whsec_live_secret_string` |
 | **`GITHUB_DEFAULT_ORGANIZATION_ID`** | Default organization UUID assigned to webhook-created analyses. | `00000000-0000-4000-8000-000000000001` |
 | **`GITHUB_PUBLISH_RESULTS`** | Whether the worker publishes Check Runs and PR comments to GitHub. | `true` |
+| **`RADIUS_TRACING_ENABLED`** | Enable OpenTelemetry tracing (needs the `observability` extra). Off by default. See `docs/OBSERVABILITY.md`. | `false` |
+| **`RADIUS_OTLP_ENDPOINT`** | OTLP/HTTP traces endpoint; empty records spans without exporting. | `http://jaeger:4318/v1/traces` |
+| **`RADIUS_METRICS_ENABLED`** | Expose Prometheus metrics at `/metrics` (API) and on the worker metrics port. Off by default. | `false` |
+| **`RADIUS_WORKER_METRICS_PORT`** | Worker Prometheus port; `0` disables it. | `9100` |
 | **`DASHBOARD_BASE_URL`** | Canonical public URL of the dashboard used in PR comment links. | `https://radius.yourcompany.com` |
 | **`NEXT_PUBLIC_RADIUS_API_BASE_URL`** | Public URL used by the browser to communicate with the API. | `https://api-radius.yourcompany.com` |
 | **`NEXT_PUBLIC_RADIUS_ORGANIZATION_ID`** | Tenant organization UUID loaded by the dashboard. | `00000000-0000-4000-8000-000000000001` |
