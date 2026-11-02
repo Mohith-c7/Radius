@@ -71,3 +71,23 @@ forbidden_modules =
     psycopg
     radius_intent.application
     radius_intent.interfaces
+
+[importlinter:contract:testability-is-offline]
+name = Deterministic testability rating has no web, database or LLM dependencies
+type = forbidden
+source_modules =
+    radius_intent.infrastructure.testability
+forbidden_modules =
+    radius_intent.application
+    radius_intent.interfaces
+    sqlalchemy
+    fastapi
+    pydantic
+    httpx
+    requests
+    psycopg
+    alembic
+    google
+    anthropic
+    openai
+    yaml
