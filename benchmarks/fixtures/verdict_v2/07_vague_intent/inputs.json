@@ -1,0 +1,661 @@
+{
+  "contracts": "radius_evidence.domain.inputs (StageAInput, StageBInput)",
+  "expected_verdict": "insufficient_evidence",
+  "fixture": "07_vague_intent",
+  "generated_by": "scripts/verdict_v2_make_fixtures.py",
+  "modes": {
+    "auto": {
+      "mode": "auto",
+      "provenance": {
+        "assertions": {
+          "note": "LK-04 (radius_testing.assertions) emits a different record shape (AssertionRecord/TestSummary); this is a hand-built AssertionFeatures per design 3.2/3.6, one per test function at head",
+          "origin": "hand_built",
+          "producer": "scripts/verdict_v2_make_fixtures.py: ast classifier (fixture-ast-v1)"
+        },
+        "changed_test_ids": {
+          "origin": "derived",
+          "producer": "LK-01 symbols that are test functions present at head"
+        },
+        "criteria": {
+          "note": "weight 1.0, lifecycle confirmed",
+          "origin": "derived",
+          "producer": "expected.json criteria[]"
+        },
+        "criterion_symbol": {
+          "note": "combined links, no reranker",
+          "origin": "real",
+          "producer": "radius_linking.infrastructure.pipeline.link_changeset (LK-02)"
+        },
+        "criterion_test": {
+          "note": "VS-04 (test relevance) does not exist yet; VS-02 adds the real snapshot",
+          "origin": "hand_built",
+          "producer": "empty"
+        },
+        "ids": {
+          "note": "uuid5/sha1 of the fixture name; head_sha is a PLACEHOLDER, not a git sha",
+          "origin": "derived",
+          "producer": "scripts/verdict_v2_make_fixtures.py"
+        },
+        "stage_b": {
+          "note": "outcomes copied per scenario",
+          "origin": "hand_built",
+          "producer": "expected.json test_outcomes"
+        },
+        "symbol_test": {
+          "note": "head python sources; no dynamic coverage",
+          "origin": "real",
+          "producer": "radius_testing.linking StaticLinker + NamingLinker + combine_links (LK-03)"
+        },
+        "symbols": {
+          "note": "base/head snapshots + pr.patch",
+          "origin": "real",
+          "producer": "radius_analysis.symbol_changes.extract_symbol_changes (LK-01)"
+        },
+        "tamper": {
+          "note": "offline StaticPackageRegistry lacking pytimeparse-ultra; default (no registry) result in tamper_variants",
+          "origin": "real",
+          "producer": "radius_analysis.tamper.analyze_tampering (EV-02)"
+        }
+      },
+      "stage_a": {
+        "agent_signal": false,
+        "algo_versions": {
+          "assertions": "test-assertions-v1",
+          "assertions_producer": "fixture-ast-v1",
+          "criterion_symbol_links": "criterion-symbol-links-v1",
+          "criterion_test": "pending-vs04",
+          "symbol_changes": "symbol-changes-v1",
+          "symbol_test_links": "link-combine-v1",
+          "tamper": "tamper-rules-v1"
+        },
+        "analysis_id": "9d93895f-a569-5e25-afc9-931401932b5b",
+        "assertions": [
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "compares_computed_value": true,
+                "kind": "value_equality",
+                "line": 6,
+                "note": null,
+                "target_symbol_ids": [
+                  "python:src/report.py::summarize#function@9bd76f92f0b1"
+                ]
+              }
+            ],
+            "called_symbol_refs": [
+              "src/report.py::summarize"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 6,
+            "line_start": 4,
+            "literal_terms": [
+              "2",
+              "1",
+              "3",
+              "5"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "summarize",
+              "group",
+              "and",
+              "sort"
+            ],
+            "path": "tests/test_report.py",
+            "test_id": "tests/test_report.py::test_summarize_groups_and_sorts"
+          },
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "compares_computed_value": true,
+                "kind": "comparison_bound",
+                "line": 11,
+                "note": null,
+                "target_symbol_ids": [
+                  "python:src/report.py::top#function@6f91edeb5f0a"
+                ]
+              }
+            ],
+            "called_symbol_refs": [
+              "src/report.py::top"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 11,
+            "line_start": 9,
+            "literal_terms": [
+              "3",
+              "1",
+              "2",
+              "4"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "top",
+              "is",
+              "bound"
+            ],
+            "path": "tests/test_report.py",
+            "test_id": "tests/test_report.py::test_top_is_bounded"
+          }
+        ],
+        "changed_test_ids": [
+          "tests/test_report.py::test_top_is_bounded"
+        ],
+        "changeset_ref": "symbol-changes-v1:a309b6994dff1231",
+        "criteria": [
+          {
+            "criterion_id": "C1",
+            "hints_paths": [],
+            "hints_tests": [],
+            "lifecycle": "confirmed",
+            "testability": "subjective_or_vague",
+            "text": "report generation is better",
+            "weight": 1.0
+          },
+          {
+            "criterion_id": "C2",
+            "hints_paths": [],
+            "hints_tests": [],
+            "lifecycle": "confirmed",
+            "testability": "non_functional_measurable",
+            "text": "report generation is faster",
+            "weight": 1.0
+          }
+        ],
+        "criterion_symbol": [
+          {
+            "by_linker": {
+              "change_prior": 1.0,
+              "lexical": 0.272727
+            },
+            "criterion_id": "C1",
+            "rank": 1,
+            "reasons": [
+              {
+                "code": "bm25_term",
+                "detail": "lexical: term 'report' bm25=0.182",
+                "ref": null
+              },
+              {
+                "code": "bm25_summary",
+                "detail": "lexical: matched 1/3 query terms in src/report.py::top; coverage=0.33",
+                "ref": null
+              },
+              {
+                "code": "change_kind",
+                "detail": "change_prior: added (behavioural)",
+                "ref": null
+              }
+            ],
+            "score": 0.218182,
+            "symbol_id": "python:src/report.py::top#function@6f91edeb5f0a"
+          },
+          {
+            "by_linker": {
+              "change_prior": 0.95,
+              "lexical": 0.272727
+            },
+            "criterion_id": "C1",
+            "rank": 2,
+            "reasons": [
+              {
+                "code": "bm25_term",
+                "detail": "lexical: term 'report' bm25=0.182",
+                "ref": null
+              },
+              {
+                "code": "bm25_summary",
+                "detail": "lexical: matched 1/3 query terms in src/report.py::summarize; coverage=0.33",
+                "ref": null
+              },
+              {
+                "code": "change_kind",
+                "detail": "change_prior: modified_body (behavioural)",
+                "ref": null
+              }
+            ],
+            "score": 0.212727,
+            "symbol_id": "python:src/report.py::summarize#function@9bd76f92f0b1"
+          },
+          {
+            "by_linker": {
+              "change_prior": 1.0,
+              "lexical": 0.272727
+            },
+            "criterion_id": "C2",
+            "rank": 1,
+            "reasons": [
+              {
+                "code": "bm25_term",
+                "detail": "lexical: term 'report' bm25=0.182",
+                "ref": null
+              },
+              {
+                "code": "bm25_summary",
+                "detail": "lexical: matched 1/3 query terms in src/report.py::top; coverage=0.33",
+                "ref": null
+              },
+              {
+                "code": "change_kind",
+                "detail": "change_prior: added (behavioural)",
+                "ref": null
+              }
+            ],
+            "score": 0.218182,
+            "symbol_id": "python:src/report.py::top#function@6f91edeb5f0a"
+          },
+          {
+            "by_linker": {
+              "change_prior": 0.95,
+              "lexical": 0.272727
+            },
+            "criterion_id": "C2",
+            "rank": 2,
+            "reasons": [
+              {
+                "code": "bm25_term",
+                "detail": "lexical: term 'report' bm25=0.182",
+                "ref": null
+              },
+              {
+                "code": "bm25_summary",
+                "detail": "lexical: matched 1/3 query terms in src/report.py::summarize; coverage=0.33",
+                "ref": null
+              },
+              {
+                "code": "change_kind",
+                "detail": "change_prior: modified_body (behavioural)",
+                "ref": null
+              }
+            ],
+            "score": 0.212727,
+            "symbol_id": "python:src/report.py::summarize#function@9bd76f92f0b1"
+          }
+        ],
+        "criterion_test": [],
+        "degraded": [],
+        "head_sha": "1a5385a9f7d1bfe580b3029c4cf84c0afdbb419c",
+        "repository_id": "324f17ca-a35f-5215-bdd9-ccd27d517cf6",
+        "symbol_test": [
+          {
+            "depth": null,
+            "kind": "direct_call",
+            "score": 0.9,
+            "symbol_id": "python:src/report.py::summarize#function@9bd76f92f0b1",
+            "test_id": "tests/test_report.py::test_summarize_groups_and_sorts"
+          },
+          {
+            "depth": 1,
+            "kind": "indirect_call",
+            "score": 0.75,
+            "symbol_id": "python:src/report.py::summarize#function@9bd76f92f0b1",
+            "test_id": "tests/test_report.py::test_top_is_bounded"
+          },
+          {
+            "depth": null,
+            "kind": "direct_call",
+            "score": 0.9,
+            "symbol_id": "python:src/report.py::top#function@6f91edeb5f0a",
+            "test_id": "tests/test_report.py::test_top_is_bounded"
+          },
+          {
+            "depth": null,
+            "kind": "import_reference",
+            "score": 0.25,
+            "symbol_id": "python:src/report.py::top#function@6f91edeb5f0a",
+            "test_id": "tests/test_report.py::test_summarize_groups_and_sorts"
+          }
+        ],
+        "symbols": [
+          {
+            "change_kind": "modified_body",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": false,
+            "kind": "function",
+            "language": "python",
+            "path": "src/report.py",
+            "qualified_name": "summarize",
+            "symbol_id": "python:src/report.py::summarize#function@9bd76f92f0b1"
+          },
+          {
+            "change_kind": "added",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": false,
+            "kind": "function",
+            "language": "python",
+            "path": "src/report.py",
+            "qualified_name": "top",
+            "symbol_id": "python:src/report.py::top#function@6f91edeb5f0a"
+          },
+          {
+            "change_kind": "added",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": true,
+            "kind": "function",
+            "language": "python",
+            "path": "tests/test_report.py",
+            "qualified_name": "test_top_is_bounded",
+            "symbol_id": "python:tests/test_report.py::test_top_is_bounded#function@f9065fa73897"
+          }
+        ],
+        "tamper": [],
+        "tamper_unanalyzable": [],
+        "tamper_waived": 0
+      },
+      "status": "criterion_test_pending_vs04"
+    },
+    "gold": {
+      "mode": "gold",
+      "provenance": {
+        "assertions": {
+          "note": "LK-04 (radius_testing.assertions) emits a different record shape (AssertionRecord/TestSummary); this is a hand-built AssertionFeatures per design 3.2/3.6, one per test function at head",
+          "origin": "hand_built",
+          "producer": "scripts/verdict_v2_make_fixtures.py: ast classifier (fixture-ast-v1)"
+        },
+        "changed_test_ids": {
+          "origin": "derived",
+          "producer": "LK-01 symbols that are test functions present at head"
+        },
+        "criteria": {
+          "note": "weight 1.0, lifecycle confirmed",
+          "origin": "derived",
+          "producer": "expected.json criteria[]"
+        },
+        "criterion_symbol": {
+          "note": "score 1.0, rank 1",
+          "origin": "hand_built",
+          "producer": "expected.json links[]"
+        },
+        "criterion_test": {
+          "note": "ADDRESSED_BY weight 1.0, method gold_expected_json",
+          "origin": "hand_built",
+          "producer": "expected.json links[].tests"
+        },
+        "ids": {
+          "note": "uuid5/sha1 of the fixture name; head_sha is a PLACEHOLDER, not a git sha",
+          "origin": "derived",
+          "producer": "scripts/verdict_v2_make_fixtures.py"
+        },
+        "stage_b": {
+          "note": "outcomes copied per scenario",
+          "origin": "hand_built",
+          "producer": "expected.json test_outcomes"
+        },
+        "symbol_test": {
+          "note": "ADDRESSED tests as EXERCISED_BY edges, score 0.9 (l_st), kind gold",
+          "origin": "hand_built",
+          "producer": "expected.json links[].tests"
+        },
+        "symbols": {
+          "note": "base/head snapshots + pr.patch",
+          "origin": "real",
+          "producer": "radius_analysis.symbol_changes.extract_symbol_changes (LK-01)"
+        },
+        "tamper": {
+          "note": "offline StaticPackageRegistry lacking pytimeparse-ultra; default (no registry) result in tamper_variants",
+          "origin": "real",
+          "producer": "radius_analysis.tamper.analyze_tampering (EV-02)"
+        }
+      },
+      "stage_a": {
+        "agent_signal": false,
+        "algo_versions": {
+          "assertions": "test-assertions-v1",
+          "assertions_producer": "fixture-ast-v1",
+          "links": "verdict-v2-fixture-gold-1",
+          "symbol_changes": "symbol-changes-v1",
+          "tamper": "tamper-rules-v1"
+        },
+        "analysis_id": "9d93895f-a569-5e25-afc9-931401932b5b",
+        "assertions": [
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "compares_computed_value": true,
+                "kind": "value_equality",
+                "line": 6,
+                "note": null,
+                "target_symbol_ids": [
+                  "python:src/report.py::summarize#function@9bd76f92f0b1"
+                ]
+              }
+            ],
+            "called_symbol_refs": [
+              "src/report.py::summarize"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 6,
+            "line_start": 4,
+            "literal_terms": [
+              "2",
+              "1",
+              "3",
+              "5"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "summarize",
+              "group",
+              "and",
+              "sort"
+            ],
+            "path": "tests/test_report.py",
+            "test_id": "tests/test_report.py::test_summarize_groups_and_sorts"
+          },
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "compares_computed_value": true,
+                "kind": "comparison_bound",
+                "line": 11,
+                "note": null,
+                "target_symbol_ids": [
+                  "python:src/report.py::top#function@6f91edeb5f0a"
+                ]
+              }
+            ],
+            "called_symbol_refs": [
+              "src/report.py::top"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 11,
+            "line_start": 9,
+            "literal_terms": [
+              "3",
+              "1",
+              "2",
+              "4"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "top",
+              "is",
+              "bound"
+            ],
+            "path": "tests/test_report.py",
+            "test_id": "tests/test_report.py::test_top_is_bounded"
+          }
+        ],
+        "changed_test_ids": [
+          "tests/test_report.py::test_top_is_bounded"
+        ],
+        "changeset_ref": "symbol-changes-v1:a309b6994dff1231",
+        "criteria": [
+          {
+            "criterion_id": "C1",
+            "hints_paths": [],
+            "hints_tests": [],
+            "lifecycle": "confirmed",
+            "testability": "subjective_or_vague",
+            "text": "report generation is better",
+            "weight": 1.0
+          },
+          {
+            "criterion_id": "C2",
+            "hints_paths": [],
+            "hints_tests": [],
+            "lifecycle": "confirmed",
+            "testability": "non_functional_measurable",
+            "text": "report generation is faster",
+            "weight": 1.0
+          }
+        ],
+        "criterion_symbol": [
+          {
+            "by_linker": {
+              "gold": 1.0
+            },
+            "criterion_id": "C1",
+            "rank": 1,
+            "reasons": [
+              {
+                "code": "gold_label",
+                "detail": "expected.json links[]",
+                "ref": "src/report.py::summarize"
+              }
+            ],
+            "score": 1.0,
+            "symbol_id": "python:src/report.py::summarize#function@9bd76f92f0b1"
+          },
+          {
+            "by_linker": {
+              "gold": 1.0
+            },
+            "criterion_id": "C2",
+            "rank": 1,
+            "reasons": [
+              {
+                "code": "gold_label",
+                "detail": "expected.json links[]",
+                "ref": "src/report.py::summarize"
+              }
+            ],
+            "score": 1.0,
+            "symbol_id": "python:src/report.py::summarize#function@9bd76f92f0b1"
+          }
+        ],
+        "criterion_test": [],
+        "degraded": [],
+        "head_sha": "1a5385a9f7d1bfe580b3029c4cf84c0afdbb419c",
+        "repository_id": "324f17ca-a35f-5215-bdd9-ccd27d517cf6",
+        "symbol_test": [],
+        "symbols": [
+          {
+            "change_kind": "modified_body",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": false,
+            "kind": "function",
+            "language": "python",
+            "path": "src/report.py",
+            "qualified_name": "summarize",
+            "symbol_id": "python:src/report.py::summarize#function@9bd76f92f0b1"
+          },
+          {
+            "change_kind": "added",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": false,
+            "kind": "function",
+            "language": "python",
+            "path": "src/report.py",
+            "qualified_name": "top",
+            "symbol_id": "python:src/report.py::top#function@6f91edeb5f0a"
+          },
+          {
+            "change_kind": "added",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": true,
+            "kind": "function",
+            "language": "python",
+            "path": "tests/test_report.py",
+            "qualified_name": "test_top_is_bounded",
+            "symbol_id": "python:tests/test_report.py::test_top_is_bounded#function@f9065fa73897"
+          }
+        ],
+        "tamper": [],
+        "tamper_unanalyzable": [],
+        "tamper_waived": 0
+      },
+      "status": "complete"
+    }
+  },
+  "schema": "verdict-v2-fixture-inputs-1",
+  "stage_b": {
+    "base": {
+      "cases": [
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_report",
+          "raw_file": "tests/test_report.py",
+          "raw_name": "test_summarize_groups_and_sorts",
+          "test_id": "tests/test_report.py::test_summarize_groups_and_sorts"
+        }
+      ],
+      "ci_failed_cases": 0,
+      "flaky_scores": {},
+      "flaky_test_ids": [],
+      "results_received": true,
+      "uploads": 1
+    },
+    "head": {
+      "cases": [
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_report",
+          "raw_file": "tests/test_report.py",
+          "raw_name": "test_summarize_groups_and_sorts",
+          "test_id": "tests/test_report.py::test_summarize_groups_and_sorts"
+        },
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_report",
+          "raw_file": "tests/test_report.py",
+          "raw_name": "test_top_is_bounded",
+          "test_id": "tests/test_report.py::test_top_is_bounded"
+        }
+      ],
+      "ci_failed_cases": 0,
+      "flaky_scores": {},
+      "flaky_test_ids": [],
+      "results_received": true,
+      "uploads": 1
+    }
+  },
+  "tamper": {
+    "catalog_version": "tamper-rules-v1",
+    "findings": [],
+    "rule_errors": [],
+    "unanalyzable": [],
+    "waived": 0
+  },
+  "tamper_variants": {
+    "no_registry": {
+      "catalog_version": "tamper-rules-v1",
+      "findings": [],
+      "rule_errors": [],
+      "unanalyzable": [],
+      "waived": 0
+    }
+  }
+}
