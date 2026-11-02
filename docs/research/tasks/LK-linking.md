@@ -4,15 +4,16 @@ Goal: connect criteria to the code that implements them, and code to the tests/e
 
 ---
 
-### LK-01 Symbol-level change extraction   [ ]
+### LK-01 Symbol-level change extraction   [x]
 - Owner type: agent-ok
 - Depends on: F-08
-- Branch: `feature/analysis-changed-symbols`
+- Branch: `feature/analysis-changed-symbols` (implemented on `feature/linking-symbol-changes`)
 - Size: M
 - Goal: for each diff hunk, list changed symbols (function/method/class) with before/after signatures and a change kind (added/removed/modified/signature/behavior/comment-only/rename).
 - Steps: extend `packages/analysis` hunk -> symbol mapping; detect pure renames and formatting-only changes; mark generated files; handle moved code.
 - Acceptance: on fixtures, changed-symbol sets match expected; comment-only and whitespace-only changes are flagged non-behavioral.
 - Tests: table-driven on fixtures; mutation of formatting must not change the symbol set.
+- Done: `radius_analysis.symbol_changes` in `packages/analysis`; contract and change-kind semantics in `packages/analysis/README.md`. Consumers: EV-02 reads `change_kind`, `is_behavioral`, `old_range`, `hunks`, `notes`; LK-02/LK-03 read `symbol_id`, `key`, `new_range`, `old_symbol_id`, `new_body_hash`.
 
 ### LK-02 Criterion-to-symbol linkers   [ ]
 - Owner type: pair
