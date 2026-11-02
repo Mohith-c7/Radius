@@ -124,6 +124,31 @@ AI-generated or AI-assisted pull requests are welcome under the same rules as an
 
 ## Licensing and sign-off
 
-> This section is intentionally short and easy to replace.
+### License of contributions (inbound = outbound)
 
-The project license and contribution terms are decided in `docs/decisions.md`: DEC-018 (license) and DEC-022 (contributions use the Developer Certificate of Origin, no CLA). **The `LICENSE` file is pending owner confirmation and is not in the repository yet**, so until it lands the repository is all rights reserved even though it is publicly visible. Please wait for confirmation before sending substantial outside contributions, and read DEC-018 and DEC-022 for the intended terms. The DCO sign-off instructions (`git commit -s`) will be added here when the license lands.
+Radius is licensed under the Apache License 2.0 (`LICENSE`, `NOTICE`; decision DEC-018 in `docs/decisions.md`). By submitting a contribution you agree that it is licensed to the project and to everyone who receives the project under the same Apache License 2.0 ("inbound = outbound"), as set out in section 5 of that license. You keep your copyright. You also confirm you have the right to submit the work: it is your own, or you have your employer's or institution's permission, or it comes from a source whose license allows inclusion under Apache-2.0.
+
+Practical rules:
+
+- Do not copy code, rules, prompts or data from other projects unless the license is compatible with Apache-2.0 and the source and license are recorded in `NOTICE` or `THIRD_PARTY_NOTICES.md`. In particular, do not copy or vendor code that is AGPL/GPL/SSPL, source-available (for example BSL/FSL), or has no license (no license means all rights reserved). See `docs/research/literature/related-work.md` for the licenses of related tools.
+- Do not commit third-party datasets or their rows. Only manifests, hashes and fetch scripts belong in the repo (`docs/research/datasets/DATA_HYGIENE.md`).
+- New dependencies must pass the license gate (`scripts/ci/license_check.py`, run by the `sbom-licenses` job in `.github/workflows/security.yml`): strong copyleft (AGPL, SSPL, GPL) is blocked, weak copyleft (LGPL, MPL) is reported and allowed when used as an unmodified library.
+
+### Sign your commits (DCO)
+
+We use the Developer Certificate of Origin (https://developercertificate.org/), not a Contributor License Agreement (CLA). Add a sign-off line to every commit:
+
+```
+git commit -s -m "feat(intent): describe the change"
+# adds: Signed-off-by: Your Name <you@example.com>
+```
+
+The sign-off states that you wrote the change or have the right to submit it under the project license. Why DCO and not a CLA:
+
+- A DCO is lightweight: no legal document to sign, no tooling or account, and it does not transfer or broaden any rights. Contributors keep their copyright and the license grant comes from Apache-2.0 section 5 itself.
+- A CLA that assigns or broadly relicenses rights discourages contributors and enterprise employees, and a CLA signing flow is operational overhead we do not need now.
+- Trade-off: with a DCO and contributors who keep their copyright, the project cannot later relicense contributed code without asking each contributor. That is accepted on purpose (it is also a trust signal: the open core stays open). Proprietary enterprise features are written as separate modules, not by relicensing contributed code (DEC-018).
+
+Status: the DCO is recommended now and will be enforced by a CI check (for example the DCO GitHub App) once there are external contributors. Until then, a missing sign-off is not a reason to reject a change from the maintainers.
+
+Security reports go through `SECURITY.md`, never a public issue.

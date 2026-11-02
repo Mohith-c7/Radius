@@ -100,11 +100,11 @@ Repository layout: `apps/` (api, worker, dashboard), `packages/` (analysis, conf
 
 ## Contributing and security
 
-Contribution and security-reporting files are being added (tracked as PRD-03 in the [backlog](docs/production-readiness/BACKLOG.md)). Until they land, use the [development guide](docs/DEVELOPMENT_GUIDE.md) for the workflow: branch from `develop`, conventional commit messages (see [docs/RELEASING.md](docs/RELEASING.md)), and open a pull request against `develop`. Do not report vulnerabilities in public issues; contact the maintainer privately through the GitHub profile of the repository owner.
+See [CONTRIBUTING.md](CONTRIBUTING.md) (workflow, tests, DCO sign-off), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) and [SECURITY.md](SECURITY.md) for private vulnerability reporting.
 
-## Licence
+## License
 
-**Licence pending.** DEC-018 decides on Apache-2.0, but the `LICENSE` file is deliberately not in the repository yet; until it is, the code is all rights reserved even though the repository is visible. See [decisions](docs/decisions.md) (DEC-018).
+Radius is licensed under the Apache License 2.0 (`LICENSE`, `NOTICE`; decision DEC-018 in [docs/decisions.md](docs/decisions.md)). Contributions use a DCO sign-off, not a CLA. Third-party notices: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Citation
 

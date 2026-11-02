@@ -1,6 +1,7 @@
 {
   "name": "radius",
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "private": true,
   "description": "AI-native software verification platform.",
   "packageManager": "pnpm@9.15.0",
