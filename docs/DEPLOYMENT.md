@@ -103,6 +103,14 @@ Check them with `docker compose ps` (the STATUS column shows `healthy`) or
 | **`RADIUS_OTLP_ENDPOINT`** | OTLP/HTTP traces endpoint; empty records spans without exporting. | `http://jaeger:4318/v1/traces` |
 | **`RADIUS_METRICS_ENABLED`** | Expose Prometheus metrics at `/metrics` (API) and on the worker metrics port. Off by default. | `false` |
 | **`RADIUS_WORKER_METRICS_PORT`** | Worker Prometheus port; `0` disables it. | `9100` |
+| **`CORS_ORIGINS`** | API: comma separated browser origins allowed by CORS. In production every entry must be `https://host[:port]`; `*` is rejected at startup. Localhost dashboards are added automatically outside production. | `https://radius.yourcompany.com` |
+| **`RADIUS_CORS_ALLOW_CREDENTIALS`** | API: send `Access-Control-Allow-Credentials` (session cookies). Never combined with `*`. | `true` |
+| **`RADIUS_HSTS_ENABLED`** | API and dashboard: send `Strict-Transport-Security` (and CSP `upgrade-insecure-requests` on the dashboard). Enable only behind TLS. | `false` |
+| **`RADIUS_MAX_BODY_BYTES`** / **`RADIUS_WEBHOOK_MAX_BODY_BYTES`** / **`RADIUS_UPLOAD_MAX_BODY_BYTES`** | API request body caps: default, GitHub webhook, CI test-report upload. Over the cap: `413 PAYLOAD_TOO_LARGE`. | `1048576` / `26214400` / `20971520` |
+| **`RADIUS_TRUSTED_PROXIES`** | API: IPs/CIDRs of reverse proxies whose `X-Forwarded-For` is trusted for client-IP rate limiting. Empty trusts none (every client appears as the proxy). | `10.0.0.0/8` |
+| **`RADIUS_RATE_LIMIT_ENABLED`** | API: master switch for the token-bucket limiter. | `true` |
+| **`RADIUS_RATE_LIMIT_AUTH`** / **`_WEBHOOK`** / **`_GENERAL`** / **`_EXPENSIVE`** | API: `<requests>/<window seconds>` per bucket. In-memory, per replica. | `10/60`, `600/60`, `600/60`, `20/60` |
+| **`RADIUS_RATE_LIMIT_IP_MULTIPLIER`** | API: per-IP limit as a multiple of the per-key limit for general/expensive buckets. | `2` |
 | **`DASHBOARD_BASE_URL`** | Canonical public URL of the dashboard used in PR comment links. | `https://radius.yourcompany.com` |
 | **`NEXT_PUBLIC_RADIUS_API_BASE_URL`** | Public URL used by the browser to communicate with the API. | `https://api-radius.yourcompany.com` |
 | **`NEXT_PUBLIC_RADIUS_ORGANIZATION_ID`** | Tenant organization UUID loaded by the dashboard. | `00000000-0000-4000-8000-000000000001` |
