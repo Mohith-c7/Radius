@@ -86,6 +86,15 @@ class WorkerSettings(DatabaseSettings):
             "analysis."
         ),
     )
+    assertion_extraction_enabled: bool = Field(
+        default=False,
+        alias="RADIUS_FEATURE_ASSERTION_EXTRACTION",
+        description=(
+            "LK-04: statically extract the assertions of the repository's test files "
+            "(AST only, nothing is executed) and log their counts. Nothing is "
+            "persisted yet (LK-05); failures never affect the analysis."
+        ),
+    )
     test_timeout_seconds: int = Field(default=600, alias="WORKER_TEST_TIMEOUT_SECONDS")
     dashboard_base_url: str = Field(default="", alias="DASHBOARD_BASE_URL")
     github_publish_results: bool = Field(

@@ -560,6 +560,7 @@ def _create_sql_orchestrator(
         symbol_impact_enabled=bool(settings and settings.symbol_impact_enabled),
         symbol_changes_enabled=bool(settings and settings.symbol_changes_enabled),
         tamper_rules_enabled=bool(settings and settings.tamper_rules_enabled),
+        assertion_extraction_enabled=bool(settings and settings.assertion_extraction_enabled),
         flaky_policy=(settings.flaky_policy if settings else "exclude"),
     )
 
