@@ -35,6 +35,8 @@ class SelectTestsCommand:
     semantic_evidence: dict[str, tuple[str, ...]] | None = None
     coverage_evidence: dict[str, tuple[str, ...]] | None = None
     history_evidence: dict[str, tuple[str, ...]] | None = None
+    # F-08: test path -> reason tags (symbol path or file-level fallback cause).
+    symbol_evidence: dict[str, tuple[str, ...]] | None = None
 
 
 @dataclass(frozen=True, slots=True)

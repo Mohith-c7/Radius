@@ -47,6 +47,15 @@ class WorkerSettings(DatabaseSettings):
             "selected tests in CI and upload JUnit results."
         ),
     )
+    symbol_impact_enabled: bool = Field(
+        default=False,
+        alias="RADIUS_FEATURE_SYMBOL_IMPACT",
+        description=(
+            "F-08: narrow test selection and blast radius to tests that can reach "
+            "the changed Python symbols. Falls back to file-level impact whenever "
+            "symbol information is missing or low-confidence."
+        ),
+    )
     test_timeout_seconds: int = Field(default=600, alias="WORKER_TEST_TIMEOUT_SECONDS")
     dashboard_base_url: str = Field(default="", alias="DASHBOARD_BASE_URL")
     github_publish_results: bool = Field(

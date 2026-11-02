@@ -19,5 +19,6 @@ class TestSelector(Protocol):
         coverage_evidence: dict[str, tuple[str, ...]] | None = None,
         history_evidence: dict[str, tuple[str, ...]] | None = None,
         full_suite_reasons: tuple[str, ...] = (),
+        symbol_evidence: dict[str, tuple[str, ...]] | None = None,
     ) -> TestSelection:
         """Return selected tests."""

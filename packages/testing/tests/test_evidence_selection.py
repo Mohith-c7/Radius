@@ -58,3 +58,20 @@ def test_missing_optional_evidence_does_not_break_existing_selection() -> None:
     selection = PathBasedTestSelector().select(uuid4(), (_test("tests/test_profile.py"),), ("src/other.py",))
     assert selection.selected_tests == ()
     assert selection.decisions[0].decision.value == "skipped"
+
+
+def test_symbol_evidence_is_recorded_as_reason_tags_for_selected_tests_only() -> None:
+    tests = (_test("tests/test_a.py"), _test("tests/test_b.py"))
+    selection = PathBasedTestSelector().select(
+        uuid4(), tests, ("src/a.py",), affected_file_paths=("tests/test_a.py",),
+        symbol_evidence={
+            "tests/test_a.py": ("symbol impact: tests/test_a.py::test_x -> src/a.py::f (changed)",),
+            "tests/test_b.py": ("must not appear: test was not selected",),
+        },
+    )
+    a, b = selection.decisions
+    assert a.decision.value == "selected"
+    assert a.evidence_sources == ("AST_CPG", "SYMBOL_IMPACT")
+    assert "src/a.py::f" in a.reason
+    assert b.decision.value == "skipped"
+    assert "must not appear" not in b.reason

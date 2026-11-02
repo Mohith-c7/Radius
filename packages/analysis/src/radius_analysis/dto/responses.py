@@ -38,6 +38,7 @@ class ChangeAnalysisResponse:
 
     analysis_id: UUID
     changed_files: tuple[ChangedFileResponse, ...]
+    diff_text: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

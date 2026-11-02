@@ -111,6 +111,7 @@ class TestingApplicationService:
             command.coverage_evidence,
             command.history_evidence,
             full_suite_reasons=command.full_suite_reasons,
+            symbol_evidence=command.symbol_evidence,
         )
         return TestSelectionResponse.from_entity(
             self._store.save_selection(selection)
