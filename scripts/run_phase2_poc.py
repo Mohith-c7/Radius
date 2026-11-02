@@ -23,7 +23,7 @@ def main():
     
     # Parse our mock files
     for filename in ["db.py", "api.py"]:
-        filepath = os.path.join("tmp/poc_repo", filename)
+        filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "poc_repo", filename)
         with open(filepath, "r") as f:
             code = f.read()
             

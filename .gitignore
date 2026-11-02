@@ -48,3 +48,8 @@ bandit_report.json
 test_e2e.py
 ui-audit.md
 tmp/
+
+# Generated artifacts and local smoke-test scratch
+output/
+.docker-smoke/
+.docker-pip-smoke/

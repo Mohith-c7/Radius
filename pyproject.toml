@@ -52,7 +52,6 @@ exclude = [
   "tmp",
   ".docker-smoke",
   ".docker-pip-smoke",
-  "audit_script.py",
   "scripts",
 ]
 
