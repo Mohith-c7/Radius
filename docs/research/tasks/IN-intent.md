@@ -113,7 +113,7 @@ Goal: capture what a change is *supposed* to do as a set of confirmable, testabl
 - Acceptance: contract tests; unauthorized and cross-tenant access return 404/403 as per existing conventions.
 - Delivered: see `docs/API_CONTRACTS.md` (Intent APIs). Paths differ from the sketch above (`GET /analyses/{id}/intent`, `POST .../intent/sources`, `PATCH .../intent/criteria/{id}` with `action`, `POST .../intent/criteria`). Cross-tenant access returns 404. Rate limiting and weight edits are follow-ups.
 
-### IN-09 Gold annotation set for RQ1   [ ]
+### IN-09 Gold annotation set for RQ1   [~] tooling ready; annotation pending
 - Owner type: human-required
 - Depends on: F-14, EP-03
 - Branch: `feature/bench-intent-gold`
@@ -122,6 +122,7 @@ Goal: capture what a change is *supposed* to do as a set of confirmable, testabl
 - Steps: pick >= 150 PRs (mix of human and agent PRs, several languages/projects, varying description quality); define the annotation guideline (what counts as an atomic criterion; vague vs testable); two annotators per PR; measure inter-annotator agreement (Cohen's kappa); adjudicate disagreements; store as JSON under `benchmarks/intent_gold/` with source snapshots (respect licensing; store references + hashes where text cannot be redistributed).
 - Acceptance: guideline doc, kappa >= 0.6 (or documented reasons), adjudicated set committed or reproducibly downloadable.
 - Research hook: this is a paper dataset; plan its release.
+- Status (2026-11-02): **tooling ready; annotation pending (needs two human annotators plus an adjudicator).** Delivered: guidelines `../annotation/GUIDELINES.md` (gl-0.1, to be revised after the 10-PR calibration), runbook `../annotation/RUNBOOK.md`, schema and layout `benchmarks/gold/intent/` (`<pr-id>/{sources,annotator-<id>,adjudicated}.json`; the directory is `benchmarks/gold/intent/`, not the `benchmarks/intent_gold/` named in the steps above), stratified sampler and source fetcher `scripts/gold_sample.py`, annotation UI `scripts/gold_annotate.py`, agreement and adjudication `scripts/gold_agreement.py`, validator and public export `scripts/gold_validate.py`, synthetic end-to-end tests `tests/test_gold_*.py`. No real annotations exist. Remaining human steps: `benchmarks/gold/README.md`. The acceptance criteria (guideline doc: draft done; kappa >= 0.6; adjudicated set) are **not** met until the human run finishes.
 
 ### IN-10 Extraction metrics harness   [ ]
 - Owner type: agent-ok
