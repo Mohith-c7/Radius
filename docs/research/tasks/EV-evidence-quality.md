@@ -16,7 +16,7 @@ M2 = cheap signals (EV-01 to EV-03, EV-06 to EV-08). M4 = mutation-based signals
 - Acceptance: each normalizer has fixtures incl. malformed/oversized input rejected safely; items always bound to repo + head SHA; unbound items rejected (keeps existing SHA-binding guarantee).
 - Tests: parser fuzzing; tenant isolation.
 
-### EV-02 Tamper rule engine and catalog (Python first)   [ ]
+### EV-02 Tamper rule engine and catalog (Python first)   [x]
 - Owner type: agent-ok
 - Depends on: LK-01
 - Branch: `feature/tamper-rules`
