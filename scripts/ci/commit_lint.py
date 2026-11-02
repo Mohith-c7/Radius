@@ -42,7 +42,7 @@ PROMOTION_BASES = frozenset({"dev", "main"})
 
 _HEADER = re.compile(
     r"^(?P<type>[a-z]+)"
-    r"(?:\((?P<scope>[A-Za-z0-9._/-]+)\))?"
+    r"(?:\((?P<scope>[A-Za-z0-9._/-]+(?:, ?[A-Za-z0-9._/-]+)*)\))?"
     r"(?P<breaking>!)?"
     r": (?P<description>\S.*)$"
 )
