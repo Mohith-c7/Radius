@@ -1,8 +1,8 @@
 # Radius Intent Package
 
-Owns the intent layer: what a change is supposed to do, as confirmable, testable criteria with provenance (`docs/research/DESIGN.md` 6.1, RQ1). IN-01 delivered the pure domain model and ports; IN-07 adds persistence. No HTTP or LLM calls yet.
+Owns the intent layer: what a change is supposed to do, as confirmable, testable criteria with provenance (`docs/research/DESIGN.md` 6.1, RQ1). IN-01 delivered the pure domain model and ports; IN-07 added persistence; IN-03 adds deterministic (LLM-free) criterion extraction. No HTTP or LLM calls yet.
 
-Layout follows DEC-003/DEC-007: `domain/` (pure), `interfaces/` (ports), `application/` (empty until IN-02+) and `infrastructure/` (repositories).
+Layout follows DEC-003/DEC-007: `domain/` (pure), `interfaces/` (ports), `application/` (empty until IN-02+) and `infrastructure/` (repositories in IN-07, `extraction/` in IN-03).
 
 ## Formal model
 
@@ -12,7 +12,7 @@ A *span* is `(s.id, a, b)` with `0 <= a < b <= len(s.text)`; the half-open range
 
 *Provenance* is `(ref(s), retrieved_at, method, extractor_version)` with `method` in {deterministic, llm, human}. All times are caller-supplied and timezone-aware; the domain never reads a clock.
 
-A *criterion* is `c = (id, text, norm, origin, span, w, t, r, st)`:
+A *criterion* is `c = (id, text, norm, origin, span, w, t, r, st, h)` where `h = (paths, tests, label)` are optional author hints (`CriterionHints`, IN-03) that never affect the id:
 
 - `norm = normalize(text)`: Unicode NFKC, drop format characters (category Cf, e.g. zero-width and bidi controls), casefold, collapse whitespace; non-empty and idempotent.
 - `id = "crit_" + sha256("crit-id-v1" NUL "<kind>:<source id>" NUL norm)[:32]`. Fixed at creation, stable under edits, re-weighting, rating and state changes; independent of the source hash, so unrelated edits to a source keep ids. Changing the derivation requires bumping `CRITERION_ID_ALGO` (plan 1.6).
@@ -47,4 +47,67 @@ Port: `radius_intent.interfaces.IntentRepository` (plus `CriterionStateChange` a
 
 ## Tests
 
-`python -m pytest packages/intent/tests --cov=radius_intent.domain --cov-branch`
+`python -m pytest packages/intent/tests --cov=radius_intent --cov-branch`
+
+## Deterministic extraction (IN-03)
+
+`radius_intent.infrastructure.extraction.DeterministicCriterionExtractor` implements the `CriterionExtractor` port with fixed rules: no LLM, network, clock or randomness. The output is a pure function of `(source, ExtractionConfig)`; the same input gives byte-identical criteria, ids and diagnostics. Rule set version: `DETERMINISTIC_EXTRACTOR_VERSION = "det-extract-v1"` (bump on any rule, default or tie-break change).
+
+```python
+extractor = DeterministicCriterionExtractor()  # or (ExtractionConfig(...))
+criteria = extractor.extract(source)  # port method
+report = extractor.extract_report(source)  # + traces, diagnostics, merges
+report = extractor.extract_sources(
+    [body, issue, spec]
+)  # cross-source dedupe, order independent
+```
+
+An `ExtractionReport` holds `criteria`, one `CriterionTrace` per criterion (rule name, section, checkbox state, nesting depth), `diagnostics` (skipped regions with a reason code, parse errors with line numbers, suspicious-content flags, limits) and `duplicates` (the kept criterion and every merged origin with source, span and similarity). It contains no timestamps; provenance times come from `source.fetched_at`.
+
+### Rules (markdown sources)
+
+Everything is one linear pass over lines. HTML comments are blanked (same length) before parsing so spans stay valid in the original text. Content under a code fence is never extracted unless the fence is Gherkin.
+
+| Rule | Fires on | Notes |
+|---|---|---|
+| `task_item` | `- [ ]` / `- [x]` items anywhere | Outside criteria sections, PR-template boilerplate is skipped (`I have ...`, `Tests added`, `Docs updated`, `Follows ... CONTRIBUTING`, ...). State goes in the trace, not the criterion. |
+| `section_item` | any bullet (`- * +`) or numbered (`1.` `1)`) item under a criteria heading | Default headings (full match on the cleaned, lowercased title): Acceptance Criteria, Acceptance, Success Criteria, Requirement(s), Expected (Behavior/Behaviour/Result(s)/Outcome(s)), Definition of Done, DoD, Done When, Scope, Steps to Verify/Test. Setext headings, `**Bold**` lines and `Title:` lines count as headings; sub-headings inherit the section; it ends at the next heading of the same or higher level. Configurable via `ExtractionConfig.section_pattern`. |
+| `table_row` | rows of a table whose header has a criteria column (Criterion/Criteria, Acceptance (Criteria), Requirement(s), Expected ...) | One criterion per matching cell; `<br>` becomes a space. Tables without such a column are skipped (`table_no_criteria_column`). |
+| `gherkin` | `Scenario:` / `Scenario Outline:` blocks in `gherkin`/`feature`/`cucumber` fences, in unlabeled fences that start with Gherkin, or in plain text; also an unlabeled run of `Given/When/Then` lines | One criterion per scenario: `Scenario: <title>: <step>; <step>`. Needs two steps or a `Then`. `Background:` steps and `Examples:` rows are not part of the text. |
+| `modal` / `when_then` / `so_that` / `user_story` | single sentences in prose paragraphs, and in list items outside criteria sections | Precision first, English only. `must`, `shall`, `needs/has/have to`, `required to` always count; `should` counts unless the subject is `we/you/I`; `When/If ... then ...`; `As a ..., I want ...`; `... so that ...` only with a capability verb (`can`, `will`, `ensure`, ...). Rejected: questions, hedges (`maybe`, `probably`, `could`, `ideally`, `I think`), first-person narration, reader directives (`you must`, `please`), sentences over 400 characters. |
+
+**Nesting.** A child bullet is a separate criterion with its own span. A parent that ends with `:` and has children is a lead-in: it is not emitted and each child becomes `"<lead-in>: <child>"`. Any other parent is emitted as its own criterion (its own lines only) next to its children. Continuation lines (indented or lazy) join the item. Items nest when indented deeper than their parent's marker (a tab counts as 4 columns). Depth is capped (`max_list_depth`, 64).
+
+**Never extracted.** Content of non-Gherkin code fences (also unterminated ones), block quotes, HTML comments and standalone block-level HTML tag lines, links or images only, placeholders (`N/A`, `TBD`, `_No response_`), empty checkboxes, and everything under excluded headings (Checklist, Type of change, Screenshots, Notes, Testing/Test plan, Related issues, Changelog, ...; `ExtractionConfig.excluded_pattern`). Plain bullets in neutral sections such as "Changes" are not criteria unless they carry a modal.
+
+**Suspicious content.** A comment is flagged (`hidden_comment_content`, warning) only when its text looks like criteria or instructions (`- [ ]`, `must`, `ignore previous instructions`, ...); ordinary template hints are an info-level `html_comment`. Also flagged: unterminated comments, zero-width and bidi characters (`invisible_characters`), and sources that ingestion marked `suspicious_content_removed` or `truncated`. Hidden text is never turned into a criterion.
+
+**Limits.** 500 criteria per source, 1000 diagnostics per source (then a `diagnostics_truncated` note), 2000 characters per item. Regexes are single-pass and non-nested (a test guards this); a 1 MB body takes about a second.
+
+### Near-duplicate merging
+
+Criteria are merged within a source and across sources. Two criteria merge when their normalized text is equal as a word sequence ignoring punctuation, or when the token-set Jaccard `|A and B| / |A or B|` over content words (stopwords and modal verbs removed) is at least `similarity_threshold` (default 0.8; statements with fewer than 3 content words merge only when exact). Entries are processed by `(source priority desc, source key, span, id)` and each joins the most similar earlier group (ties: the earliest), so the result does not depend on input order. Priority: spec_file 100, agent_prompt 90, issue 70, pr_body 60, pr_title 40, commit_message 30, comment 20. The kept criterion is the highest-priority one; merged origins are listed in `report.duplicates`. Ids are the domain's `criterion_id(normalized_text, source.ref.key)`, so they survive edits to unrelated text.
+
+### `.radius/intent.yml` (source kind `spec_file`)
+
+```yaml
+version: 1                      # required, must be 1
+criteria:                       # required list
+  - id: C1                      # optional label [A-Za-z0-9_.-]{1,64}, unique; kept in hints.label
+    text: "Users can reset their password via email link"   # required, <= 2000 chars
+    weight: 1.0                 # optional, number in (0, 1], default 1.0
+    paths: ["src/auth/**"]      # optional hints (relative globs), at most 50
+    tests: ["tests/auth/test_reset.py::test_reset_flow"]    # optional explicit evidence, at most 50
+```
+
+Explicit criteria become `Criterion` objects with origin `spec_file` and `hints = CriterionHints(paths, tests, label)` (the only domain addition in IN-03; hints never change the id). The span is the `text` value (inside the quotes). A sample is in `docs/intent/intent.example.yml`.
+
+PyYAML is only a transitive dependency of Radius (not declared), so the spec is read by a small strict parser (`spec_file.py`) instead of `yaml.safe_load`; no new dependency was added. Supported: mappings, `- ` sequences, plain, single and double-quoted scalars, single-line `[a, b]` lists, `|` and `>` block scalars, `#` comments, an optional leading `---` and trailing `...`. Rejected with an error: tabs, anchors, aliases, tags, flow mappings, multi-line flow scalars, a second document, an unquoted `: ` inside a value, bad escapes, absolute or `..` paths. Errors are diagnostics with a `code` and 1-based `line` (`spec_syntax`, `spec_unsupported_version`, `spec_missing_text`, `spec_invalid_weight`, `spec_duplicate_id`, ...). A bad criterion is skipped and the others are still read; a bad spec never stops other sources. Unknown keys are warnings (`spec_unknown_key`). A structural syntax error stops reading that file.
+
+### Metrics hook for IN-10
+
+IN-09's gold set does not exist yet. `score_extraction(predicted_texts, gold_texts, fuzzy_threshold=None)` returns `PrecisionRecall` (one-to-one greedy matching on normalized text, optionally fuzzy by content-token Jaccard) and `score_by_source_kind(cases)` micro-averages over `GoldCase(kind, predicted, gold)` per source kind. No CLI, no I/O.
+
+### Limitations
+
+English-only modal rules (other languages extract only via lists, tables, Gherkin and spec files). One criterion per list item or sentence: compound statements are not split (IN-04). Markdown handling follows GitHub loosely, not CommonMark exactly (child lists need only a deeper marker; indented code blocks are not recognised; a `---` rule does not end a section). `Steps to Verify` steps and `Scope` bullets are taken as criteria, which can lower precision. Checkbox state is trace-only. Sources over the ingestion limit are read as given (IN-02 truncates).

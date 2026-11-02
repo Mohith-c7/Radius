@@ -31,6 +31,7 @@ from radius_intent.domain.snapshot import (
 )
 from radius_intent.domain.source import IntentSource
 from radius_intent.domain.value_objects import (
+    CriterionHints,
     Provenance,
     SourceRef,
     Span,
@@ -42,6 +43,7 @@ __all__ = [
     "CRITERION_ID_ALGO",
     "Criterion",
     "CriterionChange",
+    "CriterionHints",
     "CriterionState",
     "DuplicateCriterionError",
     "ExtractionMethod",

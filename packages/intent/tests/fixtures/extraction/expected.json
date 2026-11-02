@@ -1,0 +1,833 @@
+{
+ "agent_prompt_list.md": {
+  "codes": [],
+  "criteria": [
+   "Add a /health endpoint",
+   "It returns 200 when the database is reachable"
+  ],
+  "crlf": false,
+  "kind": "agent_prompt",
+  "suspicious": null
+ },
+ "blockquote_ignored.md": {
+  "codes": [
+   "blockquote"
+  ],
+  "criteria": [
+   "Outside quote"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "bold_pseudo_heading.md": {
+  "codes": [
+   "excluded_section"
+  ],
+  "criteria": [
+   "The banner is dismissible",
+   "Dismissal persists across sessions"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "bullets_under_ac.md": {
+  "codes": [],
+  "criteria": [
+   "The API returns 404 for unknown ids",
+   "The API returns 200 with a JSON body for known ids",
+   "Responses include an ETag header",
+   "Responses are gzip compressed"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "colon_pseudo_heading.md": {
+  "codes": [],
+  "criteria": [
+   "Tooltips appear on hover",
+   "Tooltips disappear on blur"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "commit_message_style.md": {
+  "codes": [],
+  "criteria": [
+   "The last page must not be empty when the total is a multiple of the page size."
+  ],
+  "crlf": false,
+  "kind": "commit_message",
+  "suspicious": null
+ },
+ "criteria_section_ends_at_peer_heading.md": {
+  "codes": [],
+  "criteria": [
+   "In section"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "crlf_line_endings.md": {
+  "codes": [],
+  "criteria": [
+   "First criterion",
+   "Second criterion continued on a second line"
+  ],
+  "crlf": true,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "definition_of_done.md": {
+  "codes": [],
+  "criteria": [
+   "Feature flag RADIUS_FEATURE_X gates the endpoint",
+   "Metrics are emitted for every request"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "done_when.md": {
+  "codes": [],
+  "criteria": [
+   "Retries use exponential backoff",
+   "Retries stop after 5 attempts"
+  ],
+  "crlf": false,
+  "kind": "issue",
+  "suspicious": null
+ },
+ "duplicate_items_within_source.md": {
+  "codes": [],
+  "criteria": [
+   "Users can log in"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "emoji_task_items.md": {
+  "codes": [],
+  "criteria": [
+   "✅ Emoji in the statement works",
+   "🚀 Launch banner appears"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "empty_checkbox_and_markers.md": {
+  "codes": [
+   "no_text"
+  ],
+  "criteria": [
+   "Only real one"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "empty_input.md": {
+  "codes": [],
+  "criteria": [],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "excluded_section_bullets.md": {
+  "codes": [
+   "excluded_section"
+  ],
+  "criteria": [],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "expected_behavior.md": {
+  "codes": [],
+  "criteria": [
+   "The form keeps the typed values after a validation error"
+  ],
+  "crlf": false,
+  "kind": "issue",
+  "suspicious": null
+ },
+ "fence_content_never_extracted.md": {
+  "codes": [
+   "code_fence"
+  ],
+  "criteria": [
+   "The CLI prints usage"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "fence_inline_triple_backticks_not_a_fence.md": {
+  "codes": [],
+  "criteria": [
+   "Use ```inline``` code in docs",
+   "Second item"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "fence_unterminated.md": {
+  "codes": [
+   "code_fence",
+   "unterminated_fence"
+  ],
+  "criteria": [
+   "Logging is structured"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "first_person_narration_skipped.md": {
+  "codes": [
+   "first_person_narration"
+  ],
+  "criteria": [],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "gh_pr_template_standard.md": {
+  "codes": [
+   "excluded_section"
+  ],
+  "criteria": [
+   "The service must send a reset email within 5 seconds.",
+   "Users can reset their password via an email link",
+   "Expired links show an error page"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "gherkin_fenced.md": {
+  "codes": [],
+  "criteria": [
+   "Scenario: Request a reset: Given a registered user; When they request a reset; Then an email is sent",
+   "Scenario: Expired link: Given a link older than 1 hour; When the user opens it; Then an error page is shown"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "gherkin_outline_examples_background.md": {
+  "codes": [],
+  "criteria": [
+   "Scenario: Apply code: Given a cart total of <total>; When code <code> is applied; Then the total becomes <result>"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "gherkin_plain_text.md": {
+  "codes": [],
+  "criteria": [
+   "Scenario: Empty cart: Given an empty cart; When the user checks out; Then an error is shown; And the cart stays empty",
+   "Scenario: Paid cart: Given a cart with one item; When the user pays; Then an order is created"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "gherkin_scenario_without_steps.md": {
+  "codes": [],
+  "criteria": [],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "gherkin_steps_without_scenario.md": {
+  "codes": [],
+  "criteria": [
+   "Scenario: Given a user who is logged out; When they open the dashboard; Then they are redirected to login"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "heading_hash_closing_sequence.md": {
+  "codes": [],
+  "criteria": [
+   "Closing hashes are trimmed"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "heading_variants_emoji_colon.md": {
+  "codes": [],
+  "criteria": [
+   "Search results are sorted by relevance",
+   "Search supports quoted phrases"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "hr_does_not_end_section.md": {
+  "codes": [],
+  "criteria": [
+   "First",
+   "Not under requirements after the rule"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "html_comment_hidden_checklist_not_extracted.md": {
+  "codes": [
+   "hidden_comment_content"
+  ],
+  "criteria": [
+   "Visible criterion"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": true
+ },
+ "html_comment_hidden_instruction.md": {
+  "codes": [
+   "hidden_comment_content"
+  ],
+  "criteria": [
+   "Rate limiting is enabled"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": true
+ },
+ "html_comment_inline_in_item.md": {
+  "codes": [
+   "html_comment"
+  ],
+  "criteria": [
+   "Users can log out"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "html_comment_template_hint.md": {
+  "codes": [
+   "html_comment"
+  ],
+  "criteria": [
+   "The cache must be invalidated on write."
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": false
+ },
+ "html_comment_unterminated.md": {
+  "codes": [
+   "unterminated_html_comment"
+  ],
+  "criteria": [
+   "Before the comment"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": true
+ },
+ "html_details_and_misc_markup.md": {
+  "codes": [],
+  "criteria": [
+   "Inside details still works"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "issue_bug_report_template.md": {
+  "codes": [],
+  "criteria": [
+   "It should not crash.",
+   "Saving shows a success toast"
+  ],
+  "crlf": false,
+  "kind": "issue",
+  "suspicious": null
+ },
+ "lazy_continuation.md": {
+  "codes": [],
+  "criteria": [
+   "The report lists totals by region as well",
+   "Next"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "links_and_images_only.md": {
+  "codes": [
+   "link_or_image_only"
+  ],
+  "criteria": [
+   "See the spec for details"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "long_line_skipped.md": {
+  "codes": [
+   "sentence_too_long"
+  ],
+  "criteria": [
+   "Short criterion"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "modal_inside_description_bullet.md": {
+  "codes": [],
+  "criteria": [
+   "Callers must pass a timezone-aware datetime"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "modal_must_shall_needs_to.md": {
+  "codes": [],
+  "criteria": [
+   "The importer must skip empty rows.",
+   "The exporter shall write UTF-8.",
+   "The worker needs to retry failed jobs."
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "modal_reader_directive_and_question.md": {
+  "codes": [
+   "reader_directive"
+  ],
+  "criteria": [],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "modal_should_and_hedges.md": {
+  "codes": [
+   "hedged"
+  ],
+  "criteria": [
+   "The API should return a 409 on conflict."
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "multi_line_item_continuation.md": {
+  "codes": [],
+  "criteria": [
+   "The export includes every column that is visible in the grid",
+   "Next item"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "near_duplicate_modal_variants.md": {
+  "codes": [],
+  "criteria": [
+   "Users must be able to reset their password by email"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "nested_lead_in.md": {
+  "codes": [],
+  "criteria": [
+   "Admins can: create users",
+   "Admins can: delete users",
+   "Viewers can: read reports"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "nested_parent_and_children.md": {
+  "codes": [],
+  "criteria": [
+   "The importer handles large files",
+   "Files up to 1 GB are streamed",
+   "Progress is reported every second",
+   "The importer reports bad rows"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "nested_three_levels.md": {
+  "codes": [],
+  "criteria": [
+   "Billing supports invoices",
+   "Invoices have line items",
+   "Line items have tax rates"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "numbered_under_requirements.md": {
+  "codes": [],
+  "criteria": [
+   "Login rejects wrong passwords",
+   "Login locks the account after 5 failures",
+   "Locked accounts unlock after 15 minutes"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "placeholder_items.md": {
+  "codes": [
+   "placeholder"
+  ],
+  "criteria": [
+   "Real criterion stays"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "plain_bullets_in_description_not_criteria.md": {
+  "codes": [],
+  "criteria": [],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "pr_title_modal.md": {
+  "codes": [],
+  "criteria": [
+   "Users must be able to export data"
+  ],
+  "crlf": false,
+  "kind": "pr_title",
+  "suspicious": null
+ },
+ "scope_section.md": {
+  "codes": [],
+  "criteria": [
+   "Rename the config key timeout to timeout_seconds",
+   "Keep a deprecation alias for one release"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "setext_heading.md": {
+  "codes": [],
+  "criteria": [
+   "Dark mode follows the OS setting"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "so_that_sentence.md": {
+  "codes": [],
+  "criteria": [
+   "Cache keys include the tenant id so that tenants cannot collide."
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "spec_anchors_tags_rejected.yml": {
+  "codes": [
+   "spec_invalid_text"
+  ],
+  "criteria": [
+   "ok"
+  ],
+  "crlf": false,
+  "kind": "spec_file",
+  "suspicious": null
+ },
+ "spec_bad_weight_skips_only_that_item.yml": {
+  "codes": [
+   "spec_invalid_weight"
+  ],
+  "criteria": [
+   "good one",
+   "another good"
+  ],
+  "crlf": false,
+  "kind": "spec_file",
+  "suspicious": null
+ },
+ "spec_block_lists_and_scalars.yml": {
+  "codes": [],
+  "criteria": [
+   "Multi line literal criterion text",
+   "Folded text that is joined"
+  ],
+  "crlf": false,
+  "kind": "spec_file",
+  "suspicious": null
+ },
+ "spec_empty_criteria.yml": {
+  "codes": [],
+  "criteria": [],
+  "crlf": false,
+  "kind": "spec_file",
+  "suspicious": null
+ },
+ "spec_empty_file.yml": {
+  "codes": [],
+  "criteria": [],
+  "crlf": false,
+  "kind": "spec_file",
+  "suspicious": null
+ },
+ "spec_missing_text_and_duplicate_id.yml": {
+  "codes": [
+   "spec_duplicate_id",
+   "spec_missing_text"
+  ],
+  "criteria": [
+   "first"
+  ],
+  "crlf": false,
+  "kind": "spec_file",
+  "suspicious": null
+ },
+ "spec_missing_version.yml": {
+  "codes": [
+   "spec_missing_version"
+  ],
+  "criteria": [],
+  "crlf": false,
+  "kind": "spec_file",
+  "suspicious": null
+ },
+ "spec_tabs_rejected.yml": {
+  "codes": [
+   "spec_syntax"
+  ],
+  "criteria": [],
+  "crlf": false,
+  "kind": "spec_file",
+  "suspicious": null
+ },
+ "spec_unknown_keys_reported.yml": {
+  "codes": [
+   "spec_unknown_key"
+  ],
+  "criteria": [
+   "Known"
+  ],
+  "crlf": false,
+  "kind": "spec_file",
+  "suspicious": null
+ },
+ "spec_unquoted_colon.yml": {
+  "codes": [
+   "spec_invalid_text"
+  ],
+  "criteria": [
+   "fine"
+  ],
+  "crlf": false,
+  "kind": "spec_file",
+  "suspicious": null
+ },
+ "spec_unsafe_paths.yml": {
+  "codes": [
+   "spec_invalid_paths",
+   "spec_invalid_tests"
+  ],
+  "criteria": [
+   "fine"
+  ],
+  "crlf": false,
+  "kind": "spec_file",
+  "suspicious": null
+ },
+ "spec_valid_full.yml": {
+  "codes": [],
+  "criteria": [
+   "Users can reset their password via email link",
+   "It's fast",
+   "Plain scalar criterion"
+  ],
+  "crlf": false,
+  "kind": "spec_file",
+  "suspicious": null
+ },
+ "spec_wrong_version.yml": {
+  "codes": [
+   "spec_unsupported_version"
+  ],
+  "criteria": [],
+  "crlf": false,
+  "kind": "spec_file",
+  "suspicious": null
+ },
+ "star_and_parenthesis_markers.md": {
+  "codes": [],
+  "criteria": [
+   "Star marker item",
+   "Plus marker item",
+   "Paren numbered item"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "steps_to_verify.md": {
+  "codes": [],
+  "criteria": [
+   "Open the settings page",
+   "Toggle notifications off",
+   "Reload and confirm the toggle stays off"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "subheading_inherits_section.md": {
+  "codes": [],
+  "criteria": [
+   "Backend criterion",
+   "Frontend criterion"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "tab_indented_children.md": {
+  "codes": [],
+  "criteria": [
+   "Parent statement",
+   "Child statement",
+   "Sibling statement"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "table_criteria_column.md": {
+  "codes": [],
+  "criteria": [
+   "Passwords are hashed with argon2",
+   "Sessions expire after 30 minutes"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "table_escaped_pipe_and_br.md": {
+  "codes": [],
+  "criteria": [
+   "Pipes \\| in text work across lines"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "table_no_criteria_column.md": {
+  "codes": [
+   "table_no_criteria_column"
+  ],
+  "criteria": [],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "table_under_checklist_excluded.md": {
+  "codes": [
+   "excluded_section"
+  ],
+  "criteria": [],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "task_list_anywhere.md": {
+  "codes": [
+   "boilerplate_checklist"
+  ],
+  "criteria": [
+   "CSV export includes a header row",
+   "Export streams rows without loading everything in memory"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "unicode_cjk_and_accents.md": {
+  "codes": [],
+  "criteria": [
+   "ユーザーはパスワードをリセットできる",
+   "Les utilisateurs doivent pouvoir se déconnecter",
+   "Café menu is searchable by naïve spelling"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "unicode_non_english_prose_ignored.md": {
+  "codes": [],
+  "criteria": [],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "user_story.md": {
+  "codes": [],
+  "criteria": [
+   "As a shopper, I want to save my cart so that I can resume later."
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "when_then_sentence.md": {
+  "codes": [],
+  "criteria": [
+   "When a user submits an empty form, then the form shows an inline error.",
+   "If the token is expired then login is refused."
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "whitespace_only.md": {
+  "codes": [],
+  "criteria": [],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": null
+ },
+ "zero_width_and_bidi_characters.md": {
+  "codes": [
+   "invisible_characters"
+  ],
+  "criteria": [
+   "Pay​ment is retried‮",
+   "Normal item"
+  ],
+  "crlf": false,
+  "kind": "pr_body",
+  "suspicious": true
+ }
+}

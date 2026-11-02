@@ -1,0 +1,8 @@
+version: 1
+criteria:
+  - text: "abs path"
+    paths: ["/etc/passwd"]
+  - text: "traversal"
+    tests: ["../x.py::t"]
+  - text: "fine"
+    paths: ["src/**"]

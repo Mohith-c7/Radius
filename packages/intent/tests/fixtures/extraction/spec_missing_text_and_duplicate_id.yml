@@ -1,0 +1,8 @@
+version: 1
+criteria:
+  - id: C1
+    text: "first"
+  - id: C1
+    text: "second with duplicate id"
+  - id: C3
+    weight: 0.5

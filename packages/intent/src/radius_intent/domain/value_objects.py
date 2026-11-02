@@ -104,3 +104,32 @@ class TestabilityAssessment:
     def __post_init__(self) -> None:
         if self.rationale is not None and not self.rationale.strip():
             raise InvalidCriterionError("Rationale, if given, must be non-blank.")
+
+
+@dataclass(frozen=True)
+class CriterionHints:
+    """Optional author-supplied hints that travel with a criterion.
+
+    ``paths`` are repo-relative glob hints for linking, ``tests`` are explicit
+    evidence references (``path::name``), ``label`` is the author's own short
+    id (for example ``C1`` in ``.radius/intent.yml``). All are advisory: they
+    never change the criterion id.
+    """
+
+    paths: tuple[str, ...] = ()
+    tests: tuple[str, ...] = ()
+    label: str | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "paths", tuple(self.paths))
+        object.__setattr__(self, "tests", tuple(self.tests))
+        for entry in (*self.paths, *self.tests):
+            if not entry.strip():
+                raise InvalidCriterionError("Hint entries must be non-blank.")
+        if self.label is not None and not self.label.strip():
+            raise InvalidCriterionError("Hint label, if given, must be non-blank.")
+
+    @property
+    def is_empty(self) -> bool:
+        """Return whether no hint is set."""
+        return not (self.paths or self.tests or self.label)

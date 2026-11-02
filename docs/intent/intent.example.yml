@@ -1,0 +1,15 @@
+# Example `.radius/intent.yml` (schema version 1). See packages/intent/README.md.
+# Explicit criteria here outrank anything extracted from the PR body or issues.
+version: 1
+criteria:
+  - id: C1
+    text: "Users can reset their password via email link"
+    weight: 1.0                      # (0, 1], default 1.0
+    paths: ["src/auth/**"]           # optional: where the change should live
+    tests: ["tests/auth/test_reset.py::test_reset_flow"]   # optional: explicit evidence
+  - id: C2
+    text: "Reset links expire after one hour"
+    weight: 0.8
+    tests:
+      - tests/auth/test_reset.py::test_link_expiry
+  - text: Failed resets never reveal whether the email exists

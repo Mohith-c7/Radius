@@ -1,0 +1,6 @@
+version: 1
+owner: me
+criteria:
+  - id: C1
+    text: "Known"
+    priority: high

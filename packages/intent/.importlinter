@@ -21,3 +21,23 @@ forbidden_modules =
     google
     anthropic
     openai
+
+[importlinter:contract:extraction-is-offline]
+name = Deterministic extraction has no web, database or LLM dependencies
+type = forbidden
+source_modules =
+    radius_intent.infrastructure.extraction
+forbidden_modules =
+    radius_intent.application
+    radius_intent.interfaces
+    sqlalchemy
+    fastapi
+    pydantic
+    httpx
+    requests
+    psycopg
+    alembic
+    google
+    anthropic
+    openai
+    yaml
