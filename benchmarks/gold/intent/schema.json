@@ -1,0 +1,158 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "radius-intent-gold-v1",
+  "title": "Radius intent gold files (IN-09)",
+  "description": "Definitions for sources.json, annotator-<id>.json and adjudicated.json. Spans are half-open [start, end) ranges of Unicode code points (Python str indices, the radius_intent Span semantics) into the stored text of the named source. Semantic rules that JSON Schema cannot express (span text equals the slice, hashes match, resolution rules) are enforced by scripts/gold_lib.py.",
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "prId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,150}$"},
+    "annotatorId": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$"},
+    "sourceId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,120}$"},
+    "sourceKind": {
+      "type": "string",
+      "enum": ["pr_body", "pr_title", "issue", "commit_message", "spec_file", "agent_prompt", "comment"]
+    },
+    "testability": {
+      "type": "string",
+      "enum": [
+        "behavioral_testable",
+        "structural_checkable",
+        "non_functional_measurable",
+        "subjective_or_vague",
+        "untestable_external"
+      ]
+    },
+    "span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "start", "end"],
+      "properties": {
+        "source_id": {"$ref": "#/$defs/sourceId"},
+        "start": {"type": "integer", "minimum": 0},
+        "end": {"type": "integer", "minimum": 1}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "kind", "text", "text_sha256", "length"],
+      "properties": {
+        "source_id": {"$ref": "#/$defs/sourceId"},
+        "kind": {"$ref": "#/$defs/sourceKind"},
+        "text": {"type": ["string", "null"], "description": "Stored text that spans index into; null only in public exports."},
+        "text_sha256": {"$ref": "#/$defs/sha256"},
+        "raw_text_sha256": {"$ref": "#/$defs/sha256"},
+        "length": {"type": "integer", "minimum": 0},
+        "truncated": {"type": "boolean"},
+        "suspicious_content_removed": {"type": "boolean"},
+        "fetched_at": {"type": "string"},
+        "origin_url": {"type": "string"}
+      }
+    },
+    "criterion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "explicit", "text", "testability"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[ac][0-9]{1,4}$", "description": "Annotator-local (c1..) or adjudication-local (a1..) id."},
+        "explicit": {"type": "boolean"},
+        "span": {"oneOf": [{"$ref": "#/$defs/span"}, {"type": "null"}]},
+        "text": {"type": ["string", "null"], "description": "Explicit: exactly the span slice. Implicit: the annotator's paraphrase. Null only in public exports of explicit criteria."},
+        "testability": {"oneOf": [{"$ref": "#/$defs/testability"}, {"type": "null"}]},
+        "evidence": {"type": "array", "items": {"$ref": "#/$defs/span"}, "description": "Implicit criteria only: spans that justify the criterion."},
+        "compound_group": {"type": ["string", "null"], "pattern": "^g[0-9]{1,4}$"},
+        "notes": {"type": "string"},
+        "resolution": {"type": "string", "enum": ["agreed", "take_a", "take_b", "merged", "added", "dropped", "pending"]},
+        "origin": {"type": "object", "description": "Adjudicated only: annotator id -> criterion id this item derives from."},
+        "reasons": {"type": "array", "items": {"type": "string"}},
+        "options": {"type": "object", "description": "Adjudication skeleton only: candidate versions keyed by annotator id (never Radius output)."},
+        "from_radius_suggestion": {"type": "boolean"}
+      }
+    },
+    "link": {
+      "type": "object",
+      "description": "Reserved for LK-07. IN-09 tooling writes an empty list. Fields below are the intended minimum and will be tightened (schema_version bump) when LK-07 defines symbols and tests.",
+      "required": ["criterion_id", "link_type"],
+      "properties": {
+        "criterion_id": {"type": "string"},
+        "link_type": {"type": "string", "enum": ["criterion_symbol", "symbol_test"]},
+        "target": {"type": "object"},
+        "label": {"type": "string"},
+        "notes": {"type": "string"}
+      }
+    },
+    "timing": {
+      "type": "object",
+      "required": ["active_seconds"],
+      "properties": {
+        "active_seconds": {"type": "number", "minimum": 0},
+        "sessions": {"type": "integer", "minimum": 0},
+        "first_opened_at": {"type": "string"},
+        "last_saved_at": {"type": "string"}
+      }
+    },
+    "sourcesFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "pr_id", "pr", "sources", "sources_digest", "sanitizer"],
+      "properties": {
+        "schema_version": {"const": "radius-intent-gold-sources-v1"},
+        "pr_id": {"$ref": "#/$defs/prId"},
+        "pr": {
+          "type": "object",
+          "required": ["repo", "number"],
+          "properties": {
+            "repo": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},
+            "number": {"type": "integer", "minimum": 1},
+            "url": {"type": "string"},
+            "author_type": {"type": "string", "enum": ["agent", "human", "unknown"]},
+            "agent_name": {"type": ["string", "null"]},
+            "author_login_sha256": {"$ref": "#/$defs/sha256"},
+            "language": {"type": "string"},
+            "size": {"type": "object"},
+            "stratum": {"type": "object"},
+            "role": {"type": "string", "enum": ["pilot", "dev", "test"]},
+            "created_at": {"type": "string"},
+            "license": {"type": "string"}
+          }
+        },
+        "sources": {"type": "array", "items": {"$ref": "#/$defs/source"}},
+        "sources_digest": {"$ref": "#/$defs/sha256"},
+        "sanitizer": {"type": "string"},
+        "text_redistributable": {"type": "boolean"},
+        "synthetic": {"type": "boolean"}
+      }
+    },
+    "annotationFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "kind", "pr_id", "sources_digest", "status", "well_specified", "no_recoverable_intent", "criteria", "links", "timing"],
+      "properties": {
+        "schema_version": {"const": "radius-intent-gold-v1"},
+        "kind": {"type": "string", "enum": ["annotation", "adjudicated"]},
+        "pr_id": {"$ref": "#/$defs/prId"},
+        "sources_digest": {"$ref": "#/$defs/sha256"},
+        "annotator_id": {"$ref": "#/$defs/annotatorId"},
+        "adjudicator_id": {"$ref": "#/$defs/annotatorId"},
+        "annotators": {"type": "array", "items": {"$ref": "#/$defs/annotatorId"}},
+        "status": {"type": "string", "enum": ["in_progress", "complete", "skeleton"]},
+        "well_specified": {"type": ["boolean", "null"]},
+        "well_specified_set_at": {"type": ["string", "null"]},
+        "well_specified_conflict": {"type": "array", "items": {"type": ["boolean", "null"]}},
+        "no_recoverable_intent": {"type": "boolean"},
+        "blinded": {"type": "boolean"},
+        "criteria": {"type": "array", "items": {"$ref": "#/$defs/criterion"}},
+        "links": {"type": "array", "items": {"$ref": "#/$defs/link"}},
+        "timing": {"$ref": "#/$defs/timing"},
+        "tool": {"type": "object"},
+        "guidelines_version": {"type": "string"},
+        "notes": {"type": "string"},
+        "synthetic": {"type": "boolean"}
+      }
+    }
+  },
+  "oneOf": [
+    {"$ref": "#/$defs/sourcesFile"},
+    {"$ref": "#/$defs/annotationFile"}
+  ]
+}

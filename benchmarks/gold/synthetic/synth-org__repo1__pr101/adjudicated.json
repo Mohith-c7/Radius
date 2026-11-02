@@ -1,0 +1,165 @@
+{
+  "adjudicator_id": "synth-c",
+  "annotators": [
+    "synth-a",
+    "synth-b"
+  ],
+  "criteria": [
+    {
+      "explicit": true,
+      "id": "a1",
+      "options": {
+        "synth-a": {
+          "explicit": true,
+          "id": "c1",
+          "span": {
+            "end": 121,
+            "source_id": "pr-body",
+            "start": 86
+          },
+          "testability": "behavioral_testable",
+          "text": "The export writes one row per order"
+        },
+        "synth-b": {
+          "explicit": true,
+          "id": "c1",
+          "span": {
+            "end": 121,
+            "source_id": "pr-body",
+            "start": 86
+          },
+          "testability": "structural_checkable",
+          "text": "The export writes one row per order"
+        }
+      },
+      "origin": {
+        "synth-a": "c1",
+        "synth-b": "c1"
+      },
+      "reasons": [
+        "testability_conflict"
+      ],
+      "resolution": "take_a",
+      "span": {
+        "end": 121,
+        "source_id": "pr-body",
+        "start": 86
+      },
+      "testability": "behavioral_testable",
+      "text": "The export writes one row per order"
+    },
+    {
+      "explicit": true,
+      "id": "a2",
+      "options": {
+        "synth-a": {
+          "explicit": true,
+          "id": "c2",
+          "span": {
+            "end": 157,
+            "source_id": "pr-body",
+            "start": 128
+          },
+          "testability": "subjective_or_vague",
+          "text": "Error handling is more robust"
+        }
+      },
+      "origin": {
+        "synth-a": "c2"
+      },
+      "reasons": [
+        "only_synth-a"
+      ],
+      "resolution": "take_a",
+      "span": {
+        "end": 157,
+        "source_id": "pr-body",
+        "start": 128
+      },
+      "testability": "subjective_or_vague",
+      "text": "Error handling is more robust"
+    },
+    {
+      "explicit": true,
+      "id": "a3",
+      "options": {
+        "synth-a": {
+          "explicit": true,
+          "id": "c3",
+          "span": {
+            "end": 222,
+            "source_id": "pr-body",
+            "start": 164
+          },
+          "testability": "behavioral_testable",
+          "text": "The parser must accept an empty list and return zero items"
+        },
+        "synth-b": {
+          "explicit": true,
+          "id": "c2",
+          "span": {
+            "end": 216,
+            "source_id": "pr-body",
+            "start": 164
+          },
+          "testability": "behavioral_testable",
+          "text": "The parser must accept an empty list and return zero"
+        }
+      },
+      "origin": {
+        "synth-a": "c3",
+        "synth-b": "c2"
+      },
+      "reasons": [
+        "span_boundary"
+      ],
+      "resolution": "take_a",
+      "span": {
+        "end": 222,
+        "source_id": "pr-body",
+        "start": 164
+      },
+      "testability": "behavioral_testable",
+      "text": "The parser must accept an empty list and return zero items"
+    },
+    {
+      "explicit": true,
+      "id": "a4",
+      "origin": {
+        "synth-a": "c4",
+        "synth-b": "c3"
+      },
+      "reasons": [],
+      "resolution": "agreed",
+      "span": {
+        "end": 267,
+        "source_id": "pr-body",
+        "start": 229
+      },
+      "testability": "structural_checkable",
+      "text": "Rename the helper module to utils_core"
+    }
+  ],
+  "guidelines_version": "gl-0.1",
+  "kind": "adjudicated",
+  "links": [],
+  "no_recoverable_intent": false,
+  "pr_id": "synth-org__repo1__pr101",
+  "schema_version": "radius-intent-gold-v1",
+  "sources_digest": "7fd77eb30f68d90893b015e3bf59505be43f5ec8042393abb684e51f41b8e841",
+  "status": "complete",
+  "synthetic": true,
+  "timing": {
+    "active_seconds": 0.0,
+    "first_opened_at": "2026-01-01T00:00:00+00:00",
+    "last_saved_at": "2026-01-01T00:00:00+00:00",
+    "sessions": 0
+  },
+  "tool": {
+    "name": "gold_agreement",
+    "version": "gold-kit-0.1"
+  },
+  "well_specified": true,
+  "well_specified_conflict": [],
+  "well_specified_set_at": null
+}
