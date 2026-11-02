@@ -21,7 +21,7 @@ Can this Pull Request be merged safely?
 ## Key Capabilities
 
 1. **Multi-Language Code Property Graph (CPG)**:
-   - Tree-Sitter AST extraction for **Python** and **TypeScript / JavaScript**.
+   - **Python** is parsed with the standard-library `ast` module; **TypeScript / JavaScript** imports and symbols are extracted with a lightweight regex parser (no tree-sitter, no tsconfig path aliases or package exports). Go, Java and Rust have tree-sitter parsers, but their imports are not yet resolved to files.
    - Resolves cross-file symbol references and import statements into a directed dependency graph.
 2. **Diff-Hunk Line Precision**:
    - Parses unified git diff hunks to identify exact modified line numbers.
@@ -52,14 +52,14 @@ radius/
 ├── apps/
 │   ├── api/            FastAPI REST API (Python 3.12, Uvicorn)
 │   ├── dashboard/      Next.js 15.5 React/TypeScript Web Console
-│   └── worker/         Durable Analysis Worker (AST, CPG, AI Pruning)
+│   └── worker/         Durable Analysis Worker (parsing, CPG, test selection; polls the PostgreSQL job queue)
 │
 ├── packages/
-│   ├── analysis/       Diff hunk parser, change detection, AI semantic pruner
+│   ├── analysis/       Diff hunk parser, change detection, SQL job queue, experimental AI semantic pruner (not on the verdict path)
 │   ├── confidence/     Deterministic & dynamic confidence scoring engine
 │   ├── github/         GitHub App client, Check Runs & PR publisher
 │   ├── graph/          Code Property Graph (CPG), graph slicer, module resolver
-│   ├── parser/         Tree-Sitter multi-language AST symbol & import extractors
+│   ├── parser/         Python `ast` parser, JS/TS regex parser, tree-sitter Go/Java/Rust parsers and POC extractors
 │   ├── repository/     Git repository clones, branch tracking, and snapshots
 │   ├── shared/         Database models, auth tokens, configuration, events
 │   └── testing/        Graph-driven test selector, JUnit XML parser, planners
@@ -73,7 +73,7 @@ radius/
 
 ## Quickstart: Docker Compose
 
-Spin up the entire Radius production stack with PostgreSQL, Redis, API, Worker, and Next.js Dashboard:
+Spin up the entire Radius production stack with PostgreSQL, API, Worker, and Next.js Dashboard (the job queue is a table in PostgreSQL; there is no Redis):
 
 ```bash
 # Clone the repository
@@ -96,10 +96,10 @@ docker compose --env-file .env.production up -d --build
 ## Local Development & Testing
 
 ```bash
-# Install Python dependencies and run full test suite (217 tests)
+# Install Python dependencies and run the Python test suite
 python -m pytest
 
-# Install frontend dependencies and run dashboard tests (11 tests)
+# Install frontend dependencies and run dashboard tests
 pnpm --filter dashboard run test
 
 # Typecheck and compile production Next.js build
