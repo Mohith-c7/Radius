@@ -3,8 +3,9 @@
 from functools import lru_cache
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from radius_shared.database.session import DatabaseSettings
+from radius_shared.verdict_v2_flag import VerdictV2Mode, parse_verdict_v2_mode
 
 
 class ApiSettings(DatabaseSettings):
@@ -31,6 +32,20 @@ class ApiSettings(DatabaseSettings):
     worker fetches issues, commits and the spec file. OFF by default until the live
     GitHub validation (F-06) has happened; set true for that run.
     """
+    verdict_v2_mode: VerdictV2Mode = Field(
+        default=VerdictV2Mode.OFF, alias="RADIUS_FEATURE_VERDICT_V2"
+    )
+    """Verdict v2 alpha flag: off (default), shadow or on (VD-07-lite).
+
+    Off means no v2 code path runs and ``GET /analyses/{id}/verdict`` answers
+    404 with ``meta.reason = disabled``. Unrecognised values are treated as off.
+    """
+
+    @field_validator("verdict_v2_mode", mode="before")
+    @classmethod
+    def _parse_verdict_v2_mode(cls, value: object) -> VerdictV2Mode:
+        return parse_verdict_v2_mode(value)
+
     cors_origins: str = ""
     seed_demo_data: bool = Field(default=False, alias="RADIUS_SEED_DEMO_DATA")
     """Seed illustrative demo fixtures and a demo login at startup.
