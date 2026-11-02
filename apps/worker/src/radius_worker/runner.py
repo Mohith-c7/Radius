@@ -426,12 +426,19 @@ def create_sql_worker_runtime(settings: WorkerSettings) -> SqlAlchemyWorkerRunti
     # Fail fast at startup on a forbidden execution mode (e.g. unsafe in prod).
     require_sandbox_ready(resolve_test_execution_mode(settings), settings)
     engine = create_database_engine(settings)
+    session_factory = create_session_factory(engine)
+    verdict_v2_recomputer = None
+    if settings.verdict_v2_mode != VerdictV2Mode.OFF:
+        from radius_worker.verdict_v2.scoring import create_recomputer
+
+        verdict_v2_recomputer = create_recomputer(session_factory, settings.verdict_v2_mode)
     return SqlAlchemyWorkerRuntime(
-        session_factory=create_session_factory(engine),
+        session_factory=session_factory,
         repository_cache_dir=settings.repository_cache_dir,
         git_client=LocalGitRepositoryClient(),
         settings=settings,
         github_client=GitHubAppClient(_github_settings(settings)),
+        verdict_v2_recomputer=verdict_v2_recomputer,
     )
 
 
