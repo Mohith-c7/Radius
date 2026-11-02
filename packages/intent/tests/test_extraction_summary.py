@@ -185,3 +185,13 @@ def test_default_extractors_take_the_mode() -> None:
     assert default_extractors("nonsense")[1].config.mode == "sections"
     with pytest.raises(ValueError, match="mode"):
         ExtractionConfig(mode="nonsense")
+
+
+def test_noun_phrase_titles_are_not_criteria() -> None:
+    noun = _report(
+        "feat: managed API keys with scopes and audit", IntentSourceKind.PR_TITLE
+    )
+    assert noun.criteria == ()
+    assert "summary_skip_title_not_behavioural" in {d.code for d in noun.diagnostics}
+    verb = _report("fix: refresh the stale lockfile", IntentSourceKind.PR_TITLE)
+    assert len(verb.criteria) == 1

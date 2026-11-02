@@ -116,9 +116,9 @@ _MARKERS = (
 )
 _VERBS = frozenset(
     """accept add allow apply avoid block break change clamp compute create deny derive detect disable drop emit enable enforce ensure
-    escape expose extract fail fix guard handle ignore implement
+    escape expose extract fail fix guard handle harden ignore implement
     include introduce keep limit make move normalise normalize parse
-    permit prevent propagate raise redact reject remove rename replace
+    patch permit pin prevent propagate raise refresh redact reject remove rename replace
     require resolve restrict retry return revoke sanitise
     sanitize send skip split store support throw truncate update use validate verify warn wrap write""".split()
 )
@@ -241,6 +241,13 @@ def _title(lines: list[Line], cfg: ExtractionConfig, collector: Collector) -> No
         if reason is not None:
             collector.skip(
                 f"summary_skip_{reason}", "Title not used.", line=line.number
+            )
+            return
+        if behaviour_rule(subject) is None:
+            collector.skip(
+                "summary_skip_title_not_behavioural",
+                "Title is a noun phrase, not used.",
+                line=line.number,
             )
             return
         start = line.start + line.text.find(m["subject"])
