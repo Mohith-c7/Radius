@@ -131,6 +131,25 @@ def test_changed_test_ids_skip_removed_and_non_tests() -> None:
     assert adapters.changed_test_ids(out.items) == frozenset({"tests/test_a.py::test_new"})
 
 
+def test_added_test_ids_only_keep_new_functions() -> None:
+    out = adapters.symbol_inputs(
+        NS(
+            symbols=(
+                sym(symbol_id="a", path="tests/test_a.py", qualified_name="test_new",
+                    change_kind=NS(value="added")),
+                sym(symbol_id="b", path="tests/test_a.py", qualified_name="test_edit",
+                    change_kind=NS(value="modified_body")),
+            )
+        )
+    )
+    assert adapters.changed_test_ids(out.items) == frozenset(
+        {"tests/test_a.py::test_new", "tests/test_a.py::test_edit"}
+    )
+    assert adapters.changed_test_ids(out.items, added_only=True) == frozenset(
+        {"tests/test_a.py::test_new"}
+    )
+
+
 # ----------------------------------------------------------------- links
 
 

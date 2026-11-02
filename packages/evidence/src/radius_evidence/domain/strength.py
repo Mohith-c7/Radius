@@ -11,7 +11,7 @@ Every contribution is explained with a reason code. The LK-04 "strength features
 (``mock_only``, ``circular``, ``dead``, ``swallowed``, ``in_loop``, ``snapshot``,
 ``property_based``) enter through the *kind* of each fact (see
 ``radius_evidence.domain.assertion_records``) and are surfaced as reason codes from
-the fact ``note`` tokens; they never raise the score.
+the fact flags (and legacy ``note`` tokens); they never raise the score.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from dataclasses import dataclass
 
 from radius_evidence.domain.config import QualityConfig
 from radius_evidence.domain.enums import AssertKind
-from radius_evidence.domain.model import AssertionFeatures, Reason
+from radius_evidence.domain.model import AssertionFact, AssertionFeatures, Reason
 
 #: Tokens recognised in ``AssertionFact.note`` (comma/space separated) -> reason code.
 NOTE_TOKENS: dict[str, str] = {
@@ -54,14 +54,20 @@ def kind_score(kind: AssertKind | str, config: QualityConfig | None = None) -> f
     return _clamp(float(table.get(key, 0.0)))
 
 
-def _note_reasons(note: str | None, ref: str) -> list[Reason]:
-    if not note:
-        return []
-    tokens = note.replace(",", " ").replace(";", " ").lower().split()
-    out = []
+#: Boolean ``AssertionFact`` fields (contract 2) that map to a reason code.
+FLAG_FIELDS = ("mock_only", "circular", "dead", "swallowed", "in_loop", "property_based")
+
+
+def _note_reasons(fact: AssertionFact, ref: str) -> list[Reason]:
+    tokens: list[str] = [name for name in FLAG_FIELDS if getattr(fact, name, False)]
+    if fact.note:  # contract 1 payloads and the remaining tokens (snapshot, helper)
+        tokens.extend(fact.note.replace(",", " ").replace(";", " ").lower().split())
+    out: list[Reason] = []
+    seen: set[str] = set()
     for token in tokens:
         code = NOTE_TOKENS.get(token)
-        if code:
+        if code and token not in seen:
+            seen.add(token)
             out.append(Reason(code=code, detail=f"assertion feature: {token}", ref=ref))
     return out
 
@@ -84,7 +90,7 @@ def explain_a_static(
                 code=f"assert_{fact.kind.value}", detail=f"score {score:.2f}", ref=ref
             )
         )
-        reasons.extend(_note_reasons(fact.note, ref))
+        reasons.extend(_note_reasons(fact, ref))
         if score > best_score:
             best, best_score = fact.kind, score
 

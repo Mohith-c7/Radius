@@ -187,12 +187,20 @@ def symbol_inputs(changeset: Any) -> Adapted[SymbolInput]:
     return Adapted(tuple(out[k] for k in sorted(out)), dropped)
 
 
-def changed_test_ids(symbols: Iterable[SymbolInput]) -> frozenset[str]:
-    """Ids (``path::Class::function``) of test functions added or changed in the PR."""
+def changed_test_ids(
+    symbols: Iterable[SymbolInput], *, added_only: bool = False
+) -> frozenset[str]:
+    """Ids (``path::Class::function``) of test functions added or changed in the PR.
+
+    ``added_only`` keeps the functions that are new in the PR (contract 2
+    ``added_test_ids``); the default is every added or modified one.
+    """
 
     ids: set[str] = set()
     for s in symbols:
         if not s.is_test or s.is_pseudo or s.change_kind == "removed":
+            continue
+        if added_only and s.change_kind != "added":
             continue
         parts = s.qualified_name.split(".")
         if not parts[-1].startswith("test"):

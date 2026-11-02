@@ -180,3 +180,18 @@ def test_score_always_in_unit_interval() -> None:
     for _ in range(200):
         f = feat(*[rng.choice(kinds) for _ in range(rng.randint(0, 6))])
         assert 0.0 <= a_static(f) <= 1.0
+
+
+def test_explicit_flags_become_reason_codes_without_note_tokens() -> None:
+    fact = AssertionFact(AssertKind.TAUTOLOGY, 5, circular=True, in_loop=True)
+    result = explain_a_static(
+        AssertionFeatures(
+            test_id="t.py::test_a", path="t.py", line_start=1, line_end=9,
+            assertions=(fact,), n_assertions=1, expects_exception=False,
+            is_parametrized=False, n_param_cases=None, has_skip_marker=False,
+            name_terms=(), literal_terms=(),
+        )
+    )
+    codes = {r.code for r in result.reasons}
+    assert {"circular_expectation", "assertion_in_loop"} <= codes
+    assert result.score == 0.0

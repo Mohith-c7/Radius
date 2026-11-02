@@ -37,7 +37,7 @@ class ApiSettings(DatabaseSettings):
     )
     """Verdict v2 alpha flag: off (default), shadow or on (VD-07-lite).
 
-    Off means no v2 code path runs and ``GET /analyses/{id}/verdict`` answers
+    Off means no v2 code path runs and ``GET /analyses/{id}/verdict-v2`` answers
     404 with ``meta.reason = disabled``. Unrecognised values are treated as off.
     """
 

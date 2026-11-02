@@ -109,6 +109,12 @@ class StageAInput(Serializable):
     tamper_unanalyzable: tuple[str, ...] = ()
     changed_test_ids: frozenset[str] = frozenset()  # tests added/modified in the PR
     agent_signal: bool = False  # PR carries an agent trailer (EV-03-lite)
+    #: Contract 2: the subset of ``changed_test_ids`` that is NEW in the PR (reason
+    #: ``test_added_in_pr`` instead of ``test_modified_in_pr``). Empty = unknown.
+    added_test_ids: frozenset[str] = frozenset()
+    #: Contract 2: optional per-test agent signal (test id -> trailer seen); a test not
+    #: in the map falls back to ``agent_signal``.
+    agent_signal_by_test: dict[str, bool] = field(default_factory=dict)
     degraded: tuple[str, ...] = ()  # e.g. "truncated", "unsupported_language:ts"
     algo_versions: dict[str, str] = field(default_factory=dict)
 

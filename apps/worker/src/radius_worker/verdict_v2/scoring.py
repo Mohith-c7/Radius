@@ -454,13 +454,21 @@ def build_payload(
             "reasons": [
                 {"code": r.code, "detail": r.detail, "ref": r.ref} for r in c.reasons
             ],
-            "best_link": dict(c.best_link) or None,
+            "best_link": (
+                {k: (_r(v) if isinstance(v, float) else v) for k, v in c.best_link.items()}
+                or None
+            ),
             "items": rows[c.criterion_id],
         }
         for c in v.criteria
     ]
     reasons = [
-        {"code": r.code, "detail": r.detail, "rule_id": r.ref, "ref": r.ref}
+        {
+            "code": r.code,
+            "detail": r.detail,
+            "rule_id": r.rule_id or r.ref,
+            "ref": r.ref,
+        }
         for r in v.reasons
     ]
     return {
@@ -708,6 +716,12 @@ def run_verdict_v2_best_effort(
     except Exception as exc:  # noqa: BLE001 - v1 must stay unaffected
         code = str(getattr(exc, "reason_code", None) or type(exc).__name__)
         status = STATUS_ERROR
+        if head_sha is None:
+            # Stage A failed before it returned: the error row still needs the head
+            # sha, so v1 is recorded as the fallback (design 5.2).
+            resolver = getattr(collector, "resolve_head", None)
+            if callable(resolver):
+                head_sha = resolver(analysis_id, command)
         bundle = build_error_bundle(
             analysis_id=aid, head_sha=head_sha, code=code, config=cfg
         )
@@ -836,3 +850,16 @@ class StageBRecomputer:
             config=self.config, mode=self.mode.value, clock=self.clock
         ).score(stage_b)
         return bool(self.store.save(organization_id, analysis_id, bundle))
+
+
+def create_recomputer(
+    session_factory: Callable[[], Any], mode: VerdictV2Mode
+) -> StageBRecomputer | None:
+    """The outbox consumer's Stage B recomputer for the runtime (``None`` when off)."""
+
+    if mode is VerdictV2Mode.OFF:
+        return None
+    store = _sql_store(session_factory, mode)
+    if store is None:
+        return None
+    return StageBRecomputer(store=store, mode=mode)

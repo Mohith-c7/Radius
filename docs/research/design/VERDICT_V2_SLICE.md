@@ -50,7 +50,7 @@ Findings from reading the code that shape the design (all verified):
 | Flakiness | Rerun-detected flaky tests contribute nothing and are flagged; history flakiness score discounts | F-11 (`docs/FLAKY_TESTS.md`) |
 | Support, UIM, states | `S(c)`, `UIM`, 5 per-criterion states (DEC-008) | VD-01, VD-02 |
 | Verdict | 4 PR-level states (DEC-008), ordered rules, justification tree | VD-03 |
-| Surfaces | PR comment and Check Run v2 (updated in place, republished after CI), `GET /analyses/{id}/verdict`, dashboard panel | VD-06, VS-09, VS-10 |
+| Surfaces | PR comment and Check Run v2 (updated in place, republished after CI), `GET /analyses/{id}/verdict-v2`, dashboard panel | VD-06, VS-09, VS-10 |
 
 ### 1.2 Explicitly excluded (each has an existing task; none is needed for a first visible slice)
 
@@ -593,6 +593,18 @@ class VerdictV2:
     evidence_basis: str = "static_only"
 ```
 
+### 3.11 Contract 2 (integration, 2026-11-02)
+
+Found while integrating the first implementations; every change is an optional field with a default, so contract-1 payloads and stored bundles still load (`CONTRACT_VERSION = "verdict-v2-contract-2"` in `versions.py`; `ALGO_VERSION` and the bundle schema `verdict-v2-bundle-1` are unchanged because no formula or stored shape changed).
+
+| Change | Where | Why |
+|---|---|---|
+| `AssertionFact.mock_only`, `circular`, `dead`, `swallowed`, `in_loop`, `property_based` (default `False`) | `model.py`; the LK-04 converter sets them; EV-06 emits the reason codes from them | The former `note` tokens were an untyped side channel. Legacy `note` tokens are still read; `note` keeps only `snapshot` and `helper`. |
+| `StageAInput.added_test_ids` (default empty) | `inputs.py`, filled by Stage A from `change_kind == added` | "Test added in this PR" (`test_added_in_pr`) is now distinguishable from "modified" (`test_modified_in_pr`); `changed_test_ids` still contains both. |
+| `StageAInput.agent_signal_by_test` (default empty) | `inputs.py`, used by `normalize_evidence` | Optional per-test agent signal; a test not in the map falls back to the PR-wide `agent_signal`. |
+| `Reason.rule_id` (default `None`) | `model.py`; VD-03 sets it (and keeps `ref` = rule id for contract-1 readers) | The served payload and the renderer read `reasons[].rule_id`; it no longer travels in `ref`. |
+| `FreshnessInfo.reason` allows a 4th value `stale_sha_unchanged_covered` | `model.FRESHNESS_REASONS` | The optional decay hook (EV-07) already produced it. |
+
 ---
 
 ## 4. Persistence plan
@@ -707,7 +719,7 @@ Both stages run inside one `try/except Exception` in `run_stage_a_b_best_effort`
 
 ### 5.5 Republish after CI (VD-06 requirement) and the minimum needed
 
-Minimum: (1) API: one call to `request_recompute(analysis_id)` in `ingest_test_results`, after `recalculate_from_test_results`, only when the API setting mode is not `off` (a single insert/upsert; no GitHub credentials, no network); (2) worker: `process_pending()` in `SqlAlchemyWorkerRuntime.run_loop` after the claim step; (3) publisher: update the existing Check Run and the existing comment in place (same `COMMENT_MARKER`, same Check Run name), skipping the PATCH when `published_digest` equals the new rendered digest. Latency is the worker poll interval (default 2 s) plus Stage B (pure, no clone). Superseded heads: the route already rejects uploads for a non-latest analysis (409, `_ensure_latest_for_pull_request`), so a request never targets a stale head; the worker re-checks the analysis is still the latest before publishing. Fork PRs: GitHub App tokens are used as for v1; permission limits are the v1 ones and are documented, not solved here.
+Minimum: (1) API: one call to `request_recompute(analysis_id)` in `ingest_test_results`, after `recalculate_from_test_results`, only when the API setting mode is not `off` (a single insert/upsert; no GitHub credentials, no network); (2) worker: `process_pending()` in `SqlAlchemyWorkerRuntime.run_loop` after the claim step; (3) publisher: update the existing Check Run and the existing comment in place (same `COMMENT_MARKER`, same Check Run name) through the renderer's `plan_upsert` (create / update / skip by content digest; revision-independent), skipping all writes when `published_digest` equals the new rendered digest. There is no second v2-only comment marker: the renderer writes the v1 marker on line 1 and `<!-- radius-verdict-v2 rev=N digest=... -->` on line 2 (D10). Latency is the worker poll interval (default 2 s) plus Stage B (pure, no clone). Superseded heads: the route already rejects uploads for a non-latest analysis (409, `_ensure_latest_for_pull_request`), so a request never targets a stale head; the worker re-checks the analysis is still the latest before publishing. Fork PRs: GitHub App tokens are used as for v1; permission limits are the v1 ones and are documented, not solved here.
 
 ---
 
@@ -792,7 +804,7 @@ Same name as v1 (`Radius confidence`, `CHECK_RUN_NAME`; required-check configura
 
 ### 6.4 API
 
-New, additive route `GET /api/v1/analyses/{analysis_id}/verdict` (`routes/verdict_v2.py`). `GET /analyses/{id}/confidence` and its DTO are not changed. Response uses the standard `success_response` envelope; 404 with `meta.reason in {disabled, not_computed}` when absent.
+New, additive route `GET /api/v1/analyses/{analysis_id}/verdict-v2` (`routes/verdict_v2.py`; the VS-00 stub name `/verdict` is kept as an undocumented alias of the same handler, decided at integration). `GET /analyses/{id}/confidence` and its DTO are not changed. Response uses the standard `success_response` envelope; 404 with `meta.reason in {disabled, not_computed}` when absent.
 
 ```json
 { "success": true, "data": {
@@ -881,7 +893,7 @@ Two modes. **Gold mode** (normative): inputs are the VS-01 bundles built from ea
 | 03 incorrect, passes weak tests | C1 weak, C2 unevidenced, C3 weak | weak (0.252), unevidenced (0.144), weak (0.252) | weak (0.252), unevidenced (0.000), weak (0.290) | 1.0 / 1.0 | 1.00 | R2b | `insufficient_evidence` (never `verified` for a wrong PR; `failed` is not derivable from the shipped tests) |
 | 04 test tampering | C1 weak, C2 unevidenced, C3 unevidenced | all unevidenced (0.000) | all unevidenced (0.000) | 1.0 / 1.0 | 1.00 | R1c (T001, T002, T004, T005 high) | `failed` |
 | 05 scope creep | C1 proven, C2 proven | proven (0.604), proven (0.688) | weak (0.336), unevidenced (0.000) | 0 / 1.0 | 0.33 (1 of 3 behavioral symbols) | R2c in gold mode; R2b and R2c in auto | `insufficient_evidence` |
-| 06 hallucinated dependency | C1 proven, C2 proven | proven (0.688), proven (0.604) | proven (0.604), unevidenced (0.000) | 0 / 0.5 | 1.00 | R1c (T012 `registry_missing` high, needs an offline `StaticPackageRegistry` that lacks `pytimeparse-ultra`) | `failed`; with no registry available T012 is `unverified_new_dependency` (medium) and the verdict is `needs_review` via R3a |
+| 06 hallucinated dependency | C1 proven, C2 proven | proven (0.688), proven (0.604) | proven (0.604), unevidenced (0.000) | 0 / 0.5 | 1.00 | R1c (T012 `registry_missing` high, needs an offline `StaticPackageRegistry` that lacks `pytimeparse-ultra`) | `failed`; with no registry available the guarded import is `unverified_guarded_import` at **medium** (DEC-028) and the verdict is `needs_review` via R3a |
 | 07 vague intent | C1 excluded, C2 unevidenced | excluded, unevidenced (`needs_typed_evidence`) | same | 1.0 / 1.0 (over C2 only) | 1.00 | R2a | `insufficient_evidence` (`intent_missing_or_untestable`) |
 | 08 multi-criterion partial | C1 proven, C2 proven, C3 weak, C4 unevidenced | proven (0.604), weak (0.432), unevidenced (0.144), unevidenced (0.000) | weak (0.497), weak (0.382), unevidenced (0.119), unevidenced (0.000) | 0.75 / 1.0 | 1.00 | R2b | `insufficient_evidence` |
 
@@ -896,7 +908,7 @@ All 8 PR verdicts match `expected_verdict` in both modes (the 06 offline variant
 5. **05 symbol naming**: `expected.json` names `src/config.py::REQUEST_TIMEOUT_SECONDS`; LK-01 reports module-level constants as the pseudo-symbol `src/config.py::<module>`. The acceptance test compares through the `<module>` mapping.
 6. **02 C2 (auto)**: a spurious lexical link (`address`) gives the weak test `test_normalize_handles_plain_address` credit 0.157 for the "without `@` raises ValueError" criterion that has no test; the state is still `unevidenced` (below 0.2) but the link is wrong. Gold has none. Tracked under R2.
 7. **04 tamper `file` vs finding ids**: `expected.json` lists tamper findings by rule and test; the acceptance test matches on (`rule_id`, `test_id` or path), not on `finding_id`.
-8. **06 T012** requires registry lookups (`registry_missing`); production egress is policy-controlled (DEC-021), so the `failed` outcome needs the lookup enabled; offline it degrades to `needs_review` (above).
+8. **06 T012** requires registry lookups (`registry_missing`); production egress is policy-controlled (DEC-021), so the `failed` outcome needs the lookup enabled; offline it degrades to `needs_review` (above). **Settled at integration (DEC-028):** EV-02 had reported `unverified_guarded_import` at `high`, which made fixture 06 `failed` even offline. The default is now `medium` (a guarded import that cannot be verified is not proof of a hallucination); only `registry_missing` and `typosquat` are `high`. Offline: `needs_review` (R3a); with the registry: `failed` (R1c). Both are asserted by `apps/worker/tests/test_verdict_v2_acceptance.py`.
 
 ### 7.4 Merge sequencing for the few shared files
 
@@ -947,4 +959,4 @@ All 8 PR verdicts match `expected_verdict` in both modes (the 06 offline variant
 
 ## 9. Definition of done for the slice
 
-With `RADIUS_FEATURE_VERDICT_V2=on`, a pull request that has an intent snapshot and a CI-uploaded JUnit report gets, within one worker poll interval of the upload, one PR comment and one Check Run showing per-criterion states, the unproven intent mass, tamper findings and next actions; the same payload is served at `GET /analyses/{id}/verdict` and shown in the dashboard; with the flag off every existing test passes unchanged and the published v1 comment is byte-identical; a v2 failure leaves the v1 result published and records why; and `tests/test_verdict_v2_fixtures.py` passes in both modes on all 8 fixtures.
+With `RADIUS_FEATURE_VERDICT_V2=on`, a pull request that has an intent snapshot and a CI-uploaded JUnit report gets, within one worker poll interval of the upload, one PR comment and one Check Run showing per-criterion states, the unproven intent mass, tamper findings and next actions; the same payload is served at `GET /analyses/{id}/verdict-v2` and shown in the dashboard; with the flag off every existing test passes unchanged and the published v1 comment is byte-identical; a v2 failure leaves the v1 result published and records why; and `tests/test_verdict_v2_fixtures.py` passes in both modes on all 8 fixtures.

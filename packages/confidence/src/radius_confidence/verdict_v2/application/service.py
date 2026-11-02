@@ -126,10 +126,12 @@ def _detail(rule: RuleResult) -> str:
 
 
 def _reasons(rules: Sequence[RuleResult]) -> tuple[Reason, ...]:
-    """One reason per fired rule, deciding rule first; ``ref`` holds the rule id."""
+    """One reason per fired rule, deciding rule first; ``rule_id`` holds the rule id.
+
+    ``ref`` keeps the rule id too (contract 1 consumers read it there)."""
 
     return tuple(
-        Reason(code=RULE_TABLE[r.id][1], detail=_detail(r), ref=r.id)
+        Reason(code=RULE_TABLE[r.id][1], detail=_detail(r), ref=r.id, rule_id=r.id)
         for r in rules
         if r.fired
     )

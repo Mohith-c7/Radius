@@ -27,6 +27,7 @@ to calibrate. The only score in the payload is the labelled ``v1`` block.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -127,6 +128,17 @@ def derive_next_actions(criteria: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return actions
 
 
+_RULE_ID = re.compile(r"^R\d[a-z]?$")
+
+#: The documented per-item keys (``verdict_v2.schema.json``); bundle rows may carry more
+#: (``criterion_id``, ``lambda_kind``, ``cap_static`` ...) that are not part of the contract.
+_ITEM_KEYS = (
+    "evidence_id", "test_id", "outcome", "a_static", "d_eff", "i", "f", "flaky_f",
+    "tamper_penalty", "q", "l_cs", "l_st", "r_ct", "l", "term", "group_symbol",
+    "rank_in_group", "discount", "contribution", "status",
+)
+
+
 def _criterion(
     raw: Mapping[str, Any], outcomes: Mapping[str, Mapping[str, Any]]
 ) -> dict[str, Any]:
@@ -142,7 +154,7 @@ def _criterion(
         )
         data["test_id"] = test_id
         data["outcome"] = evidence.get("outcome") or data.get("outcome") or "not_run"
-        items.append(data)
+        items.append({k: data[k] for k in _ITEM_KEYS if k in data})
     best = raw.get("best_link")
     return {
         "criterion_id": raw.get("criterion_id", ""),
@@ -154,7 +166,10 @@ def _criterion(
         "testability": raw.get("testability", ""),
         "lifecycle": raw.get("lifecycle", ""),
         "flags": list(raw.get("flags") or []),
-        "reasons": [dict(r) for r in _maps(raw.get("reasons"))],
+        "reasons": [
+            {k: v for k, v in r.items() if not (k == "rule_id" and v is None)}
+            for r in _maps(raw.get("reasons"))
+        ],
         "best_link": dict(best) if isinstance(best, Mapping) and best else None,
         "items": items,
     }
@@ -192,8 +207,16 @@ def build_payload(
     justification = dict(stored.justification or {}) if ok else {}
     decided_by = _as_str(justification.get("decided_by"))
     reasons = [dict(r) for r in _maps(verdict.get("reasons"))] if ok else []
-    if reasons and decided_by and "rule_id" not in reasons[0]:
-        reasons[0]["rule_id"] = decided_by
+    for index, reason in enumerate(reasons):
+        if reason.get("rule_id"):
+            continue
+        ref = reason.get("ref")
+        if isinstance(ref, str) and _RULE_ID.match(ref):  # contract 1 bundles kept it in ref
+            reason["rule_id"] = ref
+        elif index == 0 and decided_by:
+            reason["rule_id"] = decided_by
+        else:
+            reason.pop("rule_id", None)
     if not ok:
         reasons = [
             {

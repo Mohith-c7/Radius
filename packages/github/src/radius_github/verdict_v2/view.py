@@ -1,7 +1,7 @@
 """``VerdictV2View``: tolerant read model of the stored verdict payload.
 
 Contract file (VS-00, then VD-06). Parses the JSON served at
-``GET /api/v1/analyses/{id}/verdict`` (``verdict_v2.schema.json``). Unknown
+``GET /api/v1/analyses/{id}/verdict-v2`` (``verdict_v2.schema.json``). Unknown
 fields are ignored, missing optional fields get neutral defaults, and every
 text field is untrusted: renderers must escape it. Stdlib only.
 """

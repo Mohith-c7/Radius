@@ -26,8 +26,9 @@ type_check               ``type_check`` (0.20)
 unknown_assert / other   ``other`` (0.00)
 ======================  =====================================================
 
-``in_loop``, ``property_based``, ``snapshot`` and helper use are carried as note
-tokens (reason codes in EV-06); they do not change the score.
+``mock_only``, ``circular``, ``dead``, ``swallowed``, ``in_loop`` and ``property_based`` are
+explicit boolean fields of ``AssertionFact`` (contract 2); only ``snapshot`` and helper use
+remain note tokens. All of them are reason codes in EV-06 and never change the score.
 """
 
 from __future__ import annotations
@@ -114,6 +115,13 @@ def _fact(record: Mapping[str, Any]) -> AssertionFact | None:
         return None
     strength = _map(record.get("strength_features"))
     kind, notes = fact_kind(kind_raw, strength)
+    # Contract 2: explicit boolean flags replace the former note tokens. Only the
+    # tokens without a flag (``helper``, ``snapshot``) stay in ``note``.
+    flags = {
+        name: bool(strength.get(name))
+        for name in ("mock_only", "circular", "dead", "swallowed", "in_loop", "property_based")
+    }
+    notes = tuple(n for n in notes if n not in flags)
     location = _map(record.get("location"))
     refs = _map(record.get("subject")).get("refs")
     symbol_ids: list[str] = []
@@ -129,6 +137,7 @@ def _fact(record: Mapping[str, Any]) -> AssertionFact | None:
         target_symbol_ids=tuple(sorted(set(symbol_ids))),
         compares_computed_value=computed,
         note=" ".join(notes) or None,
+        **flags,
     )
 
 

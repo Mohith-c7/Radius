@@ -62,6 +62,8 @@ def stage(**over: object) -> StageBInput:
         tamper=(),
         changed_test_ids=frozenset({T1}),
         agent_signal=False,
+        added_test_ids=frozenset(),
+        agent_signal_by_test={},
     )
     a_over = {k: over.pop(k) for k in list(over) if k in a}
     a.update(a_over)
@@ -249,3 +251,30 @@ def test_fuzz_never_crashes_on_random_cases() -> None:
         )
         res = run(stage(cases=cases))
         assert all(len(i.head_sha) == 40 for i in res.items)
+
+
+def _reason_codes(item) -> set[str]:
+    return {r.code for r in item.independence.reasons}
+
+
+def test_added_versus_modified_tests_are_distinguishable() -> None:
+    result = run(stage(changed_test_ids=frozenset({T1, T2}), added_test_ids=frozenset({T2})))
+    items = by_subject(result)
+    assert "test_added_in_pr" in _reason_codes(items[T2])
+    assert "test_modified_in_pr" in _reason_codes(items[T1])
+    # no added ids (contract 1 payloads): everything changed reads as modified
+    old = by_subject(run(stage(changed_test_ids=frozenset({T1, T2}))))
+    assert "test_added_in_pr" not in _reason_codes(old[T2])
+
+
+def test_per_test_agent_signal_overrides_the_pr_signal() -> None:
+    both = frozenset({T1, T2})
+    result = run(
+        stage(changed_test_ids=both, agent_signal=False, agent_signal_by_test={T2: True})
+    )
+    items = by_subject(result)
+    assert items[T2].independence.factor < items[T1].independence.factor
+    off = by_subject(
+        run(stage(changed_test_ids=both, agent_signal=True, agent_signal_by_test={T1: False}))
+    )
+    assert off[T1].independence.factor > off[T2].independence.factor

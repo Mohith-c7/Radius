@@ -325,6 +325,14 @@ class VerdictStageACollector:
 
     # -- API --------------------------------------------------------------
 
+    def resolve_head(self, analysis_id: UUID, command: Any) -> str | None:
+        """The head sha, or ``None`` when it cannot be resolved (never raises)."""
+
+        try:
+            return self._head_sha(analysis_id, command)
+        except Exception:  # noqa: BLE001 - used on the error path only
+            return None
+
     def collect(self, analysis_id: UUID, command: Any) -> StageAInput:
         """Build the :class:`StageAInput`; raises :class:`StageAError` on critical failure."""
 
@@ -476,6 +484,7 @@ class VerdictStageACollector:
             tamper_waived=tamper.waived,
             tamper_unanalyzable=tamper.unanalyzable,
             changed_test_ids=changed_tests,
+            added_test_ids=adapters.changed_test_ids(sym_items, added_only=True),
             agent_signal=adapters.agent_signal(facts.commit_messages),
             degraded=tuple(run.degraded),
             algo_versions=dict(sorted(run.algo.items())),

@@ -91,6 +91,7 @@ def normalize_evidence(
     for cedge in sa.criterion_test:
         criteria_by_test[normalize_test_id(cedge.test_id)].add(cedge.criterion_id)
     symbol_paths = {s.symbol_id: s.path for s in sa.symbols}
+    agent_by_test = {normalize_test_id(t): v for t, v in sa.agent_signal_by_test.items()}
 
     known = (
         set(features)
@@ -141,8 +142,9 @@ def normalize_evidence(
         independence = classify_independence(
             test_id,
             changed_test_ids={normalize_test_id(t) for t in sa.changed_test_ids},
+            added_test_ids={normalize_test_id(t) for t in sa.added_test_ids},
             implementation_changed=impl_changed,
-            agent_signal=sa.agent_signal,
+            agent_signal=agent_by_test.get(test_id, sa.agent_signal),
             human_attested=test_id in human_attested_tests,
             config=cfg,
         )
