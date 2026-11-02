@@ -48,6 +48,25 @@ docker compose logs -f api worker dashboard
 
 The Next.js web console is available at `http://localhost:3000`.
 
+### Container runtime behavior (PRD-08)
+
+All three images run as the non-root user `radius` (uid/gid `10001:10001`) and define a
+`HEALTHCHECK` (api: `/api/v1/ready`; worker: database reachability; dashboard: `GET /login`).
+Check them with `docker compose ps` (the STATUS column shows `healthy`) or
+`docker inspect --format '{{.State.Health.Status}}' <container>`.
+
+* Named volumes that existed before this change were created root-owned. For the worker's
+  repository cache, either recreate the volume (`docker compose down -v` drops it, and the
+  cache is rebuildable) or `chown -R 10001:10001` its contents once.
+* Read-only root filesystems are supported (verified with `--read-only --cap-drop ALL`).
+  The api and dashboard need no writable path; the worker needs its repository cache volume
+  (`/var/lib/radius/repositories`) and, as a precaution, a tmpfs on `/tmp`. Exact commands are in
+  [security/CONTAINERS.md](security/CONTAINERS.md).
+* Worker sandbox mode (`WORKER_TEST_EXECUTION_MODE=sandbox`) needs a container runtime. The
+  default worker image has none; build the `sandbox` target (adds the docker CLI) and give
+  it a daemon, see [security/CONTAINERS.md](security/CONTAINERS.md) and
+  [security/EXECUTION_ISOLATION.md](security/EXECUTION_ISOLATION.md).
+
 ---
 
 ## 3. Production Environment Configuration
