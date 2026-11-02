@@ -1,3 +1,13 @@
+# Profiles
+#   (none) / "core"  postgres, migrations, api, worker, dashboard. These services
+#                    carry no `profiles:` key on purpose so the documented
+#                    `docker compose up -d --build` (README, docs/DEPLOYMENT.md)
+#                    keeps working; `make dev` / scripts/dev.ps1 start exactly them.
+#   sandbox          builds the image the worker uses to run PR tests in an
+#                    isolated container (WORKER_TEST_EXECUTION_MODE=sandbox).
+#   observability    Jaeger + Prometheus for local tracing/metrics (see
+#                    docs/OBSERVABILITY.md).
+# Usage: docker compose --profile sandbox up sandbox-image
 services:
   postgres:
     image: postgres:16-alpine
@@ -11,7 +21,7 @@ services:
       timeout: 5s
       retries: 12
     ports:
-      - "5432:5432"
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - radius-postgres-data:/var/lib/postgresql/data
 
@@ -109,6 +119,23 @@ services:
       RADIUS_API_BASE_URL: ${RADIUS_API_BASE_URL:-http://api:8000}
     ports:
       - "3000:3000"
+
+  # ---- profile: sandbox ---------------------------------------------------
+  # One-shot build of the sandbox test image (same recipe CI uses). It does not
+  # run the sandbox: the worker starts per-command containers itself, which
+  # needs a container runtime on the worker host (see
+  # docs/security/EXECUTION_ISOLATION.md). The compose `worker` has no docker
+  # socket, so sandbox mode is meant for `make dev-local`, not for compose.
+  sandbox-image:
+    profiles: ["sandbox"]
+    image: radius-sandbox-test:latest
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM python:3.12-slim
+        RUN pip install --no-cache-dir pytest==9.2.0
+    command: ["python", "-m", "pytest", "--version"]
+    restart: "no"
 
   # Optional local observability stack: docker compose --profile observability up
   # See docs/OBSERVABILITY.md. Not started by default.
