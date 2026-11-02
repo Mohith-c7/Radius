@@ -13,7 +13,7 @@ Radius runs as an orchestrated multi-service stack:
 | **`postgres`** | PostgreSQL 16 (Alpine) | `5432` | Relational storage for organizations, repositories, analyses, test runs, and confidence reports. |
 | **`migrations`** | Alembic (one-shot container) | — | Automatically applies all pending database schema migrations on startup before the API launches. |
 | **`api`** | FastAPI (Python 3.12, Uvicorn) | `8000` | REST API handling repository management, analysis triggers, predictive test queries, CI ingestion, and dashboard data. |
-| **`worker`** | Python 3.12 Background Worker | — | Processes asynchronous analysis jobs, builds multi-language ASTs and CPGs, slices diff hunks, runs AI pruning, and publishes GitHub Check Runs. |
+| **`worker`** | Python 3.12 Background Worker | — | Processes asynchronous analysis jobs, parses the repository, builds the dependency graph, slices diff hunks, selects tests, and publishes GitHub Check Runs. |
 | **`dashboard`** | Next.js 15.5 (Node 22) | `3000` | Web console with interactive SVG CPG graph viewer, Predictive Test Selection Hub, CI report uploader, and real-time confidence metrics. |
 
 ---
@@ -57,7 +57,7 @@ The Next.js web console is available at `http://localhost:3000`.
 | **`DATABASE_URL`** | PostgreSQL connection string for API, worker, and migrations. | `postgresql+psycopg://radius:password@postgres:5432/radius` |
 | **`RADIUS_ENV`** | Application runtime environment (`production`, `development`). | `production` |
 | **`RADIUS_LOG_LEVEL`** | Application logging level (`INFO`, `DEBUG`, `WARNING`). | `INFO` |
-| **`GEMINI_API_KEY`** | Google Gemini API key for Gemini 2.0 Flash semantic AI impact pruning. | `AIzaSy...` |
+| **`GEMINI_API_KEY`** | Google Gemini API key for the experimental Gemini call-site classifier. It is not part of the analysis pipeline and does not affect verdicts or test selection. | `AIzaSy...` |
 | **`API_KEYS`** | Comma-separated API keys accepted by API in format `org_id:key`. | `00000000-0000-4000-8000-000000000001:radius_key_live` |
 | **`GITHUB_APP_ID`** | GitHub App ID used to generate installation access tokens. | `123456` |
 | **`GITHUB_APP_PRIVATE_KEY`** | RSA Private Key for the GitHub App (PEM format with `\n`). | `-----BEGIN RSA PRIVATE KEY-----\n...` |
@@ -97,5 +97,5 @@ To configure Radius to automatically verify Pull Requests:
 
 - **Tenant Isolation**: Every API request requires an `X-Radius-Organization-Id` header (and optional Bearer API key). Data queries strictly scope records by organization ID.
 - **Symlink Traversal Defense**: The worker uses `os.path.realpath` bounds checking during repository filesystem traversal to prevent symlink escape vulnerabilities.
-- **Fail-Safe AI Pruning**: If the Gemini API key is missing or an unexpected error occurs during AI evaluation, the semantic pruner automatically defaults to `impacted=True` (safe fallback) to ensure critical tests are never missed.
-- **No Unsafe Code Execution**: Worker analysis is purely static AST and CPG graph traversal; untrusted repository code is never executed inside worker containers.
+- **No LLM on the verdict path**: the experimental semantic pruner is not invoked by the worker pipeline, so no model output can remove tests or dependency edges from the selection (see `docs/audit/RADIUS_AUDIT.md`).
+- **No Unsafe Code Execution**: Worker analysis is static parsing and graph traversal; untrusted repository code is never executed inside worker containers.
