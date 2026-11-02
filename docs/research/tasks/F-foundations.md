@@ -45,7 +45,7 @@ Goal: make the existing prototype trustworthy enough to build on. Fixes the gaps
 - Acceptance: `git status` clean after a full build/test; `.gitignore` covers generated artifacts; no hardcoded personal paths remain.
 - Tests: CI passes.
 
-### F-04 Reconcile branch flow and default branch   [ ]
+### F-04 Reconcile branch flow and default branch   [x]
 - Owner type: human-required (settings) + agent-ok (docs)
 - Depends on: none
 - Branch: `docs/branch-flow`
@@ -58,6 +58,7 @@ Goal: make the existing prototype trustworthy enough to build on. Fixes the gaps
   4. Add a PR template (`.github/pull_request_template.md`) with the Definition of Done checklist.
   5. Note: `dev` currently contains an empty test commit `c2d5db6` that is not on `develop`/`main`. Decide: let it flow, or add a revert via PR. Do not force-push.
 - Acceptance: docs match reality; branch protection active; PR template present.
+- Status: docs, script and PR template are done. The applied protection differs from step 3's "linear promotion only": it uses merge-commit promotion and no signed-commit or linear-history rule (see `docs/github-branch-protection.md`). Applying the settings through the GitHub API is a separate owner step after this merges.
 - Product hook: Radius dogfoods its own required check on this repo (see IT-03).
 
 ### F-05 Remove the public API key from the dashboard   [ ]
@@ -175,10 +176,11 @@ Goal: make the existing prototype trustworthy enough to build on. Fixes the gaps
 - Steps: `make dev` or `pnpm dev` wrapper; docker-compose profiles (core, sandbox, observability); seed script (opt-in demo data, clearly labelled); troubleshooting section; Windows notes.
 - Acceptance: fresh clone to running dashboard + API + worker in under 15 minutes following `docs/DEVELOPMENT_GUIDE.md`.
 
-### F-16 Follow-up on the test commit on `dev`   [ ]
+### F-16 Follow-up on the test commit on `dev`   [x]
 - Owner type: human-required
 - Depends on: F-04
 - Branch: n/a (decision)
 - Size: S
 - Goal: the empty commit `c2d5db6` ("test: verify commit identity for Mohith-c7") exists on `dev` only. Decide to leave it or revert via a normal PR. No force-push.
 - Acceptance: decision recorded in `docs/decisions.md`.
+- Decision: leave the commit (DEC-016).
