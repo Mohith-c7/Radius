@@ -128,7 +128,7 @@ def derive_next_actions(criteria: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return actions
 
 
-_RULE_ID = re.compile(r"^R\d[a-z]?$")
+_RULE_ID = re.compile(r"^[RP]\d[a-z]?$")
 
 #: The documented per-item keys (``verdict_v2.schema.json``); bundle rows may carry more
 #: (``criterion_id``, ``lambda_kind``, ``cap_static`` ...) that are not part of the contract.
@@ -204,6 +204,7 @@ def build_payload(
         sev = str(finding.get("severity"))
         if sev in tamper_counts:
             tamper_counts[sev] += 1
+    waived_raw = _maps(verdict.get("tamper_waived")) if ok else []
     justification = dict(stored.justification or {}) if ok else {}
     decided_by = _as_str(justification.get("decided_by"))
     reasons = [dict(r) for r in _maps(verdict.get("reasons"))] if ok else []
@@ -260,7 +261,7 @@ def build_payload(
             else "static_only",
         },
         "criteria": criteria,
-        "tamper_findings": [dict(t) for t in tamper_raw],
+        "tamper_findings": [dict(t) for t in tamper_raw] + [dict(w) for w in waived_raw],
         "unlinked_symbols": [
             s for s in (verdict.get("unlinked_symbols") or []) if isinstance(s, str)
         ]
@@ -272,6 +273,12 @@ def build_payload(
         "dashboard_url": dashboard_url,
         "error": None,
     }
+    if waived_raw:
+        payload["summary"]["tamper_waived"] = len(waived_raw)
+    if ok and isinstance(verdict.get("policy"), Mapping) and verdict["policy"]:
+        payload["policy"] = dict(verdict["policy"])
+    if ok and isinstance(verdict.get("waivers"), Mapping) and verdict["waivers"]:
+        payload["waivers"] = dict(verdict["waivers"])
     if stored.status != "ok":
         payload["error"] = {
             "code": stored.reason_code or stored.status,

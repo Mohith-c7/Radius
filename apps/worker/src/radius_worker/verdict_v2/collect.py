@@ -129,6 +129,51 @@ def default_tamper(changeset: Any, command: Any) -> Any:
     return analyze_tampering(changeset, base, head, diff_text=command.diff_text or None)
 
 
+def _ref_resolves(repository_path: Any, ref: str) -> bool:
+    """True when ``ref`` names a commit in the checkout (a missing base must not read as "no policy")."""
+
+    import subprocess
+
+    if not ref or ref.startswith("-"):
+        return False
+    try:
+        result = subprocess.run(  # noqa: S603 - fixed argv, ref validated above
+            ["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],  # noqa: S607
+            cwd=repository_path,
+            capture_output=True,
+            check=False,
+            timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return result.returncode == 0
+
+
+def default_repo_config(command: Any) -> dict[str, Any]:
+    """VD-04/VD-05: capture ``.radius/policy.yml`` and ``waivers.yml`` at the BASE ref.
+
+    The head side is passed only so that a base policy that opted in with
+    ``head_policy: tighten_only`` can have its head copy read; waivers are never read
+    from the head.
+    """
+
+    from radius_analysis.symbol_changes import DirectorySnapshot, GitSnapshot
+    from radius_evidence.policy.repo_config import collect_repo_config
+
+    repository = getattr(command, "repository_path", None)
+    base_ref = getattr(command, "base_ref", None) or None
+    if not repository or not base_ref:
+        return collect_repo_config(None, None, base_ref=base_ref)
+    head_ref = getattr(command, "head_ref", None)
+    head = GitSnapshot(repository, head_ref) if head_ref else DirectorySnapshot(repository)
+    return collect_repo_config(
+        GitSnapshot(repository, base_ref).read,
+        head.read,
+        base_ref=base_ref,
+        base_available=_ref_resolves(repository, base_ref),
+    )
+
+
 def default_link_criteria(
     criteria: Sequence[CriterionInput],
     changeset: Any,
@@ -237,6 +282,8 @@ class Producers:
     link_criteria: Callable[..., Any] = default_link_criteria
     link_tests: Callable[..., Any] = default_link_tests
     assertions: Callable[..., Any] = default_assertions
+    #: VD-04/VD-05 repository config at the base ref: ``(command) -> dict``.
+    repo_config: Callable[[Any], dict[str, Any]] = default_repo_config
     #: VS-04 relevance: ``(criteria, criterion_linkset, symbol_test_linkset, sources,
     #: assertion_set) -> edges``. ``None`` means unavailable (hints only, marker
     #: ``relevance_unavailable``).
@@ -377,6 +424,19 @@ class VerdictStageACollector:
         run.mark(*(f"adapter_dropped:{k}" for k in sorted(tamper.dropped)))
         run.algo["tamper"] = getattr(report, "catalog_version", TAMPER_VERSION)
 
+        try:
+            repo_config = guarded(lambda: prod.repo_config(command), self._limits.step_timeout_s)
+        except Exception as exc:  # noqa: BLE001 - never crash; fail towards "not verified"
+            LOGGER.warning(
+                "Verdict v2 repository config read failed",
+                extra={"analysis_id": str(analysis_id), "reason_code": type(exc).__name__},
+            )
+            repo_config = {
+                "base_ref": str(getattr(command, "base_ref", "") or ""),
+                "policy": {"status": "unreadable"},
+                "waivers": {"status": "unreadable"},
+            }
+
         root = Path(command.repository_path)
         sources, src_truncated = run.step(
             "read_sources", lambda: prod.read_sources(root), ({}, False)
@@ -488,6 +548,7 @@ class VerdictStageACollector:
             agent_signal=adapters.agent_signal(facts.commit_messages),
             degraded=tuple(run.degraded),
             algo_versions=dict(sorted(run.algo.items())),
+            repo_config=repo_config,
         )
 
     @staticmethod

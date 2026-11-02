@@ -160,6 +160,10 @@
           "enum": [
             "static_only"
           ]
+        },
+        "tamper_waived": {
+          "type": "integer",
+          "description": "Contract 3: findings accepted by a waiver."
         }
       }
     },
@@ -455,6 +459,31 @@
               "string",
               "null"
             ]
+          },
+          "waived": {
+            "type": "boolean",
+            "description": "Contract 3: a valid waiver accepts this finding; it is still listed."
+          },
+          "waiver": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Contract 3: id, reason (UNTRUSTED), owner, expires.",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "owner": {
+                "type": "string"
+              },
+              "expires": {
+                "type": "string"
+              }
+            }
           }
         }
       }
@@ -538,6 +567,8 @@
                   "R2b",
                   "R2c",
                   "R2d",
+                  "P1",
+                  "P2",
                   "R3a",
                   "R3b",
                   "R3c",
@@ -644,6 +675,144 @@
           "type": "string"
         },
         "fallback": {
+          "type": "string"
+        }
+      }
+    },
+    "policy": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Contract 3: resolved .radius/policy.yml (read from the base branch); absent when the repo has none.",
+      "properties": {
+        "present": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "advisory",
+            "blocking",
+            null
+          ]
+        },
+        "source": {
+          "type": "object"
+        },
+        "head_policy": {
+          "enum": [
+            "ignore",
+            "tighten_only"
+          ]
+        },
+        "thresholds": {
+          "type": "object"
+        },
+        "provenance": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "value": {},
+              "origin": {
+                "enum": [
+                  "base",
+                  "head"
+                ]
+              },
+              "file": {
+                "type": "string"
+              },
+              "line": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "ignored_head": {
+          "type": "array"
+        },
+        "requirements": {
+          "type": "array"
+        },
+        "exclude_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tamper": {
+          "type": "object"
+        },
+        "unmet": {
+          "type": "object"
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "waivers": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Contract 3: waiver audit record of this verdict (read from the base branch).",
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "source": {
+          "type": "object"
+        },
+        "applied": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "ignored": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "line": {
+                "type": "integer"
+              },
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "audit_digest": {
+          "type": "string"
+        },
+        "evaluated_on": {
           "type": "string"
         }
       }
