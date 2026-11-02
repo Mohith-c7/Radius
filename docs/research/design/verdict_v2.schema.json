@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://radius.invalid/schemas/verdict_v2.schema.json",
-  "title": "Verdict v2 payload (data of GET /api/v1/analyses/{id}/verdict; also the stored verdict_v2.* summary)",
+  "title": "Verdict v2 payload (data of GET /api/v1/analyses/{id}/verdict-v2; also the stored verdict_v2.* summary)",
   "description": "Contract of docs/research/design/VERDICT_V2_SLICE.md. Consumers must ignore unknown properties. All text fields derived from PR or issue content are untrusted.",
   "type": "object",
   "required": [

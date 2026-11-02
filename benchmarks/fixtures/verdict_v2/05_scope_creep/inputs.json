@@ -1,0 +1,1157 @@
+{
+  "contracts": "radius_evidence.domain.inputs (StageAInput, StageBInput)",
+  "expected_verdict": "insufficient_evidence",
+  "fixture": "05_scope_creep",
+  "generated_by": "scripts/verdict_v2_make_fixtures.py",
+  "modes": {
+    "auto": {
+      "mode": "auto",
+      "provenance": {
+        "assertions": {
+          "note": "LK-04 (radius_testing.assertions) emits a different record shape (AssertionRecord/TestSummary); this is a hand-built AssertionFeatures per design 3.2/3.6, one per test function at head",
+          "origin": "hand_built",
+          "producer": "scripts/verdict_v2_make_fixtures.py: ast classifier (fixture-ast-v1)"
+        },
+        "changed_test_ids": {
+          "origin": "derived",
+          "producer": "LK-01 symbols that are test functions present at head"
+        },
+        "criteria": {
+          "note": "weight 1.0, lifecycle confirmed",
+          "origin": "derived",
+          "producer": "expected.json criteria[]"
+        },
+        "criterion_symbol": {
+          "note": "combined links, no reranker",
+          "origin": "real",
+          "producer": "radius_linking.infrastructure.pipeline.link_changeset (LK-02)"
+        },
+        "criterion_test": {
+          "note": "VS-04 (test relevance) does not exist yet; VS-02 adds the real snapshot",
+          "origin": "hand_built",
+          "producer": "empty"
+        },
+        "ids": {
+          "note": "uuid5/sha1 of the fixture name; head_sha is a PLACEHOLDER, not a git sha",
+          "origin": "derived",
+          "producer": "scripts/verdict_v2_make_fixtures.py"
+        },
+        "stage_b": {
+          "note": "outcomes copied per scenario",
+          "origin": "hand_built",
+          "producer": "expected.json test_outcomes"
+        },
+        "symbol_test": {
+          "note": "head python sources; no dynamic coverage",
+          "origin": "real",
+          "producer": "radius_testing.linking StaticLinker + NamingLinker + combine_links (LK-03)"
+        },
+        "symbols": {
+          "note": "base/head snapshots + pr.patch",
+          "origin": "real",
+          "producer": "radius_analysis.symbol_changes.extract_symbol_changes (LK-01)"
+        },
+        "tamper": {
+          "note": "offline StaticPackageRegistry lacking pytimeparse-ultra; default (no registry) result in tamper_variants",
+          "origin": "real",
+          "producer": "radius_analysis.tamper.analyze_tampering (EV-02)"
+        }
+      },
+      "stage_a": {
+        "added_test_ids": [],
+        "agent_signal": false,
+        "agent_signal_by_test": {},
+        "algo_versions": {
+          "assertions": "test-assertions-v1",
+          "assertions_producer": "fixture-ast-v1",
+          "criterion_symbol_links": "criterion-symbol-links-v1",
+          "criterion_test": "pending-vs04",
+          "symbol_changes": "symbol-changes-v1",
+          "symbol_test_links": "link-combine-v1",
+          "tamper": "tamper-rules-v1"
+        },
+        "analysis_id": "bb74cf57-209f-5a28-a815-6286c5730a5e",
+        "assertions": [
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
+                "kind": "value_equality",
+                "line": 5,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": [
+                  "python:src/billing.py::round_money#function@992b0d58ee59"
+                ]
+              }
+            ],
+            "called_symbol_refs": [
+              "src/billing.py::round_money"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 5,
+            "line_start": 4,
+            "literal_terms": [
+              "1.23",
+              "1.234"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "round",
+              "money",
+              "two",
+              "place"
+            ],
+            "path": "tests/test_billing.py",
+            "test_id": "tests/test_billing.py::test_round_money_two_places"
+          },
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
+                "kind": "value_equality",
+                "line": 9,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": [
+                  "python:src/text_utils.py::slugify#function@9a2772376b82"
+                ]
+              }
+            ],
+            "called_symbol_refs": [
+              "src/text_utils.py::slugify"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 9,
+            "line_start": 8,
+            "literal_terms": [
+              "hello",
+              "world"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "slugify",
+              "basic"
+            ],
+            "path": "tests/test_text_utils.py",
+            "test_id": "tests/test_text_utils.py::test_slugify_basic"
+          },
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
+                "kind": "value_equality",
+                "line": 13,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": [
+                  "python:src/text_utils.py::slugify#function@9a2772376b82"
+                ]
+              }
+            ],
+            "called_symbol_refs": [
+              "src/text_utils.py::slugify"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 13,
+            "line_start": 12,
+            "literal_terms": [
+              "multiple",
+              "space"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "slugify",
+              "collapse",
+              "whitespace"
+            ],
+            "path": "tests/test_text_utils.py",
+            "test_id": "tests/test_text_utils.py::test_slugify_collapses_whitespace"
+          },
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
+                "kind": "value_equality",
+                "line": 17,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": [
+                  "python:src/text_utils.py::slugify#function@9a2772376b82"
+                ]
+              }
+            ],
+            "called_symbol_refs": [
+              "src/text_utils.py::slugify"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 17,
+            "line_start": 16,
+            "literal_terms": [],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "slugify",
+              "empty"
+            ],
+            "path": "tests/test_text_utils.py",
+            "test_id": "tests/test_text_utils.py::test_slugify_empty"
+          },
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
+                "kind": "value_equality",
+                "line": 21,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": [
+                  "python:src/text_utils.py::slugify#function@9a2772376b82"
+                ]
+              }
+            ],
+            "called_symbol_refs": [
+              "src/text_utils.py::slugify"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 21,
+            "line_start": 20,
+            "literal_terms": [
+              "already",
+              "slug",
+              "ifi"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "slugify",
+              "treat",
+              "underscore",
+              "as",
+              "separator"
+            ],
+            "path": "tests/test_text_utils.py",
+            "test_id": "tests/test_text_utils.py::test_slugify_treats_underscore_as_separator"
+          },
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
+                "kind": "value_equality",
+                "line": 5,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": []
+              }
+            ],
+            "called_symbol_refs": [
+              "src/text_utils.py::title_case"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 5,
+            "line_start": 4,
+            "literal_terms": [
+              "hello",
+              "big",
+              "world"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "title",
+              "case"
+            ],
+            "path": "tests/test_text_utils.py",
+            "test_id": "tests/test_text_utils.py::test_title_case"
+          }
+        ],
+        "changed_test_ids": [
+          "tests/test_text_utils.py::test_slugify_basic",
+          "tests/test_text_utils.py::test_slugify_collapses_whitespace",
+          "tests/test_text_utils.py::test_slugify_empty",
+          "tests/test_text_utils.py::test_slugify_treats_underscore_as_separator"
+        ],
+        "changeset_ref": "symbol-changes-v1:655f80d2a507b8ac",
+        "criteria": [
+          {
+            "criterion_id": "C1",
+            "hints_paths": [],
+            "hints_tests": [],
+            "lifecycle": "confirmed",
+            "testability": "behavioral_testable",
+            "text": "slugify lowercases and replaces each run of non-alphanumeric characters with a single '-'",
+            "weight": 1.0
+          },
+          {
+            "criterion_id": "C2",
+            "hints_paths": [],
+            "hints_tests": [],
+            "lifecycle": "confirmed",
+            "testability": "behavioral_testable",
+            "text": "leading and trailing '-' are removed",
+            "weight": 1.0
+          }
+        ],
+        "criterion_symbol": [
+          {
+            "by_linker": {
+              "change_prior": 1.0,
+              "lexical": 0.407579
+            },
+            "criterion_id": "C1",
+            "rank": 1,
+            "reasons": [
+              {
+                "code": "bm25_summary",
+                "detail": "lexical: matched 5/8 query terms in src/text_utils.py::slugify; coverage=0.62",
+                "ref": null,
+                "rule_id": null
+              },
+              {
+                "code": "bm25_term",
+                "detail": "lexical: term 'slugify' bm25=1.485",
+                "ref": null,
+                "rule_id": null
+              },
+              {
+                "code": "bm25_term",
+                "detail": "lexical: term 'alphanumeric' bm25=1.132",
+                "ref": null,
+                "rule_id": null
+              },
+              {
+                "code": "bm25_term",
+                "detail": "lexical: term 'lowercase' bm25=1.132",
+                "ref": null,
+                "rule_id": null
+              },
+              {
+                "code": "bm25_term",
+                "detail": "lexical: term 'non' bm25=1.132",
+                "ref": null,
+                "rule_id": null
+              },
+              {
+                "code": "bm25_term",
+                "detail": "lexical: term 'run' bm25=1.132",
+                "ref": null,
+                "rule_id": null
+              },
+              {
+                "code": "change_kind",
+                "detail": "change_prior: added (behavioural)",
+                "ref": null,
+                "rule_id": null
+              }
+            ],
+            "score": 0.326063,
+            "symbol_id": "python:src/text_utils.py::slugify#function@9a2772376b82"
+          }
+        ],
+        "criterion_test": [],
+        "degraded": [],
+        "head_sha": "b62afcdbc9c54fce8d485b4d2f21d575f6b785c7",
+        "repository_id": "2b9b7968-113c-5da7-9636-da911dae384a",
+        "symbol_test": [
+          {
+            "depth": null,
+            "kind": "direct_call",
+            "score": 0.9,
+            "symbol_id": "python:src/billing.py::round_money#function@992b0d58ee59",
+            "test_id": "tests/test_billing.py::test_round_money_two_places"
+          },
+          {
+            "depth": null,
+            "kind": "direct_call",
+            "score": 0.9,
+            "symbol_id": "python:src/text_utils.py::slugify#function@9a2772376b82",
+            "test_id": "tests/test_text_utils.py::test_slugify_basic"
+          },
+          {
+            "depth": null,
+            "kind": "direct_call",
+            "score": 0.9,
+            "symbol_id": "python:src/text_utils.py::slugify#function@9a2772376b82",
+            "test_id": "tests/test_text_utils.py::test_slugify_collapses_whitespace"
+          },
+          {
+            "depth": null,
+            "kind": "direct_call",
+            "score": 0.9,
+            "symbol_id": "python:src/text_utils.py::slugify#function@9a2772376b82",
+            "test_id": "tests/test_text_utils.py::test_slugify_empty"
+          },
+          {
+            "depth": null,
+            "kind": "direct_call",
+            "score": 0.9,
+            "symbol_id": "python:src/text_utils.py::slugify#function@9a2772376b82",
+            "test_id": "tests/test_text_utils.py::test_slugify_treats_underscore_as_separator"
+          },
+          {
+            "depth": null,
+            "kind": "import_reference",
+            "score": 0.25,
+            "symbol_id": "python:src/text_utils.py::slugify#function@9a2772376b82",
+            "test_id": "tests/test_text_utils.py::test_title_case"
+          }
+        ],
+        "symbols": [
+          {
+            "change_kind": "modified_body",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": false,
+            "kind": "function",
+            "language": "python",
+            "path": "src/billing.py",
+            "qualified_name": "round_money",
+            "symbol_id": "python:src/billing.py::round_money#function@992b0d58ee59"
+          },
+          {
+            "change_kind": "modified_body",
+            "is_behavioral": true,
+            "is_pseudo": true,
+            "is_test": false,
+            "kind": "module",
+            "language": "python",
+            "path": "src/config.py",
+            "qualified_name": "<module>",
+            "symbol_id": "python:src/config.py::<module>#module@da39a3ee5e6b"
+          },
+          {
+            "change_kind": "added",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": false,
+            "kind": "function",
+            "language": "python",
+            "path": "src/text_utils.py",
+            "qualified_name": "slugify",
+            "symbol_id": "python:src/text_utils.py::slugify#function@9a2772376b82"
+          },
+          {
+            "change_kind": "added",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": true,
+            "kind": "function",
+            "language": "python",
+            "path": "tests/test_text_utils.py",
+            "qualified_name": "test_slugify_basic",
+            "symbol_id": "python:tests/test_text_utils.py::test_slugify_basic#function@f9065fa73897"
+          },
+          {
+            "change_kind": "added",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": true,
+            "kind": "function",
+            "language": "python",
+            "path": "tests/test_text_utils.py",
+            "qualified_name": "test_slugify_collapses_whitespace",
+            "symbol_id": "python:tests/test_text_utils.py::test_slugify_collapses_whitespace#function@f9065fa73897"
+          },
+          {
+            "change_kind": "added",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": true,
+            "kind": "function",
+            "language": "python",
+            "path": "tests/test_text_utils.py",
+            "qualified_name": "test_slugify_empty",
+            "symbol_id": "python:tests/test_text_utils.py::test_slugify_empty#function@f9065fa73897"
+          },
+          {
+            "change_kind": "added",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": true,
+            "kind": "function",
+            "language": "python",
+            "path": "tests/test_text_utils.py",
+            "qualified_name": "test_slugify_treats_underscore_as_separator",
+            "symbol_id": "python:tests/test_text_utils.py::test_slugify_treats_underscore_as_separator#function@f9065fa73897"
+          }
+        ],
+        "tamper": [],
+        "tamper_unanalyzable": [],
+        "tamper_waived": 0
+      },
+      "status": "criterion_test_pending_vs04"
+    },
+    "gold": {
+      "mode": "gold",
+      "provenance": {
+        "assertions": {
+          "note": "LK-04 (radius_testing.assertions) emits a different record shape (AssertionRecord/TestSummary); this is a hand-built AssertionFeatures per design 3.2/3.6, one per test function at head",
+          "origin": "hand_built",
+          "producer": "scripts/verdict_v2_make_fixtures.py: ast classifier (fixture-ast-v1)"
+        },
+        "changed_test_ids": {
+          "origin": "derived",
+          "producer": "LK-01 symbols that are test functions present at head"
+        },
+        "criteria": {
+          "note": "weight 1.0, lifecycle confirmed",
+          "origin": "derived",
+          "producer": "expected.json criteria[]"
+        },
+        "criterion_symbol": {
+          "note": "score 1.0, rank 1",
+          "origin": "hand_built",
+          "producer": "expected.json links[]"
+        },
+        "criterion_test": {
+          "note": "ADDRESSED_BY weight 1.0, method gold_expected_json",
+          "origin": "hand_built",
+          "producer": "expected.json links[].tests"
+        },
+        "ids": {
+          "note": "uuid5/sha1 of the fixture name; head_sha is a PLACEHOLDER, not a git sha",
+          "origin": "derived",
+          "producer": "scripts/verdict_v2_make_fixtures.py"
+        },
+        "stage_b": {
+          "note": "outcomes copied per scenario",
+          "origin": "hand_built",
+          "producer": "expected.json test_outcomes"
+        },
+        "symbol_test": {
+          "note": "ADDRESSED tests as EXERCISED_BY edges, score 0.9 (l_st), kind gold",
+          "origin": "hand_built",
+          "producer": "expected.json links[].tests"
+        },
+        "symbols": {
+          "note": "base/head snapshots + pr.patch",
+          "origin": "real",
+          "producer": "radius_analysis.symbol_changes.extract_symbol_changes (LK-01)"
+        },
+        "tamper": {
+          "note": "offline StaticPackageRegistry lacking pytimeparse-ultra; default (no registry) result in tamper_variants",
+          "origin": "real",
+          "producer": "radius_analysis.tamper.analyze_tampering (EV-02)"
+        }
+      },
+      "stage_a": {
+        "added_test_ids": [],
+        "agent_signal": false,
+        "agent_signal_by_test": {},
+        "algo_versions": {
+          "assertions": "test-assertions-v1",
+          "assertions_producer": "fixture-ast-v1",
+          "links": "verdict-v2-fixture-gold-1",
+          "symbol_changes": "symbol-changes-v1",
+          "tamper": "tamper-rules-v1"
+        },
+        "analysis_id": "bb74cf57-209f-5a28-a815-6286c5730a5e",
+        "assertions": [
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
+                "kind": "value_equality",
+                "line": 5,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": [
+                  "python:src/billing.py::round_money#function@992b0d58ee59"
+                ]
+              }
+            ],
+            "called_symbol_refs": [
+              "src/billing.py::round_money"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 5,
+            "line_start": 4,
+            "literal_terms": [
+              "1.23",
+              "1.234"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "round",
+              "money",
+              "two",
+              "place"
+            ],
+            "path": "tests/test_billing.py",
+            "test_id": "tests/test_billing.py::test_round_money_two_places"
+          },
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
+                "kind": "value_equality",
+                "line": 9,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": [
+                  "python:src/text_utils.py::slugify#function@9a2772376b82"
+                ]
+              }
+            ],
+            "called_symbol_refs": [
+              "src/text_utils.py::slugify"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 9,
+            "line_start": 8,
+            "literal_terms": [
+              "hello",
+              "world"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "slugify",
+              "basic"
+            ],
+            "path": "tests/test_text_utils.py",
+            "test_id": "tests/test_text_utils.py::test_slugify_basic"
+          },
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
+                "kind": "value_equality",
+                "line": 13,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": [
+                  "python:src/text_utils.py::slugify#function@9a2772376b82"
+                ]
+              }
+            ],
+            "called_symbol_refs": [
+              "src/text_utils.py::slugify"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 13,
+            "line_start": 12,
+            "literal_terms": [
+              "multiple",
+              "space"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "slugify",
+              "collapse",
+              "whitespace"
+            ],
+            "path": "tests/test_text_utils.py",
+            "test_id": "tests/test_text_utils.py::test_slugify_collapses_whitespace"
+          },
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
+                "kind": "value_equality",
+                "line": 17,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": [
+                  "python:src/text_utils.py::slugify#function@9a2772376b82"
+                ]
+              }
+            ],
+            "called_symbol_refs": [
+              "src/text_utils.py::slugify"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 17,
+            "line_start": 16,
+            "literal_terms": [],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "slugify",
+              "empty"
+            ],
+            "path": "tests/test_text_utils.py",
+            "test_id": "tests/test_text_utils.py::test_slugify_empty"
+          },
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
+                "kind": "value_equality",
+                "line": 21,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": [
+                  "python:src/text_utils.py::slugify#function@9a2772376b82"
+                ]
+              }
+            ],
+            "called_symbol_refs": [
+              "src/text_utils.py::slugify"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 21,
+            "line_start": 20,
+            "literal_terms": [
+              "already",
+              "slug",
+              "ifi"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "slugify",
+              "treat",
+              "underscore",
+              "as",
+              "separator"
+            ],
+            "path": "tests/test_text_utils.py",
+            "test_id": "tests/test_text_utils.py::test_slugify_treats_underscore_as_separator"
+          },
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
+                "kind": "value_equality",
+                "line": 5,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": []
+              }
+            ],
+            "called_symbol_refs": [
+              "src/text_utils.py::title_case"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 5,
+            "line_start": 4,
+            "literal_terms": [
+              "hello",
+              "big",
+              "world"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "title",
+              "case"
+            ],
+            "path": "tests/test_text_utils.py",
+            "test_id": "tests/test_text_utils.py::test_title_case"
+          }
+        ],
+        "changed_test_ids": [
+          "tests/test_text_utils.py::test_slugify_basic",
+          "tests/test_text_utils.py::test_slugify_collapses_whitespace",
+          "tests/test_text_utils.py::test_slugify_empty",
+          "tests/test_text_utils.py::test_slugify_treats_underscore_as_separator"
+        ],
+        "changeset_ref": "symbol-changes-v1:655f80d2a507b8ac",
+        "criteria": [
+          {
+            "criterion_id": "C1",
+            "hints_paths": [],
+            "hints_tests": [],
+            "lifecycle": "confirmed",
+            "testability": "behavioral_testable",
+            "text": "slugify lowercases and replaces each run of non-alphanumeric characters with a single '-'",
+            "weight": 1.0
+          },
+          {
+            "criterion_id": "C2",
+            "hints_paths": [],
+            "hints_tests": [],
+            "lifecycle": "confirmed",
+            "testability": "behavioral_testable",
+            "text": "leading and trailing '-' are removed",
+            "weight": 1.0
+          }
+        ],
+        "criterion_symbol": [
+          {
+            "by_linker": {
+              "gold": 1.0
+            },
+            "criterion_id": "C1",
+            "rank": 1,
+            "reasons": [
+              {
+                "code": "gold_label",
+                "detail": "expected.json links[]",
+                "ref": "src/text_utils.py::slugify",
+                "rule_id": null
+              }
+            ],
+            "score": 1.0,
+            "symbol_id": "python:src/text_utils.py::slugify#function@9a2772376b82"
+          },
+          {
+            "by_linker": {
+              "gold": 1.0
+            },
+            "criterion_id": "C2",
+            "rank": 1,
+            "reasons": [
+              {
+                "code": "gold_label",
+                "detail": "expected.json links[]",
+                "ref": "src/text_utils.py::slugify",
+                "rule_id": null
+              }
+            ],
+            "score": 1.0,
+            "symbol_id": "python:src/text_utils.py::slugify#function@9a2772376b82"
+          }
+        ],
+        "criterion_test": [
+          {
+            "bm25_raw": null,
+            "criterion_id": "C1",
+            "method": "gold_expected_json",
+            "test_id": "tests/test_text_utils.py::test_slugify_basic",
+            "weight": 1.0
+          },
+          {
+            "bm25_raw": null,
+            "criterion_id": "C1",
+            "method": "gold_expected_json",
+            "test_id": "tests/test_text_utils.py::test_slugify_treats_underscore_as_separator",
+            "weight": 1.0
+          },
+          {
+            "bm25_raw": null,
+            "criterion_id": "C2",
+            "method": "gold_expected_json",
+            "test_id": "tests/test_text_utils.py::test_slugify_basic",
+            "weight": 1.0
+          },
+          {
+            "bm25_raw": null,
+            "criterion_id": "C2",
+            "method": "gold_expected_json",
+            "test_id": "tests/test_text_utils.py::test_slugify_collapses_whitespace",
+            "weight": 1.0
+          },
+          {
+            "bm25_raw": null,
+            "criterion_id": "C2",
+            "method": "gold_expected_json",
+            "test_id": "tests/test_text_utils.py::test_slugify_empty",
+            "weight": 1.0
+          }
+        ],
+        "degraded": [],
+        "head_sha": "b62afcdbc9c54fce8d485b4d2f21d575f6b785c7",
+        "repository_id": "2b9b7968-113c-5da7-9636-da911dae384a",
+        "symbol_test": [
+          {
+            "depth": null,
+            "kind": "gold",
+            "score": 0.9,
+            "symbol_id": "python:src/text_utils.py::slugify#function@9a2772376b82",
+            "test_id": "tests/test_text_utils.py::test_slugify_basic"
+          },
+          {
+            "depth": null,
+            "kind": "gold",
+            "score": 0.9,
+            "symbol_id": "python:src/text_utils.py::slugify#function@9a2772376b82",
+            "test_id": "tests/test_text_utils.py::test_slugify_collapses_whitespace"
+          },
+          {
+            "depth": null,
+            "kind": "gold",
+            "score": 0.9,
+            "symbol_id": "python:src/text_utils.py::slugify#function@9a2772376b82",
+            "test_id": "tests/test_text_utils.py::test_slugify_empty"
+          },
+          {
+            "depth": null,
+            "kind": "gold",
+            "score": 0.9,
+            "symbol_id": "python:src/text_utils.py::slugify#function@9a2772376b82",
+            "test_id": "tests/test_text_utils.py::test_slugify_treats_underscore_as_separator"
+          }
+        ],
+        "symbols": [
+          {
+            "change_kind": "modified_body",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": false,
+            "kind": "function",
+            "language": "python",
+            "path": "src/billing.py",
+            "qualified_name": "round_money",
+            "symbol_id": "python:src/billing.py::round_money#function@992b0d58ee59"
+          },
+          {
+            "change_kind": "modified_body",
+            "is_behavioral": true,
+            "is_pseudo": true,
+            "is_test": false,
+            "kind": "module",
+            "language": "python",
+            "path": "src/config.py",
+            "qualified_name": "<module>",
+            "symbol_id": "python:src/config.py::<module>#module@da39a3ee5e6b"
+          },
+          {
+            "change_kind": "added",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": false,
+            "kind": "function",
+            "language": "python",
+            "path": "src/text_utils.py",
+            "qualified_name": "slugify",
+            "symbol_id": "python:src/text_utils.py::slugify#function@9a2772376b82"
+          },
+          {
+            "change_kind": "added",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": true,
+            "kind": "function",
+            "language": "python",
+            "path": "tests/test_text_utils.py",
+            "qualified_name": "test_slugify_basic",
+            "symbol_id": "python:tests/test_text_utils.py::test_slugify_basic#function@f9065fa73897"
+          },
+          {
+            "change_kind": "added",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": true,
+            "kind": "function",
+            "language": "python",
+            "path": "tests/test_text_utils.py",
+            "qualified_name": "test_slugify_collapses_whitespace",
+            "symbol_id": "python:tests/test_text_utils.py::test_slugify_collapses_whitespace#function@f9065fa73897"
+          },
+          {
+            "change_kind": "added",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": true,
+            "kind": "function",
+            "language": "python",
+            "path": "tests/test_text_utils.py",
+            "qualified_name": "test_slugify_empty",
+            "symbol_id": "python:tests/test_text_utils.py::test_slugify_empty#function@f9065fa73897"
+          },
+          {
+            "change_kind": "added",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": true,
+            "kind": "function",
+            "language": "python",
+            "path": "tests/test_text_utils.py",
+            "qualified_name": "test_slugify_treats_underscore_as_separator",
+            "symbol_id": "python:tests/test_text_utils.py::test_slugify_treats_underscore_as_separator#function@f9065fa73897"
+          }
+        ],
+        "tamper": [],
+        "tamper_unanalyzable": [],
+        "tamper_waived": 0
+      },
+      "status": "complete"
+    }
+  },
+  "schema": "verdict-v2-fixture-inputs-1",
+  "stage_b": {
+    "base": {
+      "cases": [
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_billing",
+          "raw_file": "tests/test_billing.py",
+          "raw_name": "test_round_money_two_places",
+          "test_id": "tests/test_billing.py::test_round_money_two_places"
+        },
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_text_utils",
+          "raw_file": "tests/test_text_utils.py",
+          "raw_name": "test_title_case",
+          "test_id": "tests/test_text_utils.py::test_title_case"
+        }
+      ],
+      "ci_failed_cases": 0,
+      "flaky_scores": {},
+      "flaky_test_ids": [],
+      "results_received": true,
+      "uploads": 1
+    },
+    "head": {
+      "cases": [
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_billing",
+          "raw_file": "tests/test_billing.py",
+          "raw_name": "test_round_money_two_places",
+          "test_id": "tests/test_billing.py::test_round_money_two_places"
+        },
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_text_utils",
+          "raw_file": "tests/test_text_utils.py",
+          "raw_name": "test_slugify_basic",
+          "test_id": "tests/test_text_utils.py::test_slugify_basic"
+        },
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_text_utils",
+          "raw_file": "tests/test_text_utils.py",
+          "raw_name": "test_slugify_collapses_whitespace",
+          "test_id": "tests/test_text_utils.py::test_slugify_collapses_whitespace"
+        },
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_text_utils",
+          "raw_file": "tests/test_text_utils.py",
+          "raw_name": "test_slugify_empty",
+          "test_id": "tests/test_text_utils.py::test_slugify_empty"
+        },
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_text_utils",
+          "raw_file": "tests/test_text_utils.py",
+          "raw_name": "test_slugify_treats_underscore_as_separator",
+          "test_id": "tests/test_text_utils.py::test_slugify_treats_underscore_as_separator"
+        },
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_text_utils",
+          "raw_file": "tests/test_text_utils.py",
+          "raw_name": "test_title_case",
+          "test_id": "tests/test_text_utils.py::test_title_case"
+        }
+      ],
+      "ci_failed_cases": 0,
+      "flaky_scores": {},
+      "flaky_test_ids": [],
+      "results_received": true,
+      "uploads": 1
+    }
+  },
+  "tamper": {
+    "catalog_version": "tamper-rules-v1",
+    "findings": [],
+    "rule_errors": [],
+    "unanalyzable": [],
+    "waived": 0
+  },
+  "tamper_variants": {
+    "no_registry": {
+      "catalog_version": "tamper-rules-v1",
+      "findings": [],
+      "rule_errors": [],
+      "unanalyzable": [],
+      "waived": 0
+    }
+  }
+}

@@ -59,14 +59,14 @@ def test_stub_route_is_404_disabled_when_flag_is_off(monkeypatch) -> None:
     assert body["meta"]["reason"] == "disabled"
 
 
-def test_stub_route_is_404_not_computed_when_flag_is_on(monkeypatch) -> None:
+def test_unknown_analysis_is_404_not_found_when_flag_is_on(monkeypatch) -> None:
     client = _client(monkeypatch, "on")
     response = client.get(
-        f"/api/v1/analyses/{uuid4()}/verdict",
+        f"/api/v1/analyses/{uuid4()}/verdict-v2",
         headers={"X-Radius-Organization-Id": str(uuid4())},
     )
     assert response.status_code == 404
-    assert response.json()["meta"]["reason"] == "not_computed"
+    assert response.json()["error"]["code"] == "ANALYSIS_NOT_FOUND"
 
 
 def test_v1_routes_and_openapi_are_unchanged_by_the_stub(monkeypatch) -> None:

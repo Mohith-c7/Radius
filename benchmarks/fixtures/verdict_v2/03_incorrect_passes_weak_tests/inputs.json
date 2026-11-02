@@ -1,0 +1,1034 @@
+{
+  "contracts": "radius_evidence.domain.inputs (StageAInput, StageBInput)",
+  "expected_verdict": "insufficient_evidence",
+  "fixture": "03_incorrect_passes_weak_tests",
+  "generated_by": "scripts/verdict_v2_make_fixtures.py",
+  "modes": {
+    "auto": {
+      "mode": "auto",
+      "provenance": {
+        "assertions": {
+          "note": "LK-04 (radius_testing.assertions) emits a different record shape (AssertionRecord/TestSummary); this is a hand-built AssertionFeatures per design 3.2/3.6, one per test function at head",
+          "origin": "hand_built",
+          "producer": "scripts/verdict_v2_make_fixtures.py: ast classifier (fixture-ast-v1)"
+        },
+        "changed_test_ids": {
+          "origin": "derived",
+          "producer": "LK-01 symbols that are test functions present at head"
+        },
+        "criteria": {
+          "note": "weight 1.0, lifecycle confirmed",
+          "origin": "derived",
+          "producer": "expected.json criteria[]"
+        },
+        "criterion_symbol": {
+          "note": "combined links, no reranker",
+          "origin": "real",
+          "producer": "radius_linking.infrastructure.pipeline.link_changeset (LK-02)"
+        },
+        "criterion_test": {
+          "note": "VS-04 (test relevance) does not exist yet; VS-02 adds the real snapshot",
+          "origin": "hand_built",
+          "producer": "empty"
+        },
+        "ids": {
+          "note": "uuid5/sha1 of the fixture name; head_sha is a PLACEHOLDER, not a git sha",
+          "origin": "derived",
+          "producer": "scripts/verdict_v2_make_fixtures.py"
+        },
+        "stage_b": {
+          "note": "outcomes copied per scenario",
+          "origin": "hand_built",
+          "producer": "expected.json test_outcomes"
+        },
+        "symbol_test": {
+          "note": "head python sources; no dynamic coverage",
+          "origin": "real",
+          "producer": "radius_testing.linking StaticLinker + NamingLinker + combine_links (LK-03)"
+        },
+        "symbols": {
+          "note": "base/head snapshots + pr.patch",
+          "origin": "real",
+          "producer": "radius_analysis.symbol_changes.extract_symbol_changes (LK-01)"
+        },
+        "tamper": {
+          "note": "offline StaticPackageRegistry lacking pytimeparse-ultra; default (no registry) result in tamper_variants",
+          "origin": "real",
+          "producer": "radius_analysis.tamper.analyze_tampering (EV-02)"
+        }
+      },
+      "stage_a": {
+        "added_test_ids": [],
+        "agent_signal": false,
+        "agent_signal_by_test": {},
+        "algo_versions": {
+          "assertions": "test-assertions-v1",
+          "assertions_producer": "fixture-ast-v1",
+          "criterion_symbol_links": "criterion-symbol-links-v1",
+          "criterion_test": "pending-vs04",
+          "symbol_changes": "symbol-changes-v1",
+          "symbol_test_links": "link-combine-v1",
+          "tamper": "tamper-rules-v1"
+        },
+        "analysis_id": "cdec5ab6-e150-57cb-aefe-75ed227c4273",
+        "assertions": [
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
+                "kind": "comparison_bound",
+                "line": 9,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": [
+                  "python:src/limits.py::clamp#function@b0cab14a99f1"
+                ]
+              }
+            ],
+            "called_symbol_refs": [
+              "src/limits.py::clamp"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 9,
+            "line_start": 8,
+            "literal_terms": [
+              "10",
+              "50",
+              "0"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "clamp",
+              "above",
+              "is",
+              "bound"
+            ],
+            "path": "tests/test_limits.py",
+            "test_id": "tests/test_limits.py::test_clamp_above_is_bounded"
+          },
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
+                "kind": "membership",
+                "line": 17,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": [
+                  "python:src/limits.py::clamp#function@b0cab14a99f1"
+                ]
+              }
+            ],
+            "called_symbol_refs": [
+              "src/limits.py::clamp"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 17,
+            "line_start": 16,
+            "literal_terms": [
+              "5",
+              "0",
+              "10",
+              "11"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "clamp",
+              "inside",
+              "stay",
+              "in",
+              "range"
+            ],
+            "path": "tests/test_limits.py",
+            "test_id": "tests/test_limits.py::test_clamp_inside_stays_in_range"
+          },
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": false,
+                "dead": false,
+                "in_loop": false,
+                "kind": "type_check",
+                "line": 13,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": [
+                  "python:src/limits.py::clamp#function@b0cab14a99f1"
+                ]
+              }
+            ],
+            "called_symbol_refs": [
+              "src/limits.py::clamp"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 13,
+            "line_start": 12,
+            "literal_terms": [
+              "0",
+              "10",
+              "5"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "clamp",
+              "return",
+              "an",
+              "int"
+            ],
+            "path": "tests/test_limits.py",
+            "test_id": "tests/test_limits.py::test_clamp_returns_an_int"
+          },
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
+                "kind": "truthiness",
+                "line": 5,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": []
+              }
+            ],
+            "called_symbol_refs": [
+              "src/limits.py::is_between"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 5,
+            "line_start": 4,
+            "literal_terms": [
+              "10",
+              "0"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "is",
+              "between",
+              "inclusive"
+            ],
+            "path": "tests/test_limits.py",
+            "test_id": "tests/test_limits.py::test_is_between_inclusive"
+          }
+        ],
+        "changed_test_ids": [
+          "tests/test_limits.py::test_clamp_above_is_bounded",
+          "tests/test_limits.py::test_clamp_inside_stays_in_range",
+          "tests/test_limits.py::test_clamp_returns_an_int"
+        ],
+        "changeset_ref": "symbol-changes-v1:e19383faab625ba3",
+        "criteria": [
+          {
+            "criterion_id": "C1",
+            "hints_paths": [],
+            "hints_tests": [],
+            "lifecycle": "confirmed",
+            "testability": "behavioral_testable",
+            "text": "a value above hi returns hi",
+            "weight": 1.0
+          },
+          {
+            "criterion_id": "C2",
+            "hints_paths": [],
+            "hints_tests": [],
+            "lifecycle": "confirmed",
+            "testability": "behavioral_testable",
+            "text": "a value below lo returns lo",
+            "weight": 1.0
+          },
+          {
+            "criterion_id": "C3",
+            "hints_paths": [],
+            "hints_tests": [],
+            "lifecycle": "confirmed",
+            "testability": "behavioral_testable",
+            "text": "a value inside the range is returned unchanged",
+            "weight": 1.0
+          }
+        ],
+        "criterion_symbol": [
+          {
+            "by_linker": {
+              "change_prior": 1.0,
+              "lexical": 0.576923
+            },
+            "criterion_id": "C1",
+            "rank": 1,
+            "reasons": [
+              {
+                "code": "bm25_summary",
+                "detail": "lexical: matched 2/3 query terms in src/limits.py::clamp; coverage=0.67",
+                "ref": null,
+                "rule_id": null
+              },
+              {
+                "code": "bm25_term",
+                "detail": "lexical: term 'hi' bm25=0.487",
+                "ref": null,
+                "rule_id": null
+              },
+              {
+                "code": "bm25_term",
+                "detail": "lexical: term 'value' bm25=0.487",
+                "ref": null,
+                "rule_id": null
+              },
+              {
+                "code": "change_kind",
+                "detail": "change_prior: added (behavioural)",
+                "ref": null,
+                "rule_id": null
+              }
+            ],
+            "score": 0.461538,
+            "symbol_id": "python:src/limits.py::clamp#function@b0cab14a99f1"
+          },
+          {
+            "by_linker": {
+              "change_prior": 1.0,
+              "lexical": 0.576923
+            },
+            "criterion_id": "C2",
+            "rank": 1,
+            "reasons": [
+              {
+                "code": "bm25_summary",
+                "detail": "lexical: matched 2/3 query terms in src/limits.py::clamp; coverage=0.67",
+                "ref": null,
+                "rule_id": null
+              },
+              {
+                "code": "bm25_term",
+                "detail": "lexical: term 'lo' bm25=0.487",
+                "ref": null,
+                "rule_id": null
+              },
+              {
+                "code": "bm25_term",
+                "detail": "lexical: term 'value' bm25=0.487",
+                "ref": null,
+                "rule_id": null
+              },
+              {
+                "code": "change_kind",
+                "detail": "change_prior: added (behavioural)",
+                "ref": null,
+                "rule_id": null
+              }
+            ],
+            "score": 0.461538,
+            "symbol_id": "python:src/limits.py::clamp#function@b0cab14a99f1"
+          },
+          {
+            "by_linker": {
+              "change_prior": 1.0,
+              "lexical": 0.439183
+            },
+            "criterion_id": "C3",
+            "rank": 1,
+            "reasons": [
+              {
+                "code": "bm25_summary",
+                "detail": "lexical: matched 2/5 query terms in src/limits.py::clamp; coverage=0.40",
+                "ref": null,
+                "rule_id": null
+              },
+              {
+                "code": "bm25_term",
+                "detail": "lexical: term 'value' bm25=0.487",
+                "ref": null,
+                "rule_id": null
+              },
+              {
+                "code": "bm25_term",
+                "detail": "lexical: term 'range' bm25=0.396",
+                "ref": null,
+                "rule_id": null
+              },
+              {
+                "code": "change_kind",
+                "detail": "change_prior: added (behavioural)",
+                "ref": null,
+                "rule_id": null
+              }
+            ],
+            "score": 0.351346,
+            "symbol_id": "python:src/limits.py::clamp#function@b0cab14a99f1"
+          }
+        ],
+        "criterion_test": [],
+        "degraded": [],
+        "head_sha": "45718dffc8ac67a906cf2c5e1aef8f7666a899ca",
+        "repository_id": "14d18162-3e8e-5f3e-9819-4c7c861c8e0b",
+        "symbol_test": [
+          {
+            "depth": null,
+            "kind": "direct_call",
+            "score": 0.9,
+            "symbol_id": "python:src/limits.py::clamp#function@b0cab14a99f1",
+            "test_id": "tests/test_limits.py::test_clamp_above_is_bounded"
+          },
+          {
+            "depth": null,
+            "kind": "direct_call",
+            "score": 0.9,
+            "symbol_id": "python:src/limits.py::clamp#function@b0cab14a99f1",
+            "test_id": "tests/test_limits.py::test_clamp_inside_stays_in_range"
+          },
+          {
+            "depth": null,
+            "kind": "direct_call",
+            "score": 0.9,
+            "symbol_id": "python:src/limits.py::clamp#function@b0cab14a99f1",
+            "test_id": "tests/test_limits.py::test_clamp_returns_an_int"
+          },
+          {
+            "depth": null,
+            "kind": "import_reference",
+            "score": 0.25,
+            "symbol_id": "python:src/limits.py::clamp#function@b0cab14a99f1",
+            "test_id": "tests/test_limits.py::test_is_between_inclusive"
+          }
+        ],
+        "symbols": [
+          {
+            "change_kind": "added",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": false,
+            "kind": "function",
+            "language": "python",
+            "path": "src/limits.py",
+            "qualified_name": "clamp",
+            "symbol_id": "python:src/limits.py::clamp#function@b0cab14a99f1"
+          },
+          {
+            "change_kind": "added",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": true,
+            "kind": "function",
+            "language": "python",
+            "path": "tests/test_limits.py",
+            "qualified_name": "test_clamp_above_is_bounded",
+            "symbol_id": "python:tests/test_limits.py::test_clamp_above_is_bounded#function@f9065fa73897"
+          },
+          {
+            "change_kind": "added",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": true,
+            "kind": "function",
+            "language": "python",
+            "path": "tests/test_limits.py",
+            "qualified_name": "test_clamp_returns_an_int",
+            "symbol_id": "python:tests/test_limits.py::test_clamp_returns_an_int#function@f9065fa73897"
+          },
+          {
+            "change_kind": "added",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": true,
+            "kind": "function",
+            "language": "python",
+            "path": "tests/test_limits.py",
+            "qualified_name": "test_clamp_inside_stays_in_range",
+            "symbol_id": "python:tests/test_limits.py::test_clamp_inside_stays_in_range#function@f9065fa73897"
+          }
+        ],
+        "tamper": [],
+        "tamper_unanalyzable": [],
+        "tamper_waived": 0
+      },
+      "status": "criterion_test_pending_vs04"
+    },
+    "gold": {
+      "mode": "gold",
+      "provenance": {
+        "assertions": {
+          "note": "LK-04 (radius_testing.assertions) emits a different record shape (AssertionRecord/TestSummary); this is a hand-built AssertionFeatures per design 3.2/3.6, one per test function at head",
+          "origin": "hand_built",
+          "producer": "scripts/verdict_v2_make_fixtures.py: ast classifier (fixture-ast-v1)"
+        },
+        "changed_test_ids": {
+          "origin": "derived",
+          "producer": "LK-01 symbols that are test functions present at head"
+        },
+        "criteria": {
+          "note": "weight 1.0, lifecycle confirmed",
+          "origin": "derived",
+          "producer": "expected.json criteria[]"
+        },
+        "criterion_symbol": {
+          "note": "score 1.0, rank 1",
+          "origin": "hand_built",
+          "producer": "expected.json links[]"
+        },
+        "criterion_test": {
+          "note": "ADDRESSED_BY weight 1.0, method gold_expected_json",
+          "origin": "hand_built",
+          "producer": "expected.json links[].tests"
+        },
+        "ids": {
+          "note": "uuid5/sha1 of the fixture name; head_sha is a PLACEHOLDER, not a git sha",
+          "origin": "derived",
+          "producer": "scripts/verdict_v2_make_fixtures.py"
+        },
+        "stage_b": {
+          "note": "outcomes copied per scenario",
+          "origin": "hand_built",
+          "producer": "expected.json test_outcomes"
+        },
+        "symbol_test": {
+          "note": "ADDRESSED tests as EXERCISED_BY edges, score 0.9 (l_st), kind gold",
+          "origin": "hand_built",
+          "producer": "expected.json links[].tests"
+        },
+        "symbols": {
+          "note": "base/head snapshots + pr.patch",
+          "origin": "real",
+          "producer": "radius_analysis.symbol_changes.extract_symbol_changes (LK-01)"
+        },
+        "tamper": {
+          "note": "offline StaticPackageRegistry lacking pytimeparse-ultra; default (no registry) result in tamper_variants",
+          "origin": "real",
+          "producer": "radius_analysis.tamper.analyze_tampering (EV-02)"
+        }
+      },
+      "stage_a": {
+        "added_test_ids": [],
+        "agent_signal": false,
+        "agent_signal_by_test": {},
+        "algo_versions": {
+          "assertions": "test-assertions-v1",
+          "assertions_producer": "fixture-ast-v1",
+          "links": "verdict-v2-fixture-gold-1",
+          "symbol_changes": "symbol-changes-v1",
+          "tamper": "tamper-rules-v1"
+        },
+        "analysis_id": "cdec5ab6-e150-57cb-aefe-75ed227c4273",
+        "assertions": [
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
+                "kind": "comparison_bound",
+                "line": 9,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": [
+                  "python:src/limits.py::clamp#function@b0cab14a99f1"
+                ]
+              }
+            ],
+            "called_symbol_refs": [
+              "src/limits.py::clamp"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 9,
+            "line_start": 8,
+            "literal_terms": [
+              "10",
+              "50",
+              "0"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "clamp",
+              "above",
+              "is",
+              "bound"
+            ],
+            "path": "tests/test_limits.py",
+            "test_id": "tests/test_limits.py::test_clamp_above_is_bounded"
+          },
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
+                "kind": "membership",
+                "line": 17,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": [
+                  "python:src/limits.py::clamp#function@b0cab14a99f1"
+                ]
+              }
+            ],
+            "called_symbol_refs": [
+              "src/limits.py::clamp"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 17,
+            "line_start": 16,
+            "literal_terms": [
+              "5",
+              "0",
+              "10",
+              "11"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "clamp",
+              "inside",
+              "stay",
+              "in",
+              "range"
+            ],
+            "path": "tests/test_limits.py",
+            "test_id": "tests/test_limits.py::test_clamp_inside_stays_in_range"
+          },
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": false,
+                "dead": false,
+                "in_loop": false,
+                "kind": "type_check",
+                "line": 13,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": [
+                  "python:src/limits.py::clamp#function@b0cab14a99f1"
+                ]
+              }
+            ],
+            "called_symbol_refs": [
+              "src/limits.py::clamp"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 13,
+            "line_start": 12,
+            "literal_terms": [
+              "0",
+              "10",
+              "5"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "clamp",
+              "return",
+              "an",
+              "int"
+            ],
+            "path": "tests/test_limits.py",
+            "test_id": "tests/test_limits.py::test_clamp_returns_an_int"
+          },
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
+                "kind": "truthiness",
+                "line": 5,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": []
+              }
+            ],
+            "called_symbol_refs": [
+              "src/limits.py::is_between"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 5,
+            "line_start": 4,
+            "literal_terms": [
+              "10",
+              "0"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "is",
+              "between",
+              "inclusive"
+            ],
+            "path": "tests/test_limits.py",
+            "test_id": "tests/test_limits.py::test_is_between_inclusive"
+          }
+        ],
+        "changed_test_ids": [
+          "tests/test_limits.py::test_clamp_above_is_bounded",
+          "tests/test_limits.py::test_clamp_inside_stays_in_range",
+          "tests/test_limits.py::test_clamp_returns_an_int"
+        ],
+        "changeset_ref": "symbol-changes-v1:e19383faab625ba3",
+        "criteria": [
+          {
+            "criterion_id": "C1",
+            "hints_paths": [],
+            "hints_tests": [],
+            "lifecycle": "confirmed",
+            "testability": "behavioral_testable",
+            "text": "a value above hi returns hi",
+            "weight": 1.0
+          },
+          {
+            "criterion_id": "C2",
+            "hints_paths": [],
+            "hints_tests": [],
+            "lifecycle": "confirmed",
+            "testability": "behavioral_testable",
+            "text": "a value below lo returns lo",
+            "weight": 1.0
+          },
+          {
+            "criterion_id": "C3",
+            "hints_paths": [],
+            "hints_tests": [],
+            "lifecycle": "confirmed",
+            "testability": "behavioral_testable",
+            "text": "a value inside the range is returned unchanged",
+            "weight": 1.0
+          }
+        ],
+        "criterion_symbol": [
+          {
+            "by_linker": {
+              "gold": 1.0
+            },
+            "criterion_id": "C1",
+            "rank": 1,
+            "reasons": [
+              {
+                "code": "gold_label",
+                "detail": "expected.json links[]",
+                "ref": "src/limits.py::clamp",
+                "rule_id": null
+              }
+            ],
+            "score": 1.0,
+            "symbol_id": "python:src/limits.py::clamp#function@b0cab14a99f1"
+          },
+          {
+            "by_linker": {
+              "gold": 1.0
+            },
+            "criterion_id": "C2",
+            "rank": 1,
+            "reasons": [
+              {
+                "code": "gold_label",
+                "detail": "expected.json links[]",
+                "ref": "src/limits.py::clamp",
+                "rule_id": null
+              }
+            ],
+            "score": 1.0,
+            "symbol_id": "python:src/limits.py::clamp#function@b0cab14a99f1"
+          },
+          {
+            "by_linker": {
+              "gold": 1.0
+            },
+            "criterion_id": "C3",
+            "rank": 1,
+            "reasons": [
+              {
+                "code": "gold_label",
+                "detail": "expected.json links[]",
+                "ref": "src/limits.py::clamp",
+                "rule_id": null
+              }
+            ],
+            "score": 1.0,
+            "symbol_id": "python:src/limits.py::clamp#function@b0cab14a99f1"
+          }
+        ],
+        "criterion_test": [
+          {
+            "bm25_raw": null,
+            "criterion_id": "C1",
+            "method": "gold_expected_json",
+            "test_id": "tests/test_limits.py::test_clamp_above_is_bounded",
+            "weight": 1.0
+          },
+          {
+            "bm25_raw": null,
+            "criterion_id": "C2",
+            "method": "gold_expected_json",
+            "test_id": "tests/test_limits.py::test_clamp_returns_an_int",
+            "weight": 1.0
+          },
+          {
+            "bm25_raw": null,
+            "criterion_id": "C3",
+            "method": "gold_expected_json",
+            "test_id": "tests/test_limits.py::test_clamp_inside_stays_in_range",
+            "weight": 1.0
+          }
+        ],
+        "degraded": [],
+        "head_sha": "45718dffc8ac67a906cf2c5e1aef8f7666a899ca",
+        "repository_id": "14d18162-3e8e-5f3e-9819-4c7c861c8e0b",
+        "symbol_test": [
+          {
+            "depth": null,
+            "kind": "gold",
+            "score": 0.9,
+            "symbol_id": "python:src/limits.py::clamp#function@b0cab14a99f1",
+            "test_id": "tests/test_limits.py::test_clamp_above_is_bounded"
+          },
+          {
+            "depth": null,
+            "kind": "gold",
+            "score": 0.9,
+            "symbol_id": "python:src/limits.py::clamp#function@b0cab14a99f1",
+            "test_id": "tests/test_limits.py::test_clamp_inside_stays_in_range"
+          },
+          {
+            "depth": null,
+            "kind": "gold",
+            "score": 0.9,
+            "symbol_id": "python:src/limits.py::clamp#function@b0cab14a99f1",
+            "test_id": "tests/test_limits.py::test_clamp_returns_an_int"
+          }
+        ],
+        "symbols": [
+          {
+            "change_kind": "added",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": false,
+            "kind": "function",
+            "language": "python",
+            "path": "src/limits.py",
+            "qualified_name": "clamp",
+            "symbol_id": "python:src/limits.py::clamp#function@b0cab14a99f1"
+          },
+          {
+            "change_kind": "added",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": true,
+            "kind": "function",
+            "language": "python",
+            "path": "tests/test_limits.py",
+            "qualified_name": "test_clamp_above_is_bounded",
+            "symbol_id": "python:tests/test_limits.py::test_clamp_above_is_bounded#function@f9065fa73897"
+          },
+          {
+            "change_kind": "added",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": true,
+            "kind": "function",
+            "language": "python",
+            "path": "tests/test_limits.py",
+            "qualified_name": "test_clamp_returns_an_int",
+            "symbol_id": "python:tests/test_limits.py::test_clamp_returns_an_int#function@f9065fa73897"
+          },
+          {
+            "change_kind": "added",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": true,
+            "kind": "function",
+            "language": "python",
+            "path": "tests/test_limits.py",
+            "qualified_name": "test_clamp_inside_stays_in_range",
+            "symbol_id": "python:tests/test_limits.py::test_clamp_inside_stays_in_range#function@f9065fa73897"
+          }
+        ],
+        "tamper": [],
+        "tamper_unanalyzable": [],
+        "tamper_waived": 0
+      },
+      "status": "complete"
+    }
+  },
+  "schema": "verdict-v2-fixture-inputs-1",
+  "stage_b": {
+    "base": {
+      "cases": [
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_limits",
+          "raw_file": "tests/test_limits.py",
+          "raw_name": "test_is_between_inclusive",
+          "test_id": "tests/test_limits.py::test_is_between_inclusive"
+        }
+      ],
+      "ci_failed_cases": 0,
+      "flaky_scores": {},
+      "flaky_test_ids": [],
+      "results_received": true,
+      "uploads": 1
+    },
+    "head": {
+      "cases": [
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_limits",
+          "raw_file": "tests/test_limits.py",
+          "raw_name": "test_clamp_above_is_bounded",
+          "test_id": "tests/test_limits.py::test_clamp_above_is_bounded"
+        },
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_limits",
+          "raw_file": "tests/test_limits.py",
+          "raw_name": "test_clamp_inside_stays_in_range",
+          "test_id": "tests/test_limits.py::test_clamp_inside_stays_in_range"
+        },
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_limits",
+          "raw_file": "tests/test_limits.py",
+          "raw_name": "test_clamp_returns_an_int",
+          "test_id": "tests/test_limits.py::test_clamp_returns_an_int"
+        },
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_limits",
+          "raw_file": "tests/test_limits.py",
+          "raw_name": "test_is_between_inclusive",
+          "test_id": "tests/test_limits.py::test_is_between_inclusive"
+        }
+      ],
+      "ci_failed_cases": 0,
+      "flaky_scores": {},
+      "flaky_test_ids": [],
+      "results_received": true,
+      "uploads": 1
+    },
+    "head_with_probes": {
+      "cases": [
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_limits",
+          "raw_file": "tests/test_limits.py",
+          "raw_name": "test_clamp_above_is_bounded",
+          "test_id": "tests/test_limits.py::test_clamp_above_is_bounded"
+        },
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_limits",
+          "raw_file": "tests/test_limits.py",
+          "raw_name": "test_clamp_inside_stays_in_range",
+          "test_id": "tests/test_limits.py::test_clamp_inside_stays_in_range"
+        },
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_limits",
+          "raw_file": "tests/test_limits.py",
+          "raw_name": "test_clamp_returns_an_int",
+          "test_id": "tests/test_limits.py::test_clamp_returns_an_int"
+        },
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_limits",
+          "raw_file": "tests/test_limits.py",
+          "raw_name": "test_is_between_inclusive",
+          "test_id": "tests/test_limits.py::test_is_between_inclusive"
+        },
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_limits_strong",
+          "raw_file": "tests/test_limits_strong.py",
+          "raw_name": "test_probe_clamp_above_returns_hi",
+          "test_id": "tests/test_limits_strong.py::test_probe_clamp_above_returns_hi"
+        },
+        {
+          "outcome": "failed",
+          "raw_classname": "tests.test_limits_strong",
+          "raw_file": "tests/test_limits_strong.py",
+          "raw_name": "test_probe_clamp_below_returns_lo",
+          "test_id": "tests/test_limits_strong.py::test_probe_clamp_below_returns_lo"
+        },
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_limits_strong",
+          "raw_file": "tests/test_limits_strong.py",
+          "raw_name": "test_probe_clamp_inside_unchanged",
+          "test_id": "tests/test_limits_strong.py::test_probe_clamp_inside_unchanged"
+        }
+      ],
+      "ci_failed_cases": 1,
+      "flaky_scores": {},
+      "flaky_test_ids": [],
+      "results_received": true,
+      "uploads": 1
+    }
+  },
+  "tamper": {
+    "catalog_version": "tamper-rules-v1",
+    "findings": [],
+    "rule_errors": [],
+    "unanalyzable": [],
+    "waived": 0
+  },
+  "tamper_variants": {
+    "no_registry": {
+      "catalog_version": "tamper-rules-v1",
+      "findings": [],
+      "rule_errors": [],
+      "unanalyzable": [],
+      "waived": 0
+    }
+  }
+}

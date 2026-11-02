@@ -1,0 +1,1 @@
+`packages/evidence` now computes Verdict v2 alpha scoring: the evidence-quality combiner `q(e, c)` with link mapping (EV-08), criterion support `S(c)` with same-symbol discount and cap (VD-01), and per-criterion states, flags, unproven intent mass and intent coverage (VD-02). Pure, deterministic and stdlib-only; reproduces the design's worked fixture numbers.

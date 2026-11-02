@@ -21,9 +21,13 @@ _SHA40 = re.compile(r"^[0-9a-f]{40}$")
 
 @dataclass(frozen=True, slots=True)
 class Reason(Serializable):
+    """Why something happened. ``rule_id`` (contract 2) names the deciding verdict rule
+    (``R1c`` ...); ``ref`` stays the free reference (test id, path, finding id)."""
+
     code: str
     detail: str
     ref: str | None = None
+    rule_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,7 +36,14 @@ class AssertionFact(Serializable):
     line: int
     target_symbol_ids: tuple[str, ...] = ()  # LK-01 symbol ids, best effort
     compares_computed_value: bool = False
-    note: str | None = None
+    note: str | None = None  # free text; flags below replaced the former note tokens
+    # Contract 2: explicit strength-feature flags (all optional, default False).
+    mock_only: bool = False
+    circular: bool = False
+    dead: bool = False
+    swallowed: bool = False
+    in_loop: bool = False
+    property_based: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,13 +68,25 @@ class AssertionFeatures(Serializable):
 
 @dataclass(frozen=True, slots=True)
 class FreshnessInfo(Serializable):
-    """Binding of an item to a head SHA. ``reason``: current_head|stale_sha|unbound."""
+    """Binding of an item to a head SHA.
+
+    ``reason``: ``current_head`` | ``stale_sha`` | ``unbound`` | ``stale_sha_unchanged_covered``
+    (the optional decay hook: stale SHA but no covered file changed), see ``FRESHNESS_REASONS``.
+    """
 
     bound_sha: str
     current_sha: str
     f: float
     reason: str
 
+
+#: Allowed ``FreshnessInfo.reason`` values (contract 2 added the fourth).
+FRESHNESS_REASONS: tuple[str, ...] = (
+    "current_head",
+    "stale_sha",
+    "unbound",
+    "stale_sha_unchanged_covered",
+)
 
 #: Alias used in the design discussion ("freshness binding").
 FreshnessBinding = FreshnessInfo
