@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "id": "04_test_tampering",
+  "scenario": "test_tampering",
+  "title": "PR that removes validation and weakens four tests so the suite stays green",
+  "language": "python",
+  "ground_truth": {
+    "pr_correct": false,
+    "note": "reserve no longer raises for qty<=0 or qty>stock; the original tests (probes) fail at head."
+  },
+  "criteria": [
+    {
+      "id": "C1",
+      "text": "reserve still returns the remaining stock for valid input",
+      "testability": "testable",
+      "expected_state": "weak"
+    },
+    {
+      "id": "C2",
+      "text": "reserve still raises OutOfStock when qty exceeds stock",
+      "testability": "testable",
+      "expected_state": "unevidenced"
+    },
+    {
+      "id": "C3",
+      "text": "reserve still raises ValueError for non-positive qty",
+      "testability": "testable",
+      "expected_state": "unevidenced"
+    }
+  ],
+  "links": [
+    {
+      "criterion": "C1",
+      "symbol": "src/stock.py::reserve",
+      "tests": [
+        "tests/test_stock.py::test_reserve_reduces_stock",
+        "tests/test_stock.py::test_reserve_exact_stock"
+      ]
+    },
+    {
+      "criterion": "C2",
+      "symbol": "src/stock.py::reserve",
+      "tests": [
+        "tests/test_stock.py::test_reserve_more_than_stock_raises"
+      ]
+    },
+    {
+      "criterion": "C3",
+      "symbol": "src/stock.py::reserve",
+      "tests": [
+        "tests/test_stock.py::test_reserve_rejects_non_positive"
+      ]
+    }
+  ],
+  "evidence_quality": [
+    {
+      "test": "tests/test_stock.py::test_reserve_reduces_stock",
+      "band": "weak",
+      "rationale": "weakened to `is not None` in this PR"
+    },
+    {
+      "test": "tests/test_stock.py::test_reserve_exact_stock",
+      "band": "none",
+      "rationale": "tautology `reserve(5, 5) == reserve(5, 5)`"
+    },
+    {
+      "test": "tests/test_stock.py::test_reserve_rejects_non_positive",
+      "band": "none",
+      "rationale": "skipped at head; produces no evidence"
+    },
+    {
+      "test": "tests/test_stock.py::test_reserve_more_than_stock_raises",
+      "band": "none",
+      "rationale": "deleted at head; produces no evidence"
+    },
+    {
+      "test": "tests/test_stock.py::test_release_restores",
+      "band": "strong",
+      "rationale": "unchanged exact check on an untouched function"
+    },
+    {
+      "test": "tests/test_stock.py::test_stock_value",
+      "band": "strong",
+      "rationale": "unchanged exact check on an untouched function"
+    }
+  ],
+  "tamper_findings": [
+    {
+      "rule": "T001",
+      "file": "tests/test_stock.py",
+      "test": "tests/test_stock.py::test_reserve_more_than_stock_raises",
+      "assumed_severity": "high",
+      "detail": "test deleted while reserve (the code under test) still exists"
+    },
+    {
+      "rule": "T002",
+      "file": "tests/test_stock.py",
+      "test": "tests/test_stock.py::test_reserve_rejects_non_positive",
+      "assumed_severity": "high",
+      "detail": "@pytest.mark.skip added"
+    },
+    {
+      "rule": "T004",
+      "file": "tests/test_stock.py",
+      "test": "tests/test_stock.py::test_reserve_reduces_stock",
+      "assumed_severity": "high",
+      "detail": "`== 7` weakened to `is not None`"
+    },
+    {
+      "rule": "T005",
+      "file": "tests/test_stock.py",
+      "test": "tests/test_stock.py::test_reserve_exact_stock",
+      "assumed_severity": "high",
+      "detail": "`== 0` replaced by `reserve(5, 5) == reserve(5, 5)`"
+    }
+  ],
+  "unlinked_changed_symbols": [],
+  "expected_verdict": "failed",
+  "verdict_rationale": "High-severity tamper findings force failed (DESIGN.md 6.5 rule 1), although every shipped test is green or skipped. Severity values are assumptions until EV-02 fixes them.",
+  "test_outcomes": {
+    "base": {
+      "tests/test_stock.py::test_reserve_reduces_stock": "passed",
+      "tests/test_stock.py::test_reserve_exact_stock": "passed",
+      "tests/test_stock.py::test_reserve_more_than_stock_raises": "passed",
+      "tests/test_stock.py::test_reserve_rejects_non_positive": "passed",
+      "tests/test_stock.py::test_release_restores": "passed",
+      "tests/test_stock.py::test_stock_value": "passed"
+    },
+    "head": {
+      "tests/test_stock.py::test_reserve_reduces_stock": "passed",
+      "tests/test_stock.py::test_reserve_exact_stock": "passed",
+      "tests/test_stock.py::test_reserve_rejects_non_positive": "skipped",
+      "tests/test_stock.py::test_release_restores": "passed",
+      "tests/test_stock.py::test_stock_value": "passed"
+    },
+    "head_with_probes": {
+      "tests/test_stock.py::test_reserve_reduces_stock": "passed",
+      "tests/test_stock.py::test_reserve_exact_stock": "passed",
+      "tests/test_stock.py::test_reserve_more_than_stock_raises": "failed",
+      "tests/test_stock.py::test_reserve_rejects_non_positive": "failed",
+      "tests/test_stock.py::test_release_restores": "passed",
+      "tests/test_stock.py::test_stock_value": "passed"
+    }
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "id": "02_correct_weak_tests",
+  "scenario": "correct_weak_tests",
+  "title": "Correct PR whose tests would also pass for many wrong implementations",
+  "language": "python",
+  "ground_truth": {
+    "pr_correct": true,
+    "note": "normalize_email is correct (strong probes pass at head) but the shipped tests barely constrain it."
+  },
+  "criteria": [
+    {
+      "id": "C1",
+      "text": "normalize_email trims surrounding whitespace and lowercases the address",
+      "testability": "testable",
+      "expected_state": "weak"
+    },
+    {
+      "id": "C2",
+      "text": "an address without '@' raises ValueError",
+      "testability": "testable",
+      "expected_state": "unevidenced"
+    }
+  ],
+  "links": [
+    {
+      "criterion": "C1",
+      "symbol": "src/emails.py::normalize_email",
+      "tests": [
+        "tests/test_emails.py::test_normalize_returns_something",
+        "tests/test_emails.py::test_normalize_handles_plain_address"
+      ]
+    },
+    {
+      "criterion": "C2",
+      "symbol": "src/emails.py::normalize_email",
+      "tests": []
+    }
+  ],
+  "evidence_quality": [
+    {
+      "test": "tests/test_emails.py::test_normalize_returns_something",
+      "band": "weak",
+      "rationale": "truthiness check only; passes for any non-empty return value"
+    },
+    {
+      "test": "tests/test_emails.py::test_normalize_handles_plain_address",
+      "band": "weak",
+      "rationale": "`is not None` check only; passes for any return value"
+    },
+    {
+      "test": "tests/test_emails.py::test_domain_of",
+      "band": "none",
+      "rationale": "exercises a different function, unrelated to either criterion"
+    }
+  ],
+  "tamper_findings": [],
+  "unlinked_changed_symbols": [],
+  "expected_verdict": "insufficient_evidence",
+  "verdict_rationale": "The PR is correct but no criterion reaches the support threshold: C1 has only weak evidence and C2 has none, so Radius must not say verified.",
+  "test_outcomes": {
+    "base": {
+      "tests/test_emails.py::test_domain_of": "passed"
+    },
+    "head": {
+      "tests/test_emails.py::test_domain_of": "passed",
+      "tests/test_emails.py::test_normalize_returns_something": "passed",
+      "tests/test_emails.py::test_normalize_handles_plain_address": "passed"
+    },
+    "head_with_probes": {
+      "tests/test_emails.py::test_domain_of": "passed",
+      "tests/test_emails.py::test_normalize_returns_something": "passed",
+      "tests/test_emails.py::test_normalize_handles_plain_address": "passed",
+      "tests/test_emails_strong.py::test_probe_normalize_lowercases_and_trims": "passed",
+      "tests/test_emails_strong.py::test_probe_normalize_rejects_missing_at": "passed"
+    }
+  },
+  "mutants": [
+    {
+      "id": "M1",
+      "file": "src/emails.py",
+      "old": ".strip().lower()",
+      "new": "",
+      "killed_by": []
+    },
+    {
+      "id": "M2",
+      "file": "src/emails.py",
+      "old": "if \"@\" not in cleaned:",
+      "new": "if False:",
+      "killed_by": []
+    }
+  ]
+}

@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Radius intent-to-evidence golden fixture: expected.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "id", "scenario", "title", "language", "ground_truth",
+    "criteria", "links", "evidence_quality", "tamper_findings",
+    "unlinked_changed_symbols", "expected_verdict", "verdict_rationale",
+    "test_outcomes"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "id": { "type": "string", "pattern": "^[0-9]{2}_[a-z0-9_]+$" },
+    "scenario": {
+      "enum": [
+        "correct_strong_tests", "correct_weak_tests", "incorrect_passes_weak_tests",
+        "test_tampering", "scope_creep", "hallucinated_dependency",
+        "vague_intent", "multi_criterion_partial_evidence"
+      ]
+    },
+    "title": { "type": "string", "minLength": 1 },
+    "language": { "const": "python" },
+    "ground_truth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pr_correct", "note"],
+      "properties": {
+        "pr_correct": { "type": ["boolean", "null"] },
+        "note": { "type": "string", "minLength": 1 }
+      }
+    },
+    "criteria": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "text", "testability", "expected_state"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^C[0-9]+$" },
+          "text": { "type": "string", "minLength": 1 },
+          "testability": { "enum": ["testable", "vague", "non_functional"] },
+          "expected_state": {
+            "enum": ["proven", "weak", "unevidenced", "contradicted", "excluded"]
+          }
+        }
+      }
+    },
+    "links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["criterion", "symbol", "tests"],
+        "properties": {
+          "criterion": { "type": "string", "pattern": "^C[0-9]+$" },
+          "symbol": { "type": "string", "pattern": "^[^:]+[.]py::[A-Za-z_][A-Za-z0-9_.]*$" },
+          "tests": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^tests/[^:]+[.]py::[A-Za-z_][A-Za-z0-9_]*$" }
+          }
+        }
+      }
+    },
+    "evidence_quality": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["test", "band", "rationale"],
+        "properties": {
+          "test": { "type": "string", "pattern": "^tests/[^:]+[.]py::[A-Za-z_][A-Za-z0-9_]*$" },
+          "band": { "enum": ["strong", "weak", "none"] },
+          "rationale": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "tamper_findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["rule", "file", "assumed_severity", "detail"],
+        "properties": {
+          "rule": { "type": "string", "pattern": "^T0(0[1-9]|1[0-6])$" },
+          "file": { "type": "string", "minLength": 1 },
+          "test": { "type": "string" },
+          "assumed_severity": { "enum": ["low", "medium", "high"] },
+          "detail": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "unlinked_changed_symbols": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[^:]+[.]py::[A-Za-z_][A-Za-z0-9_.]*$" }
+    },
+    "expected_verdict": {
+      "enum": ["verified", "failed", "insufficient_evidence", "needs_review"]
+    },
+    "verdict_rationale": { "type": "string", "minLength": 1 },
+    "test_outcomes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base", "head"],
+      "properties": {
+        "base": { "$ref": "#/$defs/outcomes" },
+        "head": { "$ref": "#/$defs/outcomes" },
+        "head_with_probes": { "$ref": "#/$defs/outcomes" }
+      }
+    },
+    "mutants": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "file", "old", "new", "killed_by"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^M[0-9]+$" },
+          "file": { "type": "string", "minLength": 1 },
+          "old": { "type": "string", "minLength": 1 },
+          "new": { "type": "string" },
+          "killed_by": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "outcomes": {
+      "type": "object",
+      "patternProperties": {
+        "^tests/[^:]+[.]py::[A-Za-z_][A-Za-z0-9_]*$": {
+          "enum": ["passed", "failed", "skipped", "error"]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

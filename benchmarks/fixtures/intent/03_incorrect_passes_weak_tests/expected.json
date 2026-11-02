@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "id": "03_incorrect_passes_weak_tests",
+  "scenario": "incorrect_passes_weak_tests",
+  "title": "Incorrect PR (lower bound ignored) that is green under weak tests",
+  "language": "python",
+  "ground_truth": {
+    "pr_correct": false,
+    "note": "clamp never applies lo: clamp(-5, 0, 10) returns -5. A strong probe test fails at head."
+  },
+  "criteria": [
+    {
+      "id": "C1",
+      "text": "a value above hi returns hi",
+      "testability": "testable",
+      "expected_state": "weak"
+    },
+    {
+      "id": "C2",
+      "text": "a value below lo returns lo",
+      "testability": "testable",
+      "expected_state": "unevidenced"
+    },
+    {
+      "id": "C3",
+      "text": "a value inside the range is returned unchanged",
+      "testability": "testable",
+      "expected_state": "weak"
+    }
+  ],
+  "links": [
+    {
+      "criterion": "C1",
+      "symbol": "src/limits.py::clamp",
+      "tests": [
+        "tests/test_limits.py::test_clamp_above_is_bounded"
+      ]
+    },
+    {
+      "criterion": "C2",
+      "symbol": "src/limits.py::clamp",
+      "tests": [
+        "tests/test_limits.py::test_clamp_returns_an_int"
+      ]
+    },
+    {
+      "criterion": "C3",
+      "symbol": "src/limits.py::clamp",
+      "tests": [
+        "tests/test_limits.py::test_clamp_inside_stays_in_range"
+      ]
+    }
+  ],
+  "evidence_quality": [
+    {
+      "test": "tests/test_limits.py::test_clamp_above_is_bounded",
+      "band": "weak",
+      "rationale": "`<= 10` accepts hi, lo or any smaller value"
+    },
+    {
+      "test": "tests/test_limits.py::test_clamp_returns_an_int",
+      "band": "none",
+      "rationale": "asserts only the result type; cannot tell right from wrong"
+    },
+    {
+      "test": "tests/test_limits.py::test_clamp_inside_stays_in_range",
+      "band": "weak",
+      "rationale": "membership in a range accepts any in-range value"
+    },
+    {
+      "test": "tests/test_limits.py::test_is_between_inclusive",
+      "band": "none",
+      "rationale": "exercises a different function"
+    }
+  ],
+  "tamper_findings": [],
+  "unlinked_changed_symbols": [],
+  "expected_verdict": "insufficient_evidence",
+  "verdict_rationale": "All linked evidence is weak, so no criterion is proven. The ground truth is an incorrect PR, so verified would be false safety; failed cannot be derived from the shipped tests alone.",
+  "test_outcomes": {
+    "base": {
+      "tests/test_limits.py::test_is_between_inclusive": "passed"
+    },
+    "head": {
+      "tests/test_limits.py::test_is_between_inclusive": "passed",
+      "tests/test_limits.py::test_clamp_above_is_bounded": "passed",
+      "tests/test_limits.py::test_clamp_returns_an_int": "passed",
+      "tests/test_limits.py::test_clamp_inside_stays_in_range": "passed"
+    },
+    "head_with_probes": {
+      "tests/test_limits.py::test_is_between_inclusive": "passed",
+      "tests/test_limits.py::test_clamp_above_is_bounded": "passed",
+      "tests/test_limits.py::test_clamp_returns_an_int": "passed",
+      "tests/test_limits.py::test_clamp_inside_stays_in_range": "passed",
+      "tests/test_limits_strong.py::test_probe_clamp_above_returns_hi": "passed",
+      "tests/test_limits_strong.py::test_probe_clamp_below_returns_lo": "failed",
+      "tests/test_limits_strong.py::test_probe_clamp_inside_unchanged": "passed"
+    }
+  },
+  "mutants": [
+    {
+      "id": "M1",
+      "file": "src/limits.py",
+      "old": "        return hi\n",
+      "new": "        return lo\n",
+      "killed_by": []
+    }
+  ]
+}

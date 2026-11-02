@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "id": "08_multi_criterion_partial_evidence",
+  "scenario": "multi_criterion_partial_evidence",
+  "title": "Four criteria, correct code, evidence strong for two, weak for one, absent for one",
+  "language": "python",
+  "ground_truth": {
+    "pr_correct": true,
+    "note": "validate_password implements all four rules (probes pass at head), but two rules are barely or not tested."
+  },
+  "criteria": [
+    {
+      "id": "C1",
+      "text": "a password needs at least 8 characters",
+      "testability": "testable",
+      "expected_state": "proven"
+    },
+    {
+      "id": "C2",
+      "text": "a password needs at least one digit",
+      "testability": "testable",
+      "expected_state": "proven"
+    },
+    {
+      "id": "C3",
+      "text": "a password needs at least one uppercase letter",
+      "testability": "testable",
+      "expected_state": "weak"
+    },
+    {
+      "id": "C4",
+      "text": "a password must not be on the common-password list (case-insensitive)",
+      "testability": "testable",
+      "expected_state": "unevidenced"
+    }
+  ],
+  "links": [
+    {
+      "criterion": "C1",
+      "symbol": "src/validators.py::validate_password",
+      "tests": [
+        "tests/test_validators.py::test_rejects_seven_characters",
+        "tests/test_validators.py::test_accepts_eight_characters"
+      ]
+    },
+    {
+      "criterion": "C2",
+      "symbol": "src/validators.py::validate_password",
+      "tests": [
+        "tests/test_validators.py::test_rejects_missing_digit"
+      ]
+    },
+    {
+      "criterion": "C3",
+      "symbol": "src/validators.py::validate_password",
+      "tests": [
+        "tests/test_validators.py::test_uppercase_rule_runs"
+      ]
+    },
+    {
+      "criterion": "C4",
+      "symbol": "src/validators.py::validate_password",
+      "tests": []
+    }
+  ],
+  "evidence_quality": [
+    {
+      "test": "tests/test_validators.py::test_rejects_seven_characters",
+      "band": "strong",
+      "rationale": "boundary value just below the limit, exact boolean"
+    },
+    {
+      "test": "tests/test_validators.py::test_accepts_eight_characters",
+      "band": "strong",
+      "rationale": "boundary value at the limit, exact boolean"
+    },
+    {
+      "test": "tests/test_validators.py::test_rejects_missing_digit",
+      "band": "strong",
+      "rationale": "isolates the digit rule: all other rules satisfied"
+    },
+    {
+      "test": "tests/test_validators.py::test_uppercase_rule_runs",
+      "band": "weak",
+      "rationale": "asserts only that a bool is returned"
+    },
+    {
+      "test": "tests/test_validators.py::test_is_blank",
+      "band": "none",
+      "rationale": "exercises a different function"
+    }
+  ],
+  "tamper_findings": [],
+  "unlinked_changed_symbols": [],
+  "expected_verdict": "insufficient_evidence",
+  "verdict_rationale": "Two of four criteria are proven; C3 is weak and C4 unevidenced, so the unevidenced-intent mass exceeds uim_max. Partial evidence must not round up to verified.",
+  "test_outcomes": {
+    "base": {
+      "tests/test_validators.py::test_is_blank": "passed"
+    },
+    "head": {
+      "tests/test_validators.py::test_is_blank": "passed",
+      "tests/test_validators.py::test_rejects_seven_characters": "passed",
+      "tests/test_validators.py::test_accepts_eight_characters": "passed",
+      "tests/test_validators.py::test_rejects_missing_digit": "passed",
+      "tests/test_validators.py::test_uppercase_rule_runs": "passed"
+    },
+    "head_with_probes": {
+      "tests/test_validators.py::test_is_blank": "passed",
+      "tests/test_validators.py::test_rejects_seven_characters": "passed",
+      "tests/test_validators.py::test_accepts_eight_characters": "passed",
+      "tests/test_validators.py::test_rejects_missing_digit": "passed",
+      "tests/test_validators.py::test_uppercase_rule_runs": "passed",
+      "tests/test_validators_strong.py::test_probe_rejects_missing_uppercase": "passed",
+      "tests/test_validators_strong.py::test_probe_rejects_common_password": "passed"
+    }
+  },
+  "mutants": [
+    {
+      "id": "M1",
+      "file": "src/validators.py",
+      "old": "len(pw) < 8",
+      "new": "len(pw) < 7",
+      "killed_by": [
+        "tests/test_validators.py::test_rejects_seven_characters"
+      ]
+    },
+    {
+      "id": "M2",
+      "file": "src/validators.py",
+      "old": "    if not any(ch.isdigit() for ch in pw):\n        return False\n",
+      "new": "",
+      "killed_by": [
+        "tests/test_validators.py::test_rejects_missing_digit"
+      ]
+    },
+    {
+      "id": "M3",
+      "file": "src/validators.py",
+      "old": "    if not any(ch.isupper() for ch in pw):\n        return False\n",
+      "new": "",
+      "killed_by": []
+    },
+    {
+      "id": "M4",
+      "file": "src/validators.py",
+      "old": "    if pw.lower() in COMMON_PASSWORDS:\n        return False\n",
+      "new": "",
+      "killed_by": []
+    }
+  ]
+}
