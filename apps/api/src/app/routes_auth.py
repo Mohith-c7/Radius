@@ -48,6 +48,15 @@ def send_email_message(
     sender = (
         settings.smtp_from_email or settings.smtp_username or "radius.yourapp@gmail.com"
     )
+    if settings.email_delivery_mode == "log":
+        # Local development: no mail server. The text body carries the link.
+        # (Settings refuses this mode when RADIUS_ENV=production.)
+        print(
+            f"\n[Radius Email (EMAIL_DELIVERY_MODE=log)] TO: {to_email}\n"
+            f"Subject: {subject}\n{text_body}\n",
+            flush=True,
+        )
+        return True
     print(
         f"\n[Radius Email Dispatch] FROM: {sender} -> TO: {to_email}\nSubject: {subject}\n"
     )

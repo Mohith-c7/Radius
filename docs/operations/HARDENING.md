@@ -28,8 +28,8 @@ Legend: **Required** items are needed for a safe deployment; **Recommended** one
 - [ ] Recommended. Rotate by changing the value and restarting the service. Rotating `API_KEYS` requires updating
   `RADIUS_API_KEY` for the dashboard at the same time. Per-key scopes and an audited rotation flow do not exist
   yet (task IT-09).
-- [ ] Recommended. Change the default `radius/radius` database credentials in `docker-compose.yml` and do not publish
-  port 5432 (`POSTGRES_HOST_PORT`) beyond localhost; the compose file publishes it on all interfaces.
+- [ ] Recommended. Change the default `radius/radius` database credentials in `docker-compose.yml`. Port 5432
+  (`POSTGRES_HOST_PORT`) is published on `127.0.0.1` only; do not widen it.
 
 ## 3. API authentication and tenancy
 

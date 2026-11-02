@@ -1,12 +1,22 @@
 """Runtime configuration loaded from environment variables."""
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+#: Session secrets that are published in this repository; never valid in production.
+KNOWN_PUBLIC_SESSION_SECRETS = frozenset(
+    {
+        "super_secret_radius_session_key_32bytes_min",
+        "your_secure_random_session_secret_min_32_chars",
+    }
+)
+EMAIL_DELIVERY_MODES = ("smtp", "log")
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
+    runtime_env: str = Field(default="development", alias="RADIUS_ENV")
     database_url: str = "sqlite:///./radius.db"
     session_secret: str = Field(default="super_secret_radius_session_key_32bytes_min", min_length=32)
     frontend_origin: str = "http://127.0.0.1:3000"
@@ -19,11 +29,34 @@ class Settings(BaseSettings):
     github_client_secret: str | None = None
     github_redirect_uri: str | None = None
     email_delivery_mode: str = "smtp"
+    """``smtp`` (default) sends mail; ``log`` writes the message and its link to the API log (local dev only)."""
     smtp_host: str = "smtp.gmail.com"
     smtp_port: int = 587
     smtp_username: str | None = None
     smtp_password: str | None = None
     smtp_from_email: str | None = None
+
+
+    @field_validator("email_delivery_mode")
+    @classmethod
+    def _valid_delivery_mode(cls, value: str) -> str:
+        mode = value.strip().lower()
+        if mode not in EMAIL_DELIVERY_MODES:
+            msg = f"EMAIL_DELIVERY_MODE must be one of {', '.join(EMAIL_DELIVERY_MODES)}."
+            raise ValueError(msg)
+        return mode
+
+    @model_validator(mode="after")
+    def _production_guards(self) -> "Settings":
+        if self.runtime_env.strip().lower() != "production":
+            return self
+        if self.session_secret in KNOWN_PUBLIC_SESSION_SECRETS:
+            msg = "SESSION_SECRET is a published placeholder; set a random value (>= 32 chars) in production."
+            raise ValueError(msg)
+        if self.email_delivery_mode == "log":
+            msg = "EMAIL_DELIVERY_MODE=log writes sign-in links to the logs and is not allowed in production."
+            raise ValueError(msg)
+        return self
 
 
 @lru_cache

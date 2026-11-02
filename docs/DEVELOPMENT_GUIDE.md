@@ -41,7 +41,9 @@ make dev            # Linux, macOS, WSL, Git Bash
 .\scripts\dev.ps1 dev     # Windows PowerShell, no make required
 ```
 
-`dev` copies `.env.example` to `.env` if missing (it never overwrites) and adds a local-dev `GITHUB_DEFAULT_ORGANIZATION_ID` (Compose would otherwise pass an empty value, which the API rejects as an invalid UUID), builds the images and starts Postgres, the migrations job, the API, the worker and the dashboard, waiting until they are healthy.
+`dev` runs `scripts/gen_dev_env.py` to create `.env` from `.env.example` with **random** local secrets (`SESSION_SECRET`, a dev `RADIUS_API_KEY`, the dev organization id; it never overwrites an existing file), then layers `docker-compose.dev.yml` over `docker-compose.yml` (`docker compose -f docker-compose.yml -f docker-compose.dev.yml`), builds the images and starts Postgres, the migrations job, the API, the worker and the dashboard, waiting until they are healthy.
+
+The dev override is what makes the quickstart work: it sets `RADIUS_ENV=development` for the API, allows the `http://localhost:3000` origin (the browser calls the API directly for sign-in), auto-verifies new accounts, sets `EMAIL_DELIVERY_MODE=log` (the verification link is printed in `make logs`, no mail server needed) and registers the random dev key as `API_KEYS` for the dev organization, which the dashboard proxy sends server-side. Plain `docker compose up` stays production-like (`RADIUS_ENV=production`) and stops with a clear message if `SESSION_SECRET` is unset. Never expose the dev profile to a network. If you have an older `.env`, delete it and run `make env`. **Unverified:** a full-stack run of this flow (image build, browser sign-up, dashboard data) has not been performed; the Compose files are checked with `docker compose config` and `scripts/check_compose.py`.
 
 | What | URL |
 |---|---|
@@ -66,7 +68,7 @@ make lint           # ruff
 
 | Profile | Services | Notes |
 |---|---|---|
-| core (default) | `postgres`, `migrations`, `api`, `worker`, `dashboard` | Carries no `profiles:` key so the documented `docker compose up -d --build` still works. |
+| core (default) | `postgres`, `migrations`, `api`, `worker`, `dashboard` | Carries no `profiles:` key so the documented `docker compose up -d --build` still works. `docker-compose.yml` alone is production-like; `make dev` adds `docker-compose.dev.yml`. |
 | `sandbox` | `sandbox-image` | One-shot build of the image used when `WORKER_TEST_EXECUTION_MODE=sandbox`. The worker starts per-command containers itself and needs a container runtime, so run the worker natively (`make dev-local`) for sandbox mode. See `docs/security/EXECUTION_ISOLATION.md`. |
 | `observability` | `jaeger`, `prometheus` | Local tracing and metrics backends. Build api/worker with `RADIUS_EXTRAS=[observability]` to emit data. See `docs/OBSERVABILITY.md`. |
 
@@ -84,7 +86,7 @@ make dev-local-demo   # in-memory API, seeded at start-up
 make seed-demo        # into the Docker Postgres from `make dev` (STORAGE_BACKEND=sql)
 ```
 
-`make seed-demo` runs `scripts/seed_demo.py --yes`, which prints a "DEMO DATA" banner and refuses to run without `--yes` or with `RADIUS_ENV=production`. Note that the Compose API runs with `RADIUS_ENV=production`, so it never seeds itself; the script writes into the same Postgres database from your host.
+`make seed-demo` runs `scripts/seed_demo.py --yes`, which prints a "DEMO DATA" banner and refuses to run without `--yes` or with `RADIUS_ENV=production`. Neither Compose profile seeds on its own (the dev profile does not set `RADIUS_SEED_DEMO_DATA`); the script writes into the same Postgres database from your host (the database port is published on `127.0.0.1`), into the dev organization `00000000-0000-4000-8000-000000000001`, which is the organization the dev dashboard loads.
 
 ## Windows notes
 
