@@ -26,7 +26,7 @@ If a claim fails, report it honestly and narrow the paper's contribution (the pl
 | RQ5 | Does triage help reviewers? | H5: top 20% risk-ranked hunks contain >= 60% of seeded/true defect hunks; users find more defects per minute with triage | hit rate at k, time, detection rate |
 | RQ6 (overhead) | Is the cost acceptable? | H6: cheap verdict < 2 min p95; mutation adds < 15 min p95 within budget | latency, cost per PR |
 
-Hypothesis thresholds above are *initial guesses* and are fixed in the pre-registration (EP-02) before running the experiments.
+Hypothesis thresholds above are *initial guesses* and are fixed in the pre-registration (EP-02) before running the experiments. The pre-registration draft (`preregistration/PREREGISTRATION.md`, not frozen) restates the claims after EP-01 (claim 2 as a gold-free PR-time predictor, claim 1 as evidence-strength-aware support, claims 3 and 5 as evaluation contributions, claim 4 with the AgentLens qualifiers) and refines the metrics, splits and sample sizes; where it differs from this table, the pre-registration governs once frozen.
 
 ## 3. Datasets (EP-03)
 
@@ -71,7 +71,7 @@ Fair comparison: same inputs, same splits, tuned with the same budget, report se
 | ID | Task | Needs |
 |---|---|---|
 | EP-01 [x] DONE 2026-11-02 (outputs in `literature/`) | Literature review (traceability, mutation testing for AI code, PR verification tools, calibration/conformal, process mining of agents). Confirm or narrow the novelty claim. Maintain a reading list and a table of related work with dates and artifacts. | none (start now) |
-| EP-02 | Pre-registration: RQs, hypotheses, metrics, analysis plan, stopping rules, exclusion criteria. Freeze before running. | EP-01 |
+| EP-02 [~] DRAFT 2026-11-02 (not frozen; `preregistration/`) | Pre-registration: RQs, hypotheses, metrics, analysis plan, stopping rules, exclusion criteria. Freeze before running. | EP-01 |
 | EP-03 | Dataset assembly, licensing check, splits. | F-14 |
 | EP-04 | Gold annotation (IN-09, LK-07), agreement study. | EP-03 |
 | EP-05 | Experiment harness that calls the production pipeline, takes a dataset manifest + config, writes results with `algo_version`, seed, commit hash. One command reproduces any table. | M3 |
@@ -148,4 +148,5 @@ Venue options to evaluate (check current calls and deadlines at the time): softw
 
 ## Changelog
 
+- 2026-11-02 (EP-02): added the pre-registration draft in `preregistration/` (`PREREGISTRATION.md`, `CHANGELOG.md` with the freeze mechanism); EP-02 marked DRAFT, not frozen.
 - 2026-11-02 (EP-01): verified UTBoost/PatchDiff/SWE-ABS figures against arXiv pages and added them with license/artifact status; added datasets (SWE-Bench+, SWT-Bench, SWE-Mutation, ImpossibleBench, AIDev, AgentLens-Bench status) and baselines B7-B12 plus the AgentProof disambiguation; ticked EP-01; extended the novelty-risk threat; added section 12 (literature gaps). No numeric claim in this plan was found wrong (the plan contained none from snippets); the figures that were previously only in search snippets are now sourced.
