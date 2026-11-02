@@ -18,7 +18,14 @@ Isolation applied to every command (see ``build_container_argv``):
   (JUnit XML).
 * ``--user 65534:65534`` (nobody), ``--cap-drop ALL``,
   ``--security-opt no-new-privileges``, ``--ipc none``.
-* ``--pids-limit``, ``--memory`` (+ equal ``--memory-swap``), ``--cpus``.
+* ``--pids-limit``, ``--memory`` (+ equal ``--memory-swap``), ``--cpus``,
+  and ``--ulimit`` for open files, single-file size and core dumps.
+* The runtime's default seccomp profile stays on (``unconfined`` is rejected);
+  an operator may supply a stricter custom profile.
+* Output is capped: a watchdog kills the container if either stream grows past
+  ``max_output_bytes`` on the host, and only the first 500 KB is retained.
+* Fail closed: ``check_ready`` / every ``run`` verifies the runtime, daemon, image
+  and seccomp profile *before* anything is executed; otherwise ``ERROR``.
 * ``--pull never``: images are provisioned by operators, never fetched at
   analysis time.
 * Environment: only the fixed ``SANDBOX_ENV`` allowlist, always passed as
@@ -43,6 +50,7 @@ import shutil
 import stat
 import subprocess
 import tempfile
+import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -83,6 +91,15 @@ RUNTIME_EXIT_CODES = {
     126: "test command in the sandbox image could not be invoked",
     127: "test command was not found in the sandbox image",
 }
+# 128 + signal: the sandboxed process was terminated by a resource limit or the
+# kernel. Reported as ERROR (contained), never as a test failure or pass.
+CONTAINED_EXIT_CODES = {
+    137: "killed by SIGKILL (memory limit / OOM kill or forced termination)",
+    152: "killed by SIGXCPU (CPU time limit)",
+    153: "killed by SIGXFSZ (file size limit)",
+}
+DEFAULT_MAX_OUTPUT_BYTES = 5 * 1024 * 1024
+_WATCHDOG_INTERVAL_SECONDS = 0.2
 _MEMORY_RE = re.compile(r"^[1-9][0-9]*[kmg]?$", re.IGNORECASE)
 _CPUS_RE = re.compile(r"^(?:[0-9]+(?:\.[0-9]+)?)$")
 _IMAGE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/:@+-]*$")
@@ -100,6 +117,10 @@ class SandboxConfig:
     pids_limit: int = 256
     tmpfs_size: str = "256m"
     timeout_seconds: int = 600
+    nofile_limit: int = 1024
+    max_file_size_bytes: int = 64 * 1024 * 1024
+    max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES
+    seccomp_profile: str | None = None
 
     def __post_init__(self) -> None:
         if Path(self.runtime).name not in SUPPORTED_RUNTIMES:
@@ -116,6 +137,19 @@ class SandboxConfig:
             raise ValueError("sandbox pids_limit must be positive")
         if self.timeout_seconds <= 0:
             raise ValueError("sandbox timeout_seconds must be positive")
+        for label, number in (
+            ("nofile_limit", self.nofile_limit),
+            ("max_file_size_bytes", self.max_file_size_bytes),
+            ("max_output_bytes", self.max_output_bytes),
+        ):
+            if number <= 0:
+                raise ValueError(f"sandbox {label} must be positive")
+        if self.seccomp_profile is not None and (
+            not self.seccomp_profile.strip()
+            or self.seccomp_profile.strip().lower() == "unconfined"
+            or "," in self.seccomp_profile
+        ):
+            raise ValueError("sandbox seccomp_profile must be a profile file path, not unconfined")
 
 
 def build_container_argv(
@@ -160,6 +194,17 @@ def build_container_argv(
         "ALL",
         "--security-opt",
         "no-new-privileges",
+    ]
+    if config.seccomp_profile:
+        # Replaces (never disables) the runtime's default profile; read client-side.
+        argv.extend(["--security-opt", f"seccomp={config.seccomp_profile}"])
+    argv += [
+        "--ulimit",
+        f"nofile={config.nofile_limit}:{config.nofile_limit}",
+        "--ulimit",
+        f"fsize={config.max_file_size_bytes}:{config.max_file_size_bytes}",
+        "--ulimit",
+        "core=0:0",
         "--pids-limit",
         str(config.pids_limit),
         "--memory",
@@ -200,6 +245,10 @@ def sandbox_command(command: str, args: tuple[str, ...]) -> tuple[list[str], boo
     return [command, *args], False
 
 
+class SandboxUnavailableError(RuntimeError):
+    """The sandbox cannot be used safely; execution must not proceed."""
+
+
 class _Process(Protocol):
     def wait(self, timeout: float | None = None) -> int: ...
 
@@ -229,28 +278,70 @@ class ContainerSandboxRunner:
         *,
         launcher: ProcessLauncher | None = None,
         aux_runner: AuxRunner | None = None,
-        which: Callable[[str], str | None] = shutil.which,
+        which: Callable[[str], str | None] | None = None,
+        probe: AuxRunner | None = None,
     ) -> None:
         self._config = config or SandboxConfig()
         self._launch = launcher or subprocess.Popen
         self._aux = aux_runner or subprocess.run
-        self._which = which
+        self._which = which or (lambda name: shutil.which(name))
+        self._probe = probe or subprocess.run
         self._junit = JUnitReportParser()
 
     @property
     def config(self) -> SandboxConfig:
         return self._config
 
+    def check_ready(self) -> str:
+        """Verify the sandbox is usable; return the runtime path or raise.
+
+        Checks the runtime binary, that its daemon answers, that the image is
+        already present (images are never pulled) and that a custom seccomp
+        profile exists. Any failure raises ``SandboxUnavailableError``.
+        """
+
+        runtime_path = self._which(self._config.runtime)
+        if runtime_path is None:
+            raise SandboxUnavailableError(
+                f"container runtime '{self._config.runtime}' not found"
+            )
+        profile = self._config.seccomp_profile
+        if profile and not Path(profile).is_file():
+            raise SandboxUnavailableError("configured seccomp profile file not found")
+        for label, argv in (
+            ("container runtime daemon is not reachable", [runtime_path, "version"]),
+            (
+                f"sandbox image '{self._config.image}' is not present locally",
+                [runtime_path, "image", "inspect", self._config.image],
+            ),
+        ):
+            try:
+                done = self._probe(  # noqa: S603 - argv list, no shell
+                    argv,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    stdin=subprocess.DEVNULL,
+                    env=_runtime_cli_env(),
+                    timeout=30,
+                    check=False,
+                )
+            except (OSError, subprocess.SubprocessError) as exc:
+                raise SandboxUnavailableError(
+                    f"container runtime check failed ({exc.__class__.__name__})"
+                ) from exc
+            if getattr(done, "returncode", 1) != 0:
+                raise SandboxUnavailableError(label)
+        return runtime_path
+
     def run(self, plan: TestRunPlan, repository_path: Path) -> TestRunResult:
         """Execute all commands of ``plan`` against a snapshot of the checkout."""
 
         started = time.monotonic()
         outputs: list[str] = []
-        runtime_path = self._which(self._config.runtime)
-        if runtime_path is None:
-            error = _CommandOutcome(
-                error=f"container runtime '{self._config.runtime}' not found"
-            )
+        try:
+            runtime_path = self.check_ready()
+        except SandboxUnavailableError as exc:
+            error = _CommandOutcome(error=f"sandbox unavailable, refusing to execute: {exc}")
             return build_run_result(plan, [error], outputs, started)
 
         root = Path(tempfile.mkdtemp(prefix="radius-sandbox-"))
@@ -306,6 +397,10 @@ class ContainerSandboxRunner:
             return _CommandOutcome(
                 error=f"{command}: {RUNTIME_EXIT_CODES[execution.returncode]}"
             )
+        if execution.returncode in CONTAINED_EXIT_CODES:
+            return _CommandOutcome(
+                error=f"{command}: {CONTAINED_EXIT_CODES[execution.returncode]}"
+            )
         if is_pytest:
             return pytest_outcome(
                 self._junit, execution.returncode, results_dir / "junit.xml"
@@ -328,6 +423,9 @@ class ContainerSandboxRunner:
         err_path = scratch / "stderr.txt"
         result = _Execution()
         process: _Process | None = None
+        stop = threading.Event()
+        overflow = threading.Event()
+        watchdog: threading.Thread | None = None
         try:
             with out_path.open("w+b") as out_f, err_path.open("w+b") as err_f:
                 try:
@@ -350,6 +448,12 @@ class ContainerSandboxRunner:
                         f"could not start container runtime ({exc.__class__.__name__})"
                     )
                     return result
+                watchdog = threading.Thread(
+                    target=self._watch_output,
+                    args=(stop, overflow, (out_path, err_path), runtime_path, container_name),
+                    daemon=True,
+                )
+                watchdog.start()
                 try:
                     result.returncode = process.wait(
                         timeout=self._config.timeout_seconds
@@ -362,12 +466,40 @@ class ContainerSandboxRunner:
                     process.kill()
                     _wait_quietly(process)
         finally:
+            stop.set()
+            if watchdog is not None:
+                watchdog.join(timeout=5)
+            if overflow.is_set() and result.failure is None:
+                result.failure = (
+                    f"output exceeded {self._config.max_output_bytes} bytes; container killed"
+                )
             if result.failure is not None and process is not None:
                 # --rm covers normal exits; make sure nothing is left behind.
                 self._remove_container(runtime_path, container_name)
         result.stdout = _read_capped(out_path, self.MAX_OUTPUT_SIZE)
         result.stderr = _read_capped(err_path, self.MAX_OUTPUT_SIZE)
         return result
+
+    def _watch_output(
+        self,
+        stop: threading.Event,
+        overflow: threading.Event,
+        paths: tuple[Path, Path],
+        runtime_path: str,
+        container_name: str,
+    ) -> None:
+        """Kill the container if its captured output outgrows the host-side cap."""
+
+        limit = self._config.max_output_bytes
+        while not stop.wait(_WATCHDOG_INTERVAL_SECONDS):
+            try:
+                oversized = any(path.stat().st_size > limit for path in paths)
+            except OSError:
+                continue
+            if oversized:
+                overflow.set()
+                self._kill_container(runtime_path, container_name)
+                return
 
     def _kill_container(self, runtime_path: str, container_name: str) -> None:
         self._aux_call([runtime_path, "kill", container_name])
