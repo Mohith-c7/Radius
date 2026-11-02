@@ -13,6 +13,8 @@ Operators (id: what it does):
 * ``ARG``  argument swap: first two positional args of a call swapped
 * ``CRM``  condition removal: each operand of ``and``/``or`` dropped; ``if``/``while`` test -> ``False``
 
+Opt-in (not in the default set): ``CALLX`` expression call -> operand (``x.lower()`` -> ``x``).
+
 Identity and order are deterministic: mutants are sorted by
 ``(path, lineno, col, operator, replacement)`` and the id is a hash of the site and
 the textual change, independent of enumeration order. The mutated module text is
@@ -46,6 +48,10 @@ OPERATOR_IDS: tuple[str, ...] = (
     "ARG",
     "CRM",
 )
+# Opt-in operators, not part of the frozen default set (added after the fixture run showed
+# that the default set has no mutant that changes a computed value through a call chain):
+#   CALLX  expression call -> its operand: ``x.lower()`` -> ``x``, ``f(x)`` -> ``x``
+EXPERIMENTAL_OPERATOR_IDS: tuple[str, ...] = ("CALLX",)
 PRAGMA = "pragma: no mutate"
 
 # Inclusive 1-based (start, end) line ranges.
@@ -218,8 +224,14 @@ def _swap_args(n: ast.AST) -> ast.AST:
     return n
 
 
+def _receiver(n: ast.AST) -> ast.AST:
+    func = n.func  # type: ignore[attr-defined]
+    return func.value if isinstance(func, ast.Attribute) else n.args[0]  # type: ignore[attr-defined]
+
+
 def _candidates(tree: ast.Module, skip_const: set[int]) -> list[_Cand]:
     cands: list[_Cand] = []
+    stmt_calls = {id(n.value) for n in ast.walk(tree) if isinstance(n, ast.Expr)}
     for idx, node in enumerate(ast.walk(tree)):
         if isinstance(node, ast.Compare):
             for k, op in enumerate(node.ops):
@@ -256,6 +268,15 @@ def _candidates(tree: ast.Module, skip_const: set[int]) -> list[_Cand]:
             cands.append((idx, "EXC", "raise->pass", lambda n: ast.Pass()))
         elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
             cands.append((idx, "CALL", "call->pass", lambda n: ast.Pass()))
+        if isinstance(node, ast.Call) and id(node) not in stmt_calls and not node.keywords:
+            plain_method = isinstance(node.func, ast.Attribute) and not node.args
+            one_arg = (
+                isinstance(node.func, ast.Name)
+                and len(node.args) == 1
+                and not isinstance(node.args[0], ast.Starred)
+            )
+            if plain_method or one_arg:
+                cands.append((idx, "CALLX", "call->operand", _receiver))
         if isinstance(node, ast.Call):
             pos = node.args
             if len(pos) >= 2 and not any(isinstance(a, ast.Starred) for a in pos[:2]):

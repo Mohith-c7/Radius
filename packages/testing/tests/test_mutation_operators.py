@@ -135,3 +135,14 @@ def test_mutant_is_immutable_value() -> None:
     m = generate_mutants("def f(a):\n    return a + 1\n", "m.py", operators=["AOR"])[0]
     assert isinstance(m, Mutant)
     assert m.to_dict()["operator"] == "AOR"
+
+
+def test_callx_is_opt_in_and_replaces_call_by_operand() -> None:
+    src = "def f(a):\n    return a.strip().lower()\n"
+    assert not any(m.operator == "CALLX" for m in generate_mutants(src, "m.py"))
+    got = _ops(src, operators=["CALLX"])
+    assert got == {("CALLX", "return a.strip()"), ("CALLX", "return a.lower()")}
+    assert _ops("def f(a):\n    return len(a)\n", operators=["CALLX"]) == {("CALLX", "return a")}
+    # statement calls belong to CALL; calls with arguments or keywords are left alone
+    assert _ops("def f(a):\n    g(a)\n", operators=["CALLX"]) == set()
+    assert _ops("def f(a):\n    return a.split(',')\n", operators=["CALLX"]) == set()

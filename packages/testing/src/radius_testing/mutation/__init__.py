@@ -31,7 +31,12 @@ from radius_testing.mutation.matrix import (
     d_mut_per_test,
     wilson_interval,
 )
-from radius_testing.mutation.operators import OPERATOR_IDS, Mutant, generate_mutants
+from radius_testing.mutation.operators import (
+    EXPERIMENTAL_OPERATOR_IDS,
+    OPERATOR_IDS,
+    Mutant,
+    generate_mutants,
+)
 from radius_testing.mutation.runner import (
     LocalRunnerRefusedError,
     MutantOutcome,
@@ -54,6 +59,7 @@ def mutation_enabled(environ: Mapping[str, str] | None = None) -> bool:
 
 
 __all__ = [
+    "EXPERIMENTAL_OPERATOR_IDS",
     "FLAG_ENV_NAME",
     "OPERATOR_IDS",
     "CriterionDetection",

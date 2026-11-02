@@ -49,6 +49,7 @@ from radius_evidence.domain.assertion_records import features_from_assertion_set
 from radius_evidence.domain.strength import a_static  # noqa: E402
 from radius_testing.assertions import extract_assertions  # noqa: E402
 from radius_testing.mutation import (  # noqa: E402
+    OPERATOR_IDS,
     MutationBudget,
     SubprocessLocalRunner,
     aggregate_criterion,
@@ -177,7 +178,8 @@ def measure_reach(head: Path, files: list[str], mutants) -> dict[str, set[str]]:
 
 
 def evaluate(
-    fx: Path, max_mutants: int, seed: int, timeout: float, baseline_runs: int, survivor_reruns: int
+    fx: Path, max_mutants: int, seed: int, timeout: float, baseline_runs: int, survivor_reruns: int,
+    operators: tuple[str, ...] = OPERATOR_IDS,
 ) -> dict:
     expected = json.loads((fx / "expected.json").read_text(encoding="utf-8"))
     base, head = fx / "base", fx / "head"
@@ -190,7 +192,7 @@ def evaluate(
         text = (head / path).read_text(encoding="utf-8")
         sources[path] = text
         ranges = [r for _, r in items]
-        all_mutants += generate_mutants(text, path, ranges)
+        all_mutants += generate_mutants(text, path, ranges, operators)
     mutants = sample_mutants(all_mutants, max_mutants, seed)
     labels = {p: items for p, items in scopes.items()}
     relabel = {m.id: innermost(labels[m.path], m.lineno) for m in mutants}
@@ -372,6 +374,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--max-mutants", type=int, default=30)
     ap.add_argument("--baseline-runs", type=int, default=1, help="1 keeps runtime small; the unit tests cover flaky handling")
     ap.add_argument("--survivor-reruns", type=int, default=0)
+    ap.add_argument("--operators", default=",".join(OPERATOR_IDS), help="comma list; add CALLX for the experimental operator")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--timeout", type=float, default=60.0)
     ap.add_argument("--json", type=Path, help="write raw results as JSON")
@@ -384,7 +387,8 @@ def main(argv: list[str] | None = None) -> int:
     dirs = sorted(p for p in FIXTURES.iterdir() if (p / "expected.json").is_file())
     if args.fixtures:
         dirs = [d for d in dirs if any(d.name.startswith(f) for f in args.fixtures)]
-    results = [evaluate(d, args.max_mutants, args.seed, args.timeout, args.baseline_runs, args.survivor_reruns) for d in dirs]
+    results = [evaluate(d, args.max_mutants, args.seed, args.timeout, args.baseline_runs, args.survivor_reruns,
+                         tuple(args.operators.split(","))) for d in dirs]
     agg = agreement(results)
     text = markdown(results, agg)
     print(text)
