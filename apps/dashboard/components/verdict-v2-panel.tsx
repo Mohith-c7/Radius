@@ -33,7 +33,11 @@ import { ReactNode, useCallback, useEffect, useId, useRef, useState } from "reac
 
 import { getVerdictV2 } from "../lib/verdict-v2";
 import {
+  DISCLAIMER,
+  LEGEND,
+  authorHintCount,
   classifyVerdictError,
+  provenanceLabel,
   evidenceSummary,
   flagLabel,
   formatPercent,
@@ -171,6 +175,9 @@ function VerdictView({ verdict }: { verdict: VerdictV2 }) {
   return (
     <>
       <header className="vv2-head">
+        <p className="vv2-disclaimer" role="note">
+          <strong>Alpha - static evidence only - uncalibrated.</strong> {DISCLAIMER}
+        </p>
         <p className={`vv2-verdict ${meta.tone}`}>
           <VerdictIcon size={20} aria-hidden="true" />
           <strong>{meta.label}</strong>
@@ -188,6 +195,14 @@ function VerdictView({ verdict }: { verdict: VerdictV2 }) {
       {available ? (
         <>
           <SummaryStrip verdict={verdict} />
+          {authorHintCount(verdict) > 0 ? (
+            <p className="vv2-state" role="status">
+              <AlertTriangle size={16} aria-hidden="true" /> {authorHintCount(verdict)}{" "}
+              {authorHintCount(verdict) === 1 ? "criterion relies" : "criteria rely"} on
+              author-supplied test hints. Their link strength is capped; confirm the criteria in
+              the intent panel to lift the cap.
+            </p>
+          ) : null}
           <CriteriaTable verdict={verdict} />
           <TamperSection verdict={verdict} />
           <ListSection
@@ -241,7 +256,7 @@ function SummaryStrip({ verdict }: { verdict: VerdictV2 }) {
       <div className="vv2-meters">
         <label className="vv2-meter">
           <span>
-            Unproven intent mass {formatScore(verdict.summary.uim)}
+            Unsupported intent mass {formatScore(verdict.summary.uim)}
             {bars.uimMaxPercent !== null ? ` (limit ${(bars.uimMaxPercent / 100).toFixed(2)})` : ""}
             {bars.uimOverLimit ? ": over the limit" : ""}
           </span>
@@ -281,7 +296,7 @@ function CriteriaTable({ verdict }: { verdict: VerdictV2 }) {
       <table className="vv2-table">
         <caption>
           Criteria. Support must reach the threshold {formatScore(verdict.tauSupport)} to count as
-          proven.
+          supported. Legend: {LEGEND}.
         </caption>
         <thead>
           <tr>
@@ -386,6 +401,14 @@ function CriterionDetails({ criterion }: { criterion: Criterion }) {
   return (
     <div className="vv2-detail">
       <p className="vv2-muted">{meta.description}</p>
+      <p className="vv2-small">
+        Criterion source: {provenanceLabel(criterion.provenance)}
+        {criterion.hints.length > 0
+          ? `. Hints: ${criterion.hints
+              .map((h) => `${h.kind} ${h.value} (${provenanceLabel(h.provenance)})`)
+              .join("; ")}`
+          : ""}
+      </p>
       {criterion.reasons.length > 0 ? (
         <ul className="vv2-reasons">
           {criterion.reasons.map((reason, index) => (
