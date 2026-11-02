@@ -18,6 +18,18 @@ export const DEFAULT_TAU_SUPPORT = 0.5;
 
 export const STATIC_ONLY_LABEL = "Static assertion strength only (no mutation testing)";
 export const UNCALIBRATED_LABEL = "Uncalibrated: no probability, no score";
+/** Presentation wording (alpha); the internal enum values (`proven`, `verified`) are unchanged. */
+export const DISCLAIMER =
+  "Alpha: static evidence only (assertion strength, no mutation testing); thresholds are uncalibrated. This is not a proof of correctness.";
+export const LEGEND =
+  "supported = static assertion strength above threshold; not a proof of correctness";
+export const PROVENANCE_LABELS: Record<string, string> = {
+  author_pr_body: "PR author (description)",
+  author_head_spec: "PR author (spec file in this PR)",
+  base_spec: "Base branch spec",
+  human_confirmed: "Human confirmed",
+  llm_proposed: "LLM proposed",
+};
 
 export type SupportState = "proven" | "weak" | "unevidenced" | "contradicted" | "excluded";
 export const SUPPORT_STATES: readonly SupportState[] = [
@@ -74,6 +86,8 @@ export type Criterion = {
   testability: string;
   lifecycle: string;
   flags: string[];
+  provenance: string;
+  hints: Hint[];
   reasons: Reason[];
   best_link: BestLink | null;
   items: EvidenceItem[];
@@ -106,7 +120,10 @@ export type Summary = {
   intent_coverage: number;
   tamper: Record<string, number>;
   evidence_basis: string;
+  author_hint_criteria: number;
 };
+
+export type Hint = { kind: string; value: string; provenance: string };
 
 export type RuleResult = {
   id: string;
@@ -259,6 +276,15 @@ function parseCriterion(raw: unknown): Criterion | null {
     testability: str(raw.testability),
     lifecycle: str(raw.lifecycle),
     flags: strs(raw.flags),
+    provenance: str(raw.provenance, "author_pr_body"),
+    hints: arr(raw.hints)
+      .slice(0, MAX_LIST)
+      .filter(isObject)
+      .map((h) => ({
+        kind: str(h.kind),
+        value: truncateText(str(h.value), 300),
+        provenance: str(h.provenance, "author_pr_body"),
+      })),
     reasons: reasons(raw.reasons),
     best_link: parseBestLink(raw.best_link),
     items: rawItems
@@ -361,6 +387,8 @@ function parseSummary(raw: unknown, criteria: Criterion[]): Summary {
     intent_coverage: clamp01(num(s.intent_coverage)),
     tamper,
     evidence_basis: str(s.evidence_basis, "static_only"),
+    author_hint_criteria: Math.max(0, Math.trunc(num(s.author_hint_criteria, 0))),
+
   };
 }
 
@@ -442,10 +470,11 @@ export type StateMeta = { label: string; tone: Tone; icon: IconName; description
 
 const STATE_META: Record<SupportState | "unknown", StateMeta> = {
   proven: {
-    label: "Proven",
+    label: "Supported",
     tone: "good",
     icon: "check",
-    description: "Enough independent passing evidence, judged by assertion strength only.",
+    description:
+      "Static assertion strength above the threshold. Not a proof of correctness: no mutation testing, uncalibrated thresholds.",
   },
   weak: {
     label: "Weak",
@@ -454,7 +483,7 @@ const STATE_META: Record<SupportState | "unknown", StateMeta> = {
     description: "Some evidence, but below the support threshold or without a strong assertion.",
   },
   unevidenced: {
-    label: "Unproven",
+    label: "Unsupported",
     tone: "warn",
     icon: "help",
     description: "No usable evidence for this criterion.",
@@ -494,7 +523,18 @@ const FLAG_LABELS: Record<string, string> = {
   no_strong_assertion: "No strong assertion",
   needs_typed_evidence: "Needs non-functional evidence",
   no_linked_test: "No test linked",
+  author_supplied_hint: "Relies on author-supplied test hint",
 };
+
+export function provenanceLabel(provenance: string): string {
+  return PROVENANCE_LABELS[provenance] ?? truncateText(provenance.replace(/_/g, " "), 40);
+}
+
+/** Criteria whose counted tests rely on an unconfirmed author-supplied hint. */
+export function authorHintCount(v: Pick<VerdictV2, "criteria" | "summary">): number {
+  const flagged = v.criteria.filter((c) => c.flags.includes("author_supplied_hint")).length;
+  return Math.max(flagged, v.summary.author_hint_criteria);
+}
 
 export function flagLabel(flag: string): string {
   return FLAG_LABELS[flag] ?? truncateText(flag.replace(/_/g, " "), 60);
@@ -520,7 +560,7 @@ export function verdictMeta(
   if (pending) return { label: "Awaiting CI test results", tone: "info", icon: "clock" };
   switch (verdict) {
     case "verified":
-      return { label: "Verified", tone: "good", icon: "check" };
+      return { label: "Supported by static evidence (alpha)", tone: "info", icon: "check" };
     case "failed":
       return { label: "Failed", tone: "bad", icon: "x" };
     case "needs_review":

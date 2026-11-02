@@ -619,6 +619,18 @@ Optional fields with defaults only (`CONTRACT_VERSION = "verdict-v2-contract-3"`
 
 Source rule: both files are read from the base side only (`radius_evidence.policy.repo_config`); the head policy is read only after `head_policy: tighten_only` in the base policy and then can only tighten (`effective.at_least_as_strict` is the order the property tests check). A policy or waiver never touches the CI failed-case count (R1b) or a contradicted criterion (R1a). User guide: `docs/policy.md`.
 
+### 3.13 Contract 4 (honesty and author trust, 2026-11-03, DEC-030)
+
+Optional fields only (`CONTRACT_VERSION = "verdict-v2-contract-4"`); contract-1 to -3 bundles still load. See `docs/security/VERDICT_V2_THREAT_MODEL.md`.
+
+| Change | Where | Why |
+|---|---|---|
+| `CriterionInput.provenance`, `hints_provenance`; `CriterionTestEdgeInput.provenance` (tags `author_pr_body`, `author_head_spec`, `base_spec`, `human_confirmed`, `llm_proposed`) | `inputs.py`, `enums.Provenance` | The PR author controls the description, the head spec and the hints. |
+| `LinkMapping.author_hint_cap` (0.7) | `config.py`, applied in `scoring.apply_author_hint_cap` | Untrusted `tests:` hints no longer saturate the criterion-to-test link. |
+| `Flag.AUTHOR_SUPPLIED_HINT` and reason `author_supplied_hint` | `enums.py`, `scoring.py` | Makes the reliance visible. |
+| `CriterionVerdict.provenance`, `hints` | `confidence/.../model.py` | Carried to the payload. |
+| Payload: `contract_version`, `alpha`, `calibrated`, `evidence_basis`, `presentation`, `summary.author_hint_criteria`, `criteria[].provenance`, `criteria[].hints[]` | `verdict_v2_payload.py`, `scoring.build_payload`, schema | Honest wording is part of the contract; enum values are unchanged. |
+
 ---
 
 ## 4. Persistence plan

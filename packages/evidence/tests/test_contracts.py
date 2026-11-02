@@ -275,7 +275,7 @@ def test_component_versions_cover_the_justification_keys() -> None:
 def test_contract_two_fields_default_to_the_old_behaviour() -> None:
     from radius_evidence.domain.versions import CONTRACT_VERSION
 
-    assert CONTRACT_VERSION == "verdict-v2-contract-3"
+    assert CONTRACT_VERSION == "verdict-v2-contract-4"
     fact = AssertionFact(AssertKind.VALUE_EQUALITY, 3)
     assert not any(
         (fact.mock_only, fact.circular, fact.dead, fact.swallowed, fact.in_loop, fact.property_based)

@@ -26,6 +26,8 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
+from radius_evidence.domain.config import LinkMapping
+from radius_evidence.domain.enums import ALL_PROVENANCE, Provenance
 from radius_evidence.domain.inputs import CriterionInput, StageAInput
 from radius_evidence.domain.versions import (
     CRITERION_SYMBOL_LINKS_VERSION,
@@ -113,6 +115,38 @@ def _snapshots(command: Any) -> tuple[Any, Any, Any]:
     else:
         raise StageAError("no_diff_source")
     return base, head, source
+
+
+SPEC_PATH = ".radius/intent.yml"
+
+
+def _source_kind(criterion: Any) -> str:
+    kind = getattr(getattr(getattr(criterion, "origin", None), "source", None), "kind", "")
+    return str(getattr(kind, "value", kind))
+
+
+def _norm_spec(data: bytes) -> bytes:
+    return data.replace(b"\r", b"").strip()
+
+
+def default_spec_provenance(command: Any) -> str:
+    """``base_spec`` when ``.radius/intent.yml`` exists unchanged on the base ref.
+
+    The PR author controls the head spec, so its hints are trusted only when the
+    identical file is already on the base ref (read through the same local git
+    snapshot the other producers use). A missing base ref, a missing base file or any
+    difference means ``author_head_spec`` (contract 3).
+    """
+
+    base, head, _ = _snapshots(command)
+    if base is None:
+        return Provenance.AUTHOR_HEAD_SPEC.value
+    head_bytes, base_bytes = head.read(SPEC_PATH), base.read(SPEC_PATH)
+    if head_bytes is not None and base_bytes is not None and (
+        _norm_spec(head_bytes) == _norm_spec(base_bytes)
+    ):
+        return Provenance.BASE_SPEC.value
+    return Provenance.AUTHOR_HEAD_SPEC.value
 
 
 def default_symbol_changes(command: Any) -> Any:
@@ -278,6 +312,8 @@ class Producers:
     """Injectable producer callables (tests substitute fakes)."""
 
     symbol_changes: Callable[[Any], Any] = default_symbol_changes
+    #: Provenance of the head ``.radius/intent.yml`` (``base_spec`` only if unchanged on base).
+    spec_provenance: Callable[[Any], str] = default_spec_provenance
     tamper: Callable[[Any, Any], Any] = default_tamper
     link_criteria: Callable[..., Any] = default_link_criteria
     link_tests: Callable[..., Any] = default_link_tests
@@ -370,6 +406,21 @@ class VerdictStageACollector:
             raise StageAError("head_sha_unresolved")
         return sha
 
+    def _spec_provenance(self, facts: IntentFacts, command: Any) -> str:
+        """Provenance of spec-file criteria; any failure means author-controlled."""
+
+        author = Provenance.AUTHOR_HEAD_SPEC.value
+        uses_spec = any(_source_kind(c) == "spec_file" for c in facts.criteria)
+        if not uses_spec:
+            return author
+        try:
+            value = guarded(
+                lambda: self._producers.spec_provenance(command), self._limits.step_timeout_s
+            )
+        except Exception:  # noqa: BLE001 - unknown means author-controlled
+            return author
+        return value if value in ALL_PROVENANCE else author
+
     # -- API --------------------------------------------------------------
 
     def resolve_head(self, analysis_id: UUID, command: Any) -> str | None:
@@ -398,7 +449,11 @@ class VerdictStageACollector:
             )
             raise StageAError("intent_load_failed") from exc
 
-        criteria = adapters.criterion_inputs(facts.criteria, limit=self._limits.max_criteria)
+        criteria = adapters.criterion_inputs(
+            facts.criteria,
+            limit=self._limits.max_criteria,
+            spec_provenance=self._spec_provenance(facts, command),
+        )
         if criteria.dropped.get("criteria_over_limit"):
             run.mark(TRUNCATED)
         run.mark(*criteria.notes)
@@ -527,7 +582,9 @@ class VerdictStageACollector:
                 run.mark(*rel.notes)
         elif prod.relevance is None:
             run.mark("relevance_unavailable")
-        crit_test = adapters.merge_criterion_test_edges(hints.items, relevance_edges)
+        crit_test = adapters.merge_criterion_test_edges(
+            hints.items, relevance_edges, author_hint_cap=LinkMapping().author_hint_cap
+        )
 
         return StageAInput(
             analysis_id=str(analysis_id),

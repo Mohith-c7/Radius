@@ -94,6 +94,9 @@ class CriterionVerdict(Serializable):
     flags: tuple[Flag, ...] = ()
     items: tuple[EvidenceQuality, ...] = ()  # every item considered, usable or not
     best_link: dict[str, Any] = field(default_factory=dict)
+    #: Contract 3: who supplied the criterion and each ``tests:``/``paths:`` hint.
+    provenance: str = ""
+    hints: tuple[dict[str, str], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

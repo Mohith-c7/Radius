@@ -82,6 +82,20 @@ def build_criterion_verdict(
         flags=state.flags,
         items=support.items,
         best_link=_best_link(support.items),
+        provenance=criterion.provenance,
+        hints=tuple(
+            sorted(
+                [
+                    {"kind": "paths", "value": v, "provenance": criterion.hints_provenance}
+                    for v in criterion.hints_paths
+                ]
+                + [
+                    {"kind": "tests", "value": v, "provenance": criterion.hints_provenance}
+                    for v in criterion.hints_tests
+                ],
+                key=lambda h: (h["kind"], h["value"]),
+            )
+        ),
     )
 
 
@@ -109,7 +123,7 @@ def _detail(rule: RuleResult) -> str:
             f"({i['behavioral_symbols']} changed behavioral symbol(s))"
         )
     if rid == "R2b":
-        return f"unproven intent mass {_fmt(i['uim'])} exceeds {_fmt(i['uim_max'])}"
+        return f"unsupported intent mass {_fmt(i['uim'])} exceeds {_fmt(i['uim_max'])}"
     if rid == "R2c":
         return f"intent coverage {_fmt(i['intent_coverage'])} is below {_fmt(i['min'])}"
     if rid == "R2d":
@@ -128,9 +142,9 @@ def _detail(rule: RuleResult) -> str:
             "need a human look"
         )
     if rid == "R3b":
-        return "a proven criterion depends on a flaky test"
+        return "a supported criterion depends on a flaky test"
     if rid == "R3c":
-        return f"proven criterion rests on a criterion-to-code link below {_fmt(i['link_review_min'])}"
+        return f"supported criterion rests on a criterion-to-code link below {_fmt(i['link_review_min'])}"
     return "no earlier rule fired"
 
 

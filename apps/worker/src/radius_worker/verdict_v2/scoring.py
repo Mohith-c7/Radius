@@ -36,8 +36,10 @@ from radius_evidence.application.ieg_builder import (
 from radius_evidence.application.normalize import normalize_evidence
 from radius_evidence.domain.config import VerdictV2Config
 from radius_evidence.domain.enums import (
+    TRUSTED_HINT_PROVENANCE,
     EdgeKind,
     EvidenceKind,
+    Flag,
     NodeKind,
     Outcome,
     SupportState,
@@ -71,6 +73,7 @@ from radius_evidence.domain.support import (
 from radius_evidence.domain.versions import (
     ALGO_VERSION,
     BUNDLE_SCHEMA,
+    CONTRACT_VERSION,
     DEFAULT_COMPONENT_VERSIONS,
 )
 from radius_evidence.policy.apply import (
@@ -88,6 +91,7 @@ from radius_evidence.policy.repo_config import resolve_repo_config
 from radius_evidence.policy.report import policy_block, waiver_block
 from radius_shared.logging import get_logger
 from radius_shared.verdict_v2_flag import VerdictV2Mode
+from radius_shared.verdict_v2_wording import presentation
 
 from radius_worker.verdict_v2.adapters import behavioral_symbols, failed_case_count
 
@@ -128,6 +132,32 @@ def build_stage_b(
 
 
 # ------------------------------------------------------------------ pipeline
+
+
+#: ``CriterionTestEdgeInput.method`` of a ``tests:`` hint edge (adapters.hint_test_edges).
+HINT_METHOD = "intent_yml_hint"
+
+
+def apply_author_hint_cap(
+    stage_a: StageAInput, cap: float
+) -> tuple[tuple[Any, ...], frozenset[tuple[str, str]]]:
+    """Cap the weight of ``tests:`` hint edges the PR author controls (contract 3).
+
+    A hint edge is trusted only when its provenance is ``base_spec`` or
+    ``human_confirmed``; any other value (including a missing one) is capped at
+    ``cap``. Returns the edges and the ``(criterion_id, test_id)`` pairs that rely
+    on an author-supplied hint.
+    """
+
+    edges = []
+    pairs: set[tuple[str, str]] = set()
+    for e in stage_a.criterion_test:
+        if e.method == HINT_METHOD and e.provenance not in TRUSTED_HINT_PROVENANCE:
+            pairs.add((e.criterion_id, e.test_id))
+            if e.weight > cap:
+                e = replace(e, weight=cap)
+        edges.append(e)
+    return tuple(edges), frozenset(pairs)
 
 
 @dataclass(frozen=True, slots=True)
@@ -251,6 +281,7 @@ def compute_pipeline(
     sa = replace(original_sa, tamper=finding_waivers.remaining)
     stage_b = replace(stage_b, stage_a=sa)
     norm = normalize_evidence(stage_b, collected_at=collected_at, config=cfg.quality)
+    criterion_test, author_pairs = apply_author_hint_cap(sa, cfg.link.author_hint_cap)
     ieg, _report = build_ieg_with_report(
         analysis_id=sa.analysis_id,
         head_sha=sa.head_sha,
@@ -258,7 +289,7 @@ def compute_pipeline(
         symbols=sa.symbols,
         criterion_symbol=sa.criterion_symbol,
         symbol_test=sa.symbol_test,
-        criterion_test=sa.criterion_test,
+        criterion_test=criterion_test,
         assertions=sa.assertions,
         tamper=sa.tamper,
         changed_test_ids=sa.changed_test_ids,
@@ -335,22 +366,39 @@ def compute_pipeline(
     coverage = len(covered) / len(b_symbols) if b_symbols else 1.0
     uim = compute_uim(sa.criteria, states, coverage, cfg)
 
+    evidence_test = {i.evidence_id: i.subject_id for i in norm.items}
     verdicts: list[CriterionVerdict] = []
     for c in sa.criteria:
         sup = supports[c.criterion_id]
         st = states[c.criterion_id]
+        reasons = (
+            st.reasons + support_reasons(sup, cfg.support)
+            if st.state.value != "excluded"
+            else st.reasons
+        )
+        flags = st.flags
+        reliant = sorted(
+            {
+                evidence_test.get(r.evidence_id, "")
+                for r in sup.items
+                if r.status == "counted"
+                and (c.criterion_id, evidence_test.get(r.evidence_id, "")) in author_pairs
+            }
+        )
+        if reliant and st.state.value != "excluded":
+            flags = tuple(sorted({*flags, Flag.AUTHOR_SUPPLIED_HINT}))
+            reasons = (
+                *reasons,
+                Reason(
+                    "author_supplied_hint",
+                    f"{len(reliant)} counted test(s) are linked only by a hint the PR author "
+                    f"supplied; link strength is capped at {cfg.link.author_hint_cap:g}",
+                    ",".join(reliant),
+                ),
+            )
         verdicts.append(
             build_criterion_verdict(
-                c,
-                sup,
-                CriterionStateResult(
-                    st.criterion_id,
-                    st.state,
-                    st.reasons + support_reasons(sup, cfg.support)
-                    if st.state.value != "excluded"
-                    else st.reasons,
-                    st.flags,
-                ),
+                c, sup, CriterionStateResult(st.criterion_id, st.state, reasons, flags)
             )
         )
     unlinked = tuple(sorted(s.symbol_id for s in b_symbols if s.symbol_id not in covered))
@@ -579,6 +627,8 @@ def build_payload(
             "testability": c.testability,
             "lifecycle": c.lifecycle,
             "flags": [f.value for f in c.flags],
+            "provenance": c.provenance or "author_pr_body",
+            "hints": [dict(h) for h in c.hints],
             "reasons": [
                 {"code": r.code, "detail": r.detail, "ref": r.ref} for r in c.reasons
             ],
@@ -615,9 +665,24 @@ def build_payload(
         "score": None,
         "score_kind": "none",
         "trust_probability": None,
+        "contract_version": CONTRACT_VERSION,
+        "alpha": True,
+        "calibrated": False,
+        "evidence_basis": v.evidence_basis,
+        "presentation": presentation(
+            v.verdict.value,
+            counts["proven"],
+            len(v.criteria),
+            author_hint_criteria=sum(
+                1 for c in v.criteria if Flag.AUTHOR_SUPPLIED_HINT in c.flags
+            ),
+        ),
         "summary": {
             "criteria_total": len(v.criteria),
             **counts,
+            "author_hint_criteria": sum(
+                1 for c in v.criteria if Flag.AUTHOR_SUPPLIED_HINT in c.flags
+            ),
             "uim": _r(v.uim),
             "intent_coverage": _r(v.intent_coverage),
             "tamper": sev,

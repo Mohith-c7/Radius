@@ -74,6 +74,10 @@ def make_bundle(
             "S_raw": 0.432,
             "reasons": [{"code": "below_threshold", "detail": "S 0.432 < tau_support 0.5", "ref": None}],
             "flags": ["static_only"],
+            "provenance": "author_head_spec",
+            "hints": [
+                {"kind": "tests", "value": test_id, "provenance": "author_head_spec"},
+            ],
             "items": [_item("ev_3e1fd047650b0683fb8b", test_id, 0.432)],
             "best_link": {"symbol_id": SYMBOL, "l_cs": 1.0, "l_st": 0.9, "r_ct": 1.0},
         },
