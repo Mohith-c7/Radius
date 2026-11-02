@@ -16,6 +16,7 @@ from radius_analysis.infrastructure import (
     UnifiedDiffChangeAnalyzer,
 )
 from radius_confidence.application import ConfidenceApplicationService
+from radius_confidence.domain import CURRENT_SCORE_KIND
 from radius_confidence.infrastructure import (
     DeterministicConfidenceScorer,
     InMemoryConfidenceStore,
@@ -741,6 +742,7 @@ def _github_report(
         pull_request_number=pull_request.github_pr_number,
         head_sha=analysis.commit_sha,
         confidence_score=float(confidence.confidence_score),
+        score_kind=CURRENT_SCORE_KIND.value,
         risk_level=confidence.risk_level.value,
         summary=confidence.summary,
         recommendations=tuple(confidence.recommendations),

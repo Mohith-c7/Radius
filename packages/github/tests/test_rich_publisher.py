@@ -385,3 +385,31 @@ def test_only_human_comments_with_marker_creates_new_comment() -> None:
 
     assert len(client.comments) == 1
     assert client.updated_comments == []
+
+
+def test_score_is_labelled_uncalibrated_heuristic_everywhere() -> None:
+    """F-12: Check Run title/summary and PR comment never show a bare score."""
+
+    client = FakeGitHubClient()
+    publisher = GitHubAnalysisPublisher(client)
+    report = GitHubAnalysisReport(
+        analysis_id=uuid4(),
+        owner="acme",
+        repository_name="repo",
+        pull_request_number=7,
+        head_sha="abc123",
+        confidence_score=82.0,
+        risk_level="low",
+        summary="Summary.",
+        recommendations=(),
+        verification_status="verified",
+    )
+
+    publisher.publish(installation_id=1, report=report)
+
+    label = "Confidence 82/100 (uncalibrated heuristic, not a probability)"
+    run = client.check_runs[0]
+    assert "uncalibrated heuristic score 82/100" in run["title"]
+    assert label in run["summary"]
+    assert label in client.comments[0]["body"]
+    assert "uncalibrated heuristic" in client.comments[0]["body"].split("### Verification Metrics")[1]

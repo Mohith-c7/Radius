@@ -56,6 +56,7 @@ import {
   updateRepository,
   uploadTestResults,
 } from "../lib/api";
+import { scoreKindLabel } from "../lib/score-kind";
 import { ConfidenceRing, OpenLink, PageHeading, Status } from "./ui";
 import { InteractiveGraphViewer } from "./interactive-graph";
 
@@ -225,6 +226,7 @@ export function DashboardOverviewData() {
           </div>
           <div className="confidence-summary">
             <ConfidenceRing score={average} />
+            <small className="muted">Uncalibrated heuristic average</small>
             <div>
               <h3>{average ? "Evidence available" : "No reports yet"}</h3>
               <p>
@@ -1371,9 +1373,12 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
           </p>
         </div>
         <div style={{ textAlign: "center" }}>
-          <ConfidenceRing score={score(confidence)} />
+          <ConfidenceRing
+            score={score(confidence)}
+            scoreKind={confidence?.score_kind}
+          />
           <p className="muted" style={{ fontSize: "12px", marginTop: "6px" }}>
-            Heuristic score (not a probability)
+            {scoreKindLabel(confidence?.score_kind).short} score (not a probability)
           </p>
         </div>
       </section>

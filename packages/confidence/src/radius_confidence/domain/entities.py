@@ -7,9 +7,11 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from radius_confidence.domain.enums import (
+    CURRENT_SCORE_KIND,
     EvidenceCategory,
     EvidenceImpact,
     RiskLevel,
+    ScoreKind,
 )
 from radius_confidence.domain.value_objects import ConfidenceScore, CoveragePercent
 
@@ -166,6 +168,12 @@ class ConfidenceReport:
     analysis_completeness: float = 100.0
     verification_status: str = "unverified"
     generated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    @property
+    def score_kind(self) -> ScoreKind:
+        """Kind of ``confidence_score`` (uncalibrated heuristic for v1)."""
+
+        return CURRENT_SCORE_KIND
 
     def __post_init__(self) -> None:
         if not self.summary.strip():

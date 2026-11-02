@@ -313,7 +313,15 @@ Re-run selected tests.
 
 Returns
 
-Confidence Score
+Confidence Score (`confidence_score`, 0-100)
+
+Score Kind (`score_kind`): how to interpret the score. Currently always
+`"heuristic_uncalibrated"`: the score is a heuristic built from fixed
+penalties, NOT a calibrated probability. The field is additive; the value of
+`confidence_score` is unchanged. Clients should display the label alongside
+the number. The value will become `"calibrated"` only once calibration (CA-*)
+ships behind the feature flag (VD-07). This is the only endpoint that returns
+the score.
 
 Risk Level
 
