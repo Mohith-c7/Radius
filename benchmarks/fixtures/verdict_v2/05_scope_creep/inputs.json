@@ -402,6 +402,7 @@
         "criterion_test": [],
         "degraded": [],
         "head_sha": "b62afcdbc9c54fce8d485b4d2f21d575f6b785c7",
+        "repo_config": {},
         "repository_id": "2b9b7968-113c-5da7-9636-da911dae384a",
         "symbol_test": [
           {
@@ -944,6 +945,7 @@
         ],
         "degraded": [],
         "head_sha": "b62afcdbc9c54fce8d485b4d2f21d575f6b785c7",
+        "repo_config": {},
         "repository_id": "2b9b7968-113c-5da7-9636-da911dae384a",
         "symbol_test": [
           {
