@@ -72,8 +72,6 @@ re-enqueue of a failed job replaces it with the new caller's trace.
 The column is NULL when tracing is off, for rows created before the migration,
 and when the stored value is malformed; in those cases the worker silently
 starts a fresh trace. `radius.analysis_id` remains a join key across traces.
-The old in-process `TRACE_CARRIERS` store is no longer used by the queue or
-worker.
 
 ## Metrics
 
@@ -130,6 +128,5 @@ python -m pytest apps/worker/tests/test_observability_flow.py
 
 ## Follow-ups
 
-- Remove the now-unused `TraceCarrierStore` / `TRACE_CARRIERS` helper.
 - Record real LLM token cost into `radius_llm_cost_usd_total`.
 - Propagate correlation ids into sandboxed test runs if useful.

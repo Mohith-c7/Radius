@@ -8,7 +8,6 @@ from uuid import uuid4
 import pytest
 from radius_shared.logging import JsonFormatter, RedactingFilter
 from radius_shared.observability import (
-    TRACE_CARRIERS,
     ObservabilitySettings,
     bind_correlation,
     configure_tracing,
@@ -141,7 +140,7 @@ def test_tracing_is_a_noop_by_default() -> None:
     assert current_traceparent() is None
 
 
-def test_trace_context_round_trips_through_carrier_store() -> None:
+def test_trace_context_round_trips_through_traceparent() -> None:
     pytest.importorskip("opentelemetry.sdk")
     from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
         InMemorySpanExporter,
@@ -150,12 +149,10 @@ def test_trace_context_round_trips_through_carrier_store() -> None:
     exporter = InMemorySpanExporter()
     assert configure_tracing(span_exporter=exporter) is True
     try:
-        analysis_id = uuid4()
         with span("producer"):
-            TRACE_CARRIERS.put(analysis_id, current_traceparent())
-        with continue_trace(TRACE_CARRIERS.pop(analysis_id)), span("consumer"):
+            carrier = current_traceparent()
+        with continue_trace(carrier), span("consumer"):
             pass
-        assert TRACE_CARRIERS.pop(analysis_id) is None
 
         producer, consumer = exporter.get_finished_spans()
         assert producer.context.trace_id == consumer.context.trace_id

@@ -98,9 +98,6 @@ def test_one_analysis_produces_one_trace_and_correlated_logs(
 
         # Simulate a separate worker process: nothing in-process may carry the
         # trace, only analysis_jobs.traceparent.
-        from radius_shared.observability import TRACE_CARRIERS
-
-        TRACE_CARRIERS._items.clear()
         engine = create_engine(database_url)
         with Session(engine) as check:
             stored = check.scalar(select(AnalysisJob.traceparent))
