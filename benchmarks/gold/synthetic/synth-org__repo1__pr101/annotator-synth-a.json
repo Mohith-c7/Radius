@@ -1,0 +1,71 @@
+{
+  "annotator_id": "synth-a",
+  "blinded": true,
+  "criteria": [
+    {
+      "explicit": true,
+      "id": "c1",
+      "span": {
+        "end": 121,
+        "source_id": "pr-body",
+        "start": 86
+      },
+      "testability": "behavioral_testable",
+      "text": "The export writes one row per order"
+    },
+    {
+      "explicit": true,
+      "id": "c2",
+      "span": {
+        "end": 157,
+        "source_id": "pr-body",
+        "start": 128
+      },
+      "testability": "subjective_or_vague",
+      "text": "Error handling is more robust"
+    },
+    {
+      "explicit": true,
+      "id": "c3",
+      "span": {
+        "end": 222,
+        "source_id": "pr-body",
+        "start": 164
+      },
+      "testability": "behavioral_testable",
+      "text": "The parser must accept an empty list and return zero items"
+    },
+    {
+      "explicit": true,
+      "id": "c4",
+      "span": {
+        "end": 267,
+        "source_id": "pr-body",
+        "start": 229
+      },
+      "testability": "structural_checkable",
+      "text": "Rename the helper module to utils_core"
+    }
+  ],
+  "guidelines_version": "gl-0.1",
+  "kind": "annotation",
+  "links": [],
+  "no_recoverable_intent": false,
+  "pr_id": "synth-org__repo1__pr101",
+  "schema_version": "radius-intent-gold-v1",
+  "sources_digest": "7fd77eb30f68d90893b015e3bf59505be43f5ec8042393abb684e51f41b8e841",
+  "status": "complete",
+  "synthetic": true,
+  "timing": {
+    "active_seconds": 100.0,
+    "first_opened_at": "2026-01-01T00:00:00+00:00",
+    "last_saved_at": "2026-01-01T00:00:00+00:00",
+    "sessions": 0
+  },
+  "tool": {
+    "name": "gold_annotate",
+    "version": "gold-kit-0.1"
+  },
+  "well_specified": true,
+  "well_specified_set_at": "2026-01-01T00:00:00+00:00"
+}

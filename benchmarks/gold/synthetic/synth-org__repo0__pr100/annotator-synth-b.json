@@ -1,0 +1,60 @@
+{
+  "annotator_id": "synth-b",
+  "blinded": true,
+  "criteria": [
+    {
+      "explicit": true,
+      "id": "c1",
+      "span": {
+        "end": 130,
+        "source_id": "pr-body",
+        "start": 86
+      },
+      "testability": "structural_checkable",
+      "text": "The p95 latency of search stays under 200 ms"
+    },
+    {
+      "explicit": true,
+      "id": "c2",
+      "span": {
+        "end": 211,
+        "source_id": "pr-body",
+        "start": 189
+      },
+      "testability": "untestable_external",
+      "text": "Legal approves the new"
+    },
+    {
+      "explicit": true,
+      "id": "c3",
+      "span": {
+        "end": 268,
+        "source_id": "pr-body",
+        "start": 226
+      },
+      "testability": "untestable_external",
+      "text": "The partner team confirms the rollout date"
+    }
+  ],
+  "guidelines_version": "gl-0.1",
+  "kind": "annotation",
+  "links": [],
+  "no_recoverable_intent": false,
+  "pr_id": "synth-org__repo0__pr100",
+  "schema_version": "radius-intent-gold-v1",
+  "sources_digest": "f70c194e757a4b1c98631a9299859e14cd10db968cf79963f04e99fc62e8ecf8",
+  "status": "complete",
+  "synthetic": true,
+  "timing": {
+    "active_seconds": 120.0,
+    "first_opened_at": "2026-01-01T00:00:00+00:00",
+    "last_saved_at": "2026-01-01T00:00:00+00:00",
+    "sessions": 0
+  },
+  "tool": {
+    "name": "gold_annotate",
+    "version": "gold-kit-0.1"
+  },
+  "well_specified": true,
+  "well_specified_set_at": "2026-01-01T00:00:00+00:00"
+}
