@@ -231,6 +231,19 @@ class SqlAlchemyWorkerRuntime:
                     extra_headers=clone_headers,
                 )
                 orchestrator.execute(command)
+                if self.settings.verdict_v2_mode != "off":
+                    # Verdict v2 Stage A/B (VS-05, flag RADIUS_FEATURE_VERDICT_V2):
+                    # best-effort, own sessions, never raises; v1 is unaffected.
+                    from radius_worker.verdict_v2.scoring import (
+                        run_verdict_v2_for_analysis,
+                    )
+
+                    run_verdict_v2_for_analysis(
+                        session_factory=self.session_factory,
+                        analysis_id=job.analysis_id,
+                        command=command,
+                        settings=self.settings,
+                    )
                 _publish_github_result(
                     session=session,
                     analysis_id=job.analysis_id,
