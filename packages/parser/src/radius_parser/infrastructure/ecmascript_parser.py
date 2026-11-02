@@ -78,6 +78,17 @@ def _parse_tree(source: str, suffix: str):
     return _tree_sitter_parser(_grammar_for(suffix)).parse(source.encode("utf-8"))
 
 
+def parse_syntax_tree(source: str, suffix: str):
+    """Public entry for other packages: return ``(root_node, first_error_node_or_None)``.
+
+    Shares the grammar selection and parser cache used by the import/symbol
+    extractors (LK-01 reuses it instead of duplicating grammar loading).
+    """
+
+    root = _parse_tree(source, suffix).root_node
+    return root, _first_error(root)
+
+
 def _text(node) -> str:
     return node.text.decode("utf-8", errors="replace")
 
