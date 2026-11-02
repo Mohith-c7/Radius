@@ -1,0 +1,1 @@
+Added the Verdict v2 alpha contract scaffold: the `radius_evidence` package with typed evidence, quality, graph and configuration contracts, empty verdict v2 modules in the confidence, GitHub, worker and API layers, placeholder migrations 0013 and 0014, and the `RADIUS_FEATURE_VERDICT_V2` flag (`off` by default, so nothing changes until it is set to `shadow` or `on`).

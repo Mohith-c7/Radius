@@ -1,0 +1,312 @@
+{
+  "_doc": "Machine-readable expectations for the Verdict v2 alpha vertical-slice test (VERDICT_V2_SLICE.md 7.3). Profile alpha-static: cap_static 0.6, tau_support 0.5, rho 0.7, uim_max 0.2, min_intent_coverage 0.5. 'gold' = links confirmed (normative, exact to 3 decimals); 'auto' = real LK-02/LK-03/VS-04 output (verdicts normative, per-criterion states reviewed snapshot).",
+  "profile": "alpha-static",
+  "tolerance": 0.001,
+  "fixtures": [
+    {
+      "fixture": "01_correct_strong_tests",
+      "expected_verdict": "verified",
+      "decided_by": "R4",
+      "gold": {
+        "states": {
+          "C1": "proven",
+          "C2": "proven"
+        },
+        "S": {
+          "C1": 0.734,
+          "C2": 0.604
+        },
+        "uim": 0.0
+      },
+      "auto": {
+        "states": {
+          "C1": "proven",
+          "C2": "proven"
+        },
+        "S": {
+          "C1": 0.734,
+          "C2": 0.688
+        },
+        "uim": 0.0,
+        "note": "prototype values; reviewed snapshot, verdict is normative"
+      },
+      "intent_coverage": 1.0
+    },
+    {
+      "fixture": "02_correct_weak_tests",
+      "expected_verdict": "insufficient_evidence",
+      "decided_by": "R2b",
+      "gold": {
+        "states": {
+          "C1": "weak",
+          "C2": "unevidenced"
+        },
+        "S": {
+          "C1": 0.283,
+          "C2": 0.0
+        },
+        "uim": 1.0
+      },
+      "auto": {
+        "states": {
+          "C1": "weak",
+          "C2": "unevidenced"
+        },
+        "S": {
+          "C1": 0.225,
+          "C2": 0.157
+        },
+        "uim": 1.0,
+        "note": "prototype values; reviewed snapshot, verdict is normative"
+      },
+      "intent_coverage": 1.0,
+      "fixture_disagreements": [
+        "auto C2: spurious lexical link ('address') gives 0.157 to a criterion with no test; state still unevidenced"
+      ]
+    },
+    {
+      "fixture": "03_incorrect_passes_weak_tests",
+      "expected_verdict": "insufficient_evidence",
+      "decided_by": "R2b",
+      "gold": {
+        "states": {
+          "C1": "weak",
+          "C2": "unevidenced",
+          "C3": "weak"
+        },
+        "S": {
+          "C1": 0.252,
+          "C2": 0.144,
+          "C3": 0.252
+        },
+        "uim": 1.0
+      },
+      "auto": {
+        "states": {
+          "C1": "weak",
+          "C2": "unevidenced",
+          "C3": "weak"
+        },
+        "S": {
+          "C1": 0.252,
+          "C2": 0.0,
+          "C3": 0.29
+        },
+        "uim": 1.0,
+        "note": "prototype values; reviewed snapshot, verdict is normative"
+      },
+      "intent_coverage": 1.0
+    },
+    {
+      "fixture": "04_test_tampering",
+      "expected_verdict": "failed",
+      "decided_by": "R1c",
+      "gold": {
+        "states": {
+          "C1": "unevidenced",
+          "C2": "unevidenced",
+          "C3": "unevidenced"
+        },
+        "S": {
+          "C1": 0.0,
+          "C2": 0.0,
+          "C3": 0.0
+        },
+        "uim": 1.0
+      },
+      "auto": {
+        "states": {
+          "C1": "unevidenced",
+          "C2": "unevidenced",
+          "C3": "unevidenced"
+        },
+        "S": {
+          "C1": 0.0,
+          "C2": 0.0,
+          "C3": 0.0
+        },
+        "uim": 1.0,
+        "note": "prototype values; reviewed snapshot, verdict is normative"
+      },
+      "intent_coverage": 1.0,
+      "fixture_disagreements": [
+        "C1: expected.json says weak; DESIGN 6.3 nullifies q of a test with a high tamper finding (T004), giving unevidenced with flag tampered. Recommend updating the fixture."
+      ],
+      "expected_flags": [
+        "tampered"
+      ],
+      "expected_tamper": [
+        {
+          "rule_id": "T001",
+          "severity": "high"
+        },
+        {
+          "rule_id": "T002",
+          "severity": "high"
+        },
+        {
+          "rule_id": "T004",
+          "severity": "high"
+        },
+        {
+          "rule_id": "T005",
+          "severity": "high"
+        }
+      ]
+    },
+    {
+      "fixture": "05_scope_creep",
+      "expected_verdict": "insufficient_evidence",
+      "decided_by": "R2c (gold); R2b+R2c (auto)",
+      "gold": {
+        "states": {
+          "C1": "proven",
+          "C2": "proven"
+        },
+        "S": {
+          "C1": 0.604,
+          "C2": 0.688
+        },
+        "uim": 0.0
+      },
+      "auto": {
+        "states": {
+          "C1": "weak",
+          "C2": "unevidenced"
+        },
+        "S": {
+          "C1": 0.336,
+          "C2": 0.0
+        },
+        "uim": 1.0,
+        "note": "prototype values; reviewed snapshot, verdict is normative"
+      },
+      "intent_coverage": 0.333,
+      "fixture_disagreements": [
+        "auto C2: lexical relevance finds no test for 'leading and trailing - are removed'",
+        "expected.json names src/config.py::REQUEST_TIMEOUT_SECONDS; LK-01 reports src/config.py::<module>"
+      ],
+      "unlinked_behavioral_symbols": [
+        "src/billing.py::round_money",
+        "src/config.py::<module>"
+      ]
+    },
+    {
+      "fixture": "06_hallucinated_dependency",
+      "expected_verdict": "failed",
+      "decided_by": "R1c",
+      "gold": {
+        "states": {
+          "C1": "proven",
+          "C2": "proven"
+        },
+        "S": {
+          "C1": 0.688,
+          "C2": 0.604
+        },
+        "uim": 0.0
+      },
+      "auto": {
+        "states": {
+          "C1": "proven",
+          "C2": "unevidenced"
+        },
+        "S": {
+          "C1": 0.604,
+          "C2": 0.0
+        },
+        "uim": 0.5,
+        "note": "prototype values; reviewed snapshot, verdict is normative"
+      },
+      "intent_coverage": 1.0,
+      "fixture_disagreements": [
+        "auto C2: lexical relevance finds no test for the rejects-garbage criterion",
+        "needs an offline StaticPackageRegistry lacking pytimeparse-ultra; with no registry T012 is medium and the verdict is needs_review (R3a)"
+      ],
+      "expected_tamper": [
+        {
+          "rule_id": "T012",
+          "severity": "high"
+        }
+      ],
+      "offline_registry_variant": {
+        "expected_verdict": "needs_review",
+        "decided_by": "R3a"
+      }
+    },
+    {
+      "fixture": "07_vague_intent",
+      "expected_verdict": "insufficient_evidence",
+      "decided_by": "R2a",
+      "gold": {
+        "states": {
+          "C1": "excluded",
+          "C2": "unevidenced"
+        },
+        "S": {
+          "C1": 0.0,
+          "C2": 0.0
+        },
+        "uim": 1.0
+      },
+      "auto": {
+        "states": {
+          "C1": "excluded",
+          "C2": "unevidenced"
+        },
+        "S": {
+          "C1": 0.0,
+          "C2": 0.0
+        },
+        "uim": 1.0,
+        "note": "prototype values; reviewed snapshot, verdict is normative"
+      },
+      "intent_coverage": 1.0,
+      "fixture_disagreements": [
+        "C2 non_functional_measurable is unevidenced with flag needs_typed_evidence (EV-15 lifts it)"
+      ],
+      "reason_code": "intent_missing_or_untestable"
+    },
+    {
+      "fixture": "08_multi_criterion_partial_evidence",
+      "expected_verdict": "insufficient_evidence",
+      "decided_by": "R2b",
+      "gold": {
+        "states": {
+          "C1": "proven",
+          "C2": "weak",
+          "C3": "unevidenced",
+          "C4": "unevidenced"
+        },
+        "S": {
+          "C1": 0.604,
+          "C2": 0.432,
+          "C3": 0.144,
+          "C4": 0.0
+        },
+        "uim": 0.75
+      },
+      "auto": {
+        "states": {
+          "C1": "weak",
+          "C2": "weak",
+          "C3": "unevidenced",
+          "C4": "unevidenced"
+        },
+        "S": {
+          "C1": 0.497,
+          "C2": 0.382,
+          "C3": 0.119,
+          "C4": 0.0
+        },
+        "uim": 1.0,
+        "note": "prototype values; reviewed snapshot, verdict is normative"
+      },
+      "intent_coverage": 1.0,
+      "fixture_disagreements": [
+        "C2: expected proven, one static-only test yields 0.432 < 0.5 under alpha-static; recommend expected_state_by_profile",
+        "C3: same isinstance-only assertion as fixture 03 C2 (labelled none); alpha gives unevidenced, expected.json says weak; recommend relabel"
+      ]
+    }
+  ]
+}

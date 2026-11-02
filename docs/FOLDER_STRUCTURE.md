@@ -123,6 +123,7 @@ analysis/
 testing/
 confidence/
 intent/        # research: intent layer (DEC-007)
+evidence/      # research: evidence quality, support and UIM for Verdict v2 (DEC-027)
 shared/
 ```
 
