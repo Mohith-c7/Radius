@@ -22,7 +22,7 @@ How to read it.
   (`RADIUS_LLM_*`) silently fall back to their default on a bad number.
 
 
-Variables documented: **124** (13 secret, 9 feature flags).
+Variables documented: **125** (13 secret, 9 feature flags).
 
 ## Core, API, GitHub and observability
 
@@ -65,6 +65,7 @@ Variables documented: **124** (13 secret, 9 feature flags).
 | `RADIUS_HSTS_MAX_AGE` | int | `31536000` | api | no | - | `max-age` in seconds of the Strict-Transport-Security header when HSTS is enabled. |
 | `RADIUS_INTENT_ALLOW_CROSS_REPO` | bool | `false` | worker | no | - | Fetch issues named by closing references in OTHER repositories (owner/repo#n, issue URLs). Off by default: the installation token can read every repository of the installation, so honoring a link written by a PR author would expose that repository's issue text. Skipped links are recorded as absent (cross_repo_disabled). |
 | `RADIUS_INTENT_DEADLINE_SECONDS` | float | `30.0` | worker | no | - | Wall-clock budget for all intent ingestion calls of one analysis. |
+| `RADIUS_INTENT_EXTRACTION_MODE` | str | `sections` | worker | no | - | Deterministic intent extraction mode (worker, Stage A input). sections (default): acceptance-style sections, checklists, Gherkin and spec files only. summary (opt-in): additionally proposes low-weight criteria from a conventional-commit PR title and behavioural bullets under Summary/Changes/What/Why/Description headings; never confirmed, provenance author_pr_body. Unknown values mean sections. |
 | `RADIUS_INTENT_INCLUDE_ISSUE_COMMENTS` | bool | `false` | worker | no | - | Also fetch comments on linked issues and keep only those written by OWNER/MEMBER/COLLABORATOR humans, as separate 'comment' sources. Costs one extra API call per linked issue that has comments. |
 | `RADIUS_INTENT_MAX_API_CALLS` | int | `15` | worker | no | - | Hard cap on GitHub REST calls per analysis for intent ingestion. |
 | `RADIUS_LOG_LEVEL` | LogLevel | `INFO` | api, worker | no | - | Structured log level: DEBUG, INFO, WARNING, ERROR or CRITICAL. |

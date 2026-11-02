@@ -163,6 +163,18 @@ class WorkerSettings(DatabaseSettings):
             "failing CI, high-severity tamper). strict: verified is success."
         ),
     )
+    intent_extraction_mode: str = Field(
+        default="sections",
+        alias="RADIUS_INTENT_EXTRACTION_MODE",
+        description=(
+            "Deterministic intent extraction mode (worker, Stage A input). sections "
+            "(default): acceptance-style sections, checklists, Gherkin and spec files only. "
+            "summary (opt-in): additionally proposes low-weight criteria from a "
+            "conventional-commit PR title and behavioural bullets under Summary/Changes/"
+            "What/Why/Description headings; never confirmed, provenance author_pr_body. "
+            "Unknown values mean sections."
+        ),
+    )
 
     @field_validator("verdict_v2_check_conclusions", mode="before")
     @classmethod

@@ -27,6 +27,7 @@ class Candidate:
     depth: int = 0
     weight: float = 1.0
     hints: CriterionHints = CriterionHints()
+    extractor_version: str | None = None
 
 
 @dataclass

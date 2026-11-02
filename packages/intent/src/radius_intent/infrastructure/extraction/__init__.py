@@ -1,9 +1,12 @@
 """Deterministic (LLM-free) criterion extraction (IN-03)."""
 
 from radius_intent.infrastructure.extraction.config import (
+    DEFAULT_EXTRACTION_MODE,
     DETERMINISTIC_EXTRACTOR_VERSION,
+    EXTRACTION_MODES,
     SOURCE_PRIORITY,
     ExtractionConfig,
+    normalize_mode,
 )
 from radius_intent.infrastructure.extraction.extractor import (
     DeterministicCriterionExtractor,
@@ -23,8 +26,15 @@ from radius_intent.infrastructure.extraction.report import (
     MergedOrigin,
     Severity,
 )
+from radius_intent.infrastructure.extraction.summary import (
+    SUMMARY_EXTRACTOR_VERSION,
+)
 
 __all__ = [
+    "DEFAULT_EXTRACTION_MODE",
+    "EXTRACTION_MODES",
+    "SUMMARY_EXTRACTOR_VERSION",
+    "normalize_mode",
     "DETERMINISTIC_EXTRACTOR_VERSION",
     "SOURCE_PRIORITY",
     "CriterionTrace",

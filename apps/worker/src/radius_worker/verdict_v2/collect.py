@@ -457,6 +457,8 @@ class VerdictStageACollector:
         if criteria.dropped.get("criteria_over_limit"):
             run.mark(TRUNCATED)
         run.mark(*criteria.notes)
+        if adapters.has_unconfirmed_inferred_intent(facts.criteria):
+            run.mark(adapters.UNCONFIRMED_INFERRED_MARKER)
 
         changeset = run.critical("symbol_changes", lambda: prod.symbol_changes(command))
         run.algo["symbol_changes"] = getattr(changeset, "algo_version", SYMBOL_CHANGES_VERSION)
