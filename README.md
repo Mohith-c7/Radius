@@ -113,3 +113,4 @@ pnpm --filter dashboard run build
 - **[Production Deployment Guide](docs/DEPLOYMENT.md)**: Full production runtime configuration, Docker orchestration, and security.
 - **[CI/CD Integration Guide](docs/CI_INTEGRATION_GUIDE.md)**: Integrating predictive test selection into GitHub Actions and uploading JUnit XML reports.
 - **[System Architecture](docs/SYSTEM_ARCHITECTURE.md)**: In-depth technical architecture and data flow.
+- **[Production-readiness audit and backlog](docs/production-readiness/README.md)**: Gap analysis against open-source and supply-chain standards, and the v1.0 checklist.
