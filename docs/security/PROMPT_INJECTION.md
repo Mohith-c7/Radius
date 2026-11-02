@@ -48,6 +48,15 @@ Run: `PYTHONPATH=<as in ci.yml> python -m pytest tests/security/prompt_injection
 2. Add a factory to `REGISTERED_FEATURES` in `tests/security/prompt_injection/pi_registry.py`.
 3. Run the suite. `test_registered_feature_contract` runs every corpus case against your feature with both stub models and fails on any violated invariant.
 
+### Registered features
+
+| Name | Adapter | Notes |
+|---|---|---|
+| `reference-guarded` | `pi_harness.GuardedCriteriaFeature` | Reference wiring. |
+| `intent-extract-llm (IN-04)` | `pi_intent_extract.IntentExtractAdapter` | Drives the real `radius_intent.infrastructure.llm.LlmCriterionExtractor` with the stub models behind the provider port (no SDK, no network). Ingestion is simulated by using the sanitised text as `IntentSource.text`. Emits the criteria it produced in the strict schema, so `check_outcome` re-validates every quote against the evidence. |
+
+IN-04 runs against every corpus case with both stub models. The IN-04 unit tests add per-item dropping, caps, the egress gate, caching and the merge policy (`packages/intent/tests/test_llm_extraction.py`).
+
 ### Adding cases
 
 Add a row to the corpus (keep ids stable, bump `corpus_version` in the `_meta` line when semantics change). Every discovered bypass must get a case before the fix lands (QS-02 acceptance). Payloads must be defensive test data: instruction-override strings, delimiter breakouts, hidden characters, `.invalid` hosts. Never include working exploits or real hosts, keys or tokens. If a case needs a secret, use a placeholder and the planted environment.

@@ -55,7 +55,7 @@ Goal: capture what a change is *supposed* to do as a set of confirmable, testabl
 - Acceptance: on the gold set (IN-09) deterministic extraction reports P/R per source type; known edge cases handled (nested lists, code fences, tables).
 - Tests: table-driven parser tests; fuzz tests for pathological markdown.
 
-### IN-04 LLM-assisted extraction (guarded)   [ ]
+### IN-04 LLM-assisted extraction (guarded)   [x]
 - Owner type: pair
 - Depends on: IN-03, F-10, QS-02 (done: use `radius_shared.llm_guard` and register an adapter per `docs/security/PROMPT_INJECTION.md`)
 - Branch: `feature/intent-extract-llm`
