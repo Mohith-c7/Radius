@@ -22,14 +22,14 @@ How to read it.
   (`RADIUS_LLM_*`) silently fall back to their default on a bad number.
 
 
-Variables documented: **119** (11 secret, 8 feature flags).
+Variables documented: **121** (13 secret, 8 feature flags).
 
 ## Core, API, GitHub and observability
 
 | Variable | Type | Default | Service | Secret | Status | Description |
 |---|---|---|---|---|---|---|
 | `API_BASE_URL` | str | `http://localhost:8000` | api | no | - | Auth module: public API base URL. Declared in the auth settings; no other code reads it (verified by grep). |
-| `API_KEYS` | str | `(secret, no default)` | api | yes | - | Comma-separated `org_id:key` pairs accepted in `X-Radius-API-Key` / Bearer auth. With none configured the API rejects requests unless `RADIUS_ALLOW_INSECURE_DEV` applies (development/test only). |
+| `API_KEYS` | str | `(secret, no default)` | api | yes | - | DEPRECATED legacy ``org_id:key`` entries (full access). See docs/security/API_KEYS.md. |
 | `CORS_ORIGINS` | str | `empty` | api | no | - | Comma separated browser origins allowed by CORS (``CORS_ORIGINS``). Local dashboard origins are added automatically outside production. In production the list must be explicit: no ``*``, only ``https://`` origins. |
 | `DASHBOARD_BASE_URL` | str | `empty` | worker | no | - | Canonical public dashboard URL; the worker uses it to build the analysis link in the check run and PR comment. |
 | `DATABASE_URL` | str | `postgresql+psycopg://radius:radius@localhost:5432/radius` | api, worker | yes | - | PostgreSQL URL for the API, worker and migrations. `postgres://` and `postgresql://` are normalised to `postgresql+psycopg://`. The auth module (sign-in tables) reads the same variable, but its own default is `sqlite:///./radius.db`, so when the variable is unset the auth tables go to a local SQLite file while the main settings default to the local PostgreSQL URL. Always set it explicitly. |
@@ -165,5 +165,7 @@ Variables documented: **119** (11 secret, 8 feature flags).
 | `NEXT_PUBLIC_RADIUS_ORGANIZATION_ID` | str | `empty` | dashboard | no | - | Organization UUID the dashboard loads. The dashboard asks you to set it when empty. Inlined at build time. |
 | `RADIUS_API_BASE_URL` | str | `http://api:8000 (compose)` | dashboard | no | - | Server-side API origin used by the dashboard proxy. Falls back to NEXT_PUBLIC_RADIUS_API_BASE_URL. |
 | `RADIUS_API_KEY` | str | `(secret, no default)` | dashboard | yes | - | Server-only secret the dashboard proxy (`/api/radius/*`) sends as `X-Radius-API-Key`. Must never carry a `NEXT_PUBLIC_` prefix. |
+| `RADIUS_API_KEY_LAST_USED_INTERVAL` | int | `300` | api | yes | - | Minimum seconds between ``last_used_at`` writes for one key. |
+| `RADIUS_API_KEY_PEPPER` | str | `(secret, no default)` | api | yes | - | Server-side secret mixed into managed-key fingerprints (>= 32 chars). Without it managed keys are disabled (legacy ``API_KEYS`` still work). |
 | `RADIUS_DASHBOARD_INTERNAL_URL` | str | `http://localhost:3000` | dashboard | no | - | Dashboard origin used for server-side calls to its own proxy. |
 | `RADIUS_ORGANIZATION_ID` | str | `empty` | dashboard | no | - | Server-side organization id for the dashboard proxy. Falls back to NEXT_PUBLIC_RADIUS_ORGANIZATION_ID. |
