@@ -365,11 +365,65 @@ def materialize_python_tree(
 # ------------------------------------------------------------------ intent
 
 
-def derive_intent(title: str, body: str, *, now: datetime = STAMP) -> dict[str, Any]:
+_BULLET = re.compile(r"^(?P<indent>[ \t]{0,1})(?:[-*+]|\d+[.)])[ \t]+(?P<text>\S.*)$")
+_MD = re.compile(r"[*_`]+")
+_PREFIX = re.compile(r"^\s*[a-zA-Z]+(?:\([^)]*\))?!?:\s*")
+MAX_BULLET_CRITERIA = 15
+
+
+def bullet_criteria(sources: Sequence[Any]) -> tuple[Any, ...]:
+    """SENSITIVITY MODE (not production): the PR title subject and top-level body bullets.
+
+    The production deterministic extractor only reads acceptance-style sections, so it finds
+    nothing in ordinary PR text. This mode turns every top-level bullet of at least five words
+    (and the title without its conventional prefix) into a proposed criterion, to see what
+    the downstream pipeline does when it is given *something*. It is a crude upper bound on
+    recall with unknown precision.
+    """
+
+    from radius_intent.domain import Criterion, ExtractionMethod, IntentSourceKind, Span
+
+    out: list[Any] = []
+    seen: set[str] = set()
+    for src in sources:
+        if src.kind is IntentSourceKind.PR_TITLE:
+            spans = [(0, len(src.text), _PREFIX.sub("", src.text).strip())]
+        else:
+            spans, pos = [], 0
+            for line in src.text.splitlines(keepends=True):
+                bare = line.rstrip("\r\n")
+                m = _BULLET.match(bare)
+                if m:
+                    spans.append((pos + m.start("text"), pos + len(bare), m["text"]))
+                pos += len(line)
+        for start, end, raw in spans:
+            text = _MD.sub("", raw).strip()
+            if len(text.split()) < 5 or len(text) > 300 or end <= start:
+                continue
+            key = text.lower()
+            if key in seen or len(out) >= MAX_BULLET_CRITERIA:
+                continue
+            seen.add(key)
+            out.append(
+                Criterion.create(
+                    src,
+                    Span(src.source_id, start, end),
+                    extraction_method=ExtractionMethod.DETERMINISTIC,
+                    extractor_version="replay-bullets-v0",
+                    text=text,
+                )
+            )
+    return tuple(out)
+
+
+def derive_intent(
+    title: str, body: str, *, now: datetime = STAMP, mode: str = "deterministic"
+) -> dict[str, Any]:
     """Deterministic intent from PR title and body (no LLM, no network).
 
-    Uses the production source preparation (sanitiser), the deterministic extractor and
-    the rule-based testability rater. Criteria stay ``proposed`` (nobody confirmed them).
+    ``mode="deterministic"`` uses the production source preparation (sanitiser), the
+    deterministic extractor and the rule-based testability rater. ``mode="bullets"`` is the
+    labelled sensitivity mode above. Criteria stay ``proposed`` (nobody confirmed them).
     """
 
     from radius_github.intent_sources import pull_request_outcomes
@@ -381,8 +435,11 @@ def derive_intent(title: str, body: str, *, now: datetime = STAMP) -> dict[str, 
     findings = sorted({f for o in outcomes for f in o.findings})
     criteria: tuple[Any, ...] = ()
     if sources:
-        report = DeterministicCriterionExtractor().extract_sources(sources)
-        criteria = tuple(rate_criteria(report.criteria))
+        if mode == "bullets":
+            criteria = tuple(rate_criteria(bullet_criteria(sources)))
+        else:
+            report = DeterministicCriterionExtractor().extract_sources(sources)
+            criteria = tuple(rate_criteria(report.criteria))
     return {
         "criteria": criteria,
         "sources": [o.kind.value for o in outcomes if o.source is not None],
@@ -557,6 +614,7 @@ def run_one(
     repo: str,
     lifecycle: str = "proposed",
     max_source_mb: int = 60,
+    intent_mode: str = "deterministic",
 ) -> dict[str, Any]:
     """Run Stage A + B for one PR. Never raises for pipeline problems."""
 
@@ -572,6 +630,7 @@ def run_one(
         "merged_at": pr.get("merged_at"),
         "merge_sha": pr.get("merge_sha"),
         "lifecycle": lifecycle,
+        "intent_mode": intent_mode,
         "evidence_basis": "static_only_ci_assumed_green",
         "status": "failed",
     }
@@ -591,7 +650,7 @@ def run_one(
 
         from radius_intent.domain import CriterionState  # noqa: PLC0415
 
-        intent = derive_intent(pr["title"], pr.get("body", ""))
+        intent = derive_intent(pr["title"], pr.get("body", ""), mode=intent_mode)
         crits = intent["criteria"]
         if lifecycle == "confirmed":
             crits = tuple(replace(c, state=CriterionState.CONFIRMED) for c in crits)
@@ -695,12 +754,16 @@ def result_path(cache: Path, number: int) -> Path:
     return cache / f"pr-{number}.json"
 
 
-def load_cached(cache: Path, pr: dict[str, Any], lifecycle: str) -> dict[str, Any] | None:
+def load_cached(
+    cache: Path, pr: dict[str, Any], lifecycle: str, intent_mode: str = "deterministic"
+) -> dict[str, Any] | None:
     try:
         data = json.loads(result_path(cache, pr["number"]).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
     if data.get("schema") != SCHEMA or data.get("lifecycle") != lifecycle:
+        return None
+    if data.get("intent_mode", "deterministic") != intent_mode:
         return None
     if data.get("merge_sha") != pr.get("merge_sha"):
         return None
@@ -728,6 +791,7 @@ def _failure(
         "title": pr["title"],
         "stratum": stratum_of(pr["title"]),
         "lifecycle": args.lifecycle,
+        "intent_mode": getattr(args, "intent_mode", "deterministic"),
         "status": status,
         "reason": reason,
         "merged_at": pr.get("merged_at"),
@@ -757,6 +821,8 @@ def run_in_child(pr: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]
         args.repo,
         "--lifecycle",
         args.lifecycle,
+        "--intent-mode",
+        getattr(args, "intent_mode", "deterministic"),
         "--max-source-mb",
         str(args.max_source_mb),
     ]
@@ -799,7 +865,7 @@ def replay(
     log(f"selected {len(chosen)} of {len(listing)} merged PRs")
     results: list[dict[str, Any]] = []
     for pr in chosen:
-        cached = None if args.force else load_cached(cache, pr, args.lifecycle)
+        cached = None if args.force else load_cached(cache, pr, args.lifecycle, getattr(args, "intent_mode", "deterministic"))
         if cached and (cached["status"] in ("ok", "skipped") or not args.retry_failed):
             log(f"#{pr['number']}: cached ({cached['status']})")
             results.append(cached)
@@ -931,6 +997,13 @@ def build_parser() -> argparse.ArgumentParser:
         default="proposed",
         help="state given to the extracted criteria (nobody confirmed them: proposed)",
     )
+    ap.add_argument(
+        "--intent-mode",
+        choices=("deterministic", "bullets"),
+        default="deterministic",
+        help="deterministic: production extractor; bullets: labelled sensitivity mode "
+        "(title + top-level bullets become proposed criteria)",
+    )
     ap.add_argument("--cache-dir", default=str(DEFAULT_CACHE))
     ap.add_argument("--timeout", type=float, default=300.0, help="per-PR hard timeout (s)")
     ap.add_argument("--max-files", type=int, default=300, help="skip PRs touching more files")
@@ -956,6 +1029,7 @@ def main(argv: list[str] | None = None) -> int:
             repo=args.repo,
             lifecycle=args.lifecycle,
             max_source_mb=args.max_source_mb,
+            intent_mode=args.intent_mode,
         )
         Path(args.worker_out).write_text(json.dumps(res, sort_keys=True), encoding="utf-8")
         return 0
@@ -963,7 +1037,9 @@ def main(argv: list[str] | None = None) -> int:
         cache = Path(args.cache_dir)
         loaded = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(cache.glob("pr-*.json"))]
         results = [
-            r for r in loaded if r.get("schema") == SCHEMA and r.get("lifecycle") == args.lifecycle
+            r for r in loaded if r.get("schema") == SCHEMA
+            and r.get("lifecycle") == args.lifecycle
+            and r.get("intent_mode", "deterministic") == args.intent_mode
         ]
     else:
         results = replay(GhCli(user=args.gh_user), args)

@@ -290,3 +290,28 @@ def test_resolve_range_and_materialize_python_tree(tmp_path):
         rp.resolve_range(repo, {"merge_sha": "f" * 40})
     with pytest.raises(LookupError):
         rp.resolve_range(repo, {"merge_sha": "--upload-pack=x"})
+
+
+def test_bullet_mode_is_a_labelled_sensitivity_mode():
+    body = (
+        "## Summary\n- API keys can be rotated without downtime for callers\n- short one\n"
+        "- `x` **bold** statement with enough words here\n"
+    )
+    title = "feat(api): managed keys with scopes and rotation"
+    assert rp.derive_intent(title, body)["criteria"] == ()  # production extractor: nothing
+    texts = [c.text for c in rp.derive_intent(title, body, mode="bullets")["criteria"]]
+    assert "managed keys with scopes and rotation" in texts
+    assert "API keys can be rotated without downtime for callers" in texts
+    assert "x bold statement with enough words here" in texts
+    assert "short one" not in texts
+
+
+def test_cache_distinguishes_intent_mode(tmp_path):
+    pr = {"number": 9, "merge_sha": SHA}
+    rp.store_result(
+        tmp_path,
+        {"schema": rp.SCHEMA, "number": 9, "lifecycle": "proposed", "merge_sha": SHA,
+         "status": "ok", "intent_mode": "bullets"},
+    )
+    assert rp.load_cached(tmp_path, pr, "proposed", "bullets")["status"] == "ok"
+    assert rp.load_cached(tmp_path, pr, "proposed") is None
