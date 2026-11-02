@@ -1,0 +1,18 @@
+# Gitleaks configuration (F-13 / QS-05). Extends the default ruleset.
+# Only VERIFIED false positives are listed: fake credentials that live in test
+# fixtures. Each pattern is the exact fake value (not a wildcard), so a real
+# secret added to the same files is still reported. Baseline scan results are
+# recorded in docs/security/CI_CHECKS.md.
+title = "Radius gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fake credentials used as test fixtures (verified by inspection)"
+regexes = [
+  '''FAKEinstallationTOKEN''',
+  '''ghs_abcdefghijklmnopqrstuvwxyz0123456789''',
+  '''e2e-secret-api-key-0123456789''',
+  '''MIIEbody\{TOKEN\}''',
+]
