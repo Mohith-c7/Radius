@@ -1,0 +1,1 @@
+Added a deterministic tamper rule engine (catalog `tamper-rules-v1`) that flags weakened or disabled tests, CI and coverage weakening, suppression markers and unverifiable new dependencies in a diff. It is off by default; set `RADIUS_FEATURE_TAMPER_RULES=true` on the worker to log finding counts (nothing is stored yet).

@@ -1,5 +1,30 @@
 """Pure linking domain (stdlib only)."""
 
+from radius_linking.domain.calibration import (
+    CALIBRATION_ARTIFACT_VERSION,
+    BinningCalibrator,
+    CalibrationArtifact,
+    CalibrationError,
+    Calibrator,
+    IsotonicCalibrator,
+    PlattCalibrator,
+    ReliabilityBin,
+    brier_score,
+    expected_calibration_error,
+    fit_artifact,
+    maximum_calibration_error,
+    reliability_bins,
+    reliability_report,
+)
+from radius_linking.domain.chain import (
+    CHAIN_ALGO_VERSION,
+    SCORE_KIND_CALIBRATED,
+    SCORE_KIND_UNCALIBRATED,
+    ChainLink,
+    CriterionSupportLinks,
+    SupportLinkSet,
+    SymbolTestEdge,
+)
 from radius_linking.domain.model import (
     ALGO_VERSION,
     COMBINED,
@@ -29,6 +54,27 @@ from radius_linking.domain.ports import (
 )
 
 __all__ = [
+    "CALIBRATION_ARTIFACT_VERSION",
+    "CHAIN_ALGO_VERSION",
+    "SCORE_KIND_CALIBRATED",
+    "SCORE_KIND_UNCALIBRATED",
+    "BinningCalibrator",
+    "CalibrationArtifact",
+    "CalibrationError",
+    "Calibrator",
+    "ChainLink",
+    "CriterionSupportLinks",
+    "IsotonicCalibrator",
+    "PlattCalibrator",
+    "ReliabilityBin",
+    "SupportLinkSet",
+    "SymbolTestEdge",
+    "brier_score",
+    "expected_calibration_error",
+    "fit_artifact",
+    "maximum_calibration_error",
+    "reliability_bins",
+    "reliability_report",
     "ALGO_VERSION",
     "COMBINED",
     "LINKER_CHANGE_PRIOR",

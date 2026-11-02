@@ -20,6 +20,7 @@ from radius_analysis.symbol_changes import (
     extract_symbol_changes,
 )
 from radius_analysis.symbol_impact import refine_dependents
+from radius_analysis.tamper import analyze_tampering
 from radius_confidence.application import ConfidenceApplicationService
 from radius_confidence.domain import (
     AnalysisEvidence,
@@ -119,6 +120,7 @@ class Phase1AnalysisOrchestrator:
         execute_tests: bool = True,
         symbol_impact_enabled: bool = False,
         symbol_changes_enabled: bool = False,
+        tamper_rules_enabled: bool = False,
         flaky_policy: str = "exclude",
     ) -> None:
         self._analysis = analysis_service
@@ -130,6 +132,7 @@ class Phase1AnalysisOrchestrator:
         self._execute_tests = execute_tests
         self._symbol_impact_enabled = symbol_impact_enabled
         self._symbol_changes_enabled = symbol_changes_enabled
+        self._tamper_rules_enabled = tamper_rules_enabled
         self._flaky_policy = flaky_policy
 
     def execute(self, command: ExecuteAnalysisCommand) -> AnalysisExecutionResult:
@@ -148,8 +151,12 @@ class Phase1AnalysisOrchestrator:
         with stage("analyze_changes"):
             changes = self._analyze_changes(command)
         changed_paths = tuple(item.path for item in changes.changed_files)
-        if self._symbol_changes_enabled:
-            self._extract_symbol_changes(command, changes)
+        if self._symbol_changes_enabled or self._tamper_rules_enabled:
+            symbol_result = self._extract_symbol_changes(
+                command, changes, log=self._symbol_changes_enabled
+            )
+            if self._tamper_rules_enabled:
+                self._analyze_tampering(command, symbol_result)
 
         # NOTE: the experimental LLM "semantic pruning" step is intentionally
         # NOT part of this pipeline. It could remove files (and therefore
@@ -329,7 +336,9 @@ class Phase1AnalysisOrchestrator:
         )
         return refined
 
-    def _extract_symbol_changes(self, command: ExecuteAnalysisCommand, changes) -> SymbolChangeSet | None:
+    def _extract_symbol_changes(
+        self, command: ExecuteAnalysisCommand, changes, *, log: bool = True
+    ) -> SymbolChangeSet | None:
         """LK-01: log changed-symbol counts. Stores nothing (persistence is LK-05)."""
 
         try:
@@ -355,6 +364,8 @@ class Phase1AnalysisOrchestrator:
                 exc_info=True,
             )
             return None
+        if not log:
+            return result
         LOGGER.info(
             "Symbol changes extracted",
             extra={
@@ -368,6 +379,47 @@ class Phase1AnalysisOrchestrator:
             },
         )
         return result
+
+    def _analyze_tampering(
+        self, command: ExecuteAnalysisCommand, symbol_result: SymbolChangeSet | None
+    ) -> None:
+        """EV-02: log tamper-finding counts. Stores nothing (persistence is EV-01/LK-05)."""
+
+        if symbol_result is None:
+            return
+        try:
+            base = GitSnapshot(command.repository_path, command.base_ref) if command.base_ref else None
+            head = (
+                GitSnapshot(command.repository_path, command.head_ref)
+                if command.head_ref
+                else DirectorySnapshot(command.repository_path)
+            )
+            with stage("tamper_rules"):
+                report = analyze_tampering(
+                    symbol_result, base, head, diff_text=command.diff_text or None
+                )
+        except Exception:  # an optional, informational step must never fail the analysis
+            LOGGER.warning(
+                "Tamper analysis failed; continuing without it",
+                extra={"analysis_id": str(command.analysis_id)},
+                exc_info=True,
+            )
+            return
+        counts = report.counts
+        LOGGER.info(
+            "Tamper rules evaluated",
+            extra={
+                "analysis_id": str(command.analysis_id),
+                "catalog_version": report.catalog_version,
+                "findings": counts["findings"],
+                "waived": counts["waived"],
+                "unanalyzable": counts["unanalyzable"],
+                "by_severity": counts["by_severity"],
+                "by_rule": counts["by_rule"],
+                "rule_errors": len(report.rule_errors),
+                "truncated": report.truncated,
+            },
+        )
 
     def _run_or_defer_tests(
         self,

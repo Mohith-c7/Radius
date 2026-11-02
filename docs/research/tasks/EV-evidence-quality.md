@@ -17,7 +17,7 @@ M2 = cheap signals (EV-01 to EV-03, EV-06 to EV-08). M4 = mutation-based signals
 - Tests: parser fuzzing; tenant isolation.
 - Contract: see design/VERDICT_V2_SLICE.md (docs/research/design/; Verdict v2 alpha: alpha scope is the model, factories and JSON; table is Beta (migration 0015))
 
-### EV-02 Tamper rule engine and catalog (Python first)   [ ]
+### EV-02 Tamper rule engine and catalog (Python first)   [x]
 - Owner type: agent-ok
 - Depends on: LK-01
 - Branch: `feature/tamper-rules`

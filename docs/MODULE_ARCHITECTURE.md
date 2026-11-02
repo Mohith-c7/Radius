@@ -664,13 +664,13 @@ Outputs
 
 Responsibilities
 
-Deterministic linkers (explicit hints, BM25 lexical, identifier/phrase, structural proximity), the change-kind prior, the documented combination, an optional default-off guarded LLM re-ranker, and evaluation hooks (Top-k, MRR, ablation). `domain/` is pure (import-linter contract and AST test); `application/` depends on the domain only; `infrastructure/` holds the linkers, symbol documents, neighbours and rerankers.
+Deterministic linkers (explicit hints, BM25 lexical, identifier/phrase, structural proximity), the change-kind prior, the documented combination, an optional default-off guarded LLM re-ranker, and evaluation hooks (Top-k, MRR, ablation). LK-06 adds the criterion -> symbol -> test chain model (`ChainLink`, `CriterionSupportLinks`, `SupportLinkSet`), the documented chain score and per-criterion link confidence (`build_support_links`, `score_kind=link_confidence_uncalibrated` by default) and pure-Python calibration machinery (binning, Platt, isotonic, ECE/MCE/Brier, JSON `CalibrationArtifact`) that is applied only when a fitted artifact is supplied. The symbol -> test hop enters through the plain-data port `SymbolTestEdge`; `radius_linking` does not import `radius_testing`. Contracts for LK-05 and the verdict layer: `packages/linking/README.md`, section "Chains and link confidence". `domain/` is pure (import-linter contract and AST test); `application/` depends on the domain only; `infrastructure/` holds the linkers, symbol documents, neighbours and rerankers.
 
 ---
 
 Non Responsibilities
 
-Persistence and the IEG (LK-05), calibration of link confidence (LK-06), the RQ1 gold set and results (LK-07), symbol-to-test linking (LK-03), judging whether the code is correct.
+Persistence and the IEG (LK-05), fitting calibrators on gold labels (LK-07; the calibration machinery itself lives here), the RQ1 gold set and results (LK-07), producing symbol-to-test links (LK-03), judging whether the code is correct.
 
 ---
 

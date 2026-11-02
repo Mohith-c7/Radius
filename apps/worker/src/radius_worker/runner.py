@@ -559,6 +559,7 @@ def _create_sql_orchestrator(
         execute_tests=execution_mode != TestExecutionMode.DISABLED,
         symbol_impact_enabled=bool(settings and settings.symbol_impact_enabled),
         symbol_changes_enabled=bool(settings and settings.symbol_changes_enabled),
+        tamper_rules_enabled=bool(settings and settings.tamper_rules_enabled),
         flaky_policy=(settings.flaky_policy if settings else "exclude"),
     )
 

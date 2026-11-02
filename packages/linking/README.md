@@ -28,7 +28,7 @@ Each is independent, versioned (`version`), explainable (reasons), and returns n
 | `structural` (`structural-v1`) | Seeds = symbols with explicit score >= 0.6. Others by proximity: same file 0.6, same dir 0.35, adjacent dir 0.2, call-graph neighbour `0.7 * 0.6^(hops-1)` up to 3 hops (callers and callees via `radius_graph.PythonSymbolGraph`, Python only) | `seed score * proximity`, cap 0.7; silent without hints |
 | `change_prior` (`change-prior-v1`) | LK-01 `change_kind` / `is_behavioral`: added 1.0, body/signature 0.95, removed 0.8, decorator 0.8, renamed 0.7, moved 0.5, docstring/comment-only 0.25, formatting-only 0.1 (non-behavioural capped at 0.25) | a modifier, not evidence |
 
-## Combination (`noisy-or-prior-v1`; LK-06 will refine)
+## Combination of linkers (`noisy-or-prior-v1`)
 
 ```
 base  = 1 - prod_i (1 - w_i * s_i)         w: explicit 1.0, identifier 0.9, lexical 0.8, structural 0.6
@@ -51,10 +51,83 @@ Bounded in [0, 1], monotone non-decreasing in every linker score and in the prio
 
 `radius_linking.application.evaluate`: `evaluate_rankings` (Top-1, Top-3, MRR against gold in the `expected.json` `links` shape), `evaluate_linkset` (combined and per linker), `ablation` (all, `without:<linker>`, `only:<linker>`), `links_as_expected` (predictions in the same shape). `scripts/link_eval.py` runs them on the F-14 fixtures (`python scripts/link_eval.py [--json] [--out FILE]`, PYTHONPATH as in CI). Its output is labelled *fixture sanity, not a research result*: the fixtures are tiny hand-written PRs. The RQ1 numbers come from the LK-07 gold set.
 
+## Chains and link confidence (LK-06, `link-chain-v1`)
+
+Unifies the criterion -> symbol family (this package) and the symbol -> test family (`radius_testing.linking`, LK-03) into one chain `criterion -> symbol -> test`. `radius_linking` never imports `radius_testing` (import-linter): the second hop enters through the plain-data port `SymbolTestEdge` (`symbol_id, test_id, score, kind, linker, low_confidence, evidence, components`). The composition layer converts LK-03 links with `SymbolTestEdge.from_object(link)` (duck typed, so `SymbolTestLink`, its enum `kind` and `components` work unchanged); `scripts/link_chain_eval.py` is the reference composition.
+
+Entry point: `radius_linking.application.build_support_links(criterion_ids, c2s_links, s2t_edges, *, symbols=None, test_status=None, hinted_tests=None, config=ChainConfig(), criterion_calibration=None, chain_calibration=None) -> SupportLinkSet`. Pure, deterministic, offline; input order does not matter (tested). Only `combined` criterion -> symbol links (`LinkSet.links`) are used.
+
+### Domain
+
+- `ChainLink(criterion_id, symbol_id, test_id, c2s: Link, s2t: SymbolTestEdge, chain_score, reasons, raw_chain_score, specificity, test_status, score_kind)`; `support_score = raw_chain_score * specificity`.
+- `CriterionSupportLinks(criterion_id, chains, link_confidence, unlinked_reason, reasons, raw_link_confidence, score_kind, suspicious, algo_version)`. `link_confidence` answers "how sure are we that relevant tests are wired to this criterion's code"; it is not test quality and not a verdict.
+- `SupportLinkSet(criteria, algo_version, score_kind, config, calibration, diagnostics)`: criteria in id order, chains by `(-support, symbol_id, test_id)`, `to_json` with sorted keys, exact `from_json`. `config` records every constant.
+
+### Chain rule
+
+```
+a = c2s score     e = highest explicit-linker reason score on the c2s link     b = s2t score
+h1 = max(a, 0.95 * e)                       explicit hints dominate hop 1
+h2 = max(b, 0.92)      if dynamic coverage evidence (kind or a "dynamic" component)   dominates hop 2
+   = 0.85 * b          if the link is flagged low_confidence (and not dynamic)
+   = b                 otherwise
+base  = h1 * h2                              noisy-AND: both hops must be strong
+agree = min(1, (L1 - 1 + L2 - 1) / 3)        L1, L2 = independent linkers per hop (change_prior/rerank ignored)
+chain = 1 - (1 - base) * (1 - 0.3 * agree)   only when min(h1, h2) >= 0.5
+chain = min(chain, 0.99 if (e >= 0.5 and dynamic) else 0.95)
+chain = chain * status_factor(test)          passed/unknown 1.0, flaky 0.5, failed 0.4, skipped 0.1
+no chain if min(h1, h2) < 0.05 or chain < 0.01
+```
+
+The 0.95 cap for non-explicit evidence is DESIGN 6.2; a chain is only above it when an explicit hint and measured execution both hold.
+
+### Per-criterion aggregation
+
+```
+specificity(t) = max(0.5, 1 / (1 + 0.15 * max(0, n_t - 2)))   n_t = criteria with a chain through t scoring >= 0.3
+support        = chain * specificity
+per test:        best support only (one test reached through two symbols counts once)
+confidence     = min(cap, 1 - prod_i (1 - 0.7^i * support_i))   i = 0.., top 5 tests by support
+cap            = 0.99 if a counted chain is explicit+dynamic else 0.95
+```
+
+Diminishing returns (`0.7^i`) keep a pile of weak tests from outweighing one strong chain. Specificity penalises tests that "cover" many unrelated criteria (typically broad integration tests). It is a corpus-level effect, so it is the one input where evidence added for another criterion can lower this criterion; for a single criterion the rule is monotone (tested). Work is bounded: at most 10 symbols per criterion, 10 tests per symbol and 10 chains kept (`ChainConfig`); 2000 criteria x 50 symbols x 20 tests runs in about 8 s (tested < 30 s).
+
+Properties (seeded random property tests): confidence and chain score are monotone non-decreasing in every link score, in added linkers or components, in added dynamic evidence and in added chains; removing a hop or a chain cannot raise them; no chain exceeds its cap; output is independent of input order.
+
+### Unlinked outcomes (`unlinked_reason`, confidence 0)
+
+| Code | Meaning |
+| --- | --- |
+| `no_symbol_candidates` | no criterion -> symbol link at all |
+| `only_non_behavioral_symbols` | every candidate is `formatting_only`, `docstring_or_comment_only` or `is_behavioral=False` (needs `symbols`) |
+| `untested_change` | symbols are linked but none has a test link (a coverage gap) |
+| `tests_without_symbol` | author hinted tests (`hinted_tests`) but no symbol: `suspicious = True` |
+| `only_weak_chains` | chains exist but all fall below the floors, for example only skipped tests |
+
+### Reason codes (`Reason.linker == "chain"`, `Reason.kind`)
+
+Chain: `hop1_criterion_symbol`, `hop1_explicit_dominance`, `hop2_symbol_test`, `hop2_dynamic_dominance`, `hop2_low_confidence`, `chain_noisy_and`, `agreement_bonus`, `chain_cap`, `test_status_discount`, `specificity_penalty`, `calibrated`. Criterion: `aggregate_term` (one per counted test, with its weight), `aggregate_cap`, `excluded_non_behavioral`, `untested_symbol` (a linked symbol without tests), `hinted_test_without_symbol`, `unlinked`, `unlinked_not_calibrated`, `calibrated`. `Reason.score` is the number the step used and `detail` shows the arithmetic; `explain(cs)` renders them.
+
+### Calibration policy
+
+Calibration maps a score to P(link correct), which needs gold labels (IN-09 / LK-07, not available). Therefore **`score_kind` is `link_confidence_uncalibrated` by default** and the numbers are rank-oriented, not probabilities: 0.8 does not mean "80 percent right". A calibrator is applied only when a fitted `CalibrationArtifact` is passed (`criterion_calibration` for the criterion confidence, `chain_calibration` for chain scores; the artifact's `target` must match or `CalibrationError` is raised). Then `link_confidence` holds the calibrated value, `raw_link_confidence` / `raw_chain_score` keep the original, ordering and aggregation stay on raw scores, `score_kind` becomes `link_confidence_calibrated`, `SupportLinkSet.calibration` records artifact id, method and fit metadata, and a `calibrated` reason is added. Unlinked criteria stay at exactly 0.
+
+Machinery in `radius_linking.domain.calibration` (pure Python, deterministic): `BinningCalibrator`, `PlattCalibrator` (`p = 1 / (1 + exp(A s + B))`, damped Newton on Platt-smoothed targets), `IsotonicCalibrator` (weighted PAV, linear interpolation, clipped), the `Calibrator` protocol (`fit(scores, labels)`, `transform(score)`, `params()`), `reliability_bins`, `expected_calibration_error`, `maximum_calibration_error`, `brier_score`, `reliability_report`, and `CalibrationArtifact` (JSON: version `link-calibration-v1`, method, target, params, fit metadata, SHA-256 checksum verified on load; no clock or host data, so artifacts are reproducible). `fit_artifact(method, scores, labels, target=..., dataset_id=...)` records in-sample before/after ECE and Brier; evaluate on held-out data before trusting a calibrator. Isotonic and Platt were cross-checked against scikit-learn in a throwaway environment outside the repo (isotonic predictions identical to 1e-16, Platt A and B within 2e-6 on 20 random sets); the tests use hand-computed values and do not need scikit-learn.
+
+### Evaluation hook (not results)
+
+`python scripts/link_chain_eval.py [--json] [--out FILE] [--calibrator ARTIFACT.json]`: on the F-14 fixtures (static and naming symbol -> test links; the dynamic linker needs the sandbox and is not run) it reports chain Top-1/Top-3/MRR, recall of gold `(criterion, symbol, test)` triples, whether criteria with a gold symbol but no gold test get confidence 0, and reliability bins, ECE, MCE and Brier when both labels exist. Output is labelled *fixture sanity, not a research result*.
+
+### Contracts for later tasks
+
+- LK-05 (IEG, persistence): persist chains as `(analysis, criterion_id, symbol_id, test_id)` rows with `chain_score`, `raw_chain_score`, `specificity`, `test_status`, `score_kind`, `reasons` and the two hop payloads (`c2s`, `s2t`) as JSON; persist per-criterion `link_confidence`, `raw_link_confidence`, `unlinked_reason`, `suspicious`, `score_kind`; store `SupportLinkSet.algo_version`, `config` and `calibration` for reproducibility. A (symbol, test) pair is shared across criteria; `s2t.components` carries provenance.
+- Verdict layer: `l(c, e)` in `S(c) = 1 - prod(1 - lambda * q * l)` (DESIGN 6.4) is `ChainLink.chain_score` for evidence test `e`; `link_confidence` is a criterion-level summary, not a replacement for the per-test `l(c, e)`. Treat `unlinked_reason` as a state input (`untested_change` means no evidence, `tests_without_symbol` is a flag). Never present `link_confidence_uncalibrated` as a probability. A passing test that exercises the code is not evidence that it checks this criterion: evidence quality `q` (LK-04 assertions, mutation) must multiply on top.
+
 ## Contracts for later tasks
 
 - LK-05 (IEG, persistence): store `LinkSet.links` (and optionally `by_linker`) as `criterion_symbol_link` rows keyed by `(criterion_id, symbol_id, linker)`; keep `algo_versions`, `config`, `changeset_ref` for reproducibility. `linker` values: `explicit`, `lexical`, `identifier`, `structural`, `change_prior`, `rerank`, `combined`. The design-doc method names (`explicit_ref`, `bm25`, `embedding`, `llm_verified`) map to `explicit`, `lexical`, (not built), `rerank`.
-- LK-06: replace `combine_scores` (it receives the per-linker scores from `by_linker` and the prior); keep the cap and monotonicity tests.
+- LK-06 (done): chain model and link confidence on top of this combination, see "Chains and link confidence" below; `combine_scores` is unchanged and still produces the criterion -> symbol score that hop 1 consumes.
 - LK-07: gold links are `path::qualified_name`; use `evaluate_*` and `ablation`; results should record `algo_versions`.
 
 ## Limitations
@@ -64,9 +137,11 @@ Bounded in [0, 1], monotone non-decreasing in every linker score and in the prio
 - Non-Python languages use regex documents and have no call-graph neighbours.
 - `PythonSymbolGraph` is a conservative name-based over-approximation, so call-graph proximity is noisy; it is weighted down.
 - Class symbols are scored on their own statements, not their methods.
-- Scores are not calibrated probabilities (LK-06).
+- Scores are not calibrated probabilities. LK-06 ships the calibration machinery but no fitted calibrator (it needs gold labels, IN-09 / LK-07), so everything is `link_confidence_uncalibrated`.
 - Vague criteria rank by weak lexical overlap and can mis-order near-equal candidates (visible on the F-14 vague-intent fixture).
 
 ## Follow-ups
 
 Embedding linker with a per-symbol-hash cache; quote-verified `llm_verified` method; blast-radius candidates; code-egress policy for sending code spans to the re-ranker; durable cost ledger; TypeScript call graph; learn linker weights on the LK-07 gold set.
+
+LK-06 follow-ups: fit and ship calibrators on the LK-07 gold set (held-out, split by repo); a criterion-test relevance signal (LK-04 assertions) so a test that exercises a symbol but checks something else does not raise a criterion's link confidence; sensitivity sweep of the chain constants on gold labels; learn `status_factors` and `decay` instead of fixing them; temperature scaling and conformal wrappers for RQ3.
