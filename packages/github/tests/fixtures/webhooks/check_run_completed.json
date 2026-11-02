@@ -1,0 +1,94 @@
+{
+  "action": "completed",
+  "check_run": {
+    "id": 3001,
+    "node_id": "CR_kwExample",
+    "head_sha": "222222222222222222222222222222222222222b",
+    "external_id": "",
+    "url": "https://api.github.com/repos/radius-sandbox-owner/radius-sandbox/check-runs/3001",
+    "html_url": "https://github.com/radius-sandbox-owner/radius-sandbox/runs/3001",
+    "status": "completed",
+    "conclusion": "neutral",
+    "started_at": "2026-11-02T09:31:10Z",
+    "completed_at": "2026-11-02T09:31:40Z",
+    "output": {
+      "title": "Radius: Not verified (insufficient evidence)",
+      "summary": "...",
+      "text": "..."
+    },
+    "name": "Radius confidence",
+    "check_suite": {
+      "id": 7001,
+      "head_branch": "feature/greeting",
+      "head_sha": "222222222222222222222222222222222222222b"
+    },
+    "app": {
+      "id": 1234567,
+      "slug": "radius-sandbox-app",
+      "name": "Radius Sandbox",
+      "owner": {
+        "login": "radius-sandbox-owner",
+        "id": 1001,
+        "node_id": "U_1001",
+        "avatar_url": "https://avatars.githubusercontent.com/u/1001?v=4",
+        "url": "https://api.github.com/users/radius-sandbox-owner",
+        "html_url": "https://github.com/radius-sandbox-owner",
+        "type": "User",
+        "site_admin": false
+      }
+    },
+    "pull_requests": [
+      {
+        "id": 2001001,
+        "number": 1,
+        "url": "https://api.github.com/repos/radius-sandbox-owner/radius-sandbox/pulls/1"
+      }
+    ]
+  },
+  "repository": {
+    "id": 912345678,
+    "node_id": "R_kgDOexample",
+    "name": "radius-sandbox",
+    "full_name": "radius-sandbox-owner/radius-sandbox",
+    "private": true,
+    "owner": {
+      "login": "radius-sandbox-owner",
+      "id": 1001,
+      "node_id": "U_1001",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?v=4",
+      "url": "https://api.github.com/users/radius-sandbox-owner",
+      "html_url": "https://github.com/radius-sandbox-owner",
+      "type": "User",
+      "site_admin": false
+    },
+    "html_url": "https://github.com/radius-sandbox-owner/radius-sandbox",
+    "description": "Radius live validation sandbox",
+    "fork": false,
+    "url": "https://api.github.com/repos/radius-sandbox-owner/radius-sandbox",
+    "clone_url": "https://github.com/radius-sandbox-owner/radius-sandbox.git",
+    "git_url": "git://github.com/radius-sandbox-owner/radius-sandbox.git",
+    "ssh_url": "git@github.com:radius-sandbox-owner/radius-sandbox.git",
+    "created_at": "2026-11-02T08:00:00Z",
+    "updated_at": "2026-11-02T09:00:00Z",
+    "pushed_at": "2026-11-02T09:30:00Z",
+    "default_branch": "main",
+    "language": "Python",
+    "archived": false,
+    "disabled": false,
+    "visibility": "private"
+  },
+  "sender": {
+    "login": "radius-sandbox-app[bot]",
+    "id": 2000,
+    "node_id": "U_2000",
+    "avatar_url": "https://avatars.githubusercontent.com/u/2000?v=4",
+    "url": "https://api.github.com/users/radius-sandbox-app[bot]",
+    "html_url": "https://github.com/radius-sandbox-app[bot]",
+    "type": "Bot",
+    "site_admin": false
+  },
+  "installation": {
+    "id": 55001122,
+    "node_id": "I_kwExample"
+  }
+}
