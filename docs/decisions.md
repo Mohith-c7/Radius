@@ -116,3 +116,11 @@ Decision: start with public OSS and benchmark data (SWE-bench-style datasets, Ra
 Provisional default (owner may revisit). The docs specify the mechanisms (provider port for Gemini, Anthropic, OpenAI-compatible and local/Ollama in IN-04; per-org enable flag; policy to disable code egress; redaction) but name no default provider or egress stance.
 
 Decision: all LLM-assisted features are off by default (feature flag plus per-org enable). By default no source code leaves the deployment; only redacted intent text (PR body, issues, commit messages) may be sent, and only to a provider the org configured. Code-bearing prompts (for example link verification quoting code spans) require the org to enable code egress explicitly, or use a local model. No default hosted provider is chosen; the first provider implemented is picked in IN-04. Revisit when: IN-04 starts, or a design partner requires a specific provider or air-gapped mode. Source: F-01.
+
+## DEC-016: Leave the empty test commit c2d5db6 on dev
+
+Ratified: owner decision 2026-11-02 (task F-16).
+
+Commit `c2d5db6` ("test: verify commit identity for Mohith-c7") is an empty commit that exists on `dev` only. Decision: leave it. It will reach `main` naturally when `dev` is next promoted to `main` in a release (and `develop` if `dev` is ever merged back, as in the hotfix flow of DEC-005). Do not force-push `dev`, and do not add a revert.
+
+Rationale: the commit changes no files, so it is harmless. A revert would be another empty commit and only add noise to history, and a force-push would rewrite a shared protected branch and break the "never force-push" rule in `docs/github-branch-protection.md`. Revisit if we ever need a clean `main` history (for example for an audit or a public release), at which point the options are a documented exception or a rebuilt release branch agreed by the owner. This also reinforces the rule in DEC-005 and `docs/DEVELOPMENT_GUIDE.md`: never push test or throwaway commits to `dev` or `main`.

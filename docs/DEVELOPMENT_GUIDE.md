@@ -210,26 +210,28 @@ Merge
 Radius uses an enterprise promotion flow.
 
 ```text
-feature/* -> develop -> uat -> main
+feature/* | fix/* | docs/*  ->  develop  ->  dev (UAT)  ->  main
 ```
+
+The GitHub default branch is `develop`, so new pull requests target it unless you pick another base.
+
+Nobody commits directly to `develop`, `dev` or `main`; every change arrives through a pull request that passes the required status checks. Never push test or throwaway commits to `dev` or `main`. Settings and rationale are in `docs/github-branch-protection.md`; the decision is DEC-005 (flow) and DEC-010 (default branch) in `docs/decisions.md`.
 
 ## Main
 
 `main` is the release branch.
 
-Only release-ready code should reach `main`.
-
-Direct commits to `main` should be reserved for repository setup, approved maintenance, or emergency release repair.
+Only release-ready code should reach `main`, promoted from `dev` by an owner.
 
 ---
 
 ## UAT
 
-`uat` is the UAT branch.
+`dev` is the UAT branch.
 
-Only work promoted from `develop` should merge into `uat`.
+Only work promoted from `develop` should merge into `dev`.
 
-Feature branches must not merge directly into `uat`.
+Feature branches must not merge directly into `dev`.
 
 ---
 
@@ -291,7 +293,7 @@ Release stabilization branches are optional and created only for named release p
 release/<version>
 ```
 
-Release branches may be created from `uat` when UAT is complete but final release stabilization is needed before `main`.
+Release branches may be created from `dev` when UAT is complete but final release stabilization is needed before `main`.
 
 ---
 
@@ -303,7 +305,9 @@ Urgent production fixes use:
 hotfix/<summary>
 ```
 
-Every Pull Request must:
+Promotion (`develop` -> `dev` -> `main`) uses pull requests and merge commits, so the same commits flow forward and the branches stay comparable.
+
+Every Pull Request must (the PR template at `.github/pull_request_template.md` carries this checklist):
 
 - Build successfully
 - Pass all tests

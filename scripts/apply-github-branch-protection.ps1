@@ -1,10 +1,16 @@
 param(
     [string]$Owner = "Mohith-c7",
     [string]$Repo = "Radius",
-    [string]$DefaultBranch = "dev",
+    [string]$DefaultBranch = "develop",
     [string]$ApiVersion = "2022-11-28",
     [string]$Token = $env:GITHUB_TOKEN
 )
+
+# Applies the configuration documented in docs/github-branch-protection.md.
+# Flow: feature/* -> develop -> dev (UAT) -> main.
+# Deliberately NOT set: signed commits, linear history, strict status checks,
+# enforce_admins (solo owner bypasses as admin; see the doc for when to tighten).
+# "Dependency audit (pnpm)" is not required because its baseline expires 2027-01-31.
 
 $ErrorActionPreference = "Stop"
 
@@ -17,6 +23,14 @@ $headers = @{
     Authorization          = "Bearer $Token"
     "X-GitHub-Api-Version" = $ApiVersion
 }
+
+# Job names exactly as reported by the workflows.
+$requiredChecks = @(
+    "Validate",
+    "Python coverage",
+    "Secret scan (gitleaks)",
+    "Dependency audit (Python)"
+)
 
 function Invoke-GitHubJson {
     param(
@@ -51,41 +65,28 @@ function Protect-Branch {
 
     $payload = @{
         required_status_checks           = @{
-            strict   = $true
-            contexts = @("Validate")
+            strict   = $false
+            contexts = $requiredChecks
         }
-        enforce_admins                   = $true
+        enforce_admins                   = $false
         required_pull_request_reviews    = @{
-            dismissal_restrictions          = @{
-                users = @()
-                teams = @()
-                apps  = @()
-            }
             dismiss_stale_reviews           = $true
             require_code_owner_reviews      = $RequireCodeOwnerReview
             required_approving_review_count = $RequiredApprovals
-            require_last_push_approval      = $true
-            bypass_pull_request_allowances  = @{
-                users = @()
-                teams = @()
-                apps  = @()
-            }
+            require_last_push_approval      = $false
         }
-        restrictions                       = $null
-        required_linear_history            = $true
-        allow_force_pushes                 = $false
-        allow_deletions                    = $false
-        block_creations                    = $false
-        required_conversation_resolution   = $true
-        lock_branch                        = $false
-        allow_fork_syncing                 = $true
+        restrictions                     = $null
+        required_linear_history          = $false
+        allow_force_pushes               = $false
+        allow_deletions                  = $false
+        block_creations                  = $false
+        required_conversation_resolution = $true
+        lock_branch                      = $false
+        allow_fork_syncing               = $true
     }
 
-    Write-Host "Applying branch protection to $Branch..."
+    Write-Host "Applying branch protection to $Branch (approvals: $RequiredApprovals, code owners: $RequireCodeOwnerReview)..."
     Invoke-GitHubJson -Method Put -Uri $baseUri -Body $payload | Out-Null
-
-    Write-Host "Requiring signed commits on $Branch..."
-    Invoke-GitHubJson -Method Post -Uri "$baseUri/required_signatures" | Out-Null
 }
 
 Write-Host "Setting default branch to $DefaultBranch..."
@@ -94,8 +95,9 @@ Invoke-GitHubJson `
     -Uri "https://api.github.com/repos/$Owner/$Repo" `
     -Body @{ default_branch = $DefaultBranch } | Out-Null
 
+Protect-Branch -Branch "develop" -RequiredApprovals 0 -RequireCodeOwnerReview $false
 Protect-Branch -Branch "dev" -RequiredApprovals 1 -RequireCodeOwnerReview $false
-Protect-Branch -Branch "main" -RequiredApprovals 2 -RequireCodeOwnerReview $true
+Protect-Branch -Branch "main" -RequiredApprovals 1 -RequireCodeOwnerReview $true
 
 Write-Host "Default branch set to $DefaultBranch."
-Write-Host "Branch protection applied for $Owner/$Repo on dev and main."
+Write-Host "Branch protection applied for $Owner/$Repo on develop, dev and main."

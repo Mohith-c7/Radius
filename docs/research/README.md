@@ -64,7 +64,7 @@ Also ratified: research core (DEC-006), new packages (DEC-007), verdict v2 state
 | D5 | First languages | Python then TS / other | Python (pytest) then TypeScript (DEC-013) | 2026-11-02 | Owner |
 | D6 | Calibration label sources | own + partners / public only | public/benchmark first; partner data only on explicit opt-in (DEC-014) **provisional** | 2026-11-02 | Owner (provisional) |
 | D7 | LLM provider and code-egress policy | | LLM opt-in, no code egress by default, provider chosen in IN-04 (DEC-015) **provisional** | 2026-11-02 | Owner (provisional) |
-| D8 | Handling of stray test commit `c2d5db6` on `dev` | leave / revert via PR | | | |
+| D8 | Handling of stray test commit `c2d5db6` on `dev` | leave / revert via PR | leave (DEC-016) | 2026-11-02 | Owner |
 
 ## Changelog
 
