@@ -33,7 +33,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
+from radius_shared.verdict_v2_wording import presentation
+
 BUNDLE_SCHEMA = "verdict-v2-bundle-1"
+#: Mirrors ``radius_evidence.domain.versions.CONTRACT_VERSION`` (a test keeps them equal).
+CONTRACT_VERSION = "verdict-v2-contract-3"
 STATES = ("proven", "weak", "unevidenced", "contradicted", "excluded")
 SEVERITIES = ("critical", "high", "medium", "low")
 
@@ -166,6 +170,11 @@ def _criterion(
         "testability": raw.get("testability", ""),
         "lifecycle": raw.get("lifecycle", ""),
         "flags": list(raw.get("flags") or []),
+        "provenance": raw.get("provenance") or "author_pr_body",
+        "hints": [
+            {k: str(h.get(k, "")) for k in ("kind", "value", "provenance")}
+            for h in _maps(raw.get("hints"))
+        ],
         "reasons": [
             {k: v for k, v in r.items() if not (k == "rule_id" and v is None)}
             for r in _maps(raw.get("reasons"))
@@ -245,8 +254,23 @@ def build_payload(
         "score": None,
         "score_kind": "none",
         "trust_probability": None,
+        "contract_version": CONTRACT_VERSION,
+        "alpha": True,
+        "calibrated": False,
+        "evidence_basis": (verdict.get("evidence_basis") if ok else None) or "static_only",
+        "presentation": presentation(
+            stored.verdict if ok else None,
+            counts["proven"],
+            len(criteria),
+            author_hint_criteria=sum(
+                1 for c in criteria if "author_supplied_hint" in c["flags"]
+            ),
+        ),
         "summary": {
             "criteria_total": len(criteria),
+            "author_hint_criteria": sum(
+                1 for c in criteria if "author_supplied_hint" in c["flags"]
+            ),
             "proven": counts["proven"],
             "weak": counts["weak"],
             "unevidenced": counts["unevidenced"],

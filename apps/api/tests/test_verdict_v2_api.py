@@ -259,6 +259,47 @@ def test_computed_verdict_conforms_to_the_schema_and_is_honest_about_score(env: 
     assert "v1" in data
 
 
+def test_payload_is_honest_about_alpha_provenance_and_wording(env: Env) -> None:
+    from radius_github.verdict_v2 import markdown as md
+    from radius_shared import verdict_v2_wording as wording
+
+    analysis = env.analysis()
+    env.store(env.org_a, analysis, make_bundle(analysis))
+
+    data = env.get(analysis).json()["data"]
+
+    assert validate(data, SCHEMA) == []
+    assert (data["alpha"], data["calibrated"], data["evidence_basis"]) == (True, False, "static_only")
+    assert data["contract_version"] == "verdict-v2-contract-3"
+    first, second = data["criteria"]
+    assert first["provenance"] == "author_head_spec"
+    assert first["hints"][0]["provenance"] == "author_head_spec"
+    assert second["provenance"] == "author_pr_body" and second["hints"] == []
+    assert data["summary"]["author_hint_criteria"] == 0
+    # presentation layer: internal enum values stay, user-visible text says "supported"
+    pres = data["presentation"]
+    assert pres["state_labels"]["proven"] == "SUPPORTED"
+    assert pres["verdict_label"] == "Not verified - insufficient evidence"
+    assert "0 of 2 stated criteria supported by static evidence" in pres["summary_text"]
+    assert "proven" not in pres["summary_text"].lower()
+    # the three presentations (API text, Markdown renderer) share one vocabulary
+    assert wording.LEGEND == md.LEGEND
+    assert dict(wording.STATE_LABELS) == md.STATE_LABELS
+    assert dict(wording.VERDICT_LABELS) == md.VERDICT_LABELS
+    assert wording.DISCLAIMER.split(";")[0].lower().startswith("alpha: static evidence only")
+
+
+def test_verified_verdict_is_never_worded_as_verified_by_the_api(env: Env) -> None:
+    analysis = env.analysis()
+    env.store(env.org_a, analysis, make_bundle(analysis, verdict="verified"))
+
+    data = env.get(analysis).json()["data"]
+
+    assert data["verdict"] == "verified"  # contract value unchanged
+    assert data["presentation"]["verdict_label"] == "Supported by static evidence (alpha)"
+    assert data["alpha"] is True and data["calibrated"] is False
+
+
 def test_alias_route_serves_the_same_payload(env: Env) -> None:
     analysis = env.analysis()
     env.store(env.org_a, analysis, make_bundle(analysis))

@@ -15,12 +15,29 @@
     {
       "code": "unproven_intent_mass",
       "rule_id": "R2b",
-      "detail": "unproven intent mass 0.75 exceeds 0.20"
+      "detail": "unsupported intent mass 0.75 exceeds 0.20"
     }
   ],
   "score": null,
   "score_kind": "none",
   "trust_probability": null,
+  "contract_version": "verdict-v2-contract-3",
+  "alpha": true,
+  "calibrated": false,
+  "evidence_basis": "static_only",
+  "presentation": {
+    "verdict_label": "Not verified - insufficient evidence",
+    "state_labels": {
+      "proven": "SUPPORTED",
+      "weak": "WEAK",
+      "unevidenced": "UNSUPPORTED",
+      "contradicted": "CONTRADICTED",
+      "excluded": "EXCLUDED"
+    },
+    "legend": "supported = static assertion strength above threshold; not a proof of correctness",
+    "disclaimer": "Alpha: static evidence only (assertion strength, no mutation testing); thresholds are uncalibrated. This is not a proof of correctness.",
+    "summary_text": "Not verified - insufficient evidence: 1 of 4 stated criteria supported by static evidence."
+  },
   "summary": {
     "criteria_total": 4,
     "proven": 1,
@@ -36,7 +53,8 @@
       "medium": 0,
       "low": 0
     },
-    "evidence_basis": "static_only"
+    "evidence_basis": "static_only",
+    "author_hint_criteria": 0
   },
   "criteria": [
     {
@@ -103,7 +121,9 @@
           "contribution": 0.3024,
           "status": "counted"
         }
-      ]
+      ],
+      "provenance": "human_confirmed",
+      "hints": []
     },
     {
       "criterion_id": "c_2f6a11",
@@ -152,7 +172,9 @@
           "contribution": 0.432,
           "status": "counted"
         }
-      ]
+      ],
+      "provenance": "human_confirmed",
+      "hints": []
     },
     {
       "criterion_id": "c_81b0c4",
@@ -202,7 +224,9 @@
           "contribution": 0.144,
           "status": "counted"
         }
-      ]
+      ],
+      "provenance": "human_confirmed",
+      "hints": []
     },
     {
       "criterion_id": "c_d3a2f7",
@@ -224,7 +248,9 @@
         }
       ],
       "best_link": null,
-      "items": []
+      "items": [],
+      "provenance": "human_confirmed",
+      "hints": []
     }
   ],
   "tamper_findings": [],

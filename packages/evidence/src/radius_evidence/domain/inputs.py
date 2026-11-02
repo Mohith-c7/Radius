@@ -23,6 +23,9 @@ class CriterionInput(Serializable):
     lifecycle: str  # proposed|confirmed|edited|needs_reconfirmation
     hints_paths: tuple[str, ...] = ()
     hints_tests: tuple[str, ...] = ()
+    #: Contract 3: who supplied the criterion text / its hints (see ``enums.Provenance``).
+    provenance: str = "author_pr_body"
+    hints_provenance: str = "author_pr_body"
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +67,8 @@ class CriterionTestEdgeInput(Serializable):
     weight: float
     method: str
     bm25_raw: float | None = None
+    #: Contract 3: provenance of a hint edge (empty for relevance edges).
+    provenance: str = ""
 
 
 @dataclass(frozen=True, slots=True)

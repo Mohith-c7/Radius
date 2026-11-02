@@ -2,8 +2,10 @@
 
 #: Version of the frozen data contracts (model/inputs). 2: AssertionFact strength flags,
 #: Reason.rule_id, StageAInput.added_test_ids / agent_signal_by_test, 4th freshness reason.
-#: All additions are optional with defaults, so contract-1 payloads still load.
-CONTRACT_VERSION = "verdict-v2-contract-2"
+#: 3: provenance tags (CriterionInput.provenance / hints_provenance, CriterionTestEdgeInput.provenance),
+#: Flag.AUTHOR_SUPPLIED_HINT, LinkMapping.author_hint_cap, payload honesty fields.
+#: All additions are optional with defaults, so contract-1 and -2 payloads still load.
+CONTRACT_VERSION = "verdict-v2-contract-3"
 
 ALGO_VERSION = "verdict-v2-alpha-1"
 PROFILE_ALPHA_STATIC = "alpha-static"

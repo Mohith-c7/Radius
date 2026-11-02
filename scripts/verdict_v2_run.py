@@ -88,13 +88,24 @@ def fixture_dirs(selectors: list[str]) -> list[Path]:
     return [p for p in all_dirs if any(p.name.startswith(s) for s in selectors)]
 
 
-def criteria_for(expected: dict[str, Any], *, gold: bool) -> tuple[SimpleNamespace, ...]:
+def criteria_for(
+    expected: dict[str, Any], *, gold: bool, hint_provenance: str | None = None
+) -> tuple[SimpleNamespace, ...]:
+    """Fixture criteria as IN-01 look-alikes.
+
+    Gold-mode semantics (decision DEC-029): the criteria are ``confirmed`` and the
+    expected links are fed as hints that count as ``human_confirmed`` (the author's
+    design intent, not a PR author's self-attestation), so the 8 gold results stay as
+    designed. Pass ``hint_provenance="author_head_spec"`` to see the author-hint cap.
+    """
+
     links = {link["criterion"]: link for link in expected.get("links", [])}
     out = []
     for c in expected["criteria"]:
         link = links.get(c["id"], {})
         paths = (link["symbol"].split("::", 1)[0],) if gold and link.get("symbol") else ()
         tests = tuple(link.get("tests", ())) if gold else ()
+        extra = {"hints_provenance": hint_provenance} if hint_provenance else {}
         out.append(
             SimpleNamespace(
                 id=c["id"],
@@ -103,6 +114,7 @@ def criteria_for(expected: dict[str, Any], *, gold: bool) -> tuple[SimpleNamespa
                 weight=1.0,
                 testability=TESTABILITY.get(c["testability"], c["testability"]),
                 hints=SimpleNamespace(paths=paths, tests=tests),
+                **extra,
             )
         )
     return tuple(out)
@@ -157,7 +169,7 @@ class FixedOutcomes:
         return self._facts
 
 
-def _setup(path: Path, mode: str, registry: str):
+def _setup(path: Path, mode: str, registry: str, hint_provenance: str | None = None):
     expected = json.loads((path / "expected.json").read_text(encoding="utf-8"))
     name = path.name
     command = ExecuteAnalysisCommand(
@@ -167,7 +179,7 @@ def _setup(path: Path, mode: str, registry: str):
         diff_text=(path / "pr.patch").read_text(encoding="utf-8").replace("\r\n", "\n"),
     )
     collector = VerdictStageACollector(
-        StaticIntent(IntentFacts(criteria=criteria_for(expected, gold=mode == "gold"))),
+        StaticIntent(IntentFacts(criteria=criteria_for(expected, gold=mode == "gold", hint_provenance=hint_provenance))),
         head_sha_port=FixedSha(sha_for(name)),
         producers=Producers(
             tamper=tamper_producer(registry),
@@ -179,15 +191,17 @@ def _setup(path: Path, mode: str, registry: str):
     return command, collector, facts
 
 
-def collect_stage_a(path: Path, mode: str, registry: str):
+def collect_stage_a(path: Path, mode: str, registry: str, hint_provenance: str | None = None):
     """Real Stage A on one fixture (no scoring)."""
 
-    command, collector, _ = _setup(path, mode, registry)
+    command, collector, _ = _setup(path, mode, registry, hint_provenance)
     return collector.collect(command.analysis_id, command)
 
 
-def run_collect(path: Path, mode: str, registry: str) -> dict[str, Any]:
-    command, collector, facts = _setup(path, mode, registry)
+def run_collect(
+    path: Path, mode: str, registry: str, hint_provenance: str | None = None
+) -> dict[str, Any]:
+    command, collector, facts = _setup(path, mode, registry, hint_provenance)
     report = run_verdict_v2_best_effort(
         mode=VerdictV2Mode.SHADOW,
         analysis_id=command.analysis_id,

@@ -92,6 +92,9 @@ class LinkMapping(Serializable):
     relevance_sat: float = 1.5
     max_symbols_per_criterion: int = 3
     hint_test_weight: float = 1.0
+    #: Upper bound of the criterion->test weight (r_ct) of a ``tests:`` hint whose
+    #: provenance is not base_spec / human_confirmed (the PR author controls it).
+    author_hint_cap: float = 0.7
 
 
 @dataclass(frozen=True, slots=True)
