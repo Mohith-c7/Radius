@@ -1,0 +1,33 @@
+{
+  "url": "https://api.github.com/repos/radius-sandbox-owner/radius-sandbox/pulls/1",
+  "id": 2001001,
+  "node_id": "PR_kwDOexample",
+  "html_url": "https://github.com/radius-sandbox-owner/radius-sandbox/pull/1",
+  "number": 1,
+  "state": "open",
+  "locked": false,
+  "title": "Add greeting helper",
+  "user": {
+    "login": "contributor-test",
+    "id": 1002,
+    "type": "User"
+  },
+  "body": "Adds greet() and a docs page.\n\nFixes #12\n\n<!-- reviewer note: internal -->\n## Acceptance Criteria\n- [ ] greet(name) returns \"Hello, name\"\n- [ ] greet(\"\") raises ValueError\n",
+  "draft": false,
+  "head": {
+    "label": "radius-sandbox-owner:feature/greeting",
+    "ref": "feature/greeting",
+    "sha": "111111111111111111111111111111111111111a"
+  },
+  "base": {
+    "label": "radius-sandbox-owner:main",
+    "ref": "main",
+    "sha": "0000000000000000000000000000000000000000"
+  },
+  "author_association": "OWNER",
+  "merged": false,
+  "commits": 3,
+  "additions": 40,
+  "deletions": 2,
+  "changed_files": 3
+}

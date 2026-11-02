@@ -1,6 +1,6 @@
 # Radius Intent Package
 
-Owns the intent layer: what a change is supposed to do, as confirmable, testable criteria with provenance (`docs/research/DESIGN.md` 6.1, RQ1). IN-01 delivered the pure domain model and ports; IN-07 added persistence; IN-03 adds deterministic (LLM-free) criterion extraction; IN-06 adds the snapshot service (versioning, carry-over of human decisions, diffs). IN-04 adds an optional, default-off, guarded LLM extractor behind a provider port. IN-05 adds deterministic testability rating. No HTTP yet.
+Owns the intent layer: what a change is supposed to do, as confirmable, testable criteria with provenance (`docs/research/DESIGN.md` 6.1, RQ1). IN-01 delivered the pure domain model and ports; IN-07 added persistence; IN-03 adds deterministic (LLM-free) criterion extraction; IN-06 adds the snapshot service (versioning, carry-over of human decisions, diffs). IN-04 adds an optional, default-off, guarded LLM extractor behind a provider port. IN-05 adds deterministic testability rating. IN-02 (last section) ingests the sources from GitHub.
 
 Layout follows DEC-003/DEC-007: `domain/` (pure), `interfaces/` (ports), `application/` (use cases: domain + ports only) and `infrastructure/` (repositories in IN-07, `extraction/` in IN-03).
 
@@ -290,3 +290,76 @@ The REST surface is documented in `docs/API_CONTRACTS.md` (Intent APIs); code is
 - **Sanitization.** Submitted text goes through `radius_shared.llm_guard.sanitize_untrusted` (hidden characters, comments, secrets removed). `raw_text_hash` is the hash of what the client sent; `suspicious_content_removed` is set when hidden content was stripped. Flag-only findings (injection phrases) are returned as codes and never alter the text.
 - **Concurrency.** The ETag is a hash of the snapshot id and every criterion's `(id, state, text)`; `If-Match` is checked against the latest snapshot before a write. The service's own version-conflict retry handles two writers racing without `If-Match`.
 - **Hints.** `SqlAlchemyIntentRepository` now persists `CriterionHints` in the existing `intent_criteria.hints` JSON column (no migration); previously they were dropped on the SQL backend.
+
+## Source ingestion from GitHub (IN-02)
+
+Intent now comes from the pull request itself, not only from `POST .../intent/sources`. **Status: validated against recorded/hand-built fixtures and a stateful fake GitHub API; live validation is pending F-06** (see `docs/github-app-validation/RUNBOOK.md`, section "Intent ingestion"). The code lives outside this package so the import-linter contracts stay untouched: `radius_github.intent_*` (GitHub-specific; `GitHubIntentSourceFetcher` implements the `IntentSourceFetcher` port), `radius_worker.intent_ingestion` (composition) and `radius_api.github_intent` (webhook payload capture). This package only gained `radius_intent.infrastructure.defaults.default_extractors()` so the API and the worker run the same extractors.
+
+### Who does what
+
+| Where | Network | What it stores |
+|---|---|---|
+| API webhook handler, `pull_request` opened / reopened / synchronize / ready_for_review | none | `pr-title`, `pr-body` from the payload (`title`, `body`) for the new analysis; skipped when the payload has no `body` key (the worker then uses the REST API) |
+| API webhook handler, `pull_request.edited` | none | refreshes `pr-title` / `pr-body` of the PR's latest analysis and rebuilds (`trigger=pull_request.edited`) |
+| API webhook handler, `issues.edited` | none | refreshes `issue:<n>` from the payload in the latest analysis of each of the 20 newest PRs of that repository that already stores it (`trigger=issues.edited`); cross-repository issues wait for the next analysis |
+| Worker, start of every job (`trigger=analysis.started`) | GitHub REST with the installation token | everything in the next table; skipped for inactive installations, unless `RADIUS_FEATURE_INTENT_INGESTION=true` (**default off until the live F-06 validation**), or without App credentials; any error is logged and swallowed |
+
+The API holds no GitHub credentials and makes no GitHub calls. `synchronize` creates a new analysis (new head SHA) and the worker fetches its commit messages and spec file, so new commits are covered. Commits pushed after an analysis ran do not alter that analysis' intent (an analysis is pinned to a SHA; `head_moved` is reported if the PR head differs).
+
+### Sources, ids and provenance
+
+| Source | Kind | `source_id` | Fetched from |
+|---|---|---|---|
+| PR title | `pr_title` | `pr-title` | payload, else `GET /pulls/{n}` |
+| PR body | `pr_body` | `pr-body` | payload, else `GET /pulls/{n}` |
+| Spec file | `spec_file` | `intent.yml` | `GET /contents/.radius/intent.yml?ref=<analysis commit>` (404: absent) |
+| Commit messages | `commit_message` | `commits` | `GET /pulls/{n}/commits?per_page=50` |
+| Linked issue | `issue` | `issue:<n>`; cross-repo `issue:<owner>:<repo>:<n>` (hashed owner/repo if over 64 chars) | `GET /repos/{o}/{r}/issues/{n}` |
+| Maintainer comments (opt-in) | `comment` | `issue-comments:<n>` | `GET .../issues/{n}/comments` |
+| Agent task prompt, manual criteria | `agent_prompt`, `comment` | `agent-prompt`, `manual:<hash>` | the intent API (IN-08); ingestion never touches them |
+
+Ids contain no SHA, delivery id or timestamp, so criterion ids (a hash of `<kind>:<source id>` and the normalized text) are stable across edits, force-pushes and re-runs. `pr-title`, `pr-body` and `intent.yml` equal the IN-08 defaults on purpose: GitHub's value replaces an API-submitted source with the same default id (use another `sourceId` to keep both). The commits are one source with a `Commit <sha7>:` section per commit, so a rebase changes one source instead of fifty (and stays well below the 50-source API limit). Provenance of a criterion is `(kind, source_id, raw_text_hash)` plus its span; the fetch origin (`webhook_payload` / `rest_api`), the pointer (`owner/repo#n`, `.radius/intent.yml@<sha12>`) and the status are in the ingestion report and the `Intent ingestion` log record.
+
+### Linked issues
+
+`radius_github.intent_links.parse_closing_references`: keywords `close(s|d)`, `fix(es|ed)`, `resolve(s|d)` (GitHub's nine forms), case-insensitive, optional colon; one reference per keyword (`Fixes #1, #2` links only `#1`, as on GitHub); references `#n`, `owner/repo#n` and `https://github.com/owner/repo/issues/n` (pull-request URLs are ignored). Ignored regions: fenced code (backtick and tilde, any length; an unterminated fence runs to the end), inline code, HTML comments, blockquotes, `<code>` / `<pre>`. Not detected: indented code blocks (an indented `- fixes #1` is usually a nested list). Links are read from the stored PR body and the non-merge commit messages, deduplicated case-insensitively (`#5` equals `owner/repo#5` in the PR's repository) and capped at 10 issues (`linked_issues_truncated:<n>`). References to other repositories are not fetched unless `RADIUS_INTENT_ALLOW_CROSS_REPO=true` (default false: the installation token reads every repository of the installation); they are recorded absent with reason `cross_repo_disabled` and no request is made. A number that is a pull request is recorded absent (`is_pull_request`). Maintainer comments (`RADIUS_INTENT_INCLUDE_ISSUE_COMMENTS=true`) keep only comments whose `author_association` is OWNER, MEMBER or COLLABORATOR and whose author is not a bot (at most 5, 4000 characters each), rendered as `Comment by @login (ROLE):` so the label survives into the text.
+
+### Outcomes: present, absent, unavailable
+
+Every source gets an explicit outcome; none is an exception.
+
+| Status | Meaning | Examples | Effect on stored intent |
+|---|---|---|---|
+| `present` | text fetched | | replaces the stored source with the same `(kind, id)` |
+| `absent` | not there for this App | empty body (`empty`), 404 `not_found`, 410 `gone`, 403 without rate-limit markers `forbidden` (for example no `issues: read`), 451, `is_pull_request`, `no_maintainer_comments`, a spec that is `not_a_file` / `too_large` / `unreadable` | removes an *owned* source (PR title/body, commits, issues, comments), retiring its criteria by IN-06's rules; the spec file is not owned and an absent repo file never removes a spec submitted through the API |
+| `unavailable` | could not be determined | `rate_limited`, 401, 5xx, timeout, redirect, bad JSON, `budget_exhausted`, `deadline_exceeded`, `token_error` | nothing changes; stored sources are kept (an outage never orphans a confirmed criterion) |
+
+On a *complete* pass (PR body known, commit list fetched or absent) owned `issue:*` / `issue-comments:*` sources that are no longer linked, or whose option was switched off, are dropped. Payload-only updates never drop anything they did not look at.
+
+### Change detection and idempotency
+
+`raw_text_hash` is the SHA-256 of the text exactly as fetched (before normalization), so any upstream edit changes it. `IntentIngestionService.apply` merges the outcomes into the current sources (anything not mentioned, such as the agent prompt and manual criteria, is kept) and calls `IntentSnapshotService.on_sources_changed(trigger=...)`. Unchanged hashes and criteria create no version (tested: repeated ingestion, repeated webhook deliveries and a retried job leave the version count alone); a changed source creates version `n+1` with IN-06 carry-over of confirmations. Conditional requests: an in-process `EtagCache` (per worker process and installation, 256 entries) sends `If-None-Match`; a 304 reuses the parsed body. After a worker restart the first request is unconditional.
+
+### Limits and hygiene
+
+64 KiB of UTF-8 per source (marker `[...truncated by Radius: source exceeds 64 KiB...]`, `truncated=true`; the hash still covers the full text; input is cut at 512 Ki characters before any processing). `radius_github.intent_text.prepare_text` per text: lone surrogates replaced; leading BOM removed, newlines normalized, NFC; elements hidden by the `hidden` attribute or an inline `display:none` / `visibility:hidden` / `font-size:0` / `opacity:0` / `height:0` / `width:0`, and Markdown comment links (`[//]: # (...)`), removed; then `radius_shared.llm_guard.sanitize_untrusted` (NUL, ANSI, zero-width, bidi, Unicode tag and control characters, HTML comments, secrets). `suspicious_content_removed` is set when any hidden-content finding removed something (PR templates' own HTML comments set it too). Injection phrases are flagged in the report and never rewritten or executed. Commit messages lose trailing `Co-authored-by`, `Signed-off-by`, `Change-Id`, `Reviewed-by`... trailers and "Generated with ..." signature lines; their text is kept. Merge commits (more than one parent) are skipped; at most 50 commits are read. Arabic, Hebrew and CJK text is preserved; RLM/LRM and bidi override characters are removed.
+
+Budget per analysis: at most `RADIUS_INTENT_MAX_API_CALLS` (default 15) REST calls and `RADIUS_INTENT_DEADLINE_SECONDS` (default 30) seconds; each call's timeout is `GITHUB_TIMEOUT_SECONDS` capped by the time left. Order: PR, commits, spec file, issues (up to 10), comments. The installation token is minted once and not counted. A rate-limit response (403 with `x-ratelimit-remaining: 0`, `retry-after` or a "rate limit"/"abuse" message, or 429) or a 401 stops all further calls. With 15 calls: 3 fixed, 10 issues, 2 comment fetches.
+
+### Diagnostics and research hook
+
+One structured log record per ingestion (`Intent ingestion`, logger `radius_github.intent_ingestion`): `intent_sources` (`{source_id: status}`), call count, snapshot version and whether it was created, stop reason and diagnostics (`head_moved`, `merge_commits_skipped:n`, `commits_capped_at:50`, `linked_issues_truncated:n`). That is the RQ1 "which sources exist per PR" data; no text is logged. `IngestionReport.to_dict()` adds per-source origin, reference, hash and flags. Reports are not persisted (no migration was added).
+
+### Tests
+
+`packages/github/tests/test_intent_{links,text,rest,sources,ingestion}.py`: a parser table of 80 cases (code fences, quotes, comments, hostile-input timing), hygiene, REST classification, the collector against `fixtures/api/*.json` through `radius_github.fake_api.FakeGitHub`, snapshot idempotency, permission-denied and rate-limit paths, injection inertness with a registered but disabled LLM extractor that must not be called, and the call budget. `apps/worker/tests/test_intent_ingestion.py` runs the worker end to end on SQLite (best-effort guarantees, inactive installation). `apps/api/tests/test_github_intent_webhooks.py` covers payload capture, edits, issues and savepoint isolation. The fake reproduces ETag/304, auth, `per_page`, 403/404/410/5xx and both rate-limit shapes; it is not GitHub.
+
+### Follow-ups
+
+- Persist ingestion reports (source presence and reasons) in a table for RQ1 and the dashboard.
+- `issue_comment` webhooks and cross-repository `issues.edited` refresh.
+- Fetch a newly linked issue right after `pull_request.edited` (today the next analysis does; needs App credentials in the API or a durable refresh job).
+- Carry human decisions across analyses of the same PR (a new head SHA is a new analysis with a new intent).
+- Pagination for more than 50 commits or 30 comments; compare the parser with GraphQL `closingIssuesReferences` on live PRs.
+- Tracker integrations (Jira, Linear...) are IT-07.
+- Security note: enabling `RADIUS_INTENT_ALLOW_CROSS_REPO` lets a PR author pull issue text from any repository of the installation into this analysis' intent; it is off by default.

@@ -30,12 +30,14 @@ Endpoint: `POST /api/v1/webhooks/github` (the older `/api/v1/github/webhooks` in
 | `push` | Upserts the branch's latest commit. No analysis |
 | `pull_request` `opened`, `reopened`, `synchronize`, `ready_for_review` (non-draft) | Upserts the PR and starts (or reuses) an analysis for the head SHA |
 | `pull_request` `closed` (merged or not) | Upserts the PR, returns `ignored: true`, and **cancels queued-not-started analyses** for that PR (`cancelledAnalysisIds` in the response). A running analysis is never killed; it finishes and publishes. Reopening starts a fresh analysis |
-| `pull_request` other actions (`edited`, `labeled`, draft, ...) | Upserts the PR (title, status) and returns `ignored: true`; no analysis |
-| `issues`, `issue_comment`, `check_run` | **Accepted and ignored** (202, `ignored: true`) |
+| `pull_request` `edited` | Upserts the PR, returns `ignored: true` (no analysis), and, IN-02, refreshes the PR title/body stored as intent for the PR's latest analysis from the payload (a new snapshot version only if the text changed) |
+| `pull_request` other actions (`labeled`, draft, ...) | Upserts the PR (title, status) and returns `ignored: true`; no analysis |
+| `issues` `edited` | 202, `ignored: true`; IN-02 refreshes the stored text of that issue (same repository) in the latest analysis of recent PRs that already link it. Other `issues` actions, and inactive installations: ignored |
+| `issue_comment`, `check_run` | **Accepted and ignored** (202, `ignored: true`) |
 
-**`issues: read` and the `issues` / `issue_comment` / `check_run` events are deliberate, but not used by today's code.** Nothing in the webhook handler acts on them yet, and nothing calls an issues-read endpoint (PR comments use the Issues comments API, which `pull_requests: write` already covers for PRs). They stay in `app-manifest.json` because task IN-02 (intent ingestion, `docs/research/tasks/IN-intent.md`) will need them: it fetches linked issues (`fixes|closes|resolves #n`, issue URLs) through the App, which requires `issues: read`, and refetches on `issues.edited`. Adding a permission later forces every installation owner to re-approve the App, so it is requested now. Today the events are accepted and ignored (202, `ignored: true`), and capturing their real payloads gives IN-02 ready-made fixtures. `--minimal` drops them for a strictly least-privilege validation run; that validates the same current behaviour, but a minimal App must be updated (and re-approved) before IN-02 is tried live.
+**`issues: read` and the `issues` / `issue_comment` / `check_run` events.** Since IN-02 the worker reads linked issues with `GET /repos/{owner}/{repo}/issues/{n}` (needs `issues: read`), the PR commit list and `.radius/intent.yml` (`pull_requests` and `contents` read, already granted); the API refreshes stored issue text on `issues.edited` from the payload. Adding a permission later forces every installation owner to re-approve the App, so `issues: read` is requested from the start. `--minimal` drops it: the run still works and linked issues are recorded as *absent* with reason `forbidden` (not as errors), which is also a useful scenario. `issue_comment` and `check_run` stay ignored; capturing their real payloads gives fixtures.
 
-Permissions actually exercised: `checks: write` (create/update/list Check Runs), `pull_requests: write` (comments), `contents: read` (clone via installation token), `metadata: read`.
+Permissions actually exercised: `checks: write` (create/update/list Check Runs), `pull_requests: write` (comments), `contents: read` (clone via installation token; `.radius/intent.yml` via the contents API), pull request read (PR and commit list for intent), `issues: read` (linked issues, IN-02), `metadata: read`.
 
 Publishing facts that shape the assertions:
 
@@ -122,6 +124,9 @@ Env vars (names match `.env.example`, `apps/api/src/radius_api/config.py`, `apps
 | `GITHUB_INSTALLATION_ID` | worker | optional; if empty the worker uses the installation id the API stored on the organization |
 | `DASHBOARD_BASE_URL` | worker | `http://localhost:3000` (link in the check run) |
 | `GITHUB_API_BASE_URL`, `GITHUB_API_VERSION`, `GITHUB_TIMEOUT_SECONDS` | worker | defaults |
+| `RADIUS_FEATURE_INTENT_INGESTION` | api, worker | **Default `false`. Set it to `true` in both for the live run** (IN-02: intent from the PR) |
+| `RADIUS_INTENT_ALLOW_CROSS_REPO` | worker | `false` (default); closing references to other repositories are recorded absent (`cross_repo_disabled`). Set `true` only to test that path |
+| `RADIUS_INTENT_MAX_API_CALLS`, `RADIUS_INTENT_DEADLINE_SECONDS`, `RADIUS_INTENT_INCLUDE_ISSUE_COMMENTS` | worker | `15`, `30`, `false` |
 
 Steps (see `docs/DEVELOPMENT_GUIDE.md` quickstart):
 
@@ -194,6 +199,45 @@ Manual redelivery and manual duplicate check:
    ```
    Both must print `1`.
 
+## 6b. Intent ingestion (IN-02): what to check during the live run
+
+Everything below was built and tested against hand-built fixtures and a fake GitHub; **none of it has run against real GitHub yet.** Record what differs in `REPORT.md` and turn real payloads and responses into fixtures (`packages/github/tests/fixtures/webhooks/` and `.../fixtures/api/`). Set `RADIUS_FEATURE_INTENT_INGESTION=true` for the API and the worker first (it is off by default until this validation), restart both, then optionally `RADIUS_INTENT_INCLUDE_ISSUE_COMMENTS=true`.
+
+Setup in the sandbox repo (once): create issues #A and #B (any body with a sentence like "The helper must reject empty names."), add `.radius/intent.yml` on the PR branch (`version: 1` and one criterion), and open the PR with a body such as:
+
+```
+Adds greet().
+
+Fixes #A
+Closes <owner>/<repo>#B
+
+<!-- template note that must not reach Radius -->
+## Acceptance Criteria
+- [ ] greet("") raises ValueError
+```
+
+Then check (database, or `GET /api/v1/analyses/<analysisId>/intent` with the API key headers):
+
+| # | Check | Expected | If it differs |
+| --- | --- | --- | --- |
+| 1 | The `pull_request` delivery has a `body` key | stored `pr-body` comes from the payload; the worker makes no `GET /pulls/<n>` call | Payload shape differs from the fixtures: fix `GitHubPullRequestPayload` and the fixture |
+| 2 | Worker log line `Intent ingestion` for the analysis | `intent_sources` lists `pr-title`, `pr-body`, `commits`, `intent.yml`, `issue:<A>` (`Closes <owner>/<repo>#B` is the PR's own repository here, so it is `issue:<B>`; a link to a different repository must be `absent` / `cross_repo_disabled` with no request made) as `present`; `intent_api_calls` <= 15 | Read `intent_diagnostics` and the per-source `reason` |
+| 3 | App without `issues: read` (use `--minimal` or revoke it) | issue sources `absent` / `forbidden` (GitHub answers 403 `Resource not accessible by integration`, or 404 for a repository the token cannot see); the analysis still completes and the check run publishes | Record the real status and body; adjust `intent_rest.GitHubRestReader._classify` |
+| 4 | Rate-limit shape | Not expected in a sandbox. If seen: 403 with `x-ratelimit-remaining: 0` or 429 `retry-after` becomes `unavailable` / `rate_limited` and stops further calls | Capture headers and body |
+| 5 | Commit list | `commits` source: one `Commit <sha7>:` section per non-merge commit, no `Co-authored-by` / `Signed-off-by` lines; a merge commit from "Update branch" is skipped | Compare with `GET /pulls/<n>/commits` |
+| 6 | Spec file | `intent.yml` present with the criterion; a new commit that removes the file gives a new analysis with `intent.yml` absent / `not_found` | 404 versus another status for a missing path or `ref` |
+| 7 | Edit the PR body (`edit_description` scenario or by hand) | `pull_request.edited` delivery 202 `ignored`; no new check run or comment; snapshot version +1 in `GET .../intent` | Verify `changes.body.from` and that `pull_request.body` is the new text |
+| 8 | Edit the issue text | `issues.edited` delivery 202; stored `issue:<A>` text changes and the version increments; saving without changes adds none | Confirm the `issues` event is subscribed and carries `issue.body` |
+| 9 | Add `Fixes #C` to the body after the analysis ran | NOT fetched until the next analysis (known limitation); `pr-body` text is updated | See the follow-ups in `packages/intent/README.md` |
+| 10 | Push a new commit | New analysis; its intent has the new commit list and the spec at the new SHA | |
+| 11 | Redeliver an event | Replayed response, no new version | |
+| 12 | Suspend the installation | New deliveries ignored (`installation_suspended`); the worker skips the job; no intent change | |
+| 13 | ETag | A second ingestion of the same PR in the same worker process shows 304s (the cache is per process) | GitHub may not return ETags on every endpoint; check the `etag` headers |
+| 14 | Hidden text | A body with a zero-width character, an RTL override and `<span hidden>` text | Stored text has none of them; `suspicious_content_removed=true` on the source |
+| 15 | API-call count | `intent_api_calls` matches the requests GitHub saw (compare `x-ratelimit-used` if you capture it) | |
+
+Not covered by the scenario script: its checks look at GitHub-visible effects (check runs, comments), and intent is visible only through the Radius API or database, so no scenario was added. Checks 7 and 8 are the manual equivalents of `edit_description`.
+
 ## 7. Evidence and report
 
 1. The scenario script wrote `docs/github-app-validation/evidence/scenarios-<timestamp>.md`.
@@ -212,3 +256,5 @@ Manual redelivery and manual duplicate check:
 | Analysis runs but nothing appears on GitHub | `GITHUB_PUBLISH_RESULTS=false`, or `GITHUB_APP_ID`/`GITHUB_APP_PRIVATE_KEY` empty in the worker; publish errors are logged as "Could not publish GitHub Check Run or PR comment" |
 | Worker fails cloning a private repo | The clone authenticates with HTTP Basic, username `x-access-token`, password = the installation token (GitHub's documented git-over-HTTPS form). The token is handed to git through the child process environment (`GIT_CONFIG_*`, scoped to the remote's origin), so it is not on the command line, in `.git/config` or in logs. Check the App has `contents: read` and is installed on the repository; confirm live (section 7) |
 | Check run stays missing for a draft PR | Drafts are ignored until `ready_for_review` |
+| No intent for an analysis | `RADIUS_FEATURE_INTENT_INGESTION` not set to `true` (the default is off), empty App credentials in the worker, or an inactive installation; look for `Intent ingestion` / `Intent ingestion failed` in the worker log (failures never fail the analysis) |
+| Linked issues missing from the intent | The App lacks `issues: read` (absent / `forbidden`), the issue is in a repository the installation cannot see (`not_found`), or the keyword sits inside a code fence, quote or HTML comment |

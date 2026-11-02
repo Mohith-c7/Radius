@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -32,6 +33,11 @@ from radius_api.dependencies import (
     get_analysis_service,
     get_idempotency_store,
     get_repository_service,
+)
+from radius_api.github_intent import (
+    latest_analysis_id,
+    record_pull_request_intent,
+    refresh_issue_intent,
 )
 from radius_api.idempotency import IdempotencyStore, replay_or_validate
 from radius_api.schemas.github_webhooks import (
@@ -166,7 +172,7 @@ def _handle_payload(
             repository_service,
             analysis_service,
         )
-    if event in ("push", "pull_request"):
+    if event in ("push", "pull_request", "issues"):
         inactive = _installation_inactive_reason(request)
         if inactive is not None:
             return _ignored_inactive(delivery_id, event, action, inactive)
@@ -185,6 +191,8 @@ def _handle_payload(
             repository_service,
             analysis_service,
         )
+    if event == "issues" and action == "edited":
+        _handle_issue_edited(request, payload, repository_service, analysis_service)
     return GitHubWebhookResult(
         deliveryId=delivery_id,
         event=event,
@@ -466,6 +474,19 @@ def _handle_pull_request(
                 reason="Pull request was closed before the analysis started.",
             )
         ]
+    if action == "edited":
+        # IN-02: title/body changed. Refresh the intent of the PR's latest
+        # analysis from the payload (no analysis is started for an edit).
+        edited_analysis = latest_analysis_id(analysis_service, UUID(str(pull_request.id)))
+        if edited_analysis is not None:
+            record_pull_request_intent(
+                request,
+                analysis_id=edited_analysis,
+                payload=pull_request_payload,
+                owner=repository.owner,
+                repo=repository.name,
+                trigger="pull_request.edited",
+            )
     if action not in _ANALYSIS_PR_ACTIONS or pull_request_payload.draft:
         return GitHubWebhookResult(
             cancelledAnalysisIds=cancelled,
@@ -483,6 +504,16 @@ def _handle_pull_request(
             commit_sha=pull_request_payload.head.sha,
         )
     )
+    # IN-02: the payload already holds title and body; store them as intent now
+    # (best-effort, no network). The worker adds issues, commits and the spec.
+    record_pull_request_intent(
+        request,
+        analysis_id=UUID(str(analysis.id)),
+        payload=pull_request_payload,
+        owner=repository.owner,
+        repo=repository.name,
+        trigger=f"pull_request.{action}",
+    )
     return GitHubWebhookResult(
         deliveryId=delivery_id,
         event="pull_request",
@@ -490,6 +521,41 @@ def _handle_pull_request(
         repositoryId=str(repository.id),
         pullRequestId=str(pull_request.id),
         analysisId=str(analysis.id),
+    )
+
+
+def _handle_issue_edited(
+    request: Request,
+    payload: dict[str, Any],
+    repository_service: RepositoryApplicationService,
+    analysis_service: AnalysisApplicationService,
+) -> None:
+    """IN-02: refresh a linked issue's stored text from an ``issues.edited`` payload."""
+
+    issue = payload.get("issue")
+    repo_data = payload.get("repository")
+    if not isinstance(issue, dict) or not isinstance(repo_data, dict):
+        return
+    try:
+        existing = repository_service.get_by_github_repository_id(int(repo_data["id"]))
+    except (KeyError, TypeError, ValueError):
+        return
+    org_id = getattr(request.state, "radius_webhook_org_id", None)
+    if (
+        existing is None
+        or existing.id is None
+        or existing.status == "disconnected"
+        or existing.organization_id != org_id
+    ):
+        return
+    refresh_issue_intent(
+        request,
+        analysis_service=analysis_service,
+        repository_id=UUID(str(existing.id)),
+        owner=existing.owner,
+        repo=existing.name,
+        issue=issue,
+        now=datetime.now(UTC),
     )
 
 

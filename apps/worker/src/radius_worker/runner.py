@@ -4,7 +4,7 @@ import base64
 import time
 import traceback
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
 
@@ -24,6 +24,7 @@ from radius_confidence.infrastructure import (
     SqlAlchemyConfidenceStore,
 )
 from radius_github import GitHubAnalysisPublisher, GitHubAppClient, GitHubAppSettings
+from radius_github.intent_rest import EtagCache, HttpTransport
 from radius_github.publisher import CommentPublishError, GitHubAnalysisReport
 from radius_graph.application import GraphApplicationService
 from radius_graph.infrastructure import InMemoryGraphStore, SqlAlchemyGraphStore
@@ -69,6 +70,7 @@ from radius_worker.execution_mode import (
     require_sandbox_ready,
     resolve_test_execution_mode,
 )
+from radius_worker.intent_ingestion import ingest_intent_best_effort
 from radius_worker.orchestrator import (
     ExecuteAnalysisCommand,
     Phase1AnalysisOrchestrator,
@@ -115,6 +117,10 @@ class SqlAlchemyWorkerRuntime:
     git_client: LocalGitRepositoryClient
     settings: WorkerSettings
     github_client: GitHubAppClient
+    #: IN-02: HTTP transport for intent ingestion (``None`` = real urllib). Tests inject a fake.
+    intent_transport: HttpTransport | None = None
+    #: IN-02: conditional-request cache; process-local and bounded.
+    intent_etag_cache: EtagCache = field(default_factory=EtagCache)
 
     def run_once(self) -> bool:
         """Claim and execute one durable analysis job."""
@@ -194,6 +200,21 @@ class SqlAlchemyWorkerRuntime:
                     analysis_id=job.analysis_id,
                     settings=self.settings,
                     github_client=self.github_client,
+                )
+                # Best-effort (IN-02): intent sources -> snapshot. Own session and
+                # transaction; never raises, so it cannot fail the analysis.
+                ingest_intent_best_effort(
+                    session_factory=self.session_factory,
+                    analysis_id=job.analysis_id,
+                    settings=self.settings,
+                    github_client=self.github_client,
+                    installation_id_for=lambda s: _github_installation_id(
+                        session=s,
+                        analysis_id=job.analysis_id,
+                        settings=self.settings,
+                    ),
+                    transport=self.intent_transport,
+                    etag_cache=self.intent_etag_cache,
                 )
                 orchestrator = _create_sql_orchestrator(session, self.settings)
                 clone_headers = _github_clone_headers(

@@ -22,6 +22,15 @@ class ApiSettings(DatabaseSettings):
     (default), deliveries from installations not linked to an organization are
     rejected instead of being filed under the default organization.
     """
+    intent_ingestion_enabled: bool = Field(
+        default=False, alias="RADIUS_FEATURE_INTENT_INGESTION"
+    )
+    """IN-02: store PR title/body (and refreshed issue text) from webhook payloads.
+
+    The API makes no GitHub API calls for this (it holds no App credentials); the
+    worker fetches issues, commits and the spec file. OFF by default until the live
+    GitHub validation (F-06) has happened; set true for that run.
+    """
     cors_origins: str = ""
     seed_demo_data: bool = Field(default=False, alias="RADIUS_SEED_DEMO_DATA")
     """Seed illustrative demo fixtures and a demo login at startup.

@@ -1,0 +1,8 @@
+version: 1
+criteria:
+  - id: C1
+    text: "greet(name) returns a greeting containing the name"
+    weight: 1.0
+    paths: ["src/greet.py"]
+  - id: C2
+    text: "greet() rejects empty names with ValueError"

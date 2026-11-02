@@ -1,0 +1,72 @@
+{
+  "action": "edited",
+  "issue": {
+    "url": "https://api.github.com/repos/radius-sandbox-owner/radius-sandbox/issues/12",
+    "html_url": "https://github.com/radius-sandbox-owner/radius-sandbox/issues/12",
+    "id": 3001012,
+    "node_id": "I_kwDOissue12",
+    "number": 12,
+    "title": "Greeting helper should validate input",
+    "user": {
+      "login": "reporter-test",
+      "id": 1003,
+      "type": "User"
+    },
+    "state": "open",
+    "locked": false,
+    "comments": 1,
+    "author_association": "NONE",
+    "body": "greet() must reject empty names.\n\nThe helper should return a friendly message for valid names.\n"
+  },
+  "changes": {
+    "body": {
+      "from": "greet() must reject empty names."
+    }
+  },
+  "repository": {
+    "id": 912345678,
+    "node_id": "R_kgDOexample",
+    "name": "radius-sandbox",
+    "full_name": "radius-sandbox-owner/radius-sandbox",
+    "private": true,
+    "owner": {
+      "login": "radius-sandbox-owner",
+      "id": 1001,
+      "node_id": "U_1001",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?v=4",
+      "url": "https://api.github.com/users/radius-sandbox-owner",
+      "html_url": "https://github.com/radius-sandbox-owner",
+      "type": "User",
+      "site_admin": false
+    },
+    "html_url": "https://github.com/radius-sandbox-owner/radius-sandbox",
+    "description": "Radius live validation sandbox",
+    "fork": false,
+    "url": "https://api.github.com/repos/radius-sandbox-owner/radius-sandbox",
+    "clone_url": "https://github.com/radius-sandbox-owner/radius-sandbox.git",
+    "git_url": "git://github.com/radius-sandbox-owner/radius-sandbox.git",
+    "ssh_url": "git@github.com:radius-sandbox-owner/radius-sandbox.git",
+    "created_at": "2026-11-02T08:00:00Z",
+    "updated_at": "2026-11-02T09:00:00Z",
+    "pushed_at": "2026-11-02T09:30:00Z",
+    "default_branch": "main",
+    "language": "Python",
+    "archived": false,
+    "disabled": false,
+    "visibility": "private"
+  },
+  "sender": {
+    "login": "radius-sandbox-owner",
+    "id": 1001,
+    "node_id": "U_1001",
+    "avatar_url": "https://avatars.githubusercontent.com/u/1001?v=4",
+    "url": "https://api.github.com/users/radius-sandbox-owner",
+    "html_url": "https://github.com/radius-sandbox-owner",
+    "type": "User",
+    "site_admin": false
+  },
+  "installation": {
+    "id": 55001122,
+    "node_id": "I_kwExample"
+  }
+}

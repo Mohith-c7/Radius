@@ -1,0 +1,1 @@
+Radius can now collect intent from the pull request itself: PR title and body, linked issues (same repository by default), commit messages and `.radius/intent.yml`, and re-reads them when the pull request or issue is edited. Ingestion is off by default (`RADIUS_FEATURE_INTENT_INGESTION=true` enables it) until it has been validated against a live GitHub App.

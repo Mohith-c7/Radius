@@ -26,14 +26,14 @@ from radius_confidence.infrastructure import (
     SqlAlchemyConfidenceStore,
     SqlAlchemyCoverageStore,
 )
+from radius_github.intent_ingestion import IntentIngestionService
 from radius_graph.infrastructure import InMemoryGraphStore, SqlAlchemyGraphStore
 from radius_intent.application import IntentSnapshotService
 from radius_intent.infrastructure import (
     InMemoryIntentRepository,
-    ManualCriterionExtractor,
     SqlAlchemyIntentRepository,
+    default_extractors,
 )
-from radius_intent.infrastructure.extraction import DeterministicCriterionExtractor
 from radius_intent.infrastructure.llm import (
     EnvEgressPolicy,
     InMemoryResponseCache,
@@ -129,10 +129,7 @@ class AppContainer:
     #: order for ties. Append here to add one (for example the IN-04 LLM
     #: extractor); the API layer does not care which extractors run.
     intent_extractors: tuple[CriterionExtractor, ...] = field(
-        default_factory=lambda: (
-            ManualCriterionExtractor(),
-            DeterministicCriterionExtractor(),
-        )
+        default_factory=default_extractors
     )
     #: Testability rater applied by the snapshot service (IN-05 -> IN-06).
     intent_rater: TestabilityRater = field(default_factory=DeterministicTestabilityRater)
@@ -244,6 +241,28 @@ def build_intent_service(
         clock=container.clock,
         snapshots_for=snapshots_for,
     )
+
+
+def build_ingestion_service(
+    container: AppContainer, repository: IntentRepository
+) -> IntentIngestionService:
+    """Wire the IN-02 ingestion service over ``repository`` (same extractors as the API)."""
+
+    return IntentIngestionService(
+        repository,
+        IntentSnapshotService(repository, container.intent_extractors),
+        clock=container.clock,
+    )
+
+
+def request_intent_repository(request: Request) -> IntentRepository:
+    """Return the intent repository bound to this request's SQL session (or memory)."""
+
+    container = get_container(request)
+    session = getattr(request.state, "radius_db_session", None)
+    if container.session_factory is None or session is None:
+        return container.intent_repository
+    return SqlAlchemyIntentRepository(session)
 
 
 def get_container(request: Request) -> AppContainer:
