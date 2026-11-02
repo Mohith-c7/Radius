@@ -47,6 +47,9 @@ class GitHubPullRequestPayload(BaseModel):
 
     number: int
     title: str
+    #: PR description. ``None`` both when the payload says ``null`` and when it
+    #: has no ``body`` key; ``"body" in model_fields_set`` tells them apart (IN-02).
+    body: str | None = None
     state: str
     draft: bool = False
     merged: bool = False

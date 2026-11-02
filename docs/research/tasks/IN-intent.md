@@ -15,7 +15,7 @@ Goal: capture what a change is *supposed* to do as a set of confirmable, testabl
 - Acceptance: >= 95% unit coverage on the domain; invariants tested; no infrastructure imports in the domain layer (enforced by an import-linter rule).
 - Research hook: field definitions are the paper's formal model of intent.
 
-### IN-02 Intent source ingestion   [ ]
+### IN-02 Intent source ingestion   [x]
 - Owner type: agent-ok
 - Depends on: IN-01, F-06 (live App for realistic payloads)
 - Branch: `feature/intent-sources`
@@ -34,6 +34,7 @@ Goal: capture what a change is *supposed* to do as a set of confirmable, testabl
 - Tests: recorded GitHub payload fixtures; permission-denied path; huge-body path; unicode/RTL/zero-width characters.
 - Security: sources are untrusted data; never executed.
 - Research hook: record the distribution of which sources exist per PR (RQ1 context).
+- Delivered (validated against recorded/hand-built fixtures and a stateful fake GitHub API; **live validation pending F-06**): see `packages/intent/README.md` (Source ingestion, IN-02). Code: `packages/github/src/radius_github/intent_*.py`, `apps/worker/src/radius_worker/intent_ingestion.py`, `apps/api/src/radius_api/github_intent.py`. Source ids: `pr-title`, `pr-body`, `intent.yml`, `commits`, `issue:<n>`, `issue-comments:<n>`. Follow-ups are listed in the README.
 
 ### IN-03 Deterministic criterion extraction   [x]
 - Owner type: agent-ok

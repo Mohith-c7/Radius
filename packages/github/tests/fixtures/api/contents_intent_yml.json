@@ -1,0 +1,10 @@
+{
+  "type": "file",
+  "encoding": "base64",
+  "size": 206,
+  "name": "intent.yml",
+  "path": ".radius/intent.yml",
+  "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+  "url": "https://api.github.com/repos/radius-sandbox-owner/radius-sandbox/contents/.radius/intent.yml?ref=111111111111111111111111111111111111111a",
+  "content": "dmVyc2lvbjogMQpjcml0ZXJpYToKICAtIGlkOiBDMQogICAgdGV4dDogImdyZWV0KG5hbWUpIHJl\ndHVybnMgYSBncmVldGluZyBjb250YWluaW5nIHRoZSBuYW1lIgogICAgd2VpZ2h0OiAxLjAKICAg\nIHBhdGhzOiBbInNyYy9ncmVldC5weSJdCiAgLSBpZDogQzIKICAgIHRleHQ6ICJncmVldCgpIHJl\namVjdHMgZW1wdHkgbmFtZXMgd2l0aCBWYWx1ZUVycm9yIgo=\n"
+}

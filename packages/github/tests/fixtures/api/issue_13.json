@@ -1,0 +1,13 @@
+{
+  "url": "https://api.github.com/repos/radius-sandbox-owner/radius-sandbox/issues/13",
+  "number": 13,
+  "title": "README lacks usage",
+  "user": {
+    "login": "reporter-test",
+    "type": "User"
+  },
+  "state": "closed",
+  "comments": 0,
+  "author_association": "NONE",
+  "body": "README should document greet().\n"
+}

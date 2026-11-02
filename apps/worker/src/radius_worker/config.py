@@ -108,6 +108,53 @@ class WorkerSettings(DatabaseSettings):
         alias="GITHUB_TIMEOUT_SECONDS",
     )
 
+    # --- Intent source ingestion (IN-02) -----------------------------------
+    intent_ingestion_enabled: bool = Field(
+        default=False,
+        alias="RADIUS_FEATURE_INTENT_INGESTION",
+        description=(
+            "IN-02 (OFF until the live F-06 validation): when a GitHub App is configured, fetch the PR title/body, "
+            "linked issues, commit messages and .radius/intent.yml for each new "
+            "analysis and build the intent snapshot. Best-effort: a failure is "
+            "logged and never fails the analysis. Linked issues need the App's "
+            "'issues: read' permission (a missing permission is recorded as an "
+            "absent source, not an error)."
+        ),
+    )
+    intent_max_api_calls: int = Field(
+        default=15,
+        ge=1,
+        le=50,
+        alias="RADIUS_INTENT_MAX_API_CALLS",
+        description="Hard cap on GitHub REST calls per analysis for intent ingestion.",
+    )
+    intent_deadline_seconds: float = Field(
+        default=30.0,
+        gt=0,
+        alias="RADIUS_INTENT_DEADLINE_SECONDS",
+        description="Wall-clock budget for all intent ingestion calls of one analysis.",
+    )
+    intent_allow_cross_repo: bool = Field(
+        default=False,
+        alias="RADIUS_INTENT_ALLOW_CROSS_REPO",
+        description=(
+            "Fetch issues named by closing references in OTHER repositories "
+            "(owner/repo#n, issue URLs). Off by default: the installation token "
+            "can read every repository of the installation, so honoring a link "
+            "written by a PR author would expose that repository's issue text. "
+            "Skipped links are recorded as absent (cross_repo_disabled)."
+        ),
+    )
+    intent_include_issue_comments: bool = Field(
+        default=False,
+        alias="RADIUS_INTENT_INCLUDE_ISSUE_COMMENTS",
+        description=(
+            "Also fetch comments on linked issues and keep only those written by "
+            "OWNER/MEMBER/COLLABORATOR humans, as separate 'comment' sources. "
+            "Costs one extra API call per linked issue that has comments."
+        ),
+    )
+
     # --- Test execution isolation (audit A#4 / P0-5) ---------------------
     # See docs/security/EXECUTION_ISOLATION.md and radius_worker.execution_mode.
     test_execution_mode: str | None = Field(

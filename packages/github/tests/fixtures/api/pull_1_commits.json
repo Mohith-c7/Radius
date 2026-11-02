@@ -1,0 +1,83 @@
+[
+  {
+    "sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "node_id": "C_x",
+    "commit": {
+      "author": {
+        "name": "Contributor",
+        "email": "contributor@example.invalid",
+        "date": "2026-11-02T09:00:00Z"
+      },
+      "committer": {
+        "name": "Contributor",
+        "email": "contributor@example.invalid",
+        "date": "2026-11-02T09:00:00Z"
+      },
+      "message": "feat: add greet() helper\n\nThe helper returns a greeting for a name and must reject empty names.\n\nCo-authored-by: Pair Person <pair@example.invalid>\nSigned-off-by: Contributor <contributor@example.invalid>\n",
+      "tree": {
+        "sha": "tttttttttttttttttttttttttttttttttttttttt"
+      }
+    },
+    "url": "https://api.github.com/repos/radius-sandbox-owner/radius-sandbox/commits/a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "parents": [
+      {
+        "sha": "0000000000000000000000000000000000000000"
+      }
+    ]
+  },
+  {
+    "sha": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+    "node_id": "C_x",
+    "commit": {
+      "author": {
+        "name": "Contributor",
+        "email": "contributor@example.invalid",
+        "date": "2026-11-02T09:00:00Z"
+      },
+      "committer": {
+        "name": "Contributor",
+        "email": "contributor@example.invalid",
+        "date": "2026-11-02T09:00:00Z"
+      },
+      "message": "docs: document greet()\n\nFixes #13\n\nGenerated with [Claude Code](https://claude.com/claude-code)\n",
+      "tree": {
+        "sha": "tttttttttttttttttttttttttttttttttttttttt"
+      }
+    },
+    "url": "https://api.github.com/repos/radius-sandbox-owner/radius-sandbox/commits/b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+    "parents": [
+      {
+        "sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      }
+    ]
+  },
+  {
+    "sha": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+    "node_id": "C_x",
+    "commit": {
+      "author": {
+        "name": "Contributor",
+        "email": "contributor@example.invalid",
+        "date": "2026-11-02T09:00:00Z"
+      },
+      "committer": {
+        "name": "Contributor",
+        "email": "contributor@example.invalid",
+        "date": "2026-11-02T09:00:00Z"
+      },
+      "message": "Merge branch 'main' into feature/greeting",
+      "tree": {
+        "sha": "tttttttttttttttttttttttttttttttttttttttt"
+      }
+    },
+    "url": "https://api.github.com/repos/radius-sandbox-owner/radius-sandbox/commits/c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+    "parents": [
+      {
+        "sha": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
+      },
+      {
+        "sha": "d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4"
+      }
+    ]
+  }
+]
