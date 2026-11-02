@@ -11,7 +11,7 @@ from radius_parser.core import ParserEngine
 from radius_parser.extractors.python import PythonExtractor
 from radius_graph.cpg import CodePropertyGraph
 from radius_graph.slicer import GraphSlicer
-from radius_analysis.ai.pruner import SemanticPruner
+from radius_analysis.ai.pruner import SemanticPruner, gemini_api_key_from_env
 
 def main():
     load_dotenv()
@@ -66,9 +66,12 @@ def main():
         print(f"Affected Caller found via Graph BFS: {node.symbol.id}")
         
     print("\n--- 5. SEMANTIC AI PRUNING ---")
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = gemini_api_key_from_env()
     if not api_key:
-        print("Skipping AI Evaluation: GEMINI_API_KEY not found in environment. Please add it to your .env file.")
+        print(
+            "Skipping AI Evaluation: set RADIUS_FEATURE_GEMINI_PRUNER=true and GEMINI_API_KEY. "
+            "This sends code and diffs to Google Gemini."
+        )
         return
         
     pruner = SemanticPruner(api_key=api_key)

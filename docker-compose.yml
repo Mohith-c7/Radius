@@ -62,6 +62,21 @@ services:
       RADIUS_TRACING_ENABLED: ${RADIUS_TRACING_ENABLED:-false}
       RADIUS_OTLP_ENDPOINT: ${RADIUS_OTLP_ENDPOINT:-}
       RADIUS_METRICS_ENABLED: ${RADIUS_METRICS_ENABLED:-false}
+      # HTTP hardening (docs/security/HTTP_HARDENING.md). Empty/false = code defaults.
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      RADIUS_HSTS_ENABLED: ${RADIUS_HSTS_ENABLED:-false}
+      RADIUS_TRUSTED_PROXIES: ${RADIUS_TRUSTED_PROXIES:-}
+      # Sign-in module (app.config.Settings). Without these the container would use
+      # the public placeholder session secret from the code and could not send mail.
+      SESSION_SECRET: ${SESSION_SECRET:-super_secret_radius_session_key_32bytes_min}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://127.0.0.1:3000}
+      DEV_AUTO_VERIFY_EMAIL: ${DEV_AUTO_VERIFY_EMAIL:-}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
     ports:
       - "8000:8000"
     healthcheck:
@@ -111,6 +126,11 @@ services:
       RADIUS_OTLP_ENDPOINT: ${RADIUS_OTLP_ENDPOINT:-}
       RADIUS_METRICS_ENABLED: ${RADIUS_METRICS_ENABLED:-false}
       RADIUS_WORKER_METRICS_PORT: ${RADIUS_WORKER_METRICS_PORT:-0}
+      # Flagged-off analysis steps (all default false; see docs/operations/CONFIGURATION.md).
+      RADIUS_FEATURE_SYMBOL_IMPACT: ${RADIUS_FEATURE_SYMBOL_IMPACT:-false}
+      RADIUS_FEATURE_SYMBOL_CHANGES: ${RADIUS_FEATURE_SYMBOL_CHANGES:-false}
+      RADIUS_FEATURE_TAMPER_RULES: ${RADIUS_FEATURE_TAMPER_RULES:-false}
+      RADIUS_FEATURE_ASSERTION_EXTRACTION: ${RADIUS_FEATURE_ASSERTION_EXTRACTION:-false}
     volumes:
       - radius-repository-cache:/var/lib/radius/repositories
 
@@ -126,6 +146,7 @@ services:
       NEXT_PUBLIC_RADIUS_ORGANIZATION_ID: ${NEXT_PUBLIC_RADIUS_ORGANIZATION_ID:-}
       RADIUS_API_KEY: ${RADIUS_API_KEY:-}
       RADIUS_API_BASE_URL: ${RADIUS_API_BASE_URL:-http://api:8000}
+      RADIUS_HSTS_ENABLED: ${RADIUS_HSTS_ENABLED:-false}
     ports:
       - "3000:3000"
 

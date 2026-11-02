@@ -42,7 +42,7 @@ LABEL org.opencontainers.image.title="radius-worker" \
       org.opencontainers.image.source="https://github.com/Mohith-c7/Radius" \
       org.opencontainers.image.version="${RADIUS_VERSION}" \
       org.opencontainers.image.revision="${VCS_REF}" \
-      org.opencontainers.image.licenses="NOASSERTION" \
+      org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.base.name="docker.io/library/python:3.12-slim"
 
 ENV PATH=/opt/venv/bin:$PATH \
