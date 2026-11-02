@@ -8,6 +8,12 @@
 #   observability    Jaeger + Prometheus for local tracing/metrics (see
 #                    docs/OBSERVABILITY.md).
 # Usage: docker compose --profile sandbox up sandbox-image
+#
+# This file is PRODUCTION-LIKE: RADIUS_ENV=production, so CORS needs explicit https
+# origins, accounts are not auto-verified and protected routes need real API keys.
+# SESSION_SECRET has no default: `docker compose up` stops with a clear message if
+# it is unset. LOCAL DEVELOPMENT layers docker-compose.dev.yml on top of this file
+# (`make dev`, `scripts/dev.ps1 dev`); see docs/operations/INSTALL.md.
 services:
   postgres:
     image: postgres:16-alpine
@@ -21,7 +27,7 @@ services:
       timeout: 5s
       retries: 12
     ports:
-      - "${POSTGRES_HOST_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432" # loopback only: the bundled DB uses a fixed local password
     volumes:
       - radius-postgres-data:/var/lib/postgresql/data
 
@@ -68,10 +74,11 @@ services:
       RADIUS_TRUSTED_PROXIES: ${RADIUS_TRUSTED_PROXIES:-}
       # Sign-in module (app.config.Settings). Without these the container would use
       # the public placeholder session secret from the code and could not send mail.
-      SESSION_SECRET: ${SESSION_SECRET:-super_secret_radius_session_key_32bytes_min}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required (>= 32 random characters). For local dev run `make env` or `python scripts/gen_dev_env.py`, then use `make dev`. See docs/operations/INSTALL.md}
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://127.0.0.1:3000}
       DEV_AUTO_VERIFY_EMAIL: ${DEV_AUTO_VERIFY_EMAIL:-}
+      EMAIL_DELIVERY_MODE: ${EMAIL_DELIVERY_MODE:-smtp}
       SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USERNAME: ${SMTP_USERNAME:-}
@@ -138,6 +145,11 @@ services:
     build:
       context: .
       dockerfile: apps/dashboard/Dockerfile
+      # NEXT_PUBLIC_* values are inlined into the browser bundle at build time.
+      args:
+        NEXT_PUBLIC_RADIUS_API_BASE_URL: ${NEXT_PUBLIC_RADIUS_API_BASE_URL:-http://localhost:8000}
+        NEXT_PUBLIC_RADIUS_ORGANIZATION_ID: ${NEXT_PUBLIC_RADIUS_ORGANIZATION_ID:-}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
     depends_on:
       api:
         condition: service_healthy

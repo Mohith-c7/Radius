@@ -34,19 +34,22 @@ function Use-Venv {
 }
 
 function Ensure-Env {
-  if (-not (Test-Path .env)) {
-    Copy-Item .env.example .env
-    # Compose passes an empty value otherwise, which the API rejects as an invalid UUID.
-    Add-Content .env "`n# Local dev default added by dev.ps1`nGITHUB_DEFAULT_ORGANIZATION_ID=00000000-0000-4000-8000-000000000001"
-    Write-Host 'created .env from .env.example'
-  }
+  # Creates .env with RANDOM local-dev secrets (scripts/gen_dev_env.py); never overwrites.
+  $py = Get-Command python -ErrorAction SilentlyContinue
+  if (-not $py) { $py = Get-Command py -ErrorAction SilentlyContinue }
+  if (-not $py) { throw 'Python is required to create .env (python or py not on PATH).' }
+  Invoke-Native $py.Source scripts/gen_dev_env.py --env-file .env
 }
+
+# `dev` layers docker-compose.dev.yml (RADIUS_ENV=development, localhost CORS, auto-verify,
+# logged sign-in links, one random dev API key) over the production-like docker-compose.yml.
+$ComposeDev = @('compose', '--env-file', '.env', '-f', 'docker-compose.yml', '-f', 'docker-compose.dev.yml')
 
 switch ($Target) {
   'help' {
     @'
 Targets (same names as the Makefile):
-  env              create .env from .env.example if missing
+  env              create .env for LOCAL DEV with random secrets if missing
   setup            uv sync + corepack enable + pnpm install
   dev              ONE COMMAND: postgres, migrations, api, worker, dashboard in Docker
   down | logs | ps stop / follow logs / status
@@ -69,14 +72,15 @@ Targets (same names as the Makefile):
   }
   { $_ -in 'dev', 'up' } {
     Ensure-Env
-    Invoke-Native docker compose --env-file .env up --build -d --wait --wait-timeout 300 postgres migrations api worker dashboard
+    Invoke-Native docker @ComposeDev up --build -d --wait --wait-timeout 300 postgres migrations api worker dashboard
     Write-Host ''
+    Write-Host 'LOCAL DEV stack (RADIUS_ENV=development). Sign-in links are printed in the api log: .\scripts\dev.ps1 logs'
     Write-Host 'Dashboard http://localhost:3000   API http://localhost:8000/docs   Health http://localhost:8000/api/v1/health'
     Write-Host 'Logs: .\scripts\dev.ps1 logs   Stop: .\scripts\dev.ps1 down'
   }
-  'down' { Invoke-Native docker compose --env-file .env --profile sandbox --profile observability down }
-  'logs' { Invoke-Native docker compose logs -f api worker dashboard }
-  'ps' { Invoke-Native docker compose ps }
+  'down' { Invoke-Native docker @ComposeDev --profile sandbox --profile observability down }
+  'logs' { Invoke-Native docker @ComposeDev logs -f api worker dashboard }
+  'ps' { Invoke-Native docker @ComposeDev ps }
   'dev-local' { Ensure-Env; Use-Venv; Invoke-Native pnpm dev }
   'dev-local-demo' {
     Ensure-Env
@@ -94,5 +98,5 @@ Targets (same names as the Makefile):
   }
   'sandbox' { Invoke-Native docker compose --profile sandbox up --build sandbox-image }
   'observability' { Invoke-Native docker compose --profile observability up jaeger prometheus }
-  'clean-volumes' { Invoke-Native docker compose --profile sandbox --profile observability down -v }
+  'clean-volumes' { Invoke-Native docker @ComposeDev --profile sandbox --profile observability down -v }
 }

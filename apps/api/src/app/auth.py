@@ -34,6 +34,17 @@ def should_auto_verify_email() -> bool:
     return False
 
 
+def _may_log_action_tokens() -> bool:
+    """Action-token links are bearer credentials: log them only for local dev.
+
+    Allowed when EMAIL_DELIVERY_MODE=log or the environment is not
+    production/uat. Never written in a production-like deployment.
+    """
+    if get_settings().email_delivery_mode == "log":
+        return True
+    return os.environ.get("RADIUS_ENV", "development").strip().lower() not in {"production", "uat"}
+
+
 def hash_password(password: str) -> str:
     return password_hasher.hash(password)
 
@@ -87,9 +98,10 @@ def create_action_token(
     user = db.get(User, user_id)
     email = user.email if user else "unknown"
     path = "verify-email" if "verify" in purpose else "reset-password"
-    print(
-        f"[DEV AUTH] Action Token for {email} ({purpose}): http://localhost:3000/{path}?token={raw_token}"
-    )
+    if _may_log_action_tokens():
+        print(
+            f"[DEV AUTH] Action Token for {email} ({purpose}): http://localhost:3000/{path}?token={raw_token}"
+        )
     return raw_token
 
 
