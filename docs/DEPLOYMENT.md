@@ -58,6 +58,7 @@ The Next.js web console is available at `http://localhost:3000`.
 | **`RADIUS_ENV`** | Application runtime environment (`production`, `development`). | `production` |
 | **`RADIUS_LOG_LEVEL`** | Application logging level (`INFO`, `DEBUG`, `WARNING`). | `INFO` |
 | **`RADIUS_FEATURE_SYMBOL_IMPACT`** | Worker: symbol-level test selection and blast radius for Python (F-08). Falls back to file-level impact when symbol info is missing or low-confidence. | `false` |
+| **`RADIUS_FEATURE_SYMBOL_CHANGES`** | Worker: extract changed symbols (functions/methods/classes with change kinds) for the diff and log their counts (LK-01). Informational only; nothing is stored until LK-05 and failures never affect the analysis. | `false` |
 | **`GEMINI_API_KEY`** | Google Gemini API key for the experimental Gemini call-site classifier. It is not part of the analysis pipeline and does not affect verdicts or test selection. | `AIzaSy...` |
 | **`RADIUS_LLM_INTENT_ENABLED`** | IN-04: master switch for LLM-assisted intent extraction. Off by default; the LLM only proposes criteria, never verdicts (DEC-009). Needs the `llm` extra. | `false` |
 | **`RADIUS_LLM_INTENT_ORGS`** | Comma-separated organization ids that opted in (`*` = all). Egress is allowed only when the flag is on AND the org is listed. Only redacted intent text is sent, never repository code (DEC-015). | empty (none) |

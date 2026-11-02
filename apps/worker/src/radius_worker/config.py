@@ -56,6 +56,15 @@ class WorkerSettings(DatabaseSettings):
             "symbol information is missing or low-confidence."
         ),
     )
+    symbol_changes_enabled: bool = Field(
+        default=False,
+        alias="RADIUS_FEATURE_SYMBOL_CHANGES",
+        description=(
+            "LK-01: extract the changed symbols (function/method/class, with change "
+            "kinds) for the diff and log their counts. Nothing is persisted yet "
+            "(LK-05); failures never affect the analysis."
+        ),
+    )
     test_timeout_seconds: int = Field(default=600, alias="WORKER_TEST_TIMEOUT_SECONDS")
     dashboard_base_url: str = Field(default="", alias="DASHBOARD_BASE_URL")
     github_publish_results: bool = Field(
