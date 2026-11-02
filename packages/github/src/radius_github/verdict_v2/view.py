@@ -86,6 +86,7 @@ class SummaryView:
     intent_coverage: float = 0.0
     tamper: dict[str, int] = field(default_factory=dict)
     evidence_basis: str = "static_only"
+    author_hint_criteria: int = 0
 
     @classmethod
     def from_payload(cls, data: Mapping[str, Any]) -> SummaryView:
@@ -105,6 +106,7 @@ class SummaryView:
             _num(data.get("intent_coverage")),
             tamper,
             _str(data.get("evidence_basis"), "static_only"),
+            _int(data.get("author_hint_criteria")),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -119,6 +121,7 @@ class SummaryView:
             "intent_coverage": self.intent_coverage,
             "tamper": dict(self.tamper),
             "evidence_basis": self.evidence_basis,
+            "author_hint_criteria": self.author_hint_criteria,
         }
 
 
@@ -192,6 +195,8 @@ class CriterionView:
     reasons: tuple[ReasonView, ...] = ()
     best_link: dict[str, Any] | None = None
     items: tuple[ItemView, ...] = ()
+    provenance: str = "author_pr_body"
+    hints: tuple[dict[str, str], ...] = ()
 
     @classmethod
     def from_payload(cls, data: Mapping[str, Any]) -> CriterionView:
@@ -209,6 +214,8 @@ class CriterionView:
             tuple(ReasonView.from_payload(r) for r in _maps(data.get("reasons"))),
             dict(best) if isinstance(best, Mapping) else None,
             tuple(ItemView.from_payload(i) for i in _maps(data.get("items"))),
+            _str(data.get("provenance"), "author_pr_body"),
+            tuple({str(k): str(v) for k, v in h.items()} for h in _maps(data.get("hints"))),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -225,6 +232,8 @@ class CriterionView:
             "reasons": [r.to_dict() for r in self.reasons],
             "best_link": None if self.best_link is None else dict(self.best_link),
             "items": [i.to_dict() for i in self.items],
+            "provenance": self.provenance,
+            "hints": [dict(h) for h in self.hints],
         }
 
 

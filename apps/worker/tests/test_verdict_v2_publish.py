@@ -236,7 +236,9 @@ def test_publish_creates_one_check_run_and_one_comment_with_the_v2_marker() -> N
     run = env.github.check_runs[0]
     assert run["name"] == "Radius confidence"
     assert run["conclusion"] == "neutral"
-    assert run["title"].startswith("Radius v2: ") and "criteria proven" in run["title"]
+    assert run["title"].startswith("Radius v2 alpha - static evidence only - uncalibrated: ")
+    assert "criteria supported" in run["title"]
+    assert run["summary"].startswith("**Alpha - static evidence only - uncalibrated.**")
     assert "**Why:**" in run["summary"]
     assert len(env.github.comments) == 1
     body = env.github.comments[0]["body"]
@@ -264,7 +266,22 @@ def test_identical_republish_is_a_no_op_and_changes_update_in_place() -> None:
     assert len(env.github.check_runs) == 1
     assert len(env.github.comments) == 1
     assert parse_v2_marker(env.github.comments[0]["body"])[0] == 2
+    # Advisory by default: even a `verified` verdict is never a green check.
+    assert env.github.check_runs[0]["conclusion"] == "neutral"
+
+
+def test_strict_conclusions_knob_makes_verified_a_success() -> None:
+    env = Env(RADIUS_VERDICT_V2_CHECK_CONCLUSIONS="strict")
+    assert env.settings.verdict_v2_check_conclusions == "strict"
+    env.store(make_bundle(str(env.analysis), variant="b", verdict="verified"))
+    env.publish()
     assert env.github.check_runs[0]["conclusion"] == "success"
+
+
+def test_unknown_conclusions_value_stays_advisory() -> None:
+    env = Env(RADIUS_VERDICT_V2_CHECK_CONCLUSIONS="STRICTLY")
+    assert env.settings.verdict_v2_check_conclusions == "advisory"
+    assert Env().settings.verdict_v2_check_conclusions == "advisory"
 
 
 def test_pending_verdict_is_completed_neutral_not_left_running() -> None:
@@ -274,7 +291,7 @@ def test_pending_verdict_is_completed_neutral_not_left_running() -> None:
     run = env.github.check_runs[0]
     assert run["status"] == "completed"
     assert run["conclusion"] == "neutral"
-    assert run["title"] == "Radius v2: awaiting CI test results"
+    assert run["title"] == "Radius v2 alpha - static evidence only - uncalibrated: awaiting CI test results"
 
 
 def test_an_existing_v1_comment_is_adopted_not_duplicated() -> None:
@@ -468,7 +485,7 @@ def test_ci_results_trigger_recompute_and_in_place_republish() -> None:
     assert summary.results[0].status == "done"
     assert _pending(env) is None
     assert len(env.github.check_runs) == 1 and len(env.github.comments) == 1
-    assert env.github.check_runs[0]["conclusion"] == "success"
+    assert env.github.check_runs[0]["conclusion"] == "neutral"
     assert parse_v2_marker(env.github.comments[0]["body"])[0] == 2
 
 
