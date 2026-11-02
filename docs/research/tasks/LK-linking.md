@@ -56,7 +56,7 @@ Goal: connect criteria to the code that implements them, and code to the tests/e
 - Tests: property tests on random generated test bodies (no crashes).
 - Contract: see design/VERDICT_V2_SLICE.md (docs/research/design/; Verdict v2 alpha: emits AssertionFeatures (3.2) from radius_testing.assertions)
 
-### LK-05 IEG builder and persistence   [ ]
+### LK-05 IEG builder and persistence   [x]
 - Owner type: agent-ok
 - Depends on: LK-02, LK-03, LK-04, IN-07
 - Branch: `feature/ieg-builder`
@@ -65,6 +65,7 @@ Goal: connect criteria to the code that implements them, and code to the tests/e
 - Acceptance: graph reproducible from stored inputs; versioned per SHA; query "all evidence reachable from criterion c" is fast (indexes; tested on a large synthetic graph).
 - Tests: graph invariants (no orphan edges, no cross-tenant edges).
 - Contract: see design/VERDICT_V2_SLICE.md (docs/research/design/; Verdict v2 alpha: alpha scope is the in-memory IEG and JSON (3.4); ieg tables are Beta (migration 0017), not 0011)
+- Done (alpha scope): `radius_evidence.domain.ieg` (types, `validate_ieg`, `IegIndex.paths`) and `radius_evidence.application.ieg_builder` (pure, deterministic builder with a build report); JSON round-trip via `Ieg.to_json`. Tables `ieg_nodes`/`ieg_edges` remain Beta (VS-B0). See `packages/evidence/README.md`.
 
 ### LK-06 Link combination and confidence   [ ]
 - Owner type: agent-ok
