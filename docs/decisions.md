@@ -354,3 +354,15 @@ Decision (alpha, no new features, contract 4, all additions optional):
 
 Consequences: PRs that add `.radius/intent.yml` in the same PR now score lower until a human confirms the criteria or the spec is merged first. The cap value 0.7 is a hypothesis like the other thresholds. The threat model and its limits are in `docs/security/VERDICT_V2_THREAT_MODEL.md`. The policy engine (VD-04) is expected to enforce human-confirmed criteria on protected paths. Revisit when calibration exists or when the first real PRs show the cap's cost.
 
+
+## DEC-031: `verified` needs at least one in-scope criterion; zero criteria is `insufficient_evidence` (R2e), `not_applicable` for docs-only changes
+
+Context: the first replay on 29 merged PRs (`docs/research/evaluation/REPLAY_2026-11.md`, F2) found 11 PRs `verified` with zero criteria (docs, CI, licence, dependency bumps, test-only): R2a only fires when behavioral symbols changed, so everything else fell through to R4. A "verified" word on a LICENSE or workflow change is a vacuous pass.
+
+Decision:
+
+1. New rule **R2e**, evaluated right after R2a (so after R1 and R2p, before R2b), fires when there is no non-excluded criterion, no behavioral symbol changed (otherwise R2a already decides) and no unwaived tamper finding at or above `review_on_tamper_at_least` (otherwise R3a gives the more useful `needs_review`). Verdict `insufficient_evidence`; reason code `no_intent_criteria`; message "no intent criteria were extracted; add a spec or confirm criteria".
+2. When every changed path is documentation or inert metadata (`is_inert_path`: markdown/rst/txt, images, `docs/`, `changelog.d/`, LICENSE and similar, `.gitignore`, `.editorconfig`), the same rule R2e uses reason code `not_applicable` ("only documentation or inert files changed, so there is nothing to verify; this is not a pass"). CI workflows, dependency manifests, lockfiles, Dockerfiles and tests are deliberately not inert: they stay `no_intent_criteria`.
+3. No fifth verdict value. `not_applicable` is a reason code on `insufficient_evidence`, because a new enum value would change the contract, the API schema, the dashboard and every consumer, and `verified` would repeat the vacuous pass. The Check Run stays `neutral` (it is `neutral` for every non-R1 outcome, also with `strict`). The rule list grows from 12 to 13 (14 to 15 with a policy); `R2e` is added to the justification schema enum (additive: readers that validate the enum must learn the id). Contract version unchanged.
+
+Consequences: docs and CI PRs now read "insufficient evidence" (neutral, never red) instead of "supported by static evidence"; the 8 fixtures are unchanged (all have criteria). Residual: the not-applicable test uses the paths of the changed-symbol list (a file with no symbol is invisible), and a PR that is genuinely fine but unspecified is still `insufficient_evidence` until criteria are confirmed; that is the intended message, not a defect.

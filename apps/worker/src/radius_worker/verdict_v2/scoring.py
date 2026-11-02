@@ -29,7 +29,7 @@ from radius_confidence.verdict_v2.application.service import (
     compute_verdict_v2,
 )
 from radius_confidence.verdict_v2.domain.model import CriterionVerdict, VerdictV2
-from radius_confidence.verdict_v2.domain.rules import AnalysisFacts
+from radius_confidence.verdict_v2.domain.rules import AnalysisFacts, is_inert_path
 from radius_evidence.application.ieg_builder import (
     build_ieg_with_report,
 )
@@ -449,6 +449,7 @@ def compute_pipeline(
         tamper=sa.tamper,
         degraded=tuple(dict.fromkeys((*sa.degraded, *repo.degraded))),
         behavioral_symbols=len(b_symbols),
+        inert_changes_only=all(is_inert_path(p) for p in {s.path for s in sa.symbols}),
         flaky_test_ids=stage_b.flaky_test_ids,
         policy_rules=repo.policy.has_rules,
         policy_unmet_required=unmet.required,

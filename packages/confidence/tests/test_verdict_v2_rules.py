@@ -438,10 +438,68 @@ def test_non_blocking_degraded_marker_is_recorded_but_does_not_fire() -> None:
 # ---------------------------------------------------------------------- R2a specifics
 
 def test_r2a_needs_a_behavioral_change() -> None:
-    # Docs-only PR: no criteria, no behavioral symbols -> passes R2a, reaches R4.
+    # No criteria and no behavioral symbols: R2a does not fire; R2e (DEC-031) decides.
     v = run([], behavioral_symbols=0)
-    assert v.verdict == Verdict.VERIFIED
+    assert "R2a" not in fired(v)
+    assert v.verdict == Verdict.INSUFFICIENT_EVIDENCE
     assert v.uim == 0.0
+
+
+def test_r2e_zero_criteria_is_never_verified() -> None:
+    v = run([], behavioral_symbols=0)
+    assert v.justification["decided_by"] == "R2e"
+    assert [r.code for r in v.reasons] == ["no_intent_criteria"]
+    assert "no intent criteria were extracted; add a spec or confirm criteria" in v.reasons[0].detail
+    assert v.pending is False
+
+
+def test_r2e_only_excluded_criteria_counts_as_none() -> None:
+    v = run([crit("c1", SupportState.EXCLUDED, 0.0, testability="subjective_vague", items=())], behavioral_symbols=0)
+    assert v.justification["decided_by"] == "R2e"
+
+
+def test_r2e_inert_changes_are_not_applicable() -> None:
+    v = run([], behavioral_symbols=0, inert_changes_only=True)
+    assert v.justification["decided_by"] == "R2e"
+    assert v.verdict == Verdict.INSUFFICIENT_EVIDENCE
+    assert [r.code for r in v.reasons] == ["not_applicable"]
+    assert "not applicable" in v.reasons[0].detail
+
+
+def test_r2e_does_not_hide_review_level_tamper() -> None:
+    v = run([], behavioral_symbols=0, inert_changes_only=True, tamper=(tamper(severity="medium"),))
+    assert v.justification["decided_by"] == "R3a"
+    assert "R2e" not in fired(v)
+
+
+def test_r2e_low_tamper_does_not_prevent_it() -> None:
+    v = run([], behavioral_symbols=0, tamper=(tamper(severity="low"),))
+    assert v.justification["decided_by"] == "R2e"
+
+
+def test_r2e_silent_when_a_real_criterion_exists() -> None:
+    assert "R2e" not in fired(run([PROVEN()], behavioral_symbols=0))
+
+
+def test_r2a_beats_r2e_when_behavioral_code_changed() -> None:
+    v = run([], behavioral_symbols=3)
+    assert v.justification["decided_by"] == "R2a" and "R2e" not in fired(v)
+
+
+@pytest.mark.parametrize(
+    ("path", "inert"),
+    [
+        ("README.md", True), ("docs/guide.md", True), ("LICENSE", True), ("docs/img/a.png", True),
+        (".gitignore", True), ("changelog.d/123.md", True),
+        (".github/workflows/ci.yml", False), ("pyproject.toml", False), ("uv.lock", False),
+        ("requirements.txt", False), ("Dockerfile", False), ("src/app.py", False),
+        ("tests/test_a.py", False), ("docs/conf.py", False), (".github/README.md", False),
+    ],
+)
+def test_is_inert_path(path: str, inert: bool) -> None:
+    from radius_confidence.verdict_v2.domain.rules import is_inert_path
+
+    assert is_inert_path(path) is inert
 
 
 def test_r2a_legacy_testability_string_counts_as_behavioral() -> None:
@@ -684,10 +742,10 @@ MUTATIONS = {
     "wrong verdict": lambda j: j.update(verdict="verified"),
     "dropped rule": lambda j: j["rules"].pop(3),
     "swapped rules": lambda j: j["rules"].reverse(),
-    "unknown criterion ref": lambda j: j["rules"][5]["refs"]["criterion_ids"].append("ghost"),
-    "unknown finding ref": lambda j: j["rules"][8]["refs"]["finding_ids"].append("ghost"),
-    "unknown evidence ref": lambda j: j["rules"][5]["refs"].update(evidence_ids=["ghost"]),
-    "unknown ref key": lambda j: j["rules"][5]["refs"].update(widgets=["x"]),
+    "unknown criterion ref": lambda j: j["rules"][6]["refs"]["criterion_ids"].append("ghost"),
+    "unknown finding ref": lambda j: j["rules"][9]["refs"]["finding_ids"].append("ghost"),
+    "unknown evidence ref": lambda j: j["rules"][6]["refs"].update(evidence_ids=["ghost"]),
+    "unknown ref key": lambda j: j["rules"][6]["refs"].update(widgets=["x"]),
     "refs on unfired rule": lambda j: j["rules"][0].update(refs={"criterion_ids": ["c1"]}),
     "nothing fired": lambda j: [r.update(fired=False) for r in j["rules"]],
 }

@@ -139,7 +139,7 @@ def test_check_conclusion_table(verdict, rule, pending, status, advisory, strict
 
 
 def test_advisory_never_yields_success_for_any_verdict_or_rule() -> None:
-    rules = ("R1a", "R1b", "R1c", "R2a", "R2b", "R2c", "R2d", "R3a", "R3b", "R3c", "R4")
+    rules = ("R1a", "R1b", "R1c", "R2a", "R2e", "R2b", "R2c", "R2d", "R3a", "R3b", "R3c", "R4")
     for verdict in ("verified", "failed", "insufficient_evidence", "needs_review"):
         for rule in rules:
             view = view_of(make_payload(verdict, rule, [("c1", "proven", 0.6)]))
@@ -292,3 +292,10 @@ def test_blocking_policy_never_makes_an_unavailable_verdict_fail() -> None:
     payload = make_payload(None, "R4", [], status="error")
     payload["policy"] = {"mode": "blocking"}
     assert md.check_conclusion(view_of(payload)) == "neutral"
+
+
+def test_r2e_check_run_is_neutral_and_never_success_even_when_strict() -> None:
+    for inputs in ({}, {"not_applicable": True}):
+        view = view_of(make_payload("insufficient_evidence", "R2e", [], rules_inputs=inputs))
+        assert md.check_conclusion(view) == "neutral"
+        assert md.check_conclusion(view, mode="strict") == "neutral"

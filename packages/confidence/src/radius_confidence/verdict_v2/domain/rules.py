@@ -49,6 +49,10 @@ RULE_TABLE: dict[str, tuple[Verdict, str, str]] = {
         "intent_missing_or_untestable",
         "intent missing or untestable",
     ),
+    # R2e (DEC-031): a verdict of ``verified`` needs at least one in-scope criterion.
+    # The reason code is ``no_intent_criteria``, or ``not_applicable`` when only
+    # documentation / inert files changed (see ``reason_code_of``).
+    "R2e": (Verdict.INSUFFICIENT_EVIDENCE, "no_intent_criteria", "no intent criteria"),
     "R2b": (Verdict.INSUFFICIENT_EVIDENCE, "unproven_intent_mass", "unproven intent mass"),
     "R2c": (Verdict.INSUFFICIENT_EVIDENCE, "low_intent_coverage", "intent coverage"),
     "R2d": (Verdict.INSUFFICIENT_EVIDENCE, "analysis_degraded", "analysis degraded"),
@@ -74,6 +78,41 @@ RULE_TABLE: dict[str, tuple[Verdict, str, str]] = {
 
 _FLOAT_DIGITS = 6
 
+#: Reason code of R2e when nothing verifiable is in scope (documentation / inert files only).
+NOT_APPLICABLE = "not_applicable"
+
+#: Suffixes and names of files that carry no behaviour and no supply-chain risk (DEC-031).
+#: CI workflows, dependency manifests, lockfiles, Dockerfiles and tests are NOT inert.
+INERT_SUFFIXES: frozenset[str] = frozenset(
+    {".md", ".rst", ".txt", ".adoc", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico"}
+)
+INERT_NAMES: frozenset[str] = frozenset(
+    {".gitignore", ".gitattributes", ".editorconfig", "license", "notice", "authors", "codeowners"}
+)
+INERT_DIR_PREFIXES: tuple[str, ...] = ("docs/", "changelog.d/", "doc/")
+
+
+def is_inert_path(path: str) -> bool:
+    """True for documentation / metadata files that cannot change behaviour."""
+
+    p = path.replace("\\", "/").removeprefix("./").lstrip("/").lower()
+    name = p.rsplit("/", 1)[-1]
+    if p.startswith(".github/") or name in {"requirements.txt", "constraints.txt"}:
+        return False
+    if name in INERT_NAMES or name.startswith(("license.", "licence", "changelog")):
+        return True
+    if p.startswith(INERT_DIR_PREFIXES) and not name.endswith((".py", ".ts", ".js", ".yml", ".yaml", ".json", ".toml", ".sh")):
+        return True
+    return any(name.endswith(suffix) for suffix in INERT_SUFFIXES)
+
+
+def reason_code_of(rule: RuleResult) -> str:
+    """Reason code of a fired rule (R2e is ``not_applicable`` for inert-only changes)."""
+
+    if rule.id == "R2e" and rule.inputs.get("not_applicable") is True:
+        return NOT_APPLICABLE
+    return RULE_TABLE[rule.id][1]
+
 
 @dataclass(frozen=True, slots=True)
 class AnalysisFacts:
@@ -89,6 +128,9 @@ class AnalysisFacts:
     tamper: tuple[TamperFindingInput, ...] = ()
     degraded: tuple[str, ...] = ()
     behavioral_symbols: int = 0
+    #: DEC-031: every changed path is documentation / inert (``is_inert_path``).
+    #: Computed by the caller; an empty change set is inert too.
+    inert_changes_only: bool = False
     flaky_test_ids: frozenset[str] = frozenset()
     #: Contract 3: True when the repository policy adds P1/P2 (then both are evaluated).
     policy_rules: bool = False
@@ -232,6 +274,24 @@ def evaluate_rules(
             "testable_criteria": len(testable),
             "non_excluded_criteria": len(non_excluded),
             "behavioral_symbols": int(facts.behavioral_symbols),
+        },
+    )
+
+    # R2e (DEC-031): no in-scope criterion at all. ``verified`` would be vacuous, so the
+    # outcome is insufficient_evidence; ``not_applicable`` when only docs / inert files
+    # changed (behavioral code without criteria is R2a). A medium-or-higher tamper finding is left to R3a (needs_review), which is
+    # the more useful answer than "add criteria".
+    has_review_tamper = any(rank >= review_rank for rank, _ in ranked)
+    no_scope = not non_excluded and facts.behavioral_symbols == 0
+    put(
+        "R2e",
+        no_scope and not has_review_tamper,
+        {
+            "non_excluded_criteria": len(non_excluded),
+            "behavioral_symbols": int(facts.behavioral_symbols),
+            "not_applicable": bool(
+                facts.inert_changes_only and facts.behavioral_symbols == 0
+            ),
         },
     )
 
