@@ -605,6 +605,18 @@ Found while integrating the first implementations; every change is an optional f
 | `Reason.rule_id` (default `None`) | `model.py`; VD-03 sets it (and keeps `ref` = rule id for contract-1 readers) | The served payload and the renderer read `reasons[].rule_id`; it no longer travels in `ref`. |
 | `FreshnessInfo.reason` allows a 4th value `stale_sha_unchanged_covered` | `model.FRESHNESS_REASONS` | The optional decay hook (EV-07) already produced it. |
 
+### 3.12 Contract 3 (honesty and author trust, 2026-11-03, DEC-029)
+
+Optional fields only (`CONTRACT_VERSION = "verdict-v2-contract-3"`); contract-1 and contract-2 bundles still load. See `docs/security/VERDICT_V2_THREAT_MODEL.md`.
+
+| Change | Where | Why |
+|---|---|---|
+| `CriterionInput.provenance`, `hints_provenance`; `CriterionTestEdgeInput.provenance` (tags `author_pr_body`, `author_head_spec`, `base_spec`, `human_confirmed`, `llm_proposed`) | `inputs.py`, `enums.Provenance` | The PR author controls the description, the head spec and the hints. |
+| `LinkMapping.author_hint_cap` (0.7) | `config.py`, applied in `scoring.apply_author_hint_cap` | Untrusted `tests:` hints no longer saturate the criterion-to-test link. |
+| `Flag.AUTHOR_SUPPLIED_HINT` and reason `author_supplied_hint` | `enums.py`, `scoring.py` | Makes the reliance visible. |
+| `CriterionVerdict.provenance`, `hints` | `confidence/.../model.py` | Carried to the payload. |
+| Payload: `contract_version`, `alpha`, `calibrated`, `evidence_basis`, `presentation`, `summary.author_hint_criteria`, `criteria[].provenance`, `criteria[].hints[]` | `verdict_v2_payload.py`, `scoring.build_payload`, schema | Honest wording is part of the contract; enum values are unchanged. |
+
 ---
 
 ## 4. Persistence plan

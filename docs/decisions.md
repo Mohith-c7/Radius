@@ -326,3 +326,23 @@ Context: fixture 06 (`pytimeparse-ultra` pinned in `requirements.txt`, imported 
 Decision: the default severity of `T012:unverified_guarded_import` is `medium` (EV-02 `DependencyRule.checks`, overridable through `severity_overrides` as before). `registry_missing` and `typosquat` stay `high`. This refines D12 for this one check only; the fixture facts agree (its README says the `high` severity is "an assumption until EV-02 decides" and records the registry 404 as the proof). The PR verdict for fixture 06 is `needs_review` offline and `failed` with the registry, as in `verdict_v2.fixture_expectations.json`.
 
 Consequence: until a PyPI adapter ships (follow-up of EV-02), a hallucinated dependency is surfaced as `needs_review` with the finding listed, not blocked. Revisit when the registry adapter and the egress policy (DEC-021) allow lookups by default.
+
+## DEC-029: Verdict v2 alpha honesty and author-trust hardening (wording, advisory check, provenance, author-hint cap)
+
+Context: the independent review of 2026-11-03 (`docs/research/ALIGNMENT_LOG.md`, findings 2 to 5) found that the v2 comment said `PROVEN` / `Verified` and the Check Run was green on `verified`, while the evidence is static assertion strength only with thresholds fitted to the 8 fixtures; and that the PR author controls the criteria (PR body), the `.radius/intent.yml` read from the PR head and the `tests:` hints that set link strength to 0.95 to 1.0.
+
+Decision (alpha, no new features, contract 3, all additions optional):
+
+1. **Wording.** User-visible `PROVEN` becomes `SUPPORTED` (`unevidenced` becomes `UNSUPPORTED`); the verdict `verified` is shown as "Supported by static evidence (alpha)". The JSON enum values are unchanged; a presentation mapping lives in the renderer, the API (`presentation` block, `radius_shared.verdict_v2_wording`) and the dashboard. A one-line disclaimer is the first visible line of the comment and of the Check Run summary; the Check Run title carries "alpha - static evidence only - uncalibrated". The payload adds `alpha: true`, `calibrated: false`, `evidence_basis`, `contract_version`.
+2. **Check Run conclusion.** `RADIUS_VERDICT_V2_CHECK_CONCLUSIONS=advisory` (default): never `success`; `failed` is `failure` only when decided by R1a, R1b or R1c (failing linked test, failing CI, high tamper); everything else `neutral`. `strict`: `verified` is `success`. Unknown values mean `advisory`.
+3. **Provenance and the cap.** Criteria and hints carry `author_pr_body | author_head_spec | base_spec | human_confirmed | llm_proposed`. Hint edges that are not `base_spec` or `human_confirmed` are capped at `LinkMapping.author_hint_cap = 0.7` in Stage B (so the cap is in the config digest and a stored Stage A can be re-scored). `base_spec` requires the identical `.radius/intent.yml` on the base ref (local `git show`); `human_confirmed` is lifecycle `confirmed` or `edited`. The flag and reason `author_supplied_hint` and a comment line make reliance visible. The intent-versus-diff check reuses intent coverage and R2c; the comment now states when coverage is below the minimum.
+4. **Gold mode.** The fixture harness feeds the expected links as hints on `confirmed` criteria, i.e. `human_confirmed` (they represent the design author's intent, not a PR author's self-attestation), so the 8 gold results and `verdict_v2.fixture_expectations.json` are unchanged. Auto mode has no hints and is unchanged. The cap is shown by a variant (`run_collect(..., hint_provenance="author_head_spec")`, test `test_author_head_spec_hints_lower_support_and_change_the_state_of_fixture_01`): fixture 01 goes from `verified` to `insufficient_evidence` (R2b), C2 from `proven` (0.604) to `weak` (0.450).
+
+| Option for the cap | Trade-off |
+| --- | --- |
+| Ignore author hints entirely | Safest, but removes the only way to link tests the lexical linker misses. |
+| **Cap at 0.7, lift for base-branch spec or human confirmation** | Hints still help, none can saturate a link alone; cost: more `insufficient_evidence` on PRs that add their own spec. |
+| Leave as is | Reproduces the review finding. |
+
+Consequences: PRs that add `.radius/intent.yml` in the same PR now score lower until a human confirms the criteria or the spec is merged first. The cap value 0.7 is a hypothesis like the other thresholds. The threat model and its limits are in `docs/security/VERDICT_V2_THREAT_MODEL.md`. The policy engine (VD-04) is expected to enforce human-confirmed criteria on protected paths. Revisit when calibration exists or when the first real PRs show the cap's cost.
+
