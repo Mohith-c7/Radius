@@ -1,0 +1,3 @@
+# Acknowledged breaking changes of stable operations (read by scripts/openapi_diff.py).
+# One "METHOD /path" per line. Each entry needs a CHANGELOG entry and the
+# version bump required by docs/api/STABILITY.md. Remove the line after release.
