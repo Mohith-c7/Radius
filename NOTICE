@@ -1,0 +1,13 @@
+Radius
+Copyright 2026 Mohith Kumar
+
+This product includes software developed by Mohith Kumar and the Radius
+contributors (see the git history for the list of contributors).
+
+Radius is licensed under the Apache License, Version 2.0 (see LICENSE).
+The name "Radius" and any Radius logos are not licensed for use as trademarks
+(Apache License 2.0, section 6).
+
+Third-party software that Radius depends on is licensed separately by its
+authors. See THIRD_PARTY_NOTICES.md for how the dependency license inventory is
+produced and what obligations apply.
