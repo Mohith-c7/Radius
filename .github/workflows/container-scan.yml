@@ -1,0 +1,143 @@
+name: Container scan
+
+# PRD-08. Builds the api/worker/dashboard images (no push) and scans them with
+# Trivy. Gate: fail on fixable HIGH/CRITICAL vulnerabilities and on Dockerfile
+# misconfigurations. Ignores live in .trivyignore (each with an expiry).
+# See docs/security/CONTAINERS.md.
+
+on:
+  pull_request:
+    paths:
+      - "apps/*/Dockerfile"
+      - ".dockerignore"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "apps/dashboard/package.json"
+      - ".trivyignore"
+      - ".github/workflows/container-scan.yml"
+  push:
+    branches:
+      - develop
+    paths:
+      - "apps/*/Dockerfile"
+      - ".trivyignore"
+      - ".github/workflows/container-scan.yml"
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: container-scan-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # aquasec/trivy, pinned by digest (resolve a new one with
+  # `docker buildx imagetools inspect aquasec/trivy:<tag>`).
+  TRIVY_IMAGE: aquasec/trivy@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+
+jobs:
+  misconfig:
+    name: Dockerfile misconfiguration (Trivy config)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Scan Dockerfiles (HIGH/CRITICAL fail)
+        run: |
+          docker run --rm -v "$PWD:/work:ro" -w /work "$TRIVY_IMAGE" config \
+            --severity HIGH,CRITICAL --exit-code 1 \
+            --ignorefile /work/.trivyignore apps
+
+  image:
+    name: Image scan (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      # Lets the SARIF upload reach code scanning. Forks and repositories
+      # without code scanning get read-only tokens; the upload step is
+      # non-blocking so the gate below still decides the result.
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: api
+            dockerfile: apps/api/Dockerfile
+            target: ""
+          - image: worker
+            dockerfile: apps/worker/Dockerfile
+            target: ""
+          - image: worker-sandbox
+            dockerfile: apps/worker/Dockerfile
+            target: sandbox
+          - image: dashboard
+            dockerfile: apps/dashboard/Dockerfile
+            target: ""
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Build image (no push)
+        env:
+          DOCKERFILE: ${{ matrix.dockerfile }}
+          TARGET: ${{ matrix.target }}
+          IMAGE: radius-${{ matrix.image }}:scan
+        run: |
+          args=(-f "$DOCKERFILE" -t "$IMAGE" --build-arg "VCS_REF=$GITHUB_SHA")
+          if [ -n "$TARGET" ]; then args+=(--target "$TARGET"); fi
+          docker build "${args[@]}" .
+          docker image ls "$IMAGE"
+
+      - name: Verify the container runs as non-root
+        env:
+          IMAGE: radius-${{ matrix.image }}:scan
+        run: |
+          uid=$(docker run --rm --entrypoint id "$IMAGE" -u)
+          echo "uid=$uid"
+          test "$uid" != "0"
+
+      - name: Trivy scan (SARIF report)
+        env:
+          IMAGE: radius-${{ matrix.image }}:scan
+          NAME: ${{ matrix.image }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/trivy-cache"
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$RUNNER_TEMP/trivy-cache:/root/.cache" \
+            -v "$PWD:/work" -w /work "$TRIVY_IMAGE" image \
+            --format sarif --output "/work/trivy-$NAME.sarif" \
+            --severity HIGH,CRITICAL --ignore-unfixed --ignorefile /work/.trivyignore \
+            --exit-code 0 "$IMAGE"
+
+      - name: Upload SARIF to code scanning
+        if: always() && hashFiles(format('trivy-{0}.sarif', matrix.image)) != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: trivy-${{ matrix.image }}.sarif
+          category: trivy-${{ matrix.image }}
+
+      - name: Trivy gate (fail on fixable HIGH/CRITICAL)
+        env:
+          IMAGE: radius-${{ matrix.image }}:scan
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$RUNNER_TEMP/trivy-cache:/root/.cache" \
+            -v "$PWD:/work:ro" -w /work "$TRIVY_IMAGE" image \
+            --severity HIGH,CRITICAL --ignore-unfixed --ignorefile /work/.trivyignore \
+            --exit-code 1 "$IMAGE"
