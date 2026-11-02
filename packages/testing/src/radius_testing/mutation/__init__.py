@@ -1,0 +1,82 @@
+"""Mutation-evidence prototype (EV-04/05/09/10 spike). Library only, flag-gated.
+
+Nothing here is wired into the worker pipeline. The feature flag
+``RADIUS_FEATURE_MUTATION`` (default OFF) gates any future caller; the library
+functions themselves are pure and testable without it.
+
+SAFETY MODEL (full text in docs/research/design/MUTATION_EVIDENCE.md):
+
+* A mutant is generated code derived from an untrusted repository. It must only
+  ever execute inside the F-07 hardened container sandbox
+  (:class:`SandboxMutantRunner`). Mutants are never applied to the user's checkout
+  and never run on the worker host.
+* :class:`SubprocessLocalRunner` is for development and tests on code we wrote
+  ourselves (for example the F-14 fixtures). It is refused unless the environment
+  variable ``RADIUS_MUTATION_ALLOW_LOCAL=1`` is set.
+"""
+
+from __future__ import annotations
+
+import os
+from collections.abc import Mapping
+
+from radius_testing.mutation.budget import MutationBudget, cache_key, sample_mutants
+from radius_testing.mutation.equivalence import EquivalenceVerdict, detect_equivalent
+from radius_testing.mutation.matrix import (
+    CriterionDetection,
+    KillMatrix,
+    MutantRecord,
+    TestDetection,
+    aggregate_criterion,
+    d_mut_per_test,
+    wilson_interval,
+)
+from radius_testing.mutation.operators import OPERATOR_IDS, Mutant, generate_mutants
+from radius_testing.mutation.runner import (
+    LocalRunnerRefusedError,
+    MutantOutcome,
+    MutantRunner,
+    MutationRun,
+    RunOutcome,
+    SandboxMutantRunner,
+    SubprocessLocalRunner,
+    run_mutants,
+)
+
+FLAG_ENV_NAME = "RADIUS_FEATURE_MUTATION"
+
+
+def mutation_enabled(environ: Mapping[str, str] | None = None) -> bool:
+    """True only when ``RADIUS_FEATURE_MUTATION`` is explicitly truthy (default OFF)."""
+
+    env = os.environ if environ is None else environ
+    return env.get(FLAG_ENV_NAME, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+__all__ = [
+    "FLAG_ENV_NAME",
+    "OPERATOR_IDS",
+    "CriterionDetection",
+    "EquivalenceVerdict",
+    "KillMatrix",
+    "LocalRunnerRefusedError",
+    "Mutant",
+    "MutantOutcome",
+    "MutantRecord",
+    "MutantRunner",
+    "MutationBudget",
+    "MutationRun",
+    "RunOutcome",
+    "SandboxMutantRunner",
+    "SubprocessLocalRunner",
+    "TestDetection",
+    "aggregate_criterion",
+    "cache_key",
+    "d_mut_per_test",
+    "detect_equivalent",
+    "generate_mutants",
+    "mutation_enabled",
+    "run_mutants",
+    "sample_mutants",
+    "wilson_interval",
+]
