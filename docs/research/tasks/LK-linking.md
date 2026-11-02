@@ -76,6 +76,8 @@ Goal: connect criteria to the code that implements them, and code to the tests/e
 - Acceptance: monotonic (adding evidence never lowers confidence); parameters configurable; sensitivity analysis script included.
 - Done (branch `feature/linking-chain-confidence`): chain model and per-criterion link confidence `link-chain-v1` in `packages/linking` (`ChainLink`, `CriterionSupportLinks`, `build_support_links`; noisy-AND per chain, noisy-OR with decay per criterion, specificity penalty, test-status discount, explicit unlinked reasons), default `score_kind=link_confidence_uncalibrated`; pure-Python calibration machinery (binning, Platt, isotonic, ECE/MCE/Brier, checksummed JSON artifact) applied only when a fitted artifact is supplied; `scripts/link_chain_eval.py` (fixture sanity only). Contracts for LK-05 and the verdict layer: `packages/linking/README.md`. Not done: fitted calibrators (need IN-09 / LK-07 gold labels) and the sensitivity sweep over the chain constants (needs gold labels; `ChainConfig` is fully parameterised so LK-07 can run it).
 
+- Follow-up VS-04 (branch `feature/linking-criterion-test-relevance`): criterion-to-test relevance `r_ct` in `packages/linking` (`application/relevance.py`, `scripts/relevance_eval.py`; README section "Criterion-to-test relevance"). Closes the LK-06 follow-up "criterion-test relevance signal"; wiring into the chain is VS-05. Fixture sanity only, not a research result.
+
 ### LK-07 Link evaluation harness (RQ1)   [ ]
 - Owner type: agent-ok
 - Depends on: LK-02, IN-09
