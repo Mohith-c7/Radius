@@ -24,6 +24,11 @@ EXPECTED_TABLES = {
     "test_run_plans",
     "test_selections",
     "idempotency_keys",
+    "intent_sources",
+    "intent_snapshots",
+    "intent_snapshot_sources",
+    "intent_criteria",
+    "intent_criterion_state_changes",
 }
 
 
@@ -64,6 +69,19 @@ def test_required_indexes_exist() -> None:
         "ix_idempotency_keys_organization_id"
         in indexes_by_table["idempotency_keys"]
     )
+    assert "ix_intent_sources_analysis_id" in indexes_by_table["intent_sources"]
+    assert "ix_intent_snapshots_analysis_id" in indexes_by_table["intent_snapshots"]
+    assert "ix_intent_criteria_snapshot_id" in indexes_by_table["intent_criteria"]
+
+
+def test_intent_tables_are_tenant_scoped() -> None:
+    for name, table in metadata.tables.items():
+        if name.startswith("intent_"):
+            assert "organization_id" in table.c
+            assert table.c.organization_id.nullable is False
+            assert ["organization_id"] in [
+                [c.name for c in i.columns] for i in table.indexes
+            ]
 
 
 def test_one_to_one_analysis_tables_have_unique_analysis_id() -> None:

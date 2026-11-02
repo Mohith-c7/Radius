@@ -5,6 +5,7 @@ from radius_shared.database import (
     coverage,
     enums,
     enums_coverage,
+    intent,
     models,
     session,
 )
@@ -20,6 +21,7 @@ __all__ = [
     "coverage",
     "enums",
     "enums_coverage",
+    "intent",
     "models",
     "session",
     "DatabaseSettings",
