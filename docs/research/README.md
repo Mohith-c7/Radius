@@ -2,7 +2,7 @@
 
 This folder is the single source of truth for the next phase of Radius: a research-grade, market-facing platform that verifies agent-written code by tying each stated intent to trustworthy evidence.
 
-**Status:** Ratified by the owner on 2026-11-02 (task F-01); decisions are recorded in `docs/decisions.md` (DEC-006 to DEC-015). Items marked provisional in the decision log may be revisited.
+**Status:** Ratified by the owner on 2026-11-02 (task F-01); decisions are recorded in `docs/decisions.md` (DEC-006 to DEC-025). The provisional items (DEC-011, 012, 014, 015) were finalized by delegation on 2026-11-02 (DEC-018 to DEC-021).
 **Branching:** `feature/*`, `fix/*`, `docs/*` -> `develop` -> `dev` (UAT) -> `main` (production). Never commit directly to `dev` or `main`.
 
 ## How to use this folder
@@ -52,22 +52,40 @@ This folder is the single source of truth for the next phase of Radius: a resear
 - Competitor and paper details were gathered from public pages and search results on 2026-11-02; three PDFs could not be text-extracted and several statistics came from search snippets. Verify in EP-01 before citing.
 - Repo paths come from the 2026-11-01 audit and an exploratory read; verify before editing.
 
-## Decision log (mirrored in `docs/decisions.md`, DEC-006 to DEC-015)
+## Decision log (mirrored in `docs/decisions.md`, DEC-006 to DEC-025)
 
-Also ratified: research core (DEC-006), new packages (DEC-007), verdict v2 states (DEC-008), LLM governance (DEC-009). Rows marked **provisional** had no recommendation in the plan; the conservative option was recorded and the owner may revisit.
+Also ratified: research core (DEC-006), new packages (DEC-007), verdict v2 states (DEC-008), LLM governance (DEC-009). Rows D3, D4, D6, D7 were provisional and were finalized by delegation on 2026-11-02 (see below).
 
 | # | Decision | Options | Chosen | Date | By |
 |---|---|---|---|---|---|
 | D1 | GitHub default branch | `dev` (current) / `develop` | `develop` (DEC-010) | 2026-11-02 | Owner |
 | D2 | Verdict adds `needs_review` | yes / no | yes, fourth state (DEC-008) | 2026-11-02 | Owner |
-| D3 | Allow probe generation (EV-12) | yes / no / later | later; not now (DEC-011) **provisional** | 2026-11-02 | Owner (provisional) |
-| D4 | License / open-source model | open core / fully open / closed | open core as working assumption, no license granted yet (DEC-012) **provisional** | 2026-11-02 | Owner (provisional) |
+| D3 | Allow probe generation (EV-12) | yes / no / later | later; not now (DEC-011), superseded: advisory sandbox-only probe suggestions allowed, never written to user repos (DEC-019) | 2026-11-02 | Owner (delegated) |
+| D4 | License / open-source model | open core / fully open / closed | open core, Apache-2.0 for the core, proprietary parts only as separate modules (DEC-018; supersedes DEC-012) | 2026-11-02 | Owner (delegated 2026-11-02) |
 | D5 | First languages | Python then TS / other | Python (pytest) then TypeScript (DEC-013) | 2026-11-02 | Owner |
-| D6 | Calibration label sources | own + partners / public only | public/benchmark first; partner data only on explicit opt-in (DEC-014) **provisional** | 2026-11-02 | Owner (provisional) |
-| D7 | LLM provider and code-egress policy | | LLM opt-in, no code egress by default, provider chosen in IN-04 (DEC-015) **provisional** | 2026-11-02 | Owner (provisional) |
+| D6 | Calibration label sources | own + partners / public only | public/benchmark first; partner data only on explicit written opt-in (DEC-020; supersedes DEC-014) | 2026-11-02 | Owner (delegated 2026-11-02) |
+| D7 | LLM provider and code-egress policy | | LLM opt-in per org, redacted intent text only, Anthropic first (haiku default), local model before enterprise GA (DEC-021; supersedes DEC-015) | 2026-11-02 | Owner (delegated 2026-11-02) |
 | D8 | Handling of stray test commit `c2d5db6` on `dev` | leave / revert via PR | leave (DEC-016) | 2026-11-02 | Owner |
+
+## Decisions made by delegation on 2026-11-02
+
+The owner delegated "complete everything by taking the ideal decisions". The following were decided on that basis (full reasoning in `docs/decisions.md`). **The owner can veto any of them**; a veto is recorded as a new DEC that supersedes it.
+
+| DEC | Decision | Supersedes |
+|---|---|---|
+| DEC-018 | Apache-2.0 for the open core; `LICENSE`, `NOTICE`; proprietary parts only in separate modules. Publishing a license is effectively irreversible for distributed copies | DEC-012 |
+| DEC-019 | No generation into user repos; advisory, labelled, sandbox-only probe suggestions allowed for evidence measurement (flag-gated, not started) | DEC-011 |
+| DEC-020 | Calibration labels: public benchmarks, then public real-PR outcomes, own history for dev only, partner data only with written opt-in and no raw code | DEC-014 |
+| DEC-021 | LLM: opt-in per org, redacted intent text only, Anthropic first (`claude-haiku-5-5`), sonnet only in experiments, local model before enterprise GA, metadata-only logs, token caps; legacy Gemini pruner flagged | DEC-015 |
+| DEC-022 | DCO sign-off, no CLA; inbound = outbound | none (new) |
+| DEC-023 | Telemetry opt-in, anonymous, no code or intent text, no phone-home | none (new) |
+| DEC-024 | Name/branding "Radius" flagged: trademark clearance not done | none (new) |
+| DEC-025 | Pre-registration v0.2-draft: the 11 section 17 choices (still not frozen) | none (new) |
+
+Also added: `datasets/AUTHOR_REQUESTS.md` (email drafts, not sent).
 
 ## Changelog
 
 - 2026-11-02: initial draft.
 - 2026-11-02: ratified (F-01); decision log filled and mirrored to `docs/decisions.md`.
+- 2026-11-02: provisional decisions finalized by delegation (DEC-018 to DEC-025); pre-registration v0.2-draft; author-request drafts.

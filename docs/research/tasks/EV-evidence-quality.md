@@ -137,6 +137,7 @@ M2 = cheap signals (EV-01 to EV-03, EV-06 to EV-08). M4 = mutation-based signals
 - Product hook: "your tests passed, but they would not have caught this bug" -- shown with a concrete surviving mutant.
 
 ### EV-12 (Stretch) Adversarial probe generation   [ ]
+- Decision 2026-11-02 (DEC-019): the human decision is made. Advisory, sandbox-only, flag-gated (`RADIUS_FEATURE_PROBES`), never written to the user's repo, never counted as contributor evidence, and LLM-written probes need the DEC-021 egress policy. The task stays a not-started stretch; start only after EV-04 and the M4 gate.
 - Owner type: human-required decision first
 - Depends on: EV-04, DEC (Radius generating tests)
 - Branch: `feature/evidence-probes`

@@ -5,6 +5,7 @@ Goal: make "87% confident" mean that about 87% of such PRs really are correct, a
 ---
 
 ### CA-01 Outcome label pipeline   [ ]
+- Label-source order and partner-data rules: DEC-020 (public benchmark labels first, partner data only with written opt-in).
 - Owner type: pair
 - Depends on: F-06, VD-07
 - Branch: `feature/calibration-labels`
