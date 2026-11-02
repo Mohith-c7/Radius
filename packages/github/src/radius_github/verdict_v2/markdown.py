@@ -376,6 +376,16 @@ def _why(view: VerdictV2View, labels: Mapping[str, str]) -> str:
             "No behavioral, testable criterion was found while behavioral code changed. "
             "Add or confirm acceptance criteria for this change."
         )
+    if decided == "R2e":
+        if inputs.get("not_applicable") is True:
+            return (
+                "Not applicable: only documentation or inert files changed, so there is nothing "
+                "to verify. This is not a pass."
+            )
+        return (
+            "No intent criteria were extracted; add a spec or confirm criteria. Without a "
+            "criterion there is nothing to verify, so Radius does not call this verified."
+        )
     if decided == "R2b":
         total = len(inputs.get("criteria", [])) if isinstance(inputs.get("criteria"), list) else 0
         uim = _num(inputs.get("uim")) or 0.0

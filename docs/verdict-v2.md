@@ -35,6 +35,7 @@ Rules are checked in this order. Every rule is evaluated and recorded; the first
 | 3 | R1c | an unwaived tamper finding at severity high or above | Failed |
 | 4 | R2p | no CI test results received yet for this commit | Insufficient evidence, shown as "Awaiting CI test results" |
 | 5 | R2a | no behavioral, testable criterion exists while behavioral code changed | Insufficient evidence |
+| 5b | R2e | no in-scope criterion exists (none, or all excluded) and no behavioral code changed: reason `no_intent_criteria` ("no intent criteria were extracted; add a spec or confirm criteria"), or `not_applicable` when only documentation or inert files changed | Insufficient evidence (never `verified`; see DEC-031) |
 | 6 | R2b | unproven intent mass above 0.20 | Insufficient evidence |
 | 7 | R2c | less than 50% of the behavioral changes are covered by a stated criterion | Insufficient evidence |
 | 8 | R2d | the analysis was incomplete (truncated, unsupported language, missing snapshot) | Insufficient evidence |
@@ -43,7 +44,7 @@ Rules are checked in this order. Every rule is evaluated and recorded; the first
 | 11 | R3c | a proven criterion rests on a weak criterion-to-code link (below 0.50) | Needs human review |
 | 12 | R4 | none of the above | Supported by static evidence (alpha) (`verified`) |
 
-With a repository policy that has `require` or `evidence` entries, two more rules sit between R2d and R3a: **P1** (a criterion or changed code under a required path is below the required state) and **P2** (a criterion has no counted test that is not agent-authored). Both give `Not verified - insufficient evidence`. Without such a policy the list is exactly the twelve rules above. See [Repository policy and waivers](policy.md).
+With a repository policy that has `require` or `evidence` entries, two more rules sit between R2d and R3a: **P1** (a criterion or changed code under a required path is below the required state) and **P2** (a criterion has no counted test that is not agent-authored). Both give `Not verified - insufficient evidence`. Without such a policy the list is exactly the rules above (R2e included). See [Repository policy and waivers](policy.md).
 
 Because failures come first, a tamper finding fails the verdict immediately, without waiting for CI. A pending PR (R2p) is published as a completed, neutral check, never left "in progress"; the comment updates itself when results arrive.
 

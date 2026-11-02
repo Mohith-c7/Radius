@@ -34,6 +34,7 @@ RULE_ORDER: tuple[str, ...] = (
     "R1c",
     "R2p",
     "R2a",
+    "R2e",
     "R2b",
     "R2c",
     "R2d",

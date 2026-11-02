@@ -85,7 +85,7 @@ def test_verdict_values_and_rule_order() -> None:
     }
     assert RULE_ORDER[0] == "R1a"
     assert RULE_ORDER[-1] == "R4"
-    assert len(RULE_ORDER) == 12
+    assert len(RULE_ORDER) == 13
 
 
 def test_v1_confidence_modules_do_not_import_verdict_v2() -> None:

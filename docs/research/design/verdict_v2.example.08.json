@@ -320,6 +320,16 @@
         }
       },
       {
+        "id": "R2e",
+        "label": "no intent criteria",
+        "fired": false,
+        "inputs": {
+          "non_excluded_criteria": 4,
+          "behavioral_symbols": 1,
+          "not_applicable": false
+        }
+      },
+      {
         "id": "R2b",
         "label": "unproven intent mass",
         "fired": true,

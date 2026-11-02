@@ -1,0 +1,1 @@
+Tamper T013: several lint or type suppressions of the same kind in one file are reported as one summarized finding (count and line numbers) instead of one finding per line; severity stays low (`nosec` medium) and no longer grows with the count.

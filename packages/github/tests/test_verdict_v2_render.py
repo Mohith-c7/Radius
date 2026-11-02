@@ -406,6 +406,8 @@ def test_pending_comment_says_awaiting_ci_and_scores_nothing() -> None:
         ("R1b", {"failed_cases": 3}, {}, "3 CI test case(s) failed"),
         ("R1c", {"threshold": "high"}, {"finding_ids": ["a", "b"]}, "2 tamper finding(s) at severity high or above"),
         ("R2a", {}, {}, "No behavioral, testable criterion was found"),
+        ("R2e", {}, {}, "No intent criteria were extracted; add a spec or confirm criteria."),
+        ("R2e", {"not_applicable": True}, {}, "Not applicable: only documentation or inert files changed"),
         ("R2c", {"intent_coverage": 0.333, "min": 0.5}, {}, "Only 33% of the behavioral changes"),
         ("R2d", {"blocking": ["truncated", "unsupported_language:ts"]}, {}, "The analysis was incomplete"),
         ("R3a", {}, {"finding_ids": ["a"]}, "need a human review"),

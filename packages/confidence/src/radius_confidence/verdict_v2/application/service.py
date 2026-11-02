@@ -26,10 +26,10 @@ from radius_confidence.verdict_v2.domain.model import (
     VerdictV2,
 )
 from radius_confidence.verdict_v2.domain.rules import (
-    RULE_TABLE,
     AnalysisFacts,
     decide,
     evaluate_rules,
+    reason_code_of,
 )
 from radius_confidence.verdict_v2.domain.tree import (
     build_justification,
@@ -122,6 +122,10 @@ def _detail(rule: RuleResult) -> str:
             "no behavioral_testable criterion while behavioral code changed "
             f"({i['behavioral_symbols']} changed behavioral symbol(s))"
         )
+    if rid == "R2e":
+        if i.get("not_applicable"):
+            return "not applicable: only documentation or inert files changed, nothing verifiable is in scope"
+        return "no intent criteria were extracted; add a spec or confirm criteria"
     if rid == "R2b":
         return f"unsupported intent mass {_fmt(i['uim'])} exceeds {_fmt(i['uim_max'])}"
     if rid == "R2c":
@@ -154,7 +158,7 @@ def _reasons(rules: Sequence[RuleResult]) -> tuple[Reason, ...]:
     ``ref`` keeps the rule id too (contract 1 consumers read it there)."""
 
     return tuple(
-        Reason(code=RULE_TABLE[r.id][1], detail=_detail(r), ref=r.id, rule_id=r.id)
+        Reason(code=reason_code_of(r), detail=_detail(r), ref=r.id, rule_id=r.id)
         for r in rules
         if r.fired
     )

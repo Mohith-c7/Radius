@@ -153,7 +153,7 @@ def test_p1_required_state_per_path(stage_a, cases) -> None:
     assert got.payload["verdict"] == "insufficient_evidence"
     assert got.payload["justification"]["decided_by"] == "P1"
     ids = [r["id"] for r in got.payload["justification"]["rules"]]
-    assert ids.index("P1") == ids.index("R2d") + 1 and "P2" in ids and len(ids) == 14
+    assert ids.index("P1") == ids.index("R2d") + 1 and "P2" in ids and len(ids) == 15
     unmet = got.payload["policy"]["unmet"]["required"]
     assert [(u["criterion_id"], u["state"], u["line"]) for u in unmet] == [("C2", "weak", 5)]
     assert got.payload["reasons"][0]["rule_id"] == "P1"
@@ -193,7 +193,7 @@ def test_invalid_base_policy_is_visible_and_blocks_a_pass(stage_a, cases) -> Non
     assert got.payload["verdict"] == "insufficient_evidence"
     assert got.payload["justification"]["decided_by"] == "R2d"
     assert got.payload["policy"]["status"] == "invalid" and got.payload["policy"]["errors"]
-    assert "policy_invalid" in got.payload["justification"]["rules"][7]["inputs"]["blocking"]
+    assert "policy_invalid" in got.payload["justification"]["rules"][8]["inputs"]["blocking"]
 
 
 def test_unreadable_policy_does_not_read_as_no_policy(stage_a, cases) -> None:

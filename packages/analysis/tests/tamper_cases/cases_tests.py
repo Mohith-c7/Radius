@@ -83,6 +83,33 @@ CASES = [
        "tests/test_shop.py": tf("def test_total():\n    assert total([1, 2]) == 3\n"),
        "tests/test_more.py": tf(
            "def test_x():\n    assert total([]) == 0\n\n\ndef test_price():\n    assert price(2) == 4\n")}, []),
+    c("t001-renamed-same-body", "T001", {"src/shop.py": SRC, "tests/test_shop.py": T_BASE2},
+      {"src/shop.py": SRC, "tests/test_shop.py": T_BASE2.replace("def test_price", "def test_price_doubles")}, []),
+    c("t001-renamed-and-edited", "T001", {"src/shop.py": SRC, "tests/test_shop.py": T_BASE2},
+      {"src/shop.py": SRC, "tests/test_shop.py": T_BASE2.replace(
+          "def test_price():\n    assert price(2) == 4",
+          "def test_price_doubles_the_input():\n    assert price(2) == 4\n    assert price(3) == 6")}, []),
+    c("t001-renamed-and-moved-to-other-file", "T001",
+      {"src/shop.py": SRC, "tests/test_shop.py": T_BASE2, "tests/test_more.py": tf("def test_x():\n    assert total([]) == 0\n")},
+      {"src/shop.py": SRC,
+       "tests/test_shop.py": tf("def test_total():\n    assert total([1, 2]) == 3\n"),
+       "tests/test_more.py": tf(
+           "def test_x():\n    assert total([]) == 0\n\n\ndef test_price_moved():\n    assert price(2) == 4\n")}, []),
+    c("t001-delete-plus-unrelated-add-still-fires", "T001", {"src/shop.py": SRC, "tests/test_shop.py": T_BASE2},
+      {"src/shop.py": SRC, "tests/test_shop.py": tf(
+          "def test_total():\n    assert total([1, 2]) == 3\n\n\n"
+          "def test_empty_total():\n    assert total([]) == 0\n")},
+      ["T001:test_deleted"]),
+    c("t001-rename-that-drops-all-assertions-still-fires", "T001",
+      {"src/shop.py": SRC, "tests/test_shop.py": T_BASE2},
+      {"src/shop.py": SRC, "tests/test_shop.py": T_BASE2.replace(
+          "def test_price():\n    assert price(2) == 4", "def test_price_renamed():\n    price(2)")},
+      ["T001:test_deleted"]),
+    c("t001-one-added-test-cannot-explain-two-deletions", "T001",
+      {"src/shop.py": SRC, "tests/test_shop.py": tf(
+          "def test_price_a():\n    assert price(2) == 4\n\n\ndef test_price_b():\n    assert price(2) == 4\n")},
+      {"src/shop.py": SRC, "tests/test_shop.py": tf("def test_price_c():\n    assert price(2) == 4\n")},
+      ["T001:test_deleted"]),
     # ------------------------------------------------------------------ T002
     c("t002-skip", "T002", {"src/shop.py": SRC, "tests/test_shop.py": T_BASE2},
       {"src/shop.py": SRC, "tests/test_shop.py": T_BASE2.replace(
@@ -127,6 +154,43 @@ CASES = [
     c("t002-skip-in-string", "T002", {"src/shop.py": SRC, "tests/test_shop.py": T_BASE2},
       {"src/shop.py": SRC, "tests/test_shop.py": T_BASE2.replace(
           "    assert price(2) == 4", '    note = "pytest.mark.skip"\n    assert price(2) == 4')}, []),
+    c("t002-runtime-skip-new-test-unconditional", "T002", {"src/shop.py": SRC, "tests/test_shop.py": T_BASE2},
+      {"src/shop.py": SRC, "tests/test_shop.py": T_BASE2 + '\n\ndef test_zero():\n    pytest.skip("later")\n    assert total([]) == 0\n'},
+      ["T002:runtime_skip_new"]),
+    c("t002-runtime-skip-platform-guard", "T002", {"src/shop.py": SRC, "tests/test_shop.py": T_BASE2},
+      {"src/shop.py": SRC, "tests/test_shop.py": T_BASE2.replace(
+          "    assert price(2) == 4",
+          '    if sys.platform == "win32":\n        pytest.skip("posix only")\n    assert price(2) == 4').replace(
+          "import pytest", "import sys\n\nimport pytest")},
+      ["T002:runtime_skip_guarded"]),
+    c("t002-runtime-skip-env-guard", "T002", {"src/shop.py": SRC, "tests/test_shop.py": T_BASE2},
+      {"src/shop.py": SRC, "tests/test_shop.py": T_BASE2.replace(
+          "    assert price(2) == 4",
+          '    if not os.environ.get("RUN_SLOW"):\n        pytest.skip("slow")\n    assert price(2) == 4').replace(
+          "import pytest", "import os\n\nimport pytest")},
+      ["T002:runtime_skip_guarded"]),
+    c("t002-runtime-skip-optional-import", "T002", {"src/shop.py": SRC, "tests/test_shop.py": T_BASE2},
+      {"src/shop.py": SRC, "tests/test_shop.py": T_BASE2.replace(
+          "    assert price(2) == 4",
+          '    try:\n        import prometheus_client\n    except ImportError:\n        pytest.skip("prometheus_client not installed")\n    assert price(2) == 4')},
+      ["T002:runtime_skip_guarded"]),
+    c("t002-runtime-skip-file-missing-guard-in-new-test", "T002", {"src/shop.py": SRC, "tests/test_shop.py": T_BASE2},
+      {"src/shop.py": SRC, "tests/test_shop.py": T_BASE2 + '\n\ndef test_spec(tmp_path):\n    if not (tmp_path / "openapi.json").exists():\n        pytest.skip("no previous spec")\n    assert total([]) == 0\n'},
+      ["T002:runtime_skip_guarded"]),
+    c("t002-runtime-skip-data-dependent-condition", "T002", {"src/shop.py": SRC, "tests/test_shop.py": T_BASE2},
+      {"src/shop.py": SRC, "tests/test_shop.py": T_BASE2.replace(
+          "    assert price(2) == 4",
+          '    if price(2) != 4:\n        pytest.skip("odd")\n    assert price(2) == 4')},
+      ["T002:runtime_skip_conditional"]),
+    c("t002-importorskip-is-not-a-skip-finding", "T002", {"src/shop.py": SRC, "tests/test_shop.py": T_BASE2},
+      {"src/shop.py": SRC, "tests/test_shop.py": T_BASE2.replace(
+          "    assert price(2) == 4", '    pytest.importorskip("numpy")\n    assert price(2) == 4')}, []),
+    c("t002-existing-guarded-skip-unchanged", "T002",
+      {"src/shop.py": SRC, "tests/test_shop.py": T_BASE2.replace(
+          "    assert price(2) == 4", '    if sys.platform == "win32":\n        pytest.skip("posix")\n    assert price(2) == 4').replace("import pytest", "import sys\n\nimport pytest")},
+      {"src/shop.py": SRC, "tests/test_shop.py": T_BASE2.replace(
+          "    assert price(2) == 4", '    if sys.platform == "win32":\n        pytest.skip("posix")\n    assert price(2) == 4').replace("import pytest", "import sys\n\nimport pytest")
+       + "\n\ndef test_zero():\n    assert total([]) == 0\n"}, []),
     # ------------------------------------------------------------------ T003
     c("t003-assertion-removed", "T003",
       {"src/shop.py": SRC, "tests/test_shop.py": tf(
