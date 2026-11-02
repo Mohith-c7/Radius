@@ -1,3 +1,4 @@
+# ruff: noqa: E402, I001  (helper import needs the sys.path setup below; no conftest to avoid plugin-name clashes)
 """`.radius/intent.yml` parsing and validation (precise, line-numbered errors)."""
 
 from __future__ import annotations
@@ -5,6 +6,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import sys as _sys
+from pathlib import Path as _Path
+
+_HERE = str(_Path(__file__).parent)
+if _HERE not in _sys.path:  # helper module lives next to the tests (importlib mode)
+    _sys.path.insert(0, _HERE)
+
 from extraction_helpers import src
 from radius_intent.domain import CriterionHints, ExtractionMethod, IntentSourceKind
 from radius_intent.infrastructure.extraction import (
