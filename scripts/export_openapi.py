@@ -38,12 +38,20 @@ def _prepare_environment() -> None:
 def generate_spec() -> dict:
     """Build the app with default settings and return its OpenAPI document."""
 
-    _prepare_environment()
-    from radius_api.config import get_api_settings
-    from radius_api.main import create_app
+    saved = dict(os.environ)  # restore afterwards: callers (tests) share this process
+    get_api_settings = None
+    try:
+        _prepare_environment()
+        from radius_api.config import get_api_settings
+        from radius_api.main import create_app
 
-    get_api_settings.cache_clear()
-    return create_app().openapi()
+        get_api_settings.cache_clear()
+        return create_app().openapi()
+    finally:
+        os.environ.clear()
+        os.environ.update(saved)
+        if get_api_settings is not None:
+            get_api_settings.cache_clear()
 
 
 def render(spec: dict) -> str:
