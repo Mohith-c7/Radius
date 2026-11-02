@@ -420,6 +420,57 @@ Security Testing
 
 ---
 
+## Symbol-level impact (F-08)
+
+Behind `RADIUS_FEATURE_SYMBOL_IMPACT` (default `false`, worker setting
+`symbol_impact_enabled`). When enabled, the worker narrows the file-level
+"files that import the changed file" set to "files containing code that can
+reach the changed symbols", for Python only.
+
+Pipeline (all deterministic, algo version `symbol-impact-v1`):
+
+1. `radius_analysis.diff_hunks.parse_diff_line_changes` splits a diff into added
+   lines, deletion points and deleted text.
+2. `radius_graph.symbol_impact.PythonSymbolGraph` (stdlib `ast`) indexes
+   functions, methods, classes and one `<module>` pseudo-symbol per file, and
+   maps changed lines to symbols. A reference is a bare name (`Name`,
+   `Attribute.attr`, parameter names, dotted string constants such as
+   `mock.patch("pkg.mod.f")`); names bound by `import x as y` or `y = x` are
+   merged. A symbol is used by every symbol that mentions its name anywhere in
+   the repository, which over-approximates real call edges.
+3. `radius_analysis.symbol_impact.refine_dependents` runs reverse reachability
+   per changed file and intersects the result with the file-level dependents
+   (plus tests below a `conftest.py` that depends on the file), so selection is
+   a subset of the file-level selection. It also records reason tags.
+4. The refined dependents feed the unchanged `map_changes_to_tests` and
+   `PathBasedTestSelector` and the blast radius (`symbol_affected_file_paths`).
+   Naming-convention matches and changed test files are kept.
+
+Reason tags appear in each test's selection decision (`evidence_sources`
+contains `SYMBOL_IMPACT`; `evidence_details` holds
+`symbol impact: tests/test_a.py::test_x -> pkg/b.py::g -> pkg/a.py::f (changed)`
+or `file-level fallback for <path>: <reason>`).
+
+Safe fallbacks (the changed file keeps its file-level result): non-Python file;
+no hunks or unparseable file; module-level code changed; a `def`/`class`/
+decorator line deleted; unmodelled class-body statement; an implicit protocol
+method (dunder other than `__init__`) changed or reached. If dynamic code
+(`importlib.import_module`, `__import__`, `eval`, `exec`, `globals()`,
+non-constant `getattr`) is reachable from a test, every changed file keeps its
+file-level set and additionally selects each test that contains or reaches that
+code (this is the one case where selection can exceed file-level). The
+full-suite triggers (`conftest.py`, manifests, deleted/renamed files) are
+unchanged and run before any symbol logic.
+
+Known limits: name-based matching is not type-aware (more tests than necessary
+for common method names); behaviour wired through entry points, plugin
+registries loaded by string from config, or `exec`-style code outside the repo
+snapshot is invisible; TypeScript/JavaScript have no symbol-level path yet.
+Validation: `tests/test_symbol_impact_ground_truth.py` compares selection with
+tests that dynamically execute the changed lines (`sys.settrace`).
+
+---
+
 # Confidence Domain
 
 Purpose

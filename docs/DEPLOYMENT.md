@@ -57,6 +57,7 @@ The Next.js web console is available at `http://localhost:3000`.
 | **`DATABASE_URL`** | PostgreSQL connection string for API, worker, and migrations. | `postgresql+psycopg://radius:password@postgres:5432/radius` |
 | **`RADIUS_ENV`** | Application runtime environment (`production`, `development`). | `production` |
 | **`RADIUS_LOG_LEVEL`** | Application logging level (`INFO`, `DEBUG`, `WARNING`). | `INFO` |
+| **`RADIUS_FEATURE_SYMBOL_IMPACT`** | Worker: symbol-level test selection and blast radius for Python (F-08). Falls back to file-level impact when symbol info is missing or low-confidence. | `false` |
 | **`GEMINI_API_KEY`** | Google Gemini API key for the experimental Gemini call-site classifier. It is not part of the analysis pipeline and does not affect verdicts or test selection. | `AIzaSy...` |
 | **`API_KEYS`** | Comma-separated API keys accepted by API in format `org_id:key`. | `00000000-0000-4000-8000-000000000001:radius_key_live` |
 | **`GITHUB_APP_ID`** | GitHub App ID used to generate installation access tokens. | `123456` |

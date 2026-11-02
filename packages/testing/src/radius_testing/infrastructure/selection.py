@@ -26,6 +26,7 @@ class PathBasedTestSelector:
         coverage_evidence: dict[str, tuple[str, ...]] | None = None,
         history_evidence: dict[str, tuple[str, ...]] | None = None,
         full_suite_reasons: tuple[str, ...] = (),
+        symbol_evidence: dict[str, tuple[str, ...]] | None = None,
     ) -> TestSelection:
         """Return selected tests in stable path order.
 
@@ -100,6 +101,7 @@ class PathBasedTestSelector:
         semantic_evidence = semantic_evidence or {}
         coverage_evidence = coverage_evidence or {}
         history_evidence = history_evidence or {}
+        symbol_evidence = symbol_evidence or {}
         decisions: list[TestSelectionDecision] = []
         # Evidence from coverage, history and semantic analysis is additive. A
         # test is never selected merely because an LLM guessed; semantic facts
@@ -115,6 +117,7 @@ class PathBasedTestSelector:
                 if changed_symbols:
                     details.append("Changed symbols: " + ", ".join(changed_symbols))
             for source, evidence in (
+                ("SYMBOL_IMPACT", symbol_evidence.get(path, ()) if path in selected else ()),
                 ("GEMINI_SEMANTIC", semantic_evidence.get(path, ())),
                 ("RUNTIME_COVERAGE", coverage_evidence.get(path, ())),
                 ("TEST_HISTORY", history_evidence.get(path, ())),

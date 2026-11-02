@@ -87,3 +87,5 @@ class ComputeBlastRadiusCommand:
     graph_snapshot: GraphSnapshot
     changed_file_paths: tuple[str, ...]
     affected_test_paths: tuple[str, ...] = ()
+    # F-08: when set, only these files (plus the changed ones) count as affected.
+    symbol_affected_file_paths: tuple[str, ...] | None = None

@@ -439,6 +439,7 @@ def _create_sql_orchestrator(
             store=SqlAlchemyConfidenceStore(session),
         ),
         execute_tests=execution_mode != TestExecutionMode.DISABLED,
+        symbol_impact_enabled=bool(settings and settings.symbol_impact_enabled),
     )
 
 

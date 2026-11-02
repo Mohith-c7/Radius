@@ -12,6 +12,7 @@ from radius_analysis.dto import (
     AnalyzeRepositoryDiffCommand,
     ComputeBlastRadiusCommand,
 )
+from radius_analysis.symbol_impact import refine_dependents
 from radius_confidence.application import ConfidenceApplicationService
 from radius_confidence.domain import (
     AnalysisEvidence,
@@ -44,6 +45,29 @@ from radius_testing.infrastructure.impact_mapping import (
 from radius_testing.infrastructure.selection import PathBasedTestSelector
 
 LOGGER = get_logger(__name__)
+
+
+_SKIP_DIRS = frozenset(
+    {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build", ".tox"}
+)
+
+
+def _read_python_sources(root: Path) -> dict[str, str]:
+    """Read repository ``.py`` files (no symlink escapes) keyed by posix path."""
+
+    sources: dict[str, str] = {}
+    resolved_root = root.resolve()
+    for path in sorted(root.rglob("*.py")):
+        rel = path.relative_to(root)
+        if any(part in _SKIP_DIRS for part in rel.parts) or path.is_symlink():
+            continue
+        try:
+            if resolved_root not in path.resolve().parents:
+                continue
+            sources[rel.as_posix()] = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+    return sources
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +109,7 @@ class Phase1AnalysisOrchestrator:
         testing_service: TestingApplicationService,
         confidence_service: ConfidenceApplicationService,
         execute_tests: bool = True,
+        symbol_impact_enabled: bool = False,
     ) -> None:
         self._analysis = analysis_service
         self._parser = parser_service
@@ -93,6 +118,7 @@ class Phase1AnalysisOrchestrator:
         self._testing = testing_service
         self._confidence = confidence_service
         self._execute_tests = execute_tests
+        self._symbol_impact_enabled = symbol_impact_enabled
 
     def execute(self, command: ExecuteAnalysisCommand) -> AnalysisExecutionResult:
         """Execute one analysis and mark its lifecycle status."""
@@ -135,6 +161,24 @@ class Phase1AnalysisOrchestrator:
         )
         graph_snapshot = self._require_graph_snapshot(command.analysis_id)
         dependents = file_dependents(graph_snapshot.graph, changed_paths)
+        discovered_tests = self._testing.discover_test_cases(
+            DiscoverTestsCommand(command.repository_path, command.repository_id)
+        )
+        symbol_evidence: dict[str, tuple[str, ...]] | None = None
+        changed_symbols: tuple[str, ...] = ()
+        symbol_scope: tuple[str, ...] | None = None
+        if self._symbol_impact_enabled:
+            refined = self._refine_with_symbols(
+                command, changes, changed_paths, dependents, discovered_tests,
+                graph_snapshot,
+            )
+            if refined is not None:
+                dependents = refined.dependents
+                symbol_evidence = refined.test_evidence
+                changed_symbols = refined.changed_symbols
+                symbol_scope = tuple(
+                    sorted({p for reached in dependents.values() for p in reached})
+                )
         affected_paths = tuple(
             sorted(
                 {path for reached in dependents.values() for path in reached}
@@ -142,9 +186,6 @@ class Phase1AnalysisOrchestrator:
             )
         )
 
-        discovered_tests = self._testing.discover_test_cases(
-            DiscoverTestsCommand(command.repository_path, command.repository_id)
-        )
         selector = PathBasedTestSelector()
         mapping = map_changes_to_tests(
             changed_files=tuple(
@@ -166,6 +207,8 @@ class Phase1AnalysisOrchestrator:
                 affected_file_paths=affected_paths,
                 available_tests=discovered_tests,
                 full_suite_reasons=mapping.full_suite_reasons,
+                changed_symbols=changed_symbols,
+                symbol_evidence=symbol_evidence,
             )
         )
         self._testing.plan_test_run(PlanTestRunCommand(command.analysis_id))
@@ -179,6 +222,7 @@ class Phase1AnalysisOrchestrator:
                 affected_test_paths=tuple(
                     item.test.path for item in selection.selected_tests
                 ),
+                symbol_affected_file_paths=symbol_scope,
             )
         )
         confidence = self._confidence.generate_report(
@@ -223,6 +267,45 @@ class Phase1AnalysisOrchestrator:
             risk_level=confidence.risk_level,
             verification_status=confidence.verification_status,
         )
+
+    def _refine_with_symbols(
+        self,
+        command: ExecuteAnalysisCommand,
+        changes,
+        changed_paths: tuple[str, ...],
+        dependents: dict[str, frozenset[str]],
+        discovered_tests,
+        graph_snapshot: GraphSnapshot,
+    ):
+        """Symbol-level refinement (F-08); ``None`` keeps the file-level result."""
+
+        diff_text = command.diff_text or getattr(changes, "diff_text", None)
+        try:
+            refined = refine_dependents(
+                diff_text=diff_text,
+                changed_paths=changed_paths,
+                file_level=dependents,
+                python_sources=_read_python_sources(command.repository_path),
+                test_paths=frozenset(test.path.value for test in discovered_tests),
+                graph=graph_snapshot.graph,
+            )
+        except Exception:  # never let an optimisation break the safe path
+            LOGGER.warning(
+                "Symbol-level impact failed; using file-level impact",
+                extra={"analysis_id": str(command.analysis_id)},
+                exc_info=True,
+            )
+            return None
+        LOGGER.info(
+            "Symbol-level impact computed",
+            extra={
+                "analysis_id": str(command.analysis_id),
+                "algo_version": refined.algo_version,
+                "file_level_fallbacks": len(refined.fallbacks),
+                "changed_symbols": len(refined.changed_symbols),
+            },
+        )
+        return refined
 
     def _run_or_defer_tests(
         self,

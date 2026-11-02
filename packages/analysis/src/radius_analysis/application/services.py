@@ -194,6 +194,7 @@ class AnalysisApplicationService:
         return ChangeAnalysisResponse(
             analysis_id=command.analysis_id,
             changed_files=responses,
+            diff_text=command.diff_text,
         )
 
     def analyze_repository_diff(
@@ -270,6 +271,22 @@ class AnalysisApplicationService:
                 for path in command.changed_file_paths
             },
         )
+        if command.symbol_affected_file_paths is not None:
+            keep = {
+                self._normalize_graph_path(path)
+                for path in (*command.symbol_affected_file_paths, *command.changed_file_paths)
+            }
+            scoped = {
+                node.id: node.path
+                for node in command.graph_snapshot.graph.nodes
+                if node.node_type in (GraphNodeType.FILE, GraphNodeType.SYMBOL)
+                and node.path is not None
+            }
+            affected_ids = {
+                node_id
+                for node_id in affected_ids
+                if node_id not in scoped or scoped[node_id] in keep
+            }
         affected_nodes = [
             node
             for node in command.graph_snapshot.graph.nodes

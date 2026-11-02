@@ -115,3 +115,17 @@ def test_empty_or_non_diff_strings_returning_empty_dict() -> None:
         parse_diff_modified_lines("This is just regular text\nnot a diff at all") == {}
     )
     assert parse_diff_modified_lines(None) == {}  # type: ignore[arg-type]
+
+
+def test_line_changes_separate_added_lines_from_deletions() -> None:
+    from radius_analysis.diff_hunks import parse_diff_line_changes
+
+    diff = (
+        "diff --git a/a.py b/a.py\n--- a/a.py\n+++ b/a.py\n"
+        "@@ -2,2 +2,1 @@\n-def gone():\n+x = 1\n"
+    )
+    changes = parse_diff_line_changes(diff)["a.py"]
+    assert changes.added == {2}
+    assert changes.deleted_at == {2}
+    assert changes.deleted_text == ["def gone():"]
+    assert changes.modified == {2}
