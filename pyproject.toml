@@ -17,7 +17,7 @@ dependencies = [
   "sqlalchemy>=2.0.36",
   "uvicorn[standard]>=0.34.0",
   "tree-sitter>=0.23.2,<0.27",
-  "tree-sitter-python>=0.23.2",
+  "tree-sitter-python>=0.25.0",
   "tree-sitter-typescript==0.23.2",
   "tree-sitter-javascript==0.25.0",
   "tree-sitter-go>=0.25.0",
