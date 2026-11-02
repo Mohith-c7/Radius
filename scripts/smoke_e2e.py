@@ -373,7 +373,8 @@ class Smoke:
         self.webhook_secret = secrets.token_hex(24)
         self.pepper = secrets.token_hex(24)
         self.legacy_key = "legacy-" + secrets.token_hex(16)
-        self.org_id = uuid.uuid4()
+        # RADIUS_SMOKE_ORG_ID lets a developer reuse the local-dev organization when inspecting a kept database.
+        self.org_id = uuid.UUID(os.environ["RADIUS_SMOKE_ORG_ID"]) if os.environ.get("RADIUS_SMOKE_ORG_ID") else uuid.uuid4()
         self.other_org_id = uuid.uuid4()
         self.expected = json.loads((FIXTURE_DIR / "expected.json").read_text(encoding="utf-8"))
         self.headers: dict[str, str] = {}
@@ -704,6 +705,7 @@ def main() -> int:
             sys.path.insert(0, path)
     logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
     base_url = os.environ.get("DATABASE_URL", "")
+    keep_db = os.environ.get("RADIUS_SMOKE_KEEP_DB") == "1"  # read now: setup() scrubs RADIUS_* variables
     if not base_url:
         print("DATABASE_URL is required (PostgreSQL). Example: docker compose up -d postgres", file=sys.stderr)
         return 2
@@ -731,7 +733,10 @@ def main() -> int:
         try:
             smoke.finish()
         finally:
-            drop_database(base_url, name)
+            if keep_db:
+                print(f"kept database {name} for manual inspection (RADIUS_SMOKE_KEEP_DB=1); drop it when done")
+            else:
+                drop_database(base_url, name)
             shutil.rmtree(workdir, ignore_errors=True)
     elapsed = time.monotonic() - started
     print(f"\n{'SMOKE PASSED' if ok else 'SMOKE FAILED'}: {len(STEPS)} checks in {elapsed:.1f}s")
