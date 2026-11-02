@@ -26,14 +26,47 @@ class ExtractionMethod(StrEnum):
 
 
 class Testability(StrEnum):
-    """Testability rating of a criterion (DESIGN 6.1 step 4)."""
+    """Testability rating of a criterion (DESIGN 6.1 step 4, IN-05).
+
+    ``TESTABLE``, ``VAGUE`` and ``NON_FUNCTIONAL`` are the IN-01 names; they
+    are aliases of the IN-05 categories, and the legacy stored strings
+    (``"testable"``, ``"vague"``, ``"non_functional"``) still parse.
+    """
 
     __test__ = False  # not a pytest class
 
     UNRATED = "unrated"
-    TESTABLE = "testable"
-    VAGUE = "vague"
-    NON_FUNCTIONAL = "non_functional"
+    #: Observable behavior with inputs/outputs or conditions.
+    BEHAVIORAL_TESTABLE = "behavioral_testable"
+    #: Refactor, rename, move, config, dependency or docs: checkable by diff.
+    STRUCTURAL_CHECKABLE = "structural_checkable"
+    #: Performance, security or accessibility with a threshold or named tool.
+    NON_FUNCTIONAL_MEASURABLE = "non_functional_measurable"
+    #: "Clean", "intuitive", "better" ... without a measure.
+    SUBJECTIVE_OR_VAGUE = "subjective_or_vague"
+    #: Needs human, product or legal judgment, or live external systems.
+    UNTESTABLE_EXTERNAL = "untestable_external"
+
+    # IN-01 names, kept as aliases.
+    TESTABLE = "behavioral_testable"
+    VAGUE = "subjective_or_vague"
+    NON_FUNCTIONAL = "non_functional_measurable"
+
+    @classmethod
+    def _missing_(cls, value: object) -> Testability | None:
+        """Parse the pre-IN-05 stored strings."""
+        if isinstance(value, str):
+            legacy = _LEGACY_VALUES.get(value)
+            if legacy is not None:
+                return cls(legacy)
+        return None
+
+
+_LEGACY_VALUES = {
+    "testable": "behavioral_testable",
+    "vague": "subjective_or_vague",
+    "non_functional": "non_functional_measurable",
+}
 
 
 class CriterionState(StrEnum):
