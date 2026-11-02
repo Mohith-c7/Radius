@@ -401,8 +401,9 @@ class LlmCriterionExtractor:
                 "model": model,
                 "attempt": attempt,
                 "outcome": outcome,
-                "input_tokens": in_tok,
-                "output_tokens": out_tok,
+                # not named *token*: the shared log redactor masks such keys
+                "usage_in": in_tok,
+                "usage_out": out_tok,
                 "latency_ms": round(latency_ms, 1),
             },
         )

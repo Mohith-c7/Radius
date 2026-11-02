@@ -1,3 +1,4 @@
+# ruff: noqa: E402, I001  (helper import needs the sys.path setup below; no conftest to avoid plugin-name clashes)
 """IN-04: guarded LLM extractor (fake provider only; no network, no keys)."""
 
 from __future__ import annotations
@@ -5,6 +6,13 @@ from __future__ import annotations
 import logging
 
 import pytest
+import sys as _sys
+from pathlib import Path as _Path
+
+_HERE = str(_Path(__file__).parent)
+if _HERE not in _sys.path:  # helper module lives next to the tests (importlib mode)
+    _sys.path.insert(0, _HERE)
+
 from llm_helpers import BODY, blocks, item, make, reply, source
 from radius_intent.domain import CriterionState, ExtractionMethod, IntentSourceKind
 from radius_intent.infrastructure.llm import (
@@ -477,7 +485,7 @@ def test_calls_are_logged_with_hash_tokens_latency_but_no_raw_text(caplog):
     assert len(recs) == 2
     first = recs[0].__dict__
     assert first["prompt_hash"] == out.prompt_hash and first["outcome"] == "ok"
-    assert first["input_tokens"] == 100 and first["output_tokens"] == 50
+    assert first["usage_in"] == 100 and first["usage_out"] == 50
     assert first["latency_ms"] == 250.0 and first["model"] == "fake-model-1"
     assert recs[1].__dict__["outcome"] == "cache_hit"
     blob = " ".join(str(r.__dict__) + r.getMessage() for r in recs)
