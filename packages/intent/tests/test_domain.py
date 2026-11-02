@@ -9,6 +9,7 @@ import pytest
 from radius_intent.domain import (
     ALLOWED_TRANSITIONS,
     Criterion,
+    CriterionHints,
     CriterionState,
     DuplicateCriterionError,
     ExtractionMethod,
@@ -459,3 +460,32 @@ def test_snapshot_is_immutable():
     snap = make_snapshot()
     with pytest.raises(FrozenInstanceError):
         snap.version = 3  # type: ignore[misc]
+
+
+# --- CriterionHints ----------------------------------------------------------
+
+
+def test_hints_default_empty_and_normalised_to_tuples():
+    assert CriterionHints().is_empty
+    hints = CriterionHints(paths=["src/**"], tests=["t.py::x"], label="C1")  # type: ignore[arg-type]
+    assert hints.paths == ("src/**",) and hints.tests == ("t.py::x",)
+    assert not hints.is_empty
+    assert not CriterionHints(label="C1").is_empty
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [{"paths": ("  ",)}, {"tests": ("",)}, {"label": " "}],
+)
+def test_hints_reject_blank_entries(kwargs):
+    with pytest.raises(InvalidCriterionError):
+        CriterionHints(**kwargs)
+
+
+def test_criterion_carries_hints_without_changing_its_id():
+    plain = make_criterion()
+    hinted = make_criterion(hints=CriterionHints(paths=("src/**",), label="C1"))
+    assert plain.hints.is_empty
+    assert hinted.hints.label == "C1" and hinted.id == plain.id
+    assert plain.with_hints(hinted.hints).hints == hinted.hints
+    assert hinted.edit("New wording").hints == hinted.hints

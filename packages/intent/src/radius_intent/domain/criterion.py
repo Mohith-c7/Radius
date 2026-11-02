@@ -18,7 +18,7 @@ from radius_intent.domain.errors import (
 )
 from radius_intent.domain.identity import criterion_id, normalize_text
 from radius_intent.domain.source import IntentSource
-from radius_intent.domain.value_objects import Provenance, Span
+from radius_intent.domain.value_objects import CriterionHints, Provenance, Span
 
 #: Allowed state transitions. Anything not listed is rejected.
 ALLOWED_TRANSITIONS: MappingProxyType[CriterionState, frozenset[CriterionState]] = (
@@ -64,6 +64,7 @@ class Criterion:
     testability: Testability = Testability.UNRATED
     testability_rationale: str | None = None
     state: CriterionState = CriterionState.PROPOSED
+    hints: CriterionHints = CriterionHints()
 
     def __post_init__(self) -> None:
         if not self.id.strip():
@@ -95,6 +96,7 @@ class Criterion:
         extractor_version: str,
         text: str | None = None,
         weight: float = 1.0,
+        hints: CriterionHints = CriterionHints(),
     ) -> Criterion:
         """Create a PROPOSED criterion from ``source``.
 
@@ -119,6 +121,7 @@ class Criterion:
             origin=origin,
             span=span,
             weight=weight,
+            hints=hints,
         )
 
     def transition_to(self, new_state: CriterionState) -> Criterion:
@@ -148,6 +151,10 @@ class Criterion:
     def with_weight(self, weight: float) -> Criterion:
         """Return a copy with a new weight in (0, 1]."""
         return replace(self, weight=weight)
+
+    def with_hints(self, hints: CriterionHints) -> Criterion:
+        """Return a copy with new linking hints."""
+        return replace(self, hints=hints)
 
     def with_testability(
         self, rating: Testability, rationale: str | None = None
