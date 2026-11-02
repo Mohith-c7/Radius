@@ -1,0 +1,106 @@
+name: Radius upload test results
+description: >-
+  Upload JUnit XML (and an optional Cobertura coverage percentage) from your CI
+  run to Radius so Verdict v2 can use it as evidence for the pull request head
+  commit. Never fails your job by default. No third-party actions are used.
+inputs:
+  api-url:
+    description: Radius API base URL (https).
+    required: true
+  organization-id:
+    description: Radius organization id (UUID).
+    required: true
+  api-key:
+    description: Radius API key with the `ci-upload` scope. Pass it from a secret.
+    required: false
+    default: ""
+  junit-path:
+    description: JUnit XML file(s) as glob patterns, one per line (`**` supported).
+    required: false
+    default: junit.xml
+  coverage-path:
+    description: Optional Cobertura-style coverage XML glob(s). Only the total line-rate percentage is sent.
+    required: false
+    default: ""
+  analysis-id:
+    description: Optional Radius analysis id. When empty it is looked up from repository + PR + head SHA.
+    required: false
+    default: ""
+  repository:
+    description: Repository as owner/name.
+    required: false
+    default: ${{ github.repository }}
+  pull-request:
+    description: Pull request number.
+    required: false
+    default: ${{ github.event.pull_request.number }}
+  commit-sha:
+    description: PR head commit the tests ran on. Do not use the merge commit (GITHUB_SHA).
+    required: false
+    default: ${{ github.event.pull_request.head.sha }}
+  fail-on-upload-error:
+    description: '"true" makes upload problems fail the step. Default "false": the upload never fails your CI.'
+    required: false
+    default: "false"
+  include-failure-details:
+    description: >-
+      "true" uploads reports unmodified (failure messages, stack traces,
+      stdout/stderr). Default "false": reports are reduced to test names, files,
+      outcomes and durations before leaving the runner.
+    required: false
+    default: "false"
+  max-file-size-mb:
+    description: Skip report files larger than this.
+    required: false
+    default: "10"
+  wait-seconds:
+    description: How long to wait for Radius to create the analysis for the head commit.
+    required: false
+    default: "120"
+  dashboard-url:
+    description: Optional Radius dashboard base URL, used to print a link to the analysis.
+    required: false
+    default: ""
+outputs:
+  status:
+    description: uploaded | partial | failed | skipped-fork | skipped-no-secret | skipped-no-results
+    value: ${{ steps.upload.outputs.status }}
+  analysis-id:
+    description: Resolved Radius analysis id (empty if skipped).
+    value: ${{ steps.upload.outputs.analysis-id }}
+  analysis-url:
+    description: Link to the analysis (only when dashboard-url is set).
+    value: ${{ steps.upload.outputs.analysis-url }}
+  uploaded-count:
+    description: Number of report files uploaded.
+    value: ${{ steps.upload.outputs.uploaded-count }}
+  skipped-count:
+    description: Number of matched files skipped as malformed.
+    value: ${{ steps.upload.outputs.skipped-count }}
+  verification-status:
+    description: Verdict status reported by Radius after the last upload, if any.
+    value: ${{ steps.upload.outputs.verification-status }}
+runs:
+  using: composite
+  steps:
+    - name: Upload results to Radius
+      id: upload
+      shell: bash
+      env:
+        # Everything goes through env, never interpolated into the script.
+        RADIUS_API_KEY: ${{ inputs.api-key }}
+        RADIUS_API_URL: ${{ inputs.api-url }}
+        RADIUS_ORG_ID: ${{ inputs.organization-id }}
+        RADIUS_JUNIT_PATH: ${{ inputs.junit-path }}
+        RADIUS_COVERAGE_PATH: ${{ inputs.coverage-path }}
+        RADIUS_ANALYSIS_ID: ${{ inputs.analysis-id }}
+        RADIUS_REPOSITORY: ${{ inputs.repository }}
+        RADIUS_PR: ${{ inputs.pull-request }}
+        RADIUS_COMMIT_SHA: ${{ inputs.commit-sha }}
+        RADIUS_FAIL_ON_UPLOAD_ERROR: ${{ inputs.fail-on-upload-error }}
+        RADIUS_INCLUDE_FAILURE_DETAILS: ${{ inputs.include-failure-details }}
+        RADIUS_MAX_FILE_MB: ${{ inputs.max-file-size-mb }}
+        RADIUS_WAIT_SECONDS: ${{ inputs.wait-seconds }}
+        RADIUS_DASHBOARD_URL: ${{ inputs.dashboard-url }}
+        RADIUS_IS_FORK: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+      run: python3 "${GITHUB_ACTION_PATH}/upload.py"
