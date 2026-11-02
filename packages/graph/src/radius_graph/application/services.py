@@ -12,10 +12,7 @@ from radius_graph.domain.enums import GraphEdgeType, GraphNodeType
 from radius_graph.domain.value_objects import GraphNodeId, GraphVersion
 from radius_graph.dto.commands import BuildGraphCommand
 from radius_graph.dto.responses import GraphSnapshotResponse
-from radius_graph.infrastructure.module_resolver import (
-    ModuleResolver,
-    load_tsconfig_aliases,
-)
+from radius_graph.infrastructure.module_resolver import ModuleResolver
 from radius_graph.interfaces.graph_store import GraphStore
 
 
@@ -33,11 +30,7 @@ class GraphApplicationService:
         repository_path = command.parse_result.repository_path
         module_resolver = ModuleResolver(
             command.parse_result.parsed_files,
-            path_aliases=(
-                load_tsconfig_aliases(repository_path)
-                if repository_path is not None and repository_path.is_dir()
-                else None
-            ),
+            repository_path=repository_path,
         )
 
         for parsed_file in command.parse_result.parsed_files:

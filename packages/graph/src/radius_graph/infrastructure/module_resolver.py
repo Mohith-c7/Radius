@@ -11,6 +11,7 @@ from pathlib import Path, PurePosixPath
 from radius_parser.domain.entities import ParsedSourceFile
 
 from radius_graph.domain.value_objects import GraphNodeId
+from radius_graph.infrastructure.ts_resolver import TsModuleResolver, is_js_ts_path
 
 
 class ModuleResolver:
@@ -20,9 +21,18 @@ class ModuleResolver:
         self,
         parsed_files: tuple[ParsedSourceFile, ...],
         path_aliases: dict[str, tuple[str, ...]] | None = None,
+        repository_path: Path | None = None,
     ) -> None:
         self._index = self._build_index(parsed_files)
         self._aliases = dict(path_aliases or {})
+        self._ts = TsModuleResolver(
+            {
+                self._normalize_path(item.source_file.path.value)
+                for item in parsed_files
+                if is_js_ts_path(item.source_file.path.value)
+            },
+            repository_path if repository_path and repository_path.is_dir() else None,
+        )
 
     def resolve(
         self,
@@ -30,6 +40,16 @@ class ModuleResolver:
         source: str,
     ) -> GraphNodeId | None:
         """Return the imported file node id when the import is repository-local."""
+
+        if is_js_ts_path(importer_path):
+            resolved = self._ts.resolve(importer_path, source)
+            if resolved is not None:
+                return GraphNodeId(f"file:{resolved}")
+            # Bare specifiers that the tsconfig cannot map are external
+            # packages; only relative imports or explicit legacy aliases may
+            # still match through the generic index below.
+            if not source.startswith(".") and not self._aliases:
+                return None
 
         for candidate in self._candidates(importer_path, source):
             node_id = self._index.get(candidate)
@@ -45,6 +65,15 @@ class ModuleResolver:
                 if node_id is not None:
                     return node_id
         return None
+
+    def is_external(self, importer_path: str, source: str) -> bool:
+        """Return whether an import does not resolve to a repository file.
+
+        Bare package names (``react``) and unresolvable aliases are external,
+        which is a classification, not an error.
+        """
+
+        return self.resolve(importer_path, source) is None
 
     def _alias_targets(self, source: str) -> tuple[str, ...]:
         """Expand TypeScript ``paths`` patterns (single ``*`` wildcard)."""

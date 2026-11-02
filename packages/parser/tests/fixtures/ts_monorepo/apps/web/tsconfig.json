@@ -1,0 +1,7 @@
+{
+  "extends": "../../tsconfig.base",
+  "compilerOptions": {
+    "baseUrl": "src",
+    "paths": { "@/*": ["*"], "@shared/*": ["../../../packages/shared/src/*"] }
+  }
+}

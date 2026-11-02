@@ -1,7 +1,23 @@
-"""Lightweight JavaScript and TypeScript source parser."""
+"""JavaScript and TypeScript source parser backed by tree-sitter (DEC-017).
+
+Imports, symbols and exports are read from a real syntax tree, never from
+line-based patterns, so comments, strings, template literals and multi-line
+statements cannot produce false results.
+
+Grammar choice by file suffix:
+
+* ``.ts``/``.mts``/``.cts`` -> TypeScript grammar
+* ``.tsx`` -> TSX grammar
+* ``.js``/``.jsx``/``.mjs``/``.cjs`` -> JavaScript grammar (handles JSX)
+
+A file whose tree contains syntax errors raises :class:`SyntaxError`, which
+``ParserApplicationService`` records in ``parse_failures`` exactly as it does
+for Python files.
+"""
 
 from __future__ import annotations
 
+import logging
 import re
 from functools import lru_cache
 
@@ -15,108 +31,136 @@ from radius_parser.domain.entities import (
 from radius_parser.domain.enums import SourceLanguage, SymbolType, SymbolVisibility
 from radius_parser.domain.value_objects import SourceLocation, SymbolName
 
-IMPORT_RE = re.compile(
-    r"""^\s*(?:import\s+(?:type\s+)?(?:.+?\s+from\s+)?|export\s+.+?\s+from\s+)["'](?P<source>[^"']+)["']""",
+logger = logging.getLogger(__name__)
+
+TYPESCRIPT_SUFFIXES = frozenset({".ts", ".mts", ".cts"})
+TSX_SUFFIXES = frozenset({".tsx"})
+JAVASCRIPT_SUFFIXES = frozenset({".js", ".jsx", ".mjs", ".cjs"})
+
+_FUNCTION_VALUE_TYPES = frozenset(
+    {"arrow_function", "function_expression", "function", "generator_function"}
 )
-REQUIRE_RE = re.compile(r"""require\(["'](?P<source>[^"']+)["']\)""")
-# Whole-file patterns: formatters routinely split import specifiers across
-# lines (``import {\n  a,\n  b,\n} from "./x"``), which a per-line regex misses.
-MODULE_IMPORT_RE = re.compile(
-    r"""(?:^|[;\n])\s*(?:import|export)\b[^;'"`]*?\bfrom\s*["'](?P<source>[^"'\n]+)["']""",
+_CLASS_DECLARATIONS = frozenset({"class_declaration", "abstract_class_declaration"})
+_METHOD_NODES = frozenset(
+    {"method_definition", "method_signature", "abstract_method_signature"}
 )
-SIDE_EFFECT_IMPORT_RE = re.compile(r"""(?:^|[;\n])\s*import\s*["'](?P<source>[^"'\n]+)["']""")
-CALL_IMPORT_RE = re.compile(
-    r"""\b(?:require|import)\s*\(\s*["'](?P<source>[^"'\n]+)["']\s*\)""",
-)
-CLASS_RE = re.compile(
-    r"""^\s*(?:export\s+)?(?:abstract\s+)?class\s+""" r"""(?P<name>[A-Za-z_$][\w$]*)""",
-)
-INTERFACE_RE = re.compile(
-    r"""^\s*(?:export\s+)?interface\s+(?P<name>[A-Za-z_$][\w$]*)""",
-)
-FUNCTION_RE = re.compile(
-    r"""^\s*(?:export\s+)?(?:async\s+)?function\s+""" r"""(?P<name>[A-Za-z_$][\w$]*)""",
-)
-CONST_FN_RE = re.compile(
-    r"""^\s*(?:export\s+)?(?:const|let|var)\s+"""
-    r"""(?P<name>[A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?"""
-    r"""(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>""",
-)
-EXPORT_DECL_RE = re.compile(
-    r"""^\s*export\s+(?:default\s+)?"""
-    r"""(?:class|function|interface|const|let|var|enum|type)\s+"""
-    r"""(?P<name>[A-Za-z_$][\w$]*)""",
-)
-EXPORT_LIST_RE = re.compile(r"""^\s*export\s*\{(?P<names>[^}]+)\}""")
+_FIELD_NODES = frozenset({"public_field_definition", "field_definition"})
 
 
-@lru_cache(maxsize=2)
+def _grammar_for(suffix: str) -> str:
+    if suffix in TSX_SUFFIXES:
+        return "tsx"
+    if suffix in JAVASCRIPT_SUFFIXES:
+        return "javascript"
+    return "typescript"
+
+
+@lru_cache(maxsize=4)
 def _tree_sitter_parser(grammar: str):
     import tree_sitter  # noqa: PLC0415 - optional heavy import
-    import tree_sitter_typescript  # noqa: PLC0415
 
-    language = tree_sitter.Language(
-        tree_sitter_typescript.language_tsx()
-        if grammar == "tsx"
-        else tree_sitter_typescript.language_typescript()
-    )
+    if grammar == "javascript":
+        import tree_sitter_javascript  # noqa: PLC0415
+
+        language = tree_sitter.Language(tree_sitter_javascript.language())
+    else:
+        import tree_sitter_typescript  # noqa: PLC0415
+
+        language = tree_sitter.Language(
+            tree_sitter_typescript.language_tsx()
+            if grammar == "tsx"
+            else tree_sitter_typescript.language_typescript()
+        )
     return tree_sitter.Parser(language)
+
+
+def _parse_tree(source: str, suffix: str):
+    return _tree_sitter_parser(_grammar_for(suffix)).parse(source.encode("utf-8"))
+
+
+def _text(node) -> str:
+    return node.text.decode("utf-8", errors="replace")
 
 
 def _string_value(node) -> str:
     """Return the literal value of a tree-sitter ``string`` node (no template parts)."""
 
     fragments = [
-        child.text.decode("utf-8", errors="replace")
+        _text(child)
         for child in node.named_children
         if child.type in {"string_fragment", "escape_sequence"}
     ]
-    if any(child.type not in {"string_fragment", "escape_sequence"} for child in node.named_children):
+    if any(
+        child.type not in {"string_fragment", "escape_sequence"}
+        for child in node.named_children
+    ):
         return ""
     return "".join(fragments).strip()
 
 
+def _location(node) -> SourceLocation:
+    return SourceLocation(
+        start_line=node.start_point[0] + 1,
+        start_column=node.start_point[1] + 1,
+        end_line=node.end_point[0] + 1,
+        end_column=node.end_point[1] + 1,
+    )
+
+
+def _first_error(root) -> object | None:
+    stack = [root]
+    while stack:
+        node = stack.pop()
+        if node.is_error or node.is_missing:
+            return node
+        if node.has_error:
+            stack.extend(reversed(node.children))
+    return None
+
+
 class TypeScriptLikeParser:
-    """Extract useful Phase 1 metadata from JS/TS-family source files."""
+    """Extract imports, symbols and exports from JS/TS-family source files."""
 
     def __init__(self, supported_language: SourceLanguage) -> None:
         self.supported_language = supported_language
 
     def parse(self, source_file: SourceFile) -> ParsedSourceFile:
-        """Parse one JS/TS file using deterministic source patterns."""
+        """Parse one JS/TS file.
+
+        Raises:
+            SyntaxError: the file contains syntax errors (recorded by the
+                application service as a parse failure).
+        """
 
         source = self._read_source(source_file)
-        imports: list[ImportReference] = []
-        symbols: list[Symbol] = []
-        exports: dict[str, ExportReference] = {}
-
         suffix = (
             source_file.absolute_path.suffix.lower()
             if source_file.absolute_path is not None
             else ""
         )
-        imports.extend(self._imports(source, suffix))
+        try:
+            tree = _parse_tree(source, suffix)
+        except Exception:  # noqa: BLE001 - grammar wheel missing or broken
+            logger.error(
+                "tree-sitter grammar unavailable for %s; using the REGEX IMPORT "
+                "FALLBACK (imports only, no symbols). Install tree-sitter, "
+                "tree-sitter-typescript and tree-sitter-javascript.",
+                source_file.path.value,
+                exc_info=True,
+            )
+            return ParsedSourceFile(
+                source_file=source_file,
+                imports=tuple(regex_import_fallback(source)),
+            )
 
-        for line_number, line in enumerate(source.splitlines(), start=1):
-            location = SourceLocation(start_line=line_number)
+        error = _first_error(tree.root_node)
+        if error is not None:
+            line, column = error.start_point
+            msg = f"{source_file.path.value}:{line + 1}:{column + 1}: syntax error"
+            raise SyntaxError(msg)
 
-            symbol = self._symbol_from_line(line, location)
-            if symbol is not None:
-                symbols.append(symbol)
-
-            for name in self._exports_from_line(line):
-                exports[name] = ExportReference(name=name, location=location)
-
-        if not exports:
-            exports = {
-                symbol.name.value: ExportReference(
-                    name=symbol.name.value,
-                    location=symbol.location,
-                )
-                for symbol in symbols
-                if symbol.visibility == SymbolVisibility.PUBLIC
-            }
-
+        imports = self._collect_imports(tree.root_node)
+        symbols, exports = _SymbolCollector().collect(tree.root_node)
         return ParsedSourceFile(
             source_file=source_file,
             symbols=tuple(symbols),
@@ -132,17 +176,29 @@ class TypeScriptLikeParser:
 
     @classmethod
     def _imports(cls, source: str, suffix: str = ".ts") -> list[ImportReference]:
-        """Extract import sources with tree-sitter; fall back to regex on failure."""
+        """Extract import sources with tree-sitter.
+
+        Only a grammar/runtime failure (not a syntax error in the source)
+        reaches the loud, explicitly named regex fallback.
+        """
 
         try:
             return cls._tree_sitter_imports(source, suffix)
         except Exception:  # noqa: BLE001 - any grammar/runtime failure falls back
-            return cls._regex_imports(source)
+            logger.error(
+                "tree-sitter import extraction failed; using the REGEX IMPORT "
+                "FALLBACK. Results may miss dynamic imports and contain false "
+                "positives.",
+                exc_info=True,
+            )
+            return regex_import_fallback(source)
+
+    @classmethod
+    def _tree_sitter_imports(cls, source: str, suffix: str) -> list[ImportReference]:
+        return cls._collect_imports(_parse_tree(source, suffix).root_node)
 
     @staticmethod
-    def _tree_sitter_imports(source: str, suffix: str) -> list[ImportReference]:
-        parser = _tree_sitter_parser("tsx" if suffix in {".tsx", ".jsx"} else "typescript")
-        tree = parser.parse(source.encode("utf-8"))
+    def _collect_imports(root) -> list[ImportReference]:
         found: dict[tuple[str, int], ImportReference] = {}
 
         def add(string_node) -> None:
@@ -154,14 +210,24 @@ class TypeScriptLikeParser:
             line = string_node.start_point[0] + 1
             found.setdefault(
                 (value, line),
-                ImportReference(source=value, location=SourceLocation(start_line=line)),
+                ImportReference(
+                    source=value,
+                    location=SourceLocation(
+                        start_line=line,
+                        start_column=string_node.start_point[1] + 1,
+                    ),
+                ),
             )
 
-        stack = [tree.root_node]
+        stack = [root]
         while stack:
             node = stack.pop()
             node_type = node.type
-            if node_type in {"import_statement", "export_statement", "import_require_clause"}:
+            if node_type in {
+                "import_statement",
+                "export_statement",
+                "import_require_clause",
+            }:
                 add(node.child_by_field_name("source"))
             elif node_type == "call_expression":
                 function = node.child_by_field_name("function")
@@ -171,66 +237,276 @@ class TypeScriptLikeParser:
                     or (function.type == "identifier" and function.text == b"require")
                 )
                 if is_loader and arguments is not None:
-                    values = [child for child in arguments.named_children]
+                    values = list(arguments.named_children)
                     if len(values) == 1:
                         add(values[0])
             stack.extend(node.children)
-        return [found[key] for key in sorted(found, key=lambda item: (item[1], item[0]))]
+        return [
+            found[key] for key in sorted(found, key=lambda item: (item[1], item[0]))
+        ]
 
-    @staticmethod
-    def _regex_imports(source: str) -> list[ImportReference]:
-        found: dict[tuple[str, int], ImportReference] = {}
-        for pattern in (MODULE_IMPORT_RE, SIDE_EFFECT_IMPORT_RE, CALL_IMPORT_RE):
-            for match in pattern.finditer(source):
-                line = source.count("\n", 0, match.start("source")) + 1
-                key = (match.group("source"), line)
-                found.setdefault(
-                    key,
-                    ImportReference(
-                        source=match.group("source"),
-                        location=SourceLocation(start_line=line),
-                    ),
-                )
-        return [found[key] for key in sorted(found, key=lambda item: (item[1], item[0]))]
 
-    @staticmethod
-    def _symbol_from_line(line: str, location: SourceLocation) -> Symbol | None:
-        for pattern, symbol_type in (
-            (CLASS_RE, SymbolType.CLASS),
-            (INTERFACE_RE, SymbolType.INTERFACE),
-            (FUNCTION_RE, SymbolType.FUNCTION),
-            (CONST_FN_RE, SymbolType.FUNCTION),
-        ):
-            match = pattern.search(line)
-            if match is not None:
-                name = match.group("name")
-                return Symbol(
-                    name=SymbolName(name),
-                    symbol_type=symbol_type,
+# --- explicit regex fallback (grammar unavailable only) -----------------------
+
+_MODULE_IMPORT_RE = re.compile(
+    r"""(?:^|[;\n])\s*(?:import|export)\b[^;'"`]*?\bfrom\s*["'](?P<source>[^"'\n]+)["']""",
+)
+_SIDE_EFFECT_IMPORT_RE = re.compile(
+    r"""(?:^|[;\n])\s*import\s*["'](?P<source>[^"'\n]+)["']"""
+)
+_CALL_IMPORT_RE = re.compile(
+    r"""\b(?:require|import)\s*\(\s*["'](?P<source>[^"'\n]+)["']\s*\)""",
+)
+
+
+def regex_import_fallback(source: str) -> list[ImportReference]:
+    """Last-resort import extraction used ONLY when tree-sitter cannot load.
+
+    Never on the default path; callers must log loudly before using it.
+    """
+
+    found: dict[tuple[str, int], ImportReference] = {}
+    for pattern in (_MODULE_IMPORT_RE, _SIDE_EFFECT_IMPORT_RE, _CALL_IMPORT_RE):
+        for match in pattern.finditer(source):
+            line = source.count("\n", 0, match.start("source")) + 1
+            found.setdefault(
+                (match.group("source"), line),
+                ImportReference(
+                    source=match.group("source"),
+                    location=SourceLocation(start_line=line),
+                ),
+            )
+    return [found[key] for key in sorted(found, key=lambda item: (item[1], item[0]))]
+
+
+# --- symbols and exports ------------------------------------------------------
+
+
+class _SymbolCollector:
+    """Walk top-level declarations and gather symbols plus exported names."""
+
+    def __init__(self) -> None:
+        self._symbols: dict[tuple[str, SymbolType], Symbol] = {}
+        self._order: list[tuple[str, SymbolType]] = []
+        self._exported: dict[str, ExportReference] = {}
+
+    def collect(self, root) -> tuple[list[Symbol], dict[str, ExportReference]]:
+        for child in root.named_children:
+            self._statement(child, exported=False)
+
+        symbols = [self._symbols[key] for key in self._order]
+        exported_names = set(self._exported)
+        has_explicit_exports = bool(exported_names)
+
+        resolved: list[Symbol] = []
+        for symbol in symbols:
+            top_name = symbol.name.value.split(".")[0]
+            underscore = symbol.name.value.split(".")[-1].startswith("_")
+            if has_explicit_exports:
+                public = top_name in exported_names and not underscore
+            else:
+                public = not underscore
+            resolved.append(
+                Symbol(
+                    name=symbol.name,
+                    symbol_type=symbol.symbol_type,
                     visibility=(
-                        SymbolVisibility.PRIVATE
-                        if name.startswith("_")
-                        else SymbolVisibility.PUBLIC
+                        SymbolVisibility.PUBLIC if public else SymbolVisibility.PRIVATE
                     ),
-                    location=location,
+                    location=symbol.location,
                 )
-        return None
+            )
 
-    @staticmethod
-    def _exports_from_line(line: str) -> tuple[str, ...]:
-        declaration = EXPORT_DECL_RE.search(line)
+        exports = dict(self._exported)
+        if not exports:
+            # Scripts and CommonJS files declare no ES exports; every public
+            # top-level symbol is treated as exported (legacy behaviour).
+            exports = {
+                symbol.name.value: ExportReference(
+                    name=symbol.name.value, location=symbol.location
+                )
+                for symbol in resolved
+                if symbol.visibility == SymbolVisibility.PUBLIC
+                and "." not in symbol.name.value
+            }
+        return resolved, exports
+
+    # statements -------------------------------------------------------------
+
+    def _statement(self, node, *, exported: bool) -> None:
+        kind = node.type
+        if kind == "export_statement":
+            self._export_statement(node)
+        elif kind in {"ambient_declaration", "expression_statement"}:
+            # ``declare ...`` wrappers and ``namespace X {}`` (an expression
+            # statement wrapping ``internal_module``).
+            for child in node.named_children:
+                self._statement(child, exported=exported)
+        else:
+            self._declaration(node, exported=exported)
+
+    def _declaration(self, node, *, exported: bool) -> list[str]:
+        """Record symbols for a declaration node; return the declared names."""
+
+        kind = node.type
+        names: list[str] = []
+        if kind in {"function_declaration", "generator_function_declaration"}:
+            names.append(self._add(node, SymbolType.FUNCTION))
+        elif kind == "function_signature":
+            names.append(self._add(node, SymbolType.FUNCTION, overload=True))
+        elif kind in _CLASS_DECLARATIONS:
+            name = self._add(node, SymbolType.CLASS)
+            names.append(name)
+            self._members(node, name)
+        elif kind == "interface_declaration":
+            names.append(self._add(node, SymbolType.INTERFACE))
+        elif kind == "type_alias_declaration":
+            names.append(self._add(node, SymbolType.TYPE_ALIAS))
+        elif kind == "enum_declaration":
+            names.append(self._add(node, SymbolType.ENUM))
+        elif kind in {"internal_module", "module"}:
+            name_node = node.child_by_field_name("name")
+            if name_node is not None and name_node.type == "identifier":
+                names.append(self._add(node, SymbolType.NAMESPACE))
+        elif kind in {"lexical_declaration", "variable_declaration"}:
+            for declarator in node.named_children:
+                if declarator.type != "variable_declarator":
+                    continue
+                name_node = declarator.child_by_field_name("name")
+                if name_node is None or name_node.type != "identifier":
+                    continue
+                value = declarator.child_by_field_name("value")
+                names.append(_text(name_node))
+                if value is not None and value.type in _FUNCTION_VALUE_TYPES:
+                    self._put(
+                        _text(name_node), SymbolType.FUNCTION, _location(declarator)
+                    )
+                elif value is not None and value.type == "class":
+                    self._put(_text(name_node), SymbolType.CLASS, _location(declarator))
+                    self._members(value, _text(name_node))
+        if exported:
+            for name in names:
+                self._export(name, node)
+        return names
+
+    def _export_statement(self, node) -> None:
+        declaration = node.child_by_field_name("declaration")
+        source = node.child_by_field_name("source")
+        is_default = any(child.type == "default" for child in node.children)
+
         if declaration is not None:
-            return (declaration.group("name"),)
+            names = self._declaration(declaration, exported=True)
+            if is_default and not names:
+                self._export("default", node)
+            return
 
-        listed = EXPORT_LIST_RE.search(line)
-        if listed is None:
-            return ()
-        names = []
-        for item in listed.group("names").split(","):
-            name = item.strip().split(" as ", maxsplit=1)[0].strip()
-            if name:
-                names.append(name)
-        return tuple(names)
+        value = node.child_by_field_name("value")
+        if value is not None:
+            # ``export default <expression>`` / ``export default class {}``
+            if value.type == "class":
+                name_node = value.child_by_field_name("name")
+                name = _text(name_node) if name_node is not None else "default"
+                self._put(name, SymbolType.CLASS, _location(value))
+                self._members(value, name)
+                self._export(name, node)
+            elif value.type in _FUNCTION_VALUE_TYPES:
+                name_node = value.child_by_field_name("name")
+                name = _text(name_node) if name_node is not None else "default"
+                self._put(name, SymbolType.FUNCTION, _location(value))
+                self._export(name, node)
+            elif value.type == "identifier":
+                self._export(_text(value), node)
+            else:
+                self._export("default", node)
+            return
+
+        for child in node.named_children:
+            if child.type == "export_clause":
+                for spec in child.named_children:
+                    if spec.type != "export_specifier":
+                        continue
+                    name_node = spec.child_by_field_name("name")
+                    alias_node = spec.child_by_field_name("alias")
+                    if name_node is None:
+                        continue
+                    # Local exports keep the local name so they line up with
+                    # symbols; re-exports have no local symbol, so the name
+                    # visible to importers is used.
+                    chosen = (
+                        alias_node
+                        if source is not None and alias_node is not None
+                        else name_node
+                    )
+                    self._export(_text(chosen).strip("'\""), spec)
+            elif child.type == "namespace_export":
+                inner = child.named_children[0] if child.named_children else None
+                if inner is not None:
+                    self._export(_text(inner), child)
+            elif child.type == "identifier" and source is None:
+                # ``export = foo`` (TS) exports a local binding.
+                self._export(_text(child), child)
+
+    # helpers ----------------------------------------------------------------
+
+    def _members(self, class_node, class_name: str) -> None:
+        body = class_node.child_by_field_name("body")
+        if body is None:
+            return
+        for member in body.named_children:
+            name_node = member.child_by_field_name("name") or member.child_by_field_name(
+                "property"
+            )
+            if name_node is None or name_node.type == "computed_property_name":
+                continue
+            if member.type in _METHOD_NODES:
+                self._put(
+                    f"{class_name}.{_text(name_node)}",
+                    SymbolType.METHOD,
+                    _location(member),
+                    overload=member.type != "method_definition",
+                )
+            elif member.type in _FIELD_NODES:
+                value = member.child_by_field_name("value")
+                if value is not None and value.type in _FUNCTION_VALUE_TYPES:
+                    self._put(
+                        f"{class_name}.{_text(name_node)}",
+                        SymbolType.METHOD,
+                        _location(member),
+                    )
+
+    def _add(self, node, symbol_type: SymbolType, *, overload: bool = False) -> str:
+        name_node = node.child_by_field_name("name")
+        name = _text(name_node).strip("'\"") if name_node is not None else "default"
+        self._put(name, symbol_type, _location(node), overload=overload)
+        return name
+
+    def _put(
+        self,
+        name: str,
+        symbol_type: SymbolType,
+        location: SourceLocation,
+        *,
+        overload: bool = False,
+    ) -> None:
+        if not name.strip():
+            return
+        key = (name, symbol_type)
+        if key in self._symbols and overload:
+            return  # a signature never replaces an existing declaration
+        if key not in self._symbols:
+            self._order.append(key)
+        self._symbols[key] = Symbol(
+            name=SymbolName(name),
+            symbol_type=symbol_type,
+            visibility=SymbolVisibility.PUBLIC,
+            location=location,
+        )
+
+    def _export(self, name: str, node) -> None:
+        if name.strip():
+            self._exported.setdefault(
+                name, ExportReference(name=name, location=_location(node))
+            )
 
 
 class JavaScriptParser(TypeScriptLikeParser):
@@ -245,3 +521,11 @@ class TypeScriptParser(TypeScriptLikeParser):
 
     def __init__(self) -> None:
         super().__init__(SourceLanguage.TYPESCRIPT)
+
+
+__all__ = [
+    "JavaScriptParser",
+    "TypeScriptLikeParser",
+    "TypeScriptParser",
+    "regex_import_fallback",
+]

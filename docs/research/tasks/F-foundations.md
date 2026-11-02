@@ -108,7 +108,7 @@ Goal: make the existing prototype trustworthy enough to build on. Fixes the gaps
 - Tests: fixtures with deliberately shared files; property test "selection superset of dynamic-coverage tests".
 - Research hook: record precision/recall of selection vs dynamic coverage (used by LK-03).
 
-### F-09 Language scope and parser upgrade   [ ]
+### F-09 Language scope and parser upgrade   [x]
 - Owner type: pair (decision) + agent-ok
 - Depends on: F-01
 - Branch: `feature/parser-ts-treesitter`

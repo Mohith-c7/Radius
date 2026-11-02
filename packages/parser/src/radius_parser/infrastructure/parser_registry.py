@@ -3,6 +3,13 @@
 from radius_parser.domain.enums import SourceLanguage
 from radius_parser.interfaces.language_parser import LanguageParser
 
+#: Languages whose parsers are experimental (DEC-017). Behaviour is unchanged;
+#: imports are not resolved to repository files, so dependency edges for these
+#: languages are missing evidence rather than a negative.
+EXPERIMENTAL_LANGUAGES = frozenset(
+    {SourceLanguage.GO, SourceLanguage.JAVA, SourceLanguage.RUST}
+)
+
 
 class StaticLanguageParserRegistry:
     """Registry backed by a fixed parser collection."""
@@ -14,6 +21,12 @@ class StaticLanguageParserRegistry:
         """Return a parser for a language when registered."""
 
         return self._parsers.get(language)
+
+    def is_experimental(self, language: SourceLanguage) -> bool:
+        """Return whether the registered parser for ``language`` is experimental."""
+
+        parser = self._parsers.get(language)
+        return bool(getattr(parser, "experimental", False))
 
 
 def default_language_parser_registry() -> StaticLanguageParserRegistry:
