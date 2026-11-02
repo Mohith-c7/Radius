@@ -24,6 +24,7 @@ from radius_shared.errors import (
 from radius_shared.logging import configure_logging, get_logger
 from radius_shared.observability import ObservabilitySettings
 from radius_shared.observability import metrics as obs_metrics
+from radius_shared.verdict_v2_flag import VerdictV2Mode
 
 from radius_api.config import get_api_settings
 from radius_api.dependencies import AppContainer, configure_sql_storage
@@ -38,7 +39,7 @@ from radius_api.routes.health import router as health_router
 from radius_api.routes.intent import router as intent_router
 from radius_api.routes.repositories import router as repositories_router
 from radius_api.routes.tests import router as tests_router
-from radius_api.routes.verdict_v2 import router as verdict_v2_router
+from radius_api.routes.verdict_v2 import create_router as create_verdict_v2_router
 
 LOGGER = get_logger(__name__)
 
@@ -134,7 +135,10 @@ def create_app() -> FastAPI:
     app.include_router(confidence_router, prefix="/api/v1")
     app.include_router(coverage_router, prefix="/api/v1")
     app.include_router(intent_router, prefix="/api/v1")
-    app.include_router(verdict_v2_router, prefix="/api/v1")
+    app.include_router(
+        create_verdict_v2_router(documented=settings.verdict_v2_mode != VerdictV2Mode.OFF),
+        prefix="/api/v1",
+    )
     app.include_router(github_webhooks_router, prefix="/api/v1")
     app.include_router(auth_router)
 

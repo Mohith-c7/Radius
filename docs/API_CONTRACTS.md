@@ -394,6 +394,71 @@ Error codes (in addition to the table below)
 
 ---
 
+## GET /analyses/{analysisId}/verdict-v2
+
+Verdict v2 alpha (DEC-027), behind `RADIUS_FEATURE_VERDICT_V2` (`off` default,
+`shadow`, `on`). The route is listed in OpenAPI only while the flag is not `off`.
+`/analyses/{analysisId}/verdict` is an undocumented alias of the same handler.
+Design: `docs/research/design/VERDICT_V2_SLICE.md`; payload schema:
+`docs/research/design/verdict_v2.schema.json`.
+
+### Responses
+
+| Status | When |
+| --- | --- |
+| 200 | A verdict was computed. Envelope `{ success, data }`; `ETag` header (strong, over the payload). `If-None-Match` with that tag returns 304. |
+| 404 | `meta.reason = "disabled"` when the flag is off (nothing is read). `error.code = ANALYSIS_NOT_FOUND` for an unknown analysis **or an analysis of another organization** (indistinguishable). `meta.reason = "not_computed"` when no verdict exists yet. |
+| 403 | Missing or invalid organization credentials. |
+
+`data` (abridged; unknown fields must be ignored by clients):
+
+```json
+{
+  "verdict_version": 2, "algo_version": "verdict-v2-alpha-1", "profile": "alpha-static",
+  "mode": "on", "status": "ok", "analysis_id": "...", "head_sha": "<40 hex>", "revision": 2,
+  "computed_at": "2026-11-02T10:16:04Z",
+  "verdict": "insufficient_evidence", "pending": false,
+  "reasons": [{"code": "unproven_intent_mass", "rule_id": "R2b", "detail": "..."}],
+  "score": null, "score_kind": "none", "trust_probability": null,
+  "summary": {"criteria_total": 4, "proven": 1, "weak": 1, "unevidenced": 2,
+              "contradicted": 0, "excluded": 0, "uim": 0.75, "intent_coverage": 1.0,
+              "tamper": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+              "evidence_basis": "static_only"},
+  "criteria": [{"criterion_id": "...", "text": "UNTRUSTED", "state": "weak", "S": 0.432,
+                "S_raw": 0.432, "weight": 1.0, "flags": ["static_only"], "reasons": [],
+                "best_link": {"symbol_id": "...", "l_cs": 1.0, "l_st": 0.9, "r_ct": 1.0},
+                "items": [{"evidence_id": "ev_...", "test_id": "...", "outcome": "passed",
+                           "a_static": 1.0, "d_eff": 0.6, "i": 0.8, "f": 1.0, "q": 0.48,
+                           "l": 0.9, "term": 0.432, "status": "counted"}]}],
+  "tamper_findings": [], "unlinked_symbols": [], "next_actions": [],
+  "justification": {"schema": "verdict-v2-justification-1", "decided_by": "R2b", "rules": []},
+  "v1": {"verification_status": "insufficient_evidence", "confidence_score": 31.0,
+         "score_kind": "heuristic_uncalibrated", "risk_level": "high"},
+  "dashboard_url": null, "error": null
+}
+```
+
+Honesty rules:
+
+- `verdict` is one of `verified`, `failed`, `insufficient_evidence`, `needs_review`, or
+  `null` when `status` is `error` or `skipped` (then `error = {code, fallback}` and
+  `criteria` is empty; the stored error detail is never served).
+- v2 has no number: `score` is always `null`, `score_kind` always `"none"` and
+  `trust_probability` stays `null` until calibration exists. The only score in the payload
+  is the `v1` block, copied from the v1 report with its own `score_kind`
+  (`heuristic_uncalibrated`). `evidence_basis` is `static_only`: assertion strength read
+  from test code, no mutation testing.
+- Criterion `text`, test ids, tamper reasons and snippets derive from PR content: they are
+  JSON-escaped and clients must render them as text only.
+- The v1 route `GET /analyses/{analysisId}/confidence` and its DTO are unchanged and keep
+  being computed and served with the flag in any state.
+- No sub-resources: the design defines none, criteria are inside `data.criteria`.
+
+Republish after CI: when the flag is not `off`, `POST /analyses/{analysisId}/tests/results`
+also upserts one row into the `verdict_v2_requests` outbox (replays collapse; no network
+call, the API holds no GitHub credentials). The worker recomputes and updates the Check Run
+and PR comment in place.
+
 ## GET /analyses/{analysisId}/intent
 
 Latest snapshot. Header `ETag`.

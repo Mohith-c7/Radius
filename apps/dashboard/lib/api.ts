@@ -227,11 +227,19 @@ export async function radiusFetch<T>(
 export class RadiusApiError extends Error {
   readonly status: number;
   readonly code: string | null;
-  constructor(message: string, status: number, code: string | null) {
+  /** Envelope `meta` of the error response (for example `{ reason: "disabled" }`). */
+  readonly meta: Record<string, unknown>;
+  constructor(
+    message: string,
+    status: number,
+    code: string | null,
+    meta: Record<string, unknown> = {},
+  ) {
     super(message);
     this.name = "RadiusApiError";
     this.status = status;
     this.code = code;
+    this.meta = meta;
   }
 }
 
@@ -280,6 +288,7 @@ export async function radiusRequest<T>(
       apiError?.message || `Radius API request failed (${response.status})`,
       response.status,
       typeof apiError?.code === "string" ? apiError.code : null,
+      envelope?.meta ?? {},
     );
   }
   if (envelope.data === null) {
