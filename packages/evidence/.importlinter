@@ -16,6 +16,7 @@ type = forbidden
 source_modules =
     radius_evidence.domain
     radius_evidence.application
+    radius_evidence.policy
 forbidden_modules =
     radius_evidence.infrastructure
     radius_shared
