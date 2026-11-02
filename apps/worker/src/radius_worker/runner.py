@@ -52,6 +52,7 @@ from radius_shared.observability import (
 )
 from radius_shared.observability import metrics as obs_metrics
 from radius_shared.redaction import redact_secrets
+from radius_shared.verdict_v2_flag import VerdictV2Mode
 from radius_testing.application import TestingApplicationService
 from radius_testing.infrastructure import (
     ConventionalTestDiscoverer,
@@ -76,6 +77,12 @@ from radius_worker.orchestrator import (
     Phase1AnalysisOrchestrator,
 )
 from radius_worker.queue import InMemoryAnalysisQueue
+from radius_worker.verdict_v2.publish import publish_in_job as publish_v2_in_job
+from radius_worker.verdict_v2.publish import v2_replaces_v1
+from radius_worker.verdict_v2.requests import Recomputer as VerdictV2Recomputer
+from radius_worker.verdict_v2.requests import (
+    process_pending as process_verdict_v2_requests,
+)
 
 LOGGER = get_logger(__name__)
 
@@ -121,6 +128,9 @@ class SqlAlchemyWorkerRuntime:
     intent_transport: HttpTransport | None = None
     #: IN-02: conditional-request cache; process-local and bounded.
     intent_etag_cache: EtagCache = field(default_factory=EtagCache)
+    #: VS-07: Stage B recompute used by the verdict v2 outbox consumer (``None`` =
+    #: republish the latest stored verdict without recomputing). Wired by VS-06.
+    verdict_v2_recomputer: VerdictV2Recomputer | None = None
 
     def run_once(self) -> bool:
         """Claim and execute one durable analysis job."""
@@ -333,6 +343,7 @@ class SqlAlchemyWorkerRuntime:
         idle_cycles = 0
         next_reap = 0.0
         while True:
+            self._process_verdict_v2_requests()
             if time.monotonic() >= next_reap:
                 next_reap = time.monotonic() + self.settings.reaper_interval_seconds
                 try:
@@ -362,6 +373,24 @@ class SqlAlchemyWorkerRuntime:
             ):
                 return
             time.sleep(poll_interval_seconds)
+
+    def _process_verdict_v2_requests(self) -> None:
+        """VS-07: republish after CI. No-op with the flag off; never raises."""
+
+        if self.settings.verdict_v2_mode == VerdictV2Mode.OFF:
+            return
+        try:
+            process_verdict_v2_requests(
+                session_factory=self.session_factory,
+                settings=self.settings,
+                github_client=self.github_client,
+                recomputer=self.verdict_v2_recomputer,
+            )
+        except Exception as exc:
+            LOGGER.warning(
+                "Verdict v2 outbox pass failed; continuing",
+                extra={"outcome": "verdict_v2_outbox_error", "error": redact_secrets(exc)},
+            )
 
     def _claim_job(self):
         with self.session_factory() as session:
@@ -634,6 +663,15 @@ def _publish_github_result(
 ) -> None:
     github_settings = _github_settings(settings)
     if not settings.github_publish_results or not github_settings.enabled:
+        return
+    # VS-08: with the flag ``on`` and a stored v2 verdict that is ok, v2 is
+    # published instead of v1; any v2 problem falls through to v1 below.
+    if v2_replaces_v1(session, settings, analysis_id) and publish_v2_in_job(
+        session,
+        analysis_id=analysis_id,
+        settings=settings,
+        github_client=github_client,
+    ):
         return
     try:
         installation_id = _github_installation_id(
