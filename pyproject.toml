@@ -91,3 +91,17 @@ testpaths = [
   "packages/testing/tests",
 ]
 
+
+[tool.coverage.run]
+source = ["apps", "packages"]
+branch = false
+omit = [
+  "*/tests/*",
+  "*/conftest.py",
+  "*/__pycache__/*",
+  "apps/dashboard/*",
+]
+
+[tool.coverage.report]
+show_missing = false
+skip_empty = true
