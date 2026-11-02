@@ -1,0 +1,62 @@
+name: Smoke
+
+# End-to-end smoke of the real services (API + worker + PostgreSQL) with a fake
+# GitHub edge. No secrets, no network beyond package installation. See
+# docs/security/CI_CHECKS.md and scripts/smoke_e2e.py.
+on:
+  pull_request:
+  push:
+    branches:
+      - develop
+
+permissions:
+  contents: read
+
+concurrency:
+  group: smoke-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  smoke:
+    name: Smoke (API + worker + PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: radius
+          POSTGRES_USER: radius
+          POSTGRES_PASSWORD: radius
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U radius -d radius"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      DATABASE_URL: postgresql+psycopg://radius:radius@localhost:5432/radius
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: End-to-end smoke
+        run: python scripts/smoke_e2e.py
