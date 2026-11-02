@@ -124,13 +124,14 @@ Goal: capture what a change is *supposed* to do as a set of confirmable, testabl
 - Research hook: this is a paper dataset; plan its release.
 - Status (2026-11-02): **tooling ready; annotation pending (needs two human annotators plus an adjudicator).** Delivered: guidelines `../annotation/GUIDELINES.md` (gl-0.1, to be revised after the 10-PR calibration), runbook `../annotation/RUNBOOK.md`, schema and layout `benchmarks/gold/intent/` (`<pr-id>/{sources,annotator-<id>,adjudicated}.json`; the directory is `benchmarks/gold/intent/`, not the `benchmarks/intent_gold/` named in the steps above), stratified sampler and source fetcher `scripts/gold_sample.py`, annotation UI `scripts/gold_annotate.py`, agreement and adjudication `scripts/gold_agreement.py`, validator and public export `scripts/gold_validate.py`, synthetic end-to-end tests `tests/test_gold_*.py`. No real annotations exist. Remaining human steps: `benchmarks/gold/README.md`. The acceptance criteria (guideline doc: draft done; kappa >= 0.6; adjudicated set) are **not** met until the human run finishes.
 
-### IN-10 Extraction metrics harness   [ ]
+### IN-10 Extraction metrics harness   [~] harness ready; real numbers pending IN-09
 - Owner type: agent-ok
 - Depends on: IN-03, IN-09
 - Branch: `feature/bench-intent-metrics`
 - Size: M
 - Goal: run extraction over the gold set and report precision, recall, F1 (exact and fuzzy match), span accuracy, testability accuracy, per source type and per extractor (deterministic, LLM-assisted).
 - Acceptance: one command prints a table and writes JSON; results are stored with `algo_version`; CI runs a small subset.
+- Status (harness ready; real numbers pending IN-09): `scripts/intent_eval.py` / `python -m radius_intent.evaluation` (`run`, `report`, `compare`, `list-extractors`), library in `packages/intent/src/radius_intent/evaluation/`, docs in `docs/research/evaluation/INTENT_EVAL.md`. Only synthetic and F-14-derived data has been run (labelled SYNTHETIC); the real gold plugs in through an adapter (`--adapter module:function`). The remaining acceptance step is to run it on the IN-09 gold test split.
 
 ### IN-11 Dashboard Intent panel and confirmation   [x]
 - Owner type: agent-ok
