@@ -39,7 +39,6 @@ from radius_shared.database.session import (
 from radius_shared.errors import NotFoundError, ValidationError
 from radius_shared.logging import configure_logging, get_logger
 from radius_shared.observability import (
-    TRACE_CARRIERS,
     ObservabilitySettings,
     bind_correlation,
     configure_tracing,
@@ -121,7 +120,8 @@ class SqlAlchemyWorkerRuntime:
         if job is None:
             return False
         organization_id = self._organization_id(job.analysis_id)
-        traceparent = TRACE_CARRIERS.pop(job.analysis_id)
+        # Persisted at enqueue; kept across retries so attempts share one trace.
+        traceparent = job.traceparent
         started = time.perf_counter()
         outcome = "completed"
         with (

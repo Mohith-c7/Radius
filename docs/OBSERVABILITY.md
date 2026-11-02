@@ -59,18 +59,21 @@ Spans: `http.request` (API middleware) -> `webhook.handle` -> `queue.enqueue`
 `confidence` and `publish`. Correlation ids are span attributes
 (`radius.analysis_id`, ...).
 
-### Limitation: cross-process propagation
+### Cross-process propagation
 
-The `traceparent` is captured at enqueue and handed to the worker through an
-**in-process** store (`TRACE_CARRIERS`). `analysis_jobs` has no column or
-payload field for it and F-10 adds no migrations. So api and worker spans form
-one trace only when they run in the same process (tests, a single-process dev
-setup). In the docker compose deployment (separate api and worker containers)
-the worker starts a new trace per job; the shared `analysis_id` /
-`radius.analysis_id` attribute is the join key. Closing this needs a nullable
-`traceparent` column (or JSON payload) on `analysis_jobs`; see follow-ups.
-A retried attempt also starts a new trace, as the carrier is consumed on first
-claim.
+The W3C `traceparent` of the enqueuing span is stored in the nullable
+`analysis_jobs.traceparent` text column (migration `20261102_0010`) by
+`queue.enqueue`, and returned on the claimed job. The worker starts
+`worker.job` as a child of it, so API and worker spans form one trace even in
+separate containers. The value is kept across retries, so every attempt
+continues the same trace (one `worker.job` span per attempt). An explicit
+re-enqueue of a failed job replaces it with the new caller's trace.
+
+The column is NULL when tracing is off, for rows created before the migration,
+and when the stored value is malformed; in those cases the worker silently
+starts a fresh trace. `radius.analysis_id` remains a join key across traces.
+The old in-process `TRACE_CARRIERS` store is no longer used by the queue or
+worker.
 
 ## Metrics
 
@@ -127,6 +130,6 @@ python -m pytest apps/worker/tests/test_observability_flow.py
 
 ## Follow-ups
 
-- Persist `traceparent` on `analysis_jobs` (migration) for cross-process traces.
+- Remove the now-unused `TraceCarrierStore` / `TRACE_CARRIERS` helper.
 - Record real LLM token cost into `radius_llm_cost_usd_total`.
 - Propagate correlation ids into sandboxed test runs if useful.

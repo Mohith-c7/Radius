@@ -682,6 +682,8 @@ class AnalysisJob(UuidPrimaryKeyMixin, TimestampMixin, Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    #: W3C ``traceparent`` captured at enqueue so the worker continues the trace.
+    traceparent: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     analysis: Mapped[Analysis] = relationship(back_populates="analysis_job")
 

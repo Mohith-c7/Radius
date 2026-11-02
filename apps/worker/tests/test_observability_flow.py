@@ -20,13 +20,13 @@ from fastapi.testclient import TestClient
 from radius_api.config import get_api_settings
 from radius_api.main import create_app
 from radius_shared.database.base import Base
-from radius_shared.database.models import Organization
+from radius_shared.database.models import AnalysisJob, Organization
 from radius_shared.logging import JsonFormatter, RedactingFilter
 from radius_shared.observability import configure_tracing, reset_tracing
 from radius_worker import runner as runner_module
 from radius_worker.config import WorkerSettings
 from radius_worker.runner import create_sql_worker_runtime
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 pytest.importorskip("opentelemetry.sdk")
@@ -96,6 +96,17 @@ def test_one_analysis_produces_one_trace_and_correlated_logs(
         assert response.status_code == 202
         analysis_id = response.json()["data"]["analysisId"]
 
+        # Simulate a separate worker process: nothing in-process may carry the
+        # trace, only analysis_jobs.traceparent.
+        from radius_shared.observability import TRACE_CARRIERS
+
+        TRACE_CARRIERS._items.clear()
+        engine = create_engine(database_url)
+        with Session(engine) as check:
+            stored = check.scalar(select(AnalysisJob.traceparent))
+        engine.dispose()
+        assert stored is not None
+
         runtime = create_sql_worker_runtime(WorkerSettings())
         assert runtime.run_once() is True
     finally:
@@ -119,6 +130,7 @@ def test_one_analysis_produces_one_trace_and_correlated_logs(
         "stage.publish",
     } <= names
     assert len({item.context.trace_id for item in spans}) == 1
+    assert stored.split("-")[1] == format(spans[0].context.trace_id, "032x")
 
     by_name = {item.name: item for item in spans}
     http_span = by_name["http.request"]
