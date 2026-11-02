@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import test, { afterEach } from "node:test";
 
 process.env.NEXT_PUBLIC_RADIUS_API_BASE_URL = "https://radius.test/";
+process.env.RADIUS_DASHBOARD_INTERNAL_URL = "http://dashboard.test";
 process.env.NEXT_PUBLIC_RADIUS_ORGANIZATION_ID =
   "11111111-1111-4111-8111-111111111111";
-process.env.NEXT_PUBLIC_RADIUS_API_KEY = "dashboard-test-key";
 
 const api = await import("../lib/api.ts");
 const originalFetch = globalThis.fetch;
@@ -20,17 +20,14 @@ function envelope(data, init = {}) {
   });
 }
 
-test("listRepositories sends Radius headers and normalizes API URLs", async () => {
+test("listRepositories calls the same-origin proxy without credentials", async () => {
   globalThis.fetch = async (input, init) => {
-    assert.equal(String(input), "https://radius.test/api/v1/repositories");
+    assert.equal(String(input), "http://dashboard.test/api/radius/repositories");
     assert.equal(init?.cache, "no-store");
 
     const headers = new Headers(init?.headers);
-    assert.equal(
-      headers.get("X-Radius-Organization-Id"),
-      "11111111-1111-4111-8111-111111111111",
-    );
-    assert.equal(headers.get("X-Radius-API-Key"), "dashboard-test-key");
+    // Credentials are attached by the server-side proxy, never by the browser.
+    assert.equal(headers.get("X-Radius-API-Key"), null);
 
     return envelope({ success: true, data: [] });
   };
@@ -41,7 +38,7 @@ test("listRepositories sends Radius headers and normalizes API URLs", async () =
 test("listAnalyses preserves supported filters as query parameters", async () => {
   globalThis.fetch = async (input) => {
     const url = new URL(String(input));
-    assert.equal(url.pathname, "/api/v1/analyses");
+    assert.equal(url.pathname, "/api/radius/analyses");
     assert.equal(url.searchParams.get("repositoryId"), "repo-1");
     assert.equal(url.searchParams.get("status"), "completed");
     assert.equal(url.searchParams.has("pullRequestId"), false);
@@ -57,7 +54,7 @@ test("listAnalyses preserves supported filters as query parameters", async () =>
 
 test("connectRepository posts JSON with an idempotency key", async () => {
   globalThis.fetch = async (input, init) => {
-    assert.equal(String(input), "https://radius.test/api/v1/repositories");
+    assert.equal(String(input), "http://dashboard.test/api/radius/repositories");
     assert.equal(init?.method, "POST");
 
     const headers = new Headers(init?.headers);
@@ -138,7 +135,7 @@ test("getTestRunResult fetches CI test run results", async () => {
   globalThis.fetch = async (input) => {
     assert.equal(
       String(input),
-      "https://radius.test/api/v1/analyses/analysis-1/tests/results",
+      "http://dashboard.test/api/radius/analyses/analysis-1/tests/results",
     );
     return envelope({
       success: true,
@@ -165,7 +162,7 @@ test("uploadTestResults posts JUnit XML report payload", async () => {
   globalThis.fetch = async (input, init) => {
     assert.equal(
       String(input),
-      "https://radius.test/api/v1/analyses/analysis-1/tests/results",
+      "http://dashboard.test/api/radius/analyses/analysis-1/tests/results",
     );
     assert.equal(init?.method, "POST");
     const headers = new Headers(init?.headers);
