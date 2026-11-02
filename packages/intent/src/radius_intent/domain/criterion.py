@@ -36,11 +36,27 @@ ALLOWED_TRANSITIONS: MappingProxyType[CriterionState, frozenset[CriterionState]]
                     CriterionState.CONFIRMED,
                     CriterionState.REJECTED,
                     CriterionState.EDITED,
+                    CriterionState.NEEDS_RECONFIRMATION,
+                    CriterionState.ORPHANED,
                 }
             ),
             CriterionState.CONFIRMED: frozenset(
-                {CriterionState.EDITED, CriterionState.REJECTED}
+                {
+                    CriterionState.EDITED,
+                    CriterionState.REJECTED,
+                    CriterionState.NEEDS_RECONFIRMATION,
+                    CriterionState.ORPHANED,
+                }
             ),
+            CriterionState.NEEDS_RECONFIRMATION: frozenset(
+                {
+                    CriterionState.CONFIRMED,
+                    CriterionState.REJECTED,
+                    CriterionState.EDITED,
+                    CriterionState.ORPHANED,
+                }
+            ),
+            CriterionState.ORPHANED: frozenset({CriterionState.REJECTED}),
             CriterionState.REJECTED: frozenset({CriterionState.PROPOSED}),
         }
     )
