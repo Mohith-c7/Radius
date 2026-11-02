@@ -52,8 +52,24 @@ from radius_linking.domain.ports import (
     Reranker,
     RerankResult,
 )
+from radius_linking.domain.relevance import (
+    RELEVANCE_ALGO_VERSION,
+    AssertionFact,
+    CriterionTestRelevance,
+    RelevanceReason,
+    RelevanceSet,
+    TestDoc,
+    TestDocPort,
+)
 
 __all__ = [
+    "RELEVANCE_ALGO_VERSION",
+    "AssertionFact",
+    "CriterionTestRelevance",
+    "RelevanceReason",
+    "RelevanceSet",
+    "TestDoc",
+    "TestDocPort",
     "CALIBRATION_ARTIFACT_VERSION",
     "CHAIN_ALGO_VERSION",
     "SCORE_KIND_CALIBRATED",
