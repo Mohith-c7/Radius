@@ -23,8 +23,8 @@ Status: **available** = pinned revision and sha256 recorded, fetchable now; **re
 | aidev-hf | AIDev, Hugging Face | CC-BY-4.0 (embedded code keeps repo licences) | conditional | available | RQ4, CA-01 |
 | aidev-zenodo | AIDev, Zenodo v3 | CC-BY-4.0 | conditional | requested | RQ4, CA-01 |
 | agentlens-bench | AgentLens-Bench | UNKNOWN (not released) | no | **blocked** | RQ4 |
-| radius-f14-intent-fixtures | Radius F-14 fixtures | internal, no licence (DEC-012) | no | available | RQ1, RQ2 |
-| radius-real-benchmark | Radius benchmarks/real | internal, no licence (DEC-012) | no | available | RQ2, RQ3 (self-eval) |
+| radius-f14-intent-fixtures | Radius F-14 fixtures | Apache-2.0 (DEC-018) | yes | available | RQ1, RQ2 |
+| radius-real-benchmark | Radius benchmarks/real | Apache-2.0 (DEC-018) | yes | available | RQ2, RQ3 (self-eval) |
 
 Not inventoried (no primary fetch in EP-03): SWE-bench Multimodal/Multilingual, SWE-bench Pro and its ABS variant (`OpenAgentLab/SWE-bench_Pro-ABS`, named on the SWE-ABS page), c-CRAB, CR-Bench, EvalPlus, partner PR data (none exists; DEC-014 says no partner history without written opt-in and QS-06).
 
@@ -89,12 +89,12 @@ Not inventoried (no primary fetch in EP-03): SWE-bench Multimodal/Multilingual, 
 - arXiv 2605.12925; not released as of v4 (2026-10-05) per EP-01 (not re-fetched). Do not plan on it. Re-check periodically.
 
 ### radius-f14-intent-fixtures
-- `benchmarks/fixtures/intent` (8 hand-authored scenarios); hashes of every `expected.json` and the schema are in the manifest (LF-normalised). Licence: none granted (DEC-012: undecided, no LICENSE file), so not redistributable until decided. Use: development, regression, RQ1/RQ2 smoke tests. Risk: tiny, authored by the system designer (circularity); not evidence of generalisation.
+- `benchmarks/fixtures/intent` (8 hand-authored scenarios); hashes of every `expected.json` and the schema are in the manifest (LF-normalised). Licence: Apache-2.0 since DEC-018 (2026-11-02; supersedes DEC-012, which had left it undecided), so redistributable once the repository is published. Use: development, regression, RQ1/RQ2 smoke tests. Risk: tiny, authored by the system designer (circularity); not evidence of generalisation.
 
 ### radius-real-benchmark
-- `benchmarks/real` (4 own packages, 120 mutants, 16 structural scenarios; subjects pinned to `6e354274b5b42497e88c44bca9d7e6121c9e82fe`). Hashes of `corpus.json` and `results/*.jsonl` are in the manifest; regenerating results changes them and requires a manifest update. Labels: full-suite detected vs undetected (undetected may be equivalent mutants). Self-evaluation on own Python code only; no intent annotations yet. No licence (DEC-012).
+- `benchmarks/real` (4 own packages, 120 mutants, 16 structural scenarios; subjects pinned to `6e354274b5b42497e88c44bca9d7e6121c9e82fe`). Hashes of `corpus.json` and `results/*.jsonl` are in the manifest; regenerating results changes them and requires a manifest update. Labels: full-suite detected vs undetected (undetected may be equivalent mutants). Self-evaluation on own Python code only; no intent annotations yet. Apache-2.0 (DEC-018); the pinned subject packages keep their own licences.
 
-## Label-source plan (DEC-014: public data first)
+## Label-source plan (DEC-020, supersedes DEC-014: public data first)
 
 1. Primary "plausible but incorrect" labels for SWE-bench Verified patches: SWE-ABS strengthened suites (available now; agent patches must come from swe-bench-experiments and be re-run).
 2. Second source: UTBoost and/or PatchDiff, **both blocked**. Until obtained, the EVALUATION_PLAN requirement of at least two label sources is not met. SWE-Bench+ flags are a possible third.
@@ -105,5 +105,5 @@ Not inventoried (no primary fetch in EP-03): SWE-bench Multimodal/Multilingual, 
 
 - Authors of UTBoost, PatchDiff, SWE-Bench+, SWE-Mutation: artifacts and licence terms (no links found).
 - SWE-bench maintainers: confirm the dataset licence (none declared on Hugging Face); until then treat as UNKNOWN.
-- Decide DEC-012 (Radius licence) before releasing fixtures or benchmark outputs.
+- Radius licence is decided (DEC-018, Apache-2.0); publishing it is still the owner's act. Author-request drafts for the blocked datasets are in `AUTHOR_REQUESTS.md` (not sent).
 - Optional: confirm the AIDev DOI mapping and whether AIDev-pop overlaps SWE-bench repos.

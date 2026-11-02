@@ -51,6 +51,7 @@ Goal: a verification product must itself be trustworthy. Template and rules: `..
 - Acceptance: fails CI on high severity; baseline file for accepted risks with expiry.
 
 ### QS-06 Data retention and privacy   [ ]
+- Inputs decided 2026-11-02: LLM egress and log retention (DEC-021), partner-data retention and opt-in (DEC-020), telemetry (DEC-023). Also decide the fate of the legacy Gemini `SemanticPruner` egress (DEC-021 known gap).
 - Owner type: human-required (policy) + agent-ok (implementation)
 - When: before M5
 - Depends on: QS-01
@@ -114,7 +115,8 @@ Goal: a verification product must itself be trustworthy. Template and rules: `..
 - Goal: keyboard navigation, screen reader labels, contrast in light/dark, no color-only meaning (important for state badges), reduced-motion, readable on narrow screens.
 - Acceptance: automated checks (axe) in CI plus a manual pass.
 
-### QS-13 Licensing review   [ ]
+### QS-13 Licensing review   [~]
+- Status 2026-11-02: Radius license chosen (DEC-018, Apache-2.0), `LICENSE`, `NOTICE`, `THIRD_PARTY_NOTICES.md` added; Python dependency check done (gate passes; LGPL psycopg and MPL packages noted). Still open (human): Node dependency report review, written Apache-2.0 confirmation from the second commit author, institution/IP check, `SECURITY.md`, legal sign-off checklist.
 - Owner type: human-required
 - When: before M6 and before any open-sourcing
 - Depends on: F-01

@@ -63,6 +63,7 @@ Goal: make Radius something people adopt, understand in minutes, and pay for. Co
 - Acceptance: tested with partners; predictable bills.
 
 ### PL-08 Product telemetry (opt-in) and success metrics   [ ]
+- Decision 2026-11-02: DEC-023 (opt-in, anonymous, no code or intent text, no phone-home by default) is binding for this task.
 - Owner type: agent-ok
 - Depends on: QS-06
 - Branch: `feature/telemetry-optin`
@@ -71,7 +72,8 @@ Goal: make Radius something people adopt, understand in minutes, and pay for. Co
 - North-star metric (hypothesis): "verified-by-evidence PRs per week" and "agent-PR defects caught before merge".
 - Acceptance: opt-in; documented events; no PII or code content.
 
-### PL-09 Open-source and community strategy   [ ]
+### PL-09 Open-source and community strategy   [~]
+- Status 2026-11-02: license decided by delegation (DEC-018, Apache-2.0 open core; `LICENSE`, `NOTICE`, `CONTRIBUTING.md` with DCO added, DEC-022). Still open: code of conduct, roadmap transparency, benchmark leaderboard, labelled first issues, owner acceptance of DEC-018 before any public release.
 - Owner type: human-required
 - Depends on: QS-13
 - Branch: `docs/oss-strategy`

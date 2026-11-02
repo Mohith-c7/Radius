@@ -56,6 +56,7 @@ Goal: capture what a change is *supposed* to do as a set of confirmable, testabl
 - Tests: table-driven parser tests; fuzz tests for pathological markdown.
 
 ### IN-04 LLM-assisted extraction (guarded)   [x]
+- Defaults confirmed 2026-11-02 by DEC-021 (opt-in per org, redacted intent text only, `claude-haiku-5-5`). Follow-ups recorded there: local-model adapter before enterprise GA, durable usage ledger, code-egress policy, and gating the legacy Gemini pruner.
 - Owner type: pair
 - Depends on: IN-03, F-10, QS-02 (done: use `radius_shared.llm_guard` and register an adapter per `docs/security/PROMPT_INJECTION.md`)
 - Branch: `feature/intent-extract-llm`
