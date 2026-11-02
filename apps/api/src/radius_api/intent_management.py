@@ -182,7 +182,9 @@ class IntentManagementService:
         snapshots: IntentSnapshotService,
         *,
         clock: Callable[[], datetime],
+        snapshots_for: Callable[[UUID], IntentSnapshotService] | None = None,
     ) -> None:
+        self._snapshots_for = snapshots_for
         self._repo = repository
         self._snapshots = snapshots
         self._clock = clock
@@ -530,7 +532,12 @@ class IntentManagementService:
         sanitization: Sanitization = Sanitization(),
     ) -> BuildOutcome:
         try:
-            result = self._snapshots.on_sources_changed(
+            builder = (
+                self._snapshots_for(org)
+                if self._snapshots_for is not None
+                else self._snapshots
+            )
+            result = builder.on_sources_changed(
                 str(analysis_id), org, sources, self._clock(), trigger=trigger
             )
         except SnapshotBuildConflictError as exc:

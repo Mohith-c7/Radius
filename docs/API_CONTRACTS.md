@@ -410,7 +410,8 @@ Latest snapshot. Header `ETag`.
                      "source_kind": "pr_body", "source_id": "pr-body",
                      "source_hash": "e3b0...", "retrieved_at": "2026-11-02T10:00:00Z"},
           "span": {"source_id": "pr-body", "start": 24, "end": 67},
-          "weight": 1.0, "testability": "unrated", "testability_rationale": null,
+          "weight": 1.0, "testability": "behavioral_testable",
+          "testability_rationale": "Describes an observable behavior ... [testability-rules-v1; confidence=medium; rules=...]",
           "state": "confirmed", "hints": {"paths": [], "tests": [], "label": null}
         }],
         "sources": [{"kind": "pr_body", "source_id": "pr-body", "raw_text_hash": "e3b0...",
@@ -421,6 +422,8 @@ Latest snapshot. Header `ETag`.
     }
 
 `state` is one of `proposed`, `confirmed`, `rejected`, `edited`, `needs_reconfirmation`, `orphaned`. `origin.method` is `deterministic`, `llm` or `human`. A span indexes into the stored (sanitized) text of its source: fetch it with `GET .../intent/sources`.
+
+`testability` is one of `behavioral_testable`, `structural_checkable`, `non_functional_measurable`, `subjective_or_vague`, `untestable_external` (or `unrated` if the rater failed for that criterion); `testability_rationale` explains the rule-based rating and is set whenever the criterion was rated. Ratings are deterministic (no LLM) and are computed when the snapshot is built. `origin.method = "llm"` criteria are proposals only: they exist only when the deployment enabled LLM extraction (`RADIUS_LLM_INTENT_ENABLED`) and the organization is allow-listed, they always start as `proposed`, and a human must confirm them.
 
 ## GET /analyses/{analysisId}/intent/snapshots
 
