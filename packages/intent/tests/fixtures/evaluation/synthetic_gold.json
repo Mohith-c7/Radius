@@ -1,0 +1,333 @@
+{
+ "schema": "radius.intent.gold/1",
+ "name": "synthetic-demo",
+ "version": "1",
+ "split": "synthetic",
+ "synthetic": true,
+ "notes": [
+  "Hand-made synthetic cases for exercising the IN-10 harness; not annotated PRs and not a research result."
+ ],
+ "cases": [
+  {
+   "case_id": "pr-001",
+   "well_specified": true,
+   "author_type": "human",
+   "group": "repo-a",
+   "sources": [
+    {
+     "source_id": "pr_body",
+     "kind": "pr_body",
+     "text": "## Summary\nAdd CSV export for reports.\n\n## Acceptance criteria\n- Users can export a report as CSV.\n- The export finishes within 5 seconds for 10,000 rows.\n- Empty reports produce a header-only file.\n"
+    }
+   ],
+   "criteria": [
+    {
+     "id": "C1",
+     "span": {
+      "source_id": "pr_body",
+      "start": 65,
+      "end": 98
+     },
+     "testability": "behavioral_testable"
+    },
+    {
+     "id": "C2",
+     "span": {
+      "source_id": "pr_body",
+      "start": 101,
+      "end": 154
+     },
+     "testability": "non_functional_measurable"
+    },
+    {
+     "id": "C3",
+     "span": {
+      "source_id": "pr_body",
+      "start": 157,
+      "end": 198
+     },
+     "testability": "behavioral_testable"
+    }
+   ]
+  },
+  {
+   "case_id": "pr-002",
+   "well_specified": true,
+   "author_type": "agent",
+   "group": "repo-a",
+   "sources": [
+    {
+     "source_id": "pr_body",
+     "kind": "pr_body",
+     "text": "Fixes the login bug.\n\n### Expected behavior\n1. A locked account shows the message \"Account locked\".\n2. Three failed attempts lock the account for 15 minutes.\n3. The UI feels snappier.\n"
+    }
+   ],
+   "criteria": [
+    {
+     "id": "C1",
+     "span": {
+      "source_id": "pr_body",
+      "start": 47,
+      "end": 99
+     },
+     "testability": "behavioral_testable"
+    },
+    {
+     "id": "C2",
+     "span": {
+      "source_id": "pr_body",
+      "start": 103,
+      "end": 157
+     },
+     "testability": "behavioral_testable"
+    },
+    {
+     "id": "C3",
+     "span": {
+      "source_id": "pr_body",
+      "start": 161,
+      "end": 183
+     },
+     "testability": "subjective_or_vague"
+    }
+   ]
+  },
+  {
+   "case_id": "pr-003",
+   "well_specified": false,
+   "author_type": "human",
+   "group": "repo-b",
+   "sources": [
+    {
+     "source_id": "pr_body",
+     "kind": "pr_body",
+     "text": "Refactor the parser module.\n\nNo functional change is intended.\n"
+    }
+   ],
+   "criteria": []
+  },
+  {
+   "case_id": "pr-004-unicode",
+   "well_specified": true,
+   "author_type": "agent",
+   "group": "repo-b",
+   "sources": [
+    {
+     "source_id": "pr_body",
+     "kind": "pr_body",
+     "text": "## Acceptance criteria\n- \u7528\u6237\u53ef\u4ee5\u5bfc\u51fa CSV \ud83d\ude80 reports in under 2 seconds.\n- Failed exports show an error toast \u2705.\n"
+    }
+   ],
+   "criteria": [
+    {
+     "id": "C1",
+     "span": {
+      "source_id": "pr_body",
+      "start": 25,
+      "end": 65
+     },
+     "testability": "non_functional_measurable"
+    },
+    {
+     "id": "C2",
+     "span": {
+      "source_id": "pr_body",
+      "start": 68,
+      "end": 105
+     },
+     "testability": "behavioral_testable"
+    }
+   ]
+  },
+  {
+   "case_id": "pr-005-multi",
+   "well_specified": true,
+   "author_type": "human",
+   "group": "repo-c",
+   "sources": [
+    {
+     "source_id": "issue-12",
+     "kind": "issue",
+     "text": "Requirements:\n- The API returns HTTP 404 for unknown ids.\n- The API returns HTTP 400 for malformed ids.\n"
+    },
+    {
+     "source_id": "pr_body",
+     "kind": "pr_body",
+     "text": "Implements the lookup endpoint. See the linked issue.\n"
+    }
+   ],
+   "criteria": [
+    {
+     "id": "C1",
+     "span": {
+      "source_id": "issue-12",
+      "start": 16,
+      "end": 57
+     },
+     "testability": "behavioral_testable"
+    },
+    {
+     "id": "C2",
+     "span": {
+      "source_id": "issue-12",
+      "start": 60,
+      "end": 103
+     },
+     "testability": "behavioral_testable"
+    }
+   ]
+  },
+  {
+   "case_id": "pr-006-vague",
+   "well_specified": false,
+   "author_type": "human",
+   "group": "repo-c",
+   "sources": [
+    {
+     "source_id": "pr_body",
+     "kind": "pr_body",
+     "text": "Make the dashboard better and cleaner.\n"
+    }
+   ],
+   "criteria": [
+    {
+     "id": "C1",
+     "span": {
+      "source_id": "pr_body",
+      "start": 0,
+      "end": 38
+     },
+     "testability": "subjective_or_vague"
+    }
+   ]
+  },
+  {
+   "case_id": "pr-007-compound",
+   "well_specified": true,
+   "author_type": "agent",
+   "group": "repo-c",
+   "sources": [
+    {
+     "source_id": "pr_body",
+     "kind": "pr_body",
+     "text": "## Acceptance criteria\n- Passwords must be at least 12 characters and must contain a digit.\n- Reset links expire after 30 minutes.\n"
+    }
+   ],
+   "criteria": [
+    {
+     "id": "C1",
+     "span": {
+      "source_id": "pr_body",
+      "start": 25,
+      "end": 91
+     },
+     "testability": "behavioral_testable"
+    },
+    {
+     "id": "C2",
+     "span": {
+      "source_id": "pr_body",
+      "start": 25,
+      "end": 91
+     },
+     "testability": "behavioral_testable",
+     "text": "Passwords must contain a digit."
+    },
+    {
+     "id": "C3",
+     "span": {
+      "source_id": "pr_body",
+      "start": 94,
+      "end": 130
+     },
+     "testability": "behavioral_testable"
+    }
+   ]
+  },
+  {
+   "case_id": "pr-008-nogold",
+   "well_specified": false,
+   "author_type": "agent",
+   "group": "repo-a",
+   "sources": [
+    {
+     "source_id": "pr_body",
+     "kind": "pr_body",
+     "text": "Bump dependency versions.\n\nNothing else.\n"
+    }
+   ],
+   "criteria": []
+  },
+  {
+   "case_id": "pr-009-commit",
+   "well_specified": false,
+   "author_type": "human",
+   "group": "repo-d",
+   "sources": [
+    {
+     "source_id": "commit-1",
+     "kind": "commit_message",
+     "text": "Add retry to the uploader.\n\nAcceptance criteria:\n- Uploads retry up to 3 times on a 503 response.\n"
+    },
+    {
+     "source_id": "pr_body",
+     "kind": "pr_body",
+     "text": "Adds retries.\n"
+    }
+   ],
+   "criteria": [
+    {
+     "id": "C1",
+     "span": {
+      "source_id": "commit-1",
+      "start": 51,
+      "end": 97
+     },
+     "testability": "behavioral_testable"
+    }
+   ]
+  },
+  {
+   "case_id": "pr-010-agent",
+   "well_specified": true,
+   "author_type": "agent",
+   "group": "repo-d",
+   "sources": [
+    {
+     "source_id": "agent-prompt",
+     "kind": "agent_prompt",
+     "text": "Task: build the search page.\n\n## Requirements\n- The search box filters results as the user types.\n- Results are sorted by relevance, then by date.\n- The page is accessible to screen readers.\n"
+    }
+   ],
+   "criteria": [
+    {
+     "id": "C1",
+     "span": {
+      "source_id": "agent-prompt",
+      "start": 48,
+      "end": 97
+     },
+     "testability": "behavioral_testable"
+    },
+    {
+     "id": "C2",
+     "span": {
+      "source_id": "agent-prompt",
+      "start": 100,
+      "end": 146
+     },
+     "testability": "behavioral_testable"
+    },
+    {
+     "id": "C3",
+     "span": {
+      "source_id": "agent-prompt",
+      "start": 149,
+      "end": 190
+     },
+     "testability": "non_functional_measurable"
+    }
+   ]
+  }
+ ]
+}

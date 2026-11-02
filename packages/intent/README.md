@@ -168,7 +168,7 @@ PyYAML is only a transitive dependency of Radius (not declared), so the spec is 
 
 ### Metrics hook for IN-10
 
-IN-09's gold set does not exist yet. `score_extraction(predicted_texts, gold_texts, fuzzy_threshold=None)` returns `PrecisionRecall` (one-to-one greedy matching on normalized text, optionally fuzzy by content-token Jaccard) and `score_by_source_kind(cases)` micro-averages over `GoldCase(kind, predicted, gold)` per source kind. No CLI, no I/O.
+IN-09's gold set does not exist yet. `score_extraction(predicted_texts, gold_texts, fuzzy_threshold=None)` returns `PrecisionRecall` (one-to-one greedy matching on normalized text, optionally fuzzy by content-token Jaccard) and `score_by_source_kind(cases)` micro-averages over `GoldCase(kind, predicted, gold)` per source kind. No CLI, no I/O. The full harness (IN-10) is described below.
 
 ### Limitations
 
@@ -259,6 +259,23 @@ Origin and hints: a Gherkin scenario (the extractor's `Scenario: ...` text), a l
 ### Limitations
 
 English word lists only; other languages get language-neutral cues (code references, quantities, HTTP status codes) at low confidence and otherwise land in `subjective_or_vague` with the hint to add an English summary or a linked test. Rule-based: ambiguous words ("remove", "update", "secure", "split") can mislead, an imperative "Update ..." or "Remove ..." about runtime data may be read as a structural edit, and a criterion that mixes behavior and a vague adjective is rated by the larger score. Only the first 4000 characters are analysed. Weights and thresholds were set by hand and checked on `tests/fixtures/testability/labeled.jsonl` (122 criteria, developed against it) and `labeled_holdout.jsonl` (30 criteria written afterwards by the same author, not used for tuning). These are development sanity checks by one author, not a research result: the gold set is IN-09 and the measurement is IN-10. The documented known misses are listed in `tests/test_testability_cases.py`.
+
+## Extraction metrics harness (IN-10)
+
+Harness ready; real numbers pending the IN-09 gold set. Everything run so far is synthetic or F-14-derived and labelled `SYNTHETIC - not a research result`. Full documentation: `docs/research/evaluation/INTENT_EVAL.md`.
+
+```bash
+python scripts/intent_eval.py list-extractors
+python scripts/intent_eval.py run --config benchmarks/configs/intent_synthetic.json   # writes benchmarks/results/intent/<run-id>/
+python scripts/intent_eval.py report benchmarks/results/intent/<run-id>
+python scripts/intent_eval.py compare RUN_A RUN_B --a-extractor combined --b-extractor deterministic
+```
+
+- **Where.** `radius_intent.evaluation` (`python -m radius_intent.evaluation` works too). Pure computation (`gold`, `matching`, `stats`, `metrics`, `config`, `compare`, `report`) is fenced by an import-linter contract; file reading is confined to `loader` and `provenance`; `extractors`/`runner`/`cli` call the production extractors, merge and testability rater. Product code must not import it (second contract).
+- **Gold contract.** `radius.intent.gold/1` (schema in `docs/research/evaluation/intent_gold.schema.json`): per PR, `sources` (kind + text), `criteria` (code-point `span`, optional `alt_spans`, `testability`, `text`), `well_specified`, `author_type`. IN-09's files plug in through an adapter selected as `--adapter module:function` that returns this dict.
+- **Matching and metrics.** One-to-one greedy span matching at IoU >= 0.5 (configurable; PREREGISTRATION 5.1), plus normalized-text and token-Jaccard modes; micro and per-PR macro P/R/F1 overall, per source type, per well-specified slice and per author type; testability accuracy, macro-F1, Cohen's kappa and confusion matrix; abstention, coverage and false-positive rate on PRs without gold. Percentile 95% intervals from a seeded PR-cluster bootstrap (default 10,000 resamples, seed 20261102); `compare` is the paired bootstrap.
+- **Extractors.** `deterministic` (`det-extract-v1`), `llm` and `combined` (prompt `intent-extract-llm-v1`) over a `fake-lines`, `replay` or `anthropic` provider, and `oracle`/`null` sanity baselines. The real provider needs `--allow-real-llm` and `RADIUS_EVAL_ALLOW_REAL_LLM=1`; tests never use it.
+- **Reproducibility.** Every `run.json` records the config hash, seeds, dataset hash, git commit, extractor/prompt/testability versions, timings and LLM token usage.
 
 ## API integration (IN-08)
 

@@ -76,7 +76,7 @@ Fair comparison: same inputs, same splits, tuned with the same budget, report se
 | EP-02 [~] DRAFT 2026-11-02 (not frozen; `preregistration/`) | Pre-registration: RQs, hypotheses, metrics, analysis plan, stopping rules, exclusion criteria. Freeze before running. | EP-01 |
 | EP-03 [x] DONE 2026-11-02 (outputs: `datasets/`, `benchmarks/datasets/`, `scripts/datasets.py`) | Dataset assembly, licensing check, splits. | F-14 |
 | EP-04 [~] TOOLING READY 2026-11-02; annotation pending (human work; `annotation/GUIDELINES.md`, `annotation/RUNBOOK.md`, `scripts/gold_*.py`, `benchmarks/gold/`) | Gold annotation (IN-09, LK-07), agreement study. | EP-03 |
-| EP-05 | Experiment harness that calls the production pipeline, takes a dataset manifest + config, writes results with `algo_version`, seed, commit hash. One command reproduces any table. | M3 |
+| EP-05 [~] RQ1 extraction part: harness ready 2026-11-02, real numbers pending IN-09 (`evaluation/INTENT_EVAL.md`, `scripts/intent_eval.py`); other RQs pending | Experiment harness that calls the production pipeline, takes a dataset manifest + config, writes results with `algo_version`, seed, commit hash. One command reproduces any table. | M3 |
 | EP-06 | Baselines implemented and validated. | EP-05 |
 | EP-07 | RQ1 experiments (extraction, linking). | IN-10, LK-07 |
 | EP-08 | RQ2 experiments, including correlation of `a_static` vs `d_mut`. | EV-08, M4 |
