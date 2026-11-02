@@ -34,7 +34,7 @@ example a comment) never waives a finding, because the PR author controls the di
 | T009 | config_weakening | Coverage suppression | `pragma_no_cover` (medium), `fail_under_lowered` (high), `omit_added` (medium), `coverage_disabled` (high) | T009 |
 | T010 | config_weakening | CI / test-config weakening | `continue_on_error` (high), `step_disabled` (high), `or_true` (high), `test_step_removed` (high), `timeout_increased` (medium), `pytest_flag_removed` (medium), `tests_deselected` (high), `lint_weakened` (medium), `plugin_disabled` (low), `fail_fast_added` (info) | T010 |
 | T011 | config_weakening | Retries and sleeps added to force a pass | `test_sleep` (low), `test_retry_marker` (medium), `ci_retry` (medium) | T011 |
-| T012 | dependency | Hallucinated or unverifiable dependency | `registry_missing` (high), `typosquat` (high), `unverified_guarded_import` (high), `lockfile_drift` (medium), `unverified_new_dependency` (medium), `undeclared_import` (medium) | T012 |
+| T012 | dependency | Hallucinated or unverifiable dependency | `registry_missing` (high), `typosquat` (high), `unverified_guarded_import` (medium), `lockfile_drift` (medium), `unverified_new_dependency` (medium), `undeclared_import` (medium) | T012 |
 | T013 | suppression | Lint / type suppression added | `noqa` (low), `type_ignore` (low), `lint_disable` (low), `nosec` (medium), `ts_ignore` (low) | T013 |
 | T014 | code_quality | Stubbed implementation | `body_stubbed` (medium), `new_stub` (low) | T014 |
 | T015 | code_quality | Security downgrade | `tls_verify_disabled` (high), `hardcoded_secret` (high), `sql_interpolation` (high) | T015 |
@@ -366,7 +366,7 @@ AI-generated code invents plausible package names. A new dependency that is not 
 |---|---|---|
 | `registry_missing` | high | registry port reports the package does not exist |
 | `typosquat` | high | new dependency one edit away from a popular package |
-| `unverified_guarded_import` | high | new unlocked dependency whose import is wrapped in try/except ImportError |
+| `unverified_guarded_import` | medium | new unlocked dependency whose import is wrapped in try/except ImportError; offline it cannot be verified, so it is medium (DEC-028). With a registry that reports the package missing the finding is `registry_missing` (high) |
 | `lockfile_drift` | medium | new dependency missing from the lockfile |
 | `unverified_new_dependency` | medium | new dependency that cannot be verified offline |
 | `undeclared_import` | medium | new import of a third-party package declared nowhere |

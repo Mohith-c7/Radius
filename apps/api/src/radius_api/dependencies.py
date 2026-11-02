@@ -62,6 +62,10 @@ from radius_shared.database.session import (
     create_session_factory,
 )
 from radius_shared.logging import get_logger
+from radius_shared.verdict_v2_repository import (
+    InMemoryVerdictV2Repository,
+    SqlVerdictV2Repository,
+)
 from radius_testing.application import TestingApplicationService
 from radius_testing.infrastructure import (
     ConventionalTestDiscoverer,
@@ -124,6 +128,10 @@ class AppContainer:
     )
     intent_repository: InMemoryIntentRepository = field(
         default_factory=InMemoryIntentRepository
+    )
+    #: Verdict v2 alpha store and republish outbox (memory backend).
+    verdict_v2_repository: InMemoryVerdictV2Repository = field(
+        default_factory=InMemoryVerdictV2Repository
     )
     #: Criterion extractors used by the intent snapshot service, in priority
     #: order for ties. Append here to add one (for example the IN-04 LLM
@@ -413,6 +421,24 @@ def get_coverage_service(request: Request):
             confidence_store=SqlAlchemyConfidenceStore(session),
             coverage_store=SqlAlchemyCoverageStore(session),
         )
+    except Exception:
+        failed = True
+        raise
+    finally:
+        _release_request_session(request, failed=failed)
+
+
+def get_verdict_v2_repository(request: Request):
+    """Return the verdict v2 repository (one SQL session per request, or memory)."""
+
+    container = get_container(request)
+    if container.session_factory is None:
+        yield container.verdict_v2_repository
+        return
+    session = _acquire_request_session(request, container)
+    failed = False
+    try:
+        yield SqlVerdictV2Repository(session)
     except Exception:
         failed = True
         raise

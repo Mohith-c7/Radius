@@ -313,3 +313,16 @@ Accepted as recommended in `docs/research/design/VERDICT_V2_SLICE.md` section 8.
 | D17 | Alpha UIM versus the pre-registered UIM | Every stored result carries `profile`; alpha-static results are never pooled with confirmatory data; the pre-registration may add the profile as an amendment before freeze | Keeps the confirmatory analysis clean. |
 
 Revisit when: calibration exists (CA-*), mutation evidence lands (EV-04), or the first measurements (VS-04, the 8 F-14 fixtures) contradict a default; defaults are hypotheses, not results.
+
+## DEC-028: A guarded import that cannot be verified offline is `medium`; only a registry miss is `high` (T012)
+
+Context: fixture 06 (`pytimeparse-ultra` pinned in `requirements.txt`, imported behind `try/except ImportError`) reached `failed` through R1c even with no registry, because EV-02 reported `unverified_guarded_import` at `high`. The Verdict v2 design (section 7.3) expected `needs_review` offline and `failed` only when a registry lookup says the package does not exist. Without a registry the engine cannot tell a real private or niche package from a hallucinated one; the evidence is "unverified", not "known false". Failing the PR on that is a false accusation; ignoring it is false safety.
+
+| Option | Offline result for fixture 06 | Trade-off |
+| --- | --- | --- |
+| Keep `high` | `failed` (R1c) | Catches the fixture without a registry, but fails every PR that adds a real but unlocked optional dependency behind a guarded import. |
+| **`medium` offline, `registry_missing` (high) when a registry says it does not exist** | `needs_review` (R3a); `failed` with a registry | Conservative in both directions: never `verified`, never `failed` without proof. |
+
+Decision: the default severity of `T012:unverified_guarded_import` is `medium` (EV-02 `DependencyRule.checks`, overridable through `severity_overrides` as before). `registry_missing` and `typosquat` stay `high`. This refines D12 for this one check only; the fixture facts agree (its README says the `high` severity is "an assumption until EV-02 decides" and records the registry 404 as the proof). The PR verdict for fixture 06 is `needs_review` offline and `failed` with the registry, as in `verdict_v2.fixture_expectations.json`.
+
+Consequence: until a PyPI adapter ships (follow-up of EV-02), a hallucinated dependency is surfaced as `needs_review` with the finding listed, not blocked. Revisit when the registry adapter and the egress policy (DEC-021) allow lookups by default.

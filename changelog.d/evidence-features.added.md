@@ -1,0 +1,1 @@
+`radius_evidence` gains the first feature wave of Verdict v2: evidence item normalizers (EV-01), static assertion strength `a_static` (EV-06), freshness binding and staleness (EV-07) and lite independence with agent-trailer detection (EV-03-lite). All pure and deterministic; nothing is wired into the worker yet.
