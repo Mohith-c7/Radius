@@ -1,0 +1,19 @@
+title: "[Show and tell]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share how you use Radius, an integration, or a result. Do not post private code or secrets.
+  - type: textarea
+    id: what
+    attributes:
+      label: What did you build or find?
+    validations:
+      required: true
+  - type: input
+    id: link
+    attributes:
+      label: Link
+      description: Optional public repository, post or demo.
+    validations:
+      required: false

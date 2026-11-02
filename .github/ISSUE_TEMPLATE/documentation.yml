@@ -1,0 +1,31 @@
+name: Documentation
+description: Something in the docs is missing, unclear or wrong
+title: "[Docs]: "
+labels: ["type: docs", "status: needs-triage"]
+body:
+  - type: input
+    id: location
+    attributes:
+      label: Page or file
+      description: Path or URL of the documentation, for example docs/DEVELOPMENT_GUIDE.md.
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of problem
+      options:
+        - Incorrect or outdated
+        - Missing
+        - Unclear
+        - Broken link or command
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: What should change?
+      description: What is wrong, and what would be right? A suggested wording is welcome.
+    validations:
+      required: true

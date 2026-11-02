@@ -1,0 +1,77 @@
+name: Bug report
+description: Something in Radius is broken or behaves incorrectly
+title: "[Bug]: "
+labels: ["type: bug", "status: needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. If this is a security vulnerability, stop and follow [SECURITY.md](https://github.com/Mohith-c7/Radius/blob/develop/SECURITY.md) instead.
+        If Radius gave a wrong verdict, use the "Wrong verdict report" form.
+        Remove tokens, private code and personal data from everything you paste.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - API
+        - Worker
+        - Dashboard
+        - Parser or graph
+        - Intent
+        - Confidence or verdict
+        - Test selection or CI ingestion
+        - GitHub App
+        - Sandbox
+        - Docker or deployment
+        - Other or not sure
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you see, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands or clicks. A minimal repository or diff helps most.
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Output of `git rev-parse --short HEAD`, or the release you use.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Docker version, Python and Node versions, how you run Radius (make dev, dev-local, CI).
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or output
+      description: Relevant lines only. Redact secrets.
+      render: shell
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and found no duplicate.
+          required: true
+        - label: This is not a security vulnerability, and I removed secrets and private code.
+          required: true

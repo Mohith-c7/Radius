@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability (private)
+    url: https://github.com/Mohith-c7/Radius/security/advisories/new
+    about: Do not open a public issue. Use GitHub private vulnerability reporting. See SECURITY.md.
+  - name: Ask a question or share an idea (Discussions)
+    url: https://github.com/Mohith-c7/Radius/discussions
+    about: Usage questions, ideas and show-and-tell belong in Discussions, not issues.
+  - name: Getting help
+    url: https://github.com/Mohith-c7/Radius/blob/develop/SUPPORT.md
+    about: Where to ask what, and what to include.
