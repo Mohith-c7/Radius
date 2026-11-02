@@ -59,6 +59,12 @@ The Next.js web console is available at `http://localhost:3000`.
 | **`RADIUS_LOG_LEVEL`** | Application logging level (`INFO`, `DEBUG`, `WARNING`). | `INFO` |
 | **`RADIUS_FEATURE_SYMBOL_IMPACT`** | Worker: symbol-level test selection and blast radius for Python (F-08). Falls back to file-level impact when symbol info is missing or low-confidence. | `false` |
 | **`GEMINI_API_KEY`** | Google Gemini API key for the experimental Gemini call-site classifier. It is not part of the analysis pipeline and does not affect verdicts or test selection. | `AIzaSy...` |
+| **`RADIUS_LLM_INTENT_ENABLED`** | IN-04: master switch for LLM-assisted intent extraction. Off by default; the LLM only proposes criteria, never verdicts (DEC-009). Needs the `llm` extra. | `false` |
+| **`RADIUS_LLM_INTENT_ORGS`** | Comma-separated organization ids that opted in (`*` = all). Egress is allowed only when the flag is on AND the org is listed. Only redacted intent text is sent, never repository code (DEC-015). | empty (none) |
+| **`RADIUS_LLM_INTENT_MODEL`** | Model id used by the Anthropic adapter. | `claude-haiku-5-5` |
+| **`RADIUS_LLM_INTENT_ANALYSIS_TOKEN_CAP`** / **`RADIUS_LLM_INTENT_ORG_TOKEN_CAP`** | Token caps per analysis and per org (process lifetime); calls that would exceed them are skipped. | `30000` / `1000000` |
+| **`RADIUS_LLM_INTENT_MAX_OUTPUT_TOKENS`**, **`_TIMEOUT_S`**, **`_MAX_ATTEMPTS`**, **`_BREAKER_THRESHOLD`**, **`_BREAKER_COOLDOWN_S`**, **`_MAX_CRITERIA`**, **`_SEED`** | Output cap, request timeout, bounded retries, circuit breaker and proposal cap (same `RADIUS_LLM_INTENT_` prefix). | `2048`, `30`, `3`, `5`, `60`, `20`, `0` |
+| **`ANTHROPIC_API_KEY`** | API key for the Anthropic adapter (environment only; never logged). | `sk-ant-...` |
 | **`API_KEYS`** | Comma-separated API keys accepted by API in format `org_id:key`. | `00000000-0000-4000-8000-000000000001:radius_key_live` |
 | **`GITHUB_APP_ID`** | GitHub App ID used to generate installation access tokens. | `123456` |
 | **`GITHUB_APP_PRIVATE_KEY`** | RSA Private Key for the GitHub App (PEM format with `\n`). | `-----BEGIN RSA PRIVATE KEY-----\n...` |
