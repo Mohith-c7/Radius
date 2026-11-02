@@ -88,6 +88,29 @@ make seed-demo        # into the Docker Postgres from `make dev` (STORAGE_BACKEN
 
 `make seed-demo` runs `scripts/seed_demo.py --yes`, which prints a "DEMO DATA" banner and refuses to run without `--yes` or with `RADIUS_ENV=production`. Neither Compose profile seeds on its own (the dev profile does not set `RADIUS_SEED_DEMO_DATA`); the script writes into the same Postgres database from your host (the database port is published on `127.0.0.1`), into the dev organization `00000000-0000-4000-8000-000000000001`, which is the organization the dev dashboard loads.
 
+## End-to-end smoke test
+
+`scripts/smoke_e2e.py` runs the real services together against PostgreSQL, with no external network and no real GitHub. It needs only a running Postgres (about 15 s once dependencies are installed):
+
+```bash
+docker compose up -d postgres
+DATABASE_URL=postgresql+psycopg://radius:radius@localhost:5432/radius python scripts/smoke_e2e.py
+# or through pytest (skipped unless RADIUS_SMOKE=1 and a PostgreSQL DATABASE_URL):
+RADIUS_SMOKE=1 DATABASE_URL=postgresql+psycopg://radius:radius@localhost:5432/radius python -m pytest tests/test_smoke_e2e.py
+```
+
+It creates a throw-away database (`radius_smoke_<random>`) beside the one in `DATABASE_URL`, drops it at the end, and generates the webhook secret, API keys, key pepper and GitHub App RSA key at run time. Set `SMOKE_DEBUG=1` to print the final verdict payload.
+
+What it proves, on the `01_correct_strong_tests` fixture in gold mode with `RADIUS_FEATURE_VERDICT_V2=on`:
+
+- `alembic upgrade head` builds the schema on PostgreSQL; `/health` and `/ready` are healthy; secure defaults hold (no key, wrong key, other organization, wrong scope are refused with 403); authenticated responses carry `RateLimit-*` headers; a managed API key is created through the admin API and used.
+- A signed `pull_request` webhook is accepted (a bad or missing signature is rejected; a replayed delivery is idempotent) and creates an analysis and a queue job.
+- The real worker loop (`run_loop`) claims the job, clones the repository with the real `LocalGitRepositoryClient`, ingests intent (`.radius/intent.yml` hints, identical on the base ref so they count as `base_spec`), runs the v1 analysis and Verdict v2 Stage A/B, and publishes through the real `GitHubAppClient` (RS256 JWT verified by the fake).
+- `GET /analyses/{id}/verdict-v2` returns the expected verdict (`insufficient_evidence` before CI results), an ETag and 304; the Check Run and the single PR comment come from the renderer and carry the alpha disclaimer and the v2 marker.
+- Uploading a JUnit report (wrong commit 409, malformed 422, read-only key 403) triggers the outbox: the worker recomputes Stage B and updates the same comment and Check Run in place (`verified`, revision 2); an identical replay changes nothing; a later failing test removes `verified`.
+
+What it does **not** prove: anything about real GitHub (the REST API is an in-memory fake; permissions, rate limits, webhook delivery, App installation and token behaviour are unverified until the live validation in `docs/github-app-validation/`), a browser or the Next.js dashboard (the dashboard is built and tested by the `Validate` job in `ci.yml`), Docker images or Compose wiring (`scripts/check_compose.py` and `container-scan.yml` cover those statically), the test sandbox (`WORKER_EXECUTE_TESTS` stays off; CI results are uploaded), multi-process deployment (API and worker share one process here, though each uses its own database sessions), or other fixtures and languages.
+
 ## Windows notes
 
 - **pnpm via corepack.** `package.json` pins `pnpm@9.15.0`. Run `corepack enable` once. If Node is installed under `C:\Program Files` this fails with `EPERM: operation not permitted, open 'C:\Program Files\nodejs\pnpm'` unless the shell is elevated. Without administrator rights run `corepack enable --install-directory "$env:USERPROFILE\bin"` and put that directory first on `PATH`; `pnpm -v` then prints `9.15.0`. Use PowerShell or cmd for pnpm: the shims are `.cmd`/`.ps1` files that Git Bash does not find by the bare name `pnpm`.

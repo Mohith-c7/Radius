@@ -14,6 +14,7 @@ not measured on GitHub-hosted runners; CI results can differ slightly.
 | `security.yml` | `Dependency audit (Python)` | yes | `pip-audit`, baseline is 0 vulnerabilities |
 | `security.yml` | `Dependency audit (pnpm)` | yes, against expiring baseline | `pnpm audit` gated by `.github/security/audit-baseline.json` |
 | `security.yml` | `SBOM and license report` | yes for AGPL/SSPL/GPL only | CycloneDX SBOM + license reports as artifacts |
+| `smoke.yml` | `Smoke (API + worker + PostgreSQL)` | after one green run on develop | end-to-end smoke of the real API, worker and PostgreSQL with a fake GitHub edge |
 | `nightly.yml` | `Benchmarks (non-blocking)` | never | nightly `pytest benchmarks`, JUnit artifact |
 
 Only `Validate` is a required check today. Add the new checks to branch
@@ -100,6 +101,15 @@ After one green run on develop: require `Analyze (python)`, `Analyze (javascript
 ### Verification status
 
 Verified locally: actionlint 1.7.7 clean on all workflows, YAML parse of `dependabot.yml`, pin guard test, ruff. Not verifiable until GitHub runs them: CodeQL extraction results and run time, `config:` `paths-ignore` taking effect, `deny-licenses` handling of compound SPDX expressions, Scorecard publish and SARIF upload, Dependabot schema acceptance (Dependabot reports config errors in Insights > Dependency graph > Dependabot).
+
+## End-to-end smoke
+
+- Workflow: `smoke.yml` (pull requests and pushes to `develop`; `contents: read`, no secrets, 15 minute timeout, `postgres:16-alpine` service like `coverage.yml`). It runs `python scripts/smoke_e2e.py`, which takes about 15 s after dependency installation.
+- Local run: `docker compose up -d postgres`, then `DATABASE_URL=postgresql+psycopg://radius:radius@localhost:5432/radius python scripts/smoke_e2e.py`. `tests/test_smoke_e2e.py` wraps it for pytest and is skipped unless `RADIUS_SMOKE=1` and `DATABASE_URL` is PostgreSQL, so `coverage.yml` and local runs without Postgres skip it.
+- Proves: migrations, health/readiness, auth and scope enforcement, signed webhook to analysis, worker loop, Verdict v2 verdict, renderer output (alpha disclaimer, v2 marker) and republish after CI results, all against real code and a real database. See "End-to-end smoke test" in `docs/DEVELOPMENT_GUIDE.md`.
+- Does not prove: real GitHub behaviour (the GitHub REST API is an in-memory fake), a browser or the dashboard, Docker image builds or Compose wiring, the test sandbox.
+- Dashboard: the Next.js dashboard is not started by the smoke. Its lint, typecheck, test and build already run in the `Validate` job of `ci.yml` (`pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`), so no extra pnpm step was added; a browser-level smoke remains a follow-up.
+- Status: the first run on a CI runner has not happened yet; it was run locally against `postgres:16-alpine` only.
 
 ## Coverage
 
