@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import pytest
-
-from .symbol_changes_helpers import run, summary
+from radius_analysis.symbol_changes.testing import run, summary
 
 F = "function"
 M = "method"

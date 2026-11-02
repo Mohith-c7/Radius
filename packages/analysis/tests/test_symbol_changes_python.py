@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import pytest
-
-from .symbol_changes_helpers import dedent, run, summary
+from radius_analysis.symbol_changes.testing import dedent, run, summary
 
 A = "pkg/a.py"
 B = "pkg/b.py"

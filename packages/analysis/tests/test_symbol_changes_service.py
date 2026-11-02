@@ -26,8 +26,7 @@ from radius_analysis.symbol_changes import (
 from radius_analysis.symbol_changes.__main__ import main as cli_main
 from radius_analysis.symbol_changes.model import compress_lines, expand_ranges
 from radius_analysis.symbol_changes.service import detect_language, is_ignored
-
-from .symbol_changes_helpers import make_diff, run, summary
+from radius_analysis.symbol_changes.testing import make_diff, run, summary
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 FIXTURES = REPO_ROOT / "benchmarks" / "fixtures" / "intent"

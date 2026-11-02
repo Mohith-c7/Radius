@@ -1,4 +1,7 @@
-"""Test helpers for LK-01: build git-style diffs from two file maps and run extraction."""
+"""Test-support helpers for LK-01: build git-style diffs from file maps and run extraction.
+
+Shipped inside the package (not in tests/) so tests import it by absolute name regardless of
+pytest import mode."""
 
 from __future__ import annotations
 
