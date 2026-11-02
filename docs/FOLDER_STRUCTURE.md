@@ -122,6 +122,7 @@ graph/
 analysis/
 testing/
 confidence/
+intent/        # research: intent layer (DEC-007)
 shared/
 ```
 
