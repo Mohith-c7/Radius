@@ -38,7 +38,7 @@ Status key: **NEW** = not in the research plan. **EXT** = extends an existing ta
 
 ## 3. Wave 0: human decisions (start now)
 
-### PRD-01 Licence, contribution terms, DCO decision   [ ]   (EXT of QS-13)
+### PRD-01 Licence, contribution terms, DCO decision   [~] (c93509e: Apache-2.0 `LICENSE`, `NOTICE`, DCO contributing guide merged; second-author confirmation and institution/IP check remain, see QS-13)   (EXT of QS-13)
 - Owner type: human-required
 - Depends on: none
 - Branch: `docs/licence-decision`
@@ -60,7 +60,7 @@ Status key: **NEW** = not in the research plan. **EXT** = extends an existing ta
 
 ## 4. Wave 1: hygiene (parallel; disjoint files)
 
-### PRD-03 Community health files   [ ]   NEW
+### PRD-03 Community health files   [x] (fdb7941)   NEW
 - Owner type: pair (human supplies contact, conduct enforcement contact)
 - Depends on: PRD-02 for mailbox; otherwise none (use placeholder marked TODO-human)
 - Branch: `docs/community-files`
@@ -70,7 +70,7 @@ Status key: **NEW** = not in the research plan. **EXT** = extends an existing ta
 - Acceptance: GitHub community profile shows README, CoC, CONTRIBUTING, LICENSE (needs PRD-01), security policy; Scorecard Security-Policy >= 9 after scan.
 - Tests/verification: markdown link check; a new contributor follows CONTRIBUTING on a clean clone and runs tests (record in PR).
 
-### PRD-04 Issue forms, discussion templates, labels   [ ]   NEW
+### PRD-04 Issue forms, discussion templates, labels   [x] (731c9fa)   NEW
 - Owner type: agent-ok
 - Depends on: none
 - Branch: `chore/issue-templates`
@@ -80,7 +80,7 @@ Status key: **NEW** = not in the research plan. **EXT** = extends an existing ta
 - Acceptance: GitHub shows issue templates under the community profile; forms validate.
 - Tests/verification: `actionlint`-style schema check **[tool choice open]**; open a test issue in a fork.
 
-### PRD-05 README and first-impression pass   [ ]   NEW
+### PRD-05 README and first-impression pass   [x] (2ab7fc7)   NEW
 - Owner type: pair (screenshots/GIF need a running stack)
 - Depends on: none (updates later by PRD-18, PRD-25)
 - Branch: `docs/readme-overhaul`
@@ -90,7 +90,7 @@ Status key: **NEW** = not in the research plan. **EXT** = extends an existing ta
 - Acceptance: quickstart commands copy-paste verified on a clean machine; no claim without a linked evidence file; no "best"/"guaranteed" wording.
 - Tests/verification: link check; PRD-25 harness later automates the quickstart.
 
-### PRD-06 Changelog and commit lint   [ ]   NEW
+### PRD-06 Changelog and commit lint   [x] (9a41ece)   NEW
 - Owner type: agent-ok
 - Depends on: none
 - Branch: `chore/changelog-commitlint`
@@ -100,7 +100,7 @@ Status key: **NEW** = not in the research plan. **EXT** = extends an existing ta
 - Acceptance: PR with non-conforming title fails; fragment required or `no-changelog` label.
 - Tests/verification: two test PRs in a fork (one failing, one passing).
 
-### PRD-07 Supply-chain CI: CodeQL, Scorecard, dependency review   [ ]   NEW
+### PRD-07 Supply-chain CI: CodeQL, Scorecard, dependency review   [x] (dca26e2)   NEW
 - Owner type: agent-ok
 - Depends on: none
 - Branch: `chore/supply-chain-ci`
@@ -110,7 +110,7 @@ Status key: **NEW** = not in the research plan. **EXT** = extends an existing ta
 - Acceptance: workflows green on develop; baseline score recorded with date; any Critical/High Scorecard finding has a linked task.
 - Tests/verification: run the workflows; compare with AUDIT section 2.3.
 
-### PRD-08 Container hardening and image scan   [ ]   NEW
+### PRD-08 Container hardening and image scan   [x] (a86c346, 3e89565)   NEW
 - Owner type: agent-ok
 - Depends on: none
 - Branch: `chore/container-hardening`
@@ -121,6 +121,7 @@ Status key: **NEW** = not in the research plan. **EXT** = extends an existing ta
 - Tests/verification: CI build + scan; `docker compose up` still healthy (smoke).
 
 ### PRD-09 Repo hygiene: binaries and one-off scripts   [ ]   NEW
+> Owner decision pending (2026-11-02): the capstone `.docx` and `generate_capstone_diary.py` are intentionally still in the tree. Do not delete them in a docs or hygiene pass.
 - Owner type: human-required (decision on capstone diary), agent executes
 - Depends on: none
 - Branch: `chore/repo-hygiene`
@@ -130,7 +131,7 @@ Status key: **NEW** = not in the research plan. **EXT** = extends an existing ta
 - Acceptance: no executables or office binaries at root; Scorecard Binary-Artifacts passes.
 - Tests/verification: `git ls-files` listing; Scorecard.
 
-### PRD-11 HTTP hardening: headers, CORS, rate limits, body limits   [ ]   NEW
+### PRD-11 HTTP hardening: headers, CORS, rate limits, body limits   [x] (1e8a4ea)   NEW
 - Owner type: agent-ok
 - Depends on: none
 - Branch: `feature/http-hardening`
@@ -152,7 +153,7 @@ Status key: **NEW** = not in the research plan. **EXT** = extends an existing ta
 - Acceptance: reuse lint passes; notices file generated in release.
 - Tests/verification: CI. Header-only bulk change: schedule when no large PRs are open.
 
-### PRD-12 API key lifecycle   [ ]   EXT of IT-09
+### PRD-12 API key lifecycle   [x]   EXT of IT-09
 - Owner type: pair
 - Depends on: IT-09 design
 - Branch: `feature/api-key-lifecycle`
@@ -202,7 +203,7 @@ Status key: **NEW** = not in the research plan. **EXT** = extends an existing ta
 - Acceptance: `helm lint` and `helm template` pass; install on `kind` in CI reaches a verdict on a seeded PR.
 - Tests/verification: kind e2e workflow.
 
-### PRD-17 Operator documentation set   [ ]   NEW
+### PRD-17 Operator documentation set   [~] (docs/operations set and generated config reference done on `docs/truth-and-operator-docs`; the generator lives at `scripts/gen_config_reference.py` with a unit test, not `scripts/ci/`. Not done: `docker-compose.prod.yml` with published images (no images exist, PRD-13), Terraform example, CI upgrade test, a reviewer-run upgrade drill)   NEW
 - Owner type: agent-ok
 - Depends on: PRD-13 (for image names), PRD-16 optional
 - Branch: `docs/operations`

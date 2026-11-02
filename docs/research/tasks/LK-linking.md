@@ -56,11 +56,9 @@ Goal: connect criteria to the code that implements them, and code to the tests/e
 - Tests: property tests on random generated test bodies (no crashes).
 - Contract: see design/VERDICT_V2_SLICE.md (docs/research/design/; Verdict v2 alpha: emits AssertionFeatures (3.2) from radius_testing.assertions)
 
-### LK-05 IEG builder and persistence   [x]
-
 - Done: `radius_testing.assertions` in `packages/testing` (README there; placement per DEC-003, next to LK-03). `extract_assertions(test_files, repo_snapshot, links=None, resolver=None) -> AssertionSet` of `AssertionRecord(test_id, kind, subject{text, refs}, expected, comparator, strength_features, location, framework, confidence, via, algo_version=assertion-extract-v1)` plus per-test summaries (`tests_without_assertions`). Python: pytest `assert` forms, `raises/warns/approx`, unittest, mock, hypothesis, snapshot libraries, helpers (depth 2, test module + conftest), loops/parametrize/try-swallow/dead/mock_only/circular flags; TS/JS jest/vitest/node-assert is partial. EV-06 consumes `AssertionRecord.strength_features` (raw features, no score here); LK-05 plugs LK-03 results in through the `SymbolResolver` port and persists `to_dict()` rows keyed by `assertion_id`. CLI `scripts/assertion_dump.py`; flag `RADIUS_FEATURE_ASSERTION_EXTRACTION` (default off) only logs counts. Not done: helpers from imported utility modules, fixture-created mocks, chai property chains.
 
-### LK-05 IEG builder and persistence   [ ]
+### LK-05 IEG builder and persistence   [~]  (alpha scope merged: in-memory graph, invariants and builder in `radius_evidence` (ef8ca96); persistence tables `ieg_nodes`/`ieg_edges` and the query-speed acceptance are not done)
 - Owner type: agent-ok
 - Depends on: LK-02, LK-03, LK-04, IN-07
 - Branch: `feature/ieg-builder`

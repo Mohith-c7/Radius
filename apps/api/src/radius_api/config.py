@@ -39,6 +39,16 @@ class ApiSettings(DatabaseSettings):
     service_name: str = "radius-api"
     storage_backend: str = "memory"
     api_keys: str = ""
+    """DEPRECATED legacy ``org_id:key`` entries (full access). See docs/security/API_KEYS.md."""
+    api_key_pepper: str = Field(default="", alias="RADIUS_API_KEY_PEPPER")
+    """Server-side secret mixed into managed-key fingerprints (>= 32 chars).
+
+    Without it managed keys are disabled (legacy ``API_KEYS`` still work).
+    """
+    api_key_last_used_interval_seconds: int = Field(
+        default=300, ge=0, alias="RADIUS_API_KEY_LAST_USED_INTERVAL"
+    )
+    """Minimum seconds between ``last_used_at`` writes for one key."""
     github_webhook_secret: str = ""
     github_default_organization_id: UUID | None = None
     github_single_tenant: bool = Field(default=False, alias="GITHUB_SINGLE_TENANT")
@@ -121,6 +131,14 @@ class ApiSettings(DatabaseSettings):
     @classmethod
     def _valid_rate(cls, value: str) -> str:
         parse_rate_spec(value)
+        return value
+
+    @field_validator("api_key_pepper")
+    @classmethod
+    def _valid_pepper(cls, value: str) -> str:
+        if value and len(value) < 32:
+            msg = "RADIUS_API_KEY_PEPPER must be at least 32 characters."
+            raise ValueError(msg)
         return value
 
     @field_validator("trusted_proxies")

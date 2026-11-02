@@ -41,7 +41,7 @@ Goal: a verification product must itself be trustworthy. Template and rules: `..
 - Goal: automated tests that, for every endpoint and table, prove tenant A cannot read or write tenant B (including via IDs, search, exports, caches, queue, logs).
 - Acceptance: test generated from the route table so new endpoints without isolation tests fail CI.
 
-### QS-05 Secrets and dependency scanning   [ ]
+### QS-05 Secrets and dependency scanning   [x]  (13863fd gitleaks, pip-audit, pnpm audit baseline, SBOM, licence gate; 3e89565 Trivy image and Dockerfile scan; dca26e2 CodeQL, Scorecard, dependency review, Dependabot)
 - Owner type: agent-ok
 - When: M0
 - Depends on: F-13

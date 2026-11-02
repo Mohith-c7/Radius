@@ -1,6 +1,6 @@
 # Production Deployment Guide
 
-This document covers the production runtime architecture, configuration, and deployment procedures for the Radius software verification platform.
+This document covers the production runtime architecture, configuration, and deployment procedures for the Radius software verification platform. Step-by-step install, upgrade, backup, hardening and runbook pages are in [operations/](operations/README.md); the complete, generated environment variable reference is [operations/CONFIGURATION.md](operations/CONFIGURATION.md). The table in section 3 is a curated subset.
 
 ---
 
@@ -29,7 +29,9 @@ cd Radius
 
 # Configure production environment variables
 cp .env.example .env.production
-# (Edit .env.production with your database and GitHub App credentials)
+# (Edit .env.production with your database and GitHub App credentials.
+#  .env.example is a development template: remove RADIUS_ALLOW_INSECURE_DEV, set real
+#  API_KEYS, RADIUS_API_KEY, GITHUB_WEBHOOK_SECRET and SESSION_SECRET. See operations/INSTALL.md.)
 
 # Build and start all services
 docker compose --env-file .env.production up -d --build
@@ -74,20 +76,26 @@ Check them with `docker compose ps` (the STATUS column shows `healthy`) or
 | Variable | Description | Default / Example |
 | :--- | :--- | :--- |
 | **`DATABASE_URL`** | PostgreSQL connection string for API, worker, and migrations. | `postgresql+psycopg://radius:password@postgres:5432/radius` |
-| **`RADIUS_ENV`** | Application runtime environment (`production`, `development`). | `production` |
+| **`RADIUS_ENV`** | Application runtime environment: `development`, `test`, `uat` or `production`. Compose forces `production` for api and worker. | `production` |
 | **`RADIUS_LOG_LEVEL`** | Application logging level (`INFO`, `DEBUG`, `WARNING`). | `INFO` |
 | **`RADIUS_FEATURE_SYMBOL_IMPACT`** | Worker: symbol-level test selection and blast radius for Python (F-08). Falls back to file-level impact when symbol info is missing or low-confidence. | `false` |
 | **`RADIUS_FEATURE_SYMBOL_CHANGES`** | Worker: extract changed symbols (functions/methods/classes with change kinds) for the diff and log their counts (LK-01). Informational only; nothing is stored until LK-05 and failures never affect the analysis. | `false` |
 | **`RADIUS_FEATURE_COVERAGE_CONTEXTS`** | Worker: allow the LK-03 dynamic coverage-context linker. It runs the selected tests under coverage.py with one context per test, only inside the hardened F-07 sandbox (no network, read-only root, limits, timeout); it refuses any other runner. The sandbox image must contain `pytest` and `coverage` (`FROM radius-sandbox-test` + `pip install coverage`). Not wired into the pipeline until LK-05. | `false` |
-| **`GEMINI_API_KEY`** | Google Gemini API key for the experimental Gemini call-site classifier. It is not part of the analysis pipeline and does not affect verdicts or test selection. | `AIzaSy...` |
+| **`GEMINI_API_KEY`** | Credential for the **legacy** Gemini `SemanticPruner`. Leave unset. It is used only when `RADIUS_FEATURE_GEMINI_PRUNER=true` is also set and is not called by the analysis pipeline (only by tests and `scripts/run_phase2_poc.py`). When active it sends caller source code and diffs to Google Gemini, a third party, and it is **not** covered by the LLM egress policy of DEC-021. It never affects verdicts or test selection. | unset |
+| **`RADIUS_FEATURE_GEMINI_PRUNER`** | Explicit opt-in for the legacy Gemini pruner (before this flag existed, the key alone enabled it). See `GEMINI_API_KEY` above and [security/PROMPT_INJECTION.md](security/PROMPT_INJECTION.md) for the egress rules. | `false` |
+| **`RADIUS_FEATURE_TAMPER_RULES`** | Worker: run the EV-02 deterministic tamper rules on the diff and log finding counts. Nothing is stored by this step; the Verdict v2 alpha runs the rules itself. Failures never affect the analysis. | `false` |
+| **`RADIUS_FEATURE_ASSERTION_EXTRACTION`** | Worker: statically extract test assertions (LK-04, AST only, nothing executed) and log counts. Failures never affect the analysis. | `false` |
 | **`RADIUS_LLM_INTENT_ENABLED`** | IN-04: master switch for LLM-assisted intent extraction. Off by default; the LLM only proposes criteria, never verdicts (DEC-009). Needs the `llm` extra. | `false` |
 | **`RADIUS_LLM_INTENT_ORGS`** | Comma-separated organization ids that opted in (`*` = all). Egress is allowed only when the flag is on AND the org is listed. Only redacted intent text is sent, never repository code (DEC-015). | empty (none) |
 | **`ANTHROPIC_API_KEY`** | Read from the environment by the Anthropic adapter, only when LLM intent extraction is enabled for the org. If it or the `anthropic` package is missing, the API logs a warning and skips the LLM extractor (fail closed); requests still succeed. | unset |
 | **`RADIUS_LLM_INTENT_MODEL`** | Model id used by the Anthropic adapter. | `claude-haiku-5-5` |
 | **`RADIUS_LLM_INTENT_ANALYSIS_TOKEN_CAP`** / **`RADIUS_LLM_INTENT_ORG_TOKEN_CAP`** | Token caps per analysis and per org (process lifetime); calls that would exceed them are skipped. | `30000` / `1000000` |
 | **`RADIUS_LLM_INTENT_MAX_OUTPUT_TOKENS`**, **`_TIMEOUT_S`**, **`_MAX_ATTEMPTS`**, **`_BREAKER_THRESHOLD`**, **`_BREAKER_COOLDOWN_S`**, **`_MAX_CRITERIA`**, **`_SEED`** | Output cap, request timeout, bounded retries, circuit breaker and proposal cap (same `RADIUS_LLM_INTENT_` prefix). | `2048`, `30`, `3`, `5`, `60`, `20`, `0` |
-| **`ANTHROPIC_API_KEY`** | API key for the Anthropic adapter (environment only; never logged). | `sk-ant-...` |
 | **`API_KEYS`** | Comma-separated API keys accepted by API in format `org_id:key`. | `00000000-0000-4000-8000-000000000001:radius_key_live` |
+
+| **`API_KEYS`** | DEPRECATED. Comma-separated legacy keys in format `org_id:key` (full access, unhashed; logs a startup warning). Migrate to managed keys, see `docs/security/API_KEYS.md`. | `00000000-0000-4000-8000-000000000001:radius_key_live` |
+| **`RADIUS_API_KEY_PEPPER`** | Secret (>= 32 chars) used to fingerprint managed API keys (HMAC-SHA256). Required for `/api/v1/api-keys`; keep it in a secret store; rotating it invalidates all managed keys. | `<random 48+ chars>` |
+| **`RADIUS_API_KEY_LAST_USED_INTERVAL`** | Minimum seconds between `last_used_at` writes per key. | `300` |
 | **`GITHUB_APP_ID`** | GitHub App ID used to generate installation access tokens. | `123456` |
 | **`GITHUB_APP_PRIVATE_KEY`** | RSA Private Key for the GitHub App (PEM format with `\n`). | `-----BEGIN RSA PRIVATE KEY-----\n...` |
 | **`GITHUB_WEBHOOK_SECRET`** | Shared secret configured in the GitHub App webhook settings. | `whsec_live_secret_string` |
@@ -133,6 +141,7 @@ To configure Radius to automatically verify Pull Requests:
    - **Pull requests**: Read & Write (to inspect PR diffs and post verification markdown comments)
    - **Checks**: Read & Write (to publish `Radius confidence` in-progress and completed Check Runs)
    - **Metadata**: Read
+   - **Issues**: Read (optional; only for linked-issue intent ingestion, `RADIUS_FEATURE_INTENT_INGESTION`; without it linked issues are recorded as absent)
 3. Subscribe to Webhook Events:
    - `pull_request` (opened, synchronize, reopened)
    - `push`
@@ -145,5 +154,6 @@ To configure Radius to automatically verify Pull Requests:
 
 - **Tenant Isolation**: Every API request requires an `X-Radius-Organization-Id` header (and optional Bearer API key). Data queries strictly scope records by organization ID.
 - **Symlink Traversal Defense**: The worker uses `os.path.realpath` bounds checking during repository filesystem traversal to prevent symlink escape vulnerabilities.
-- **No LLM on the verdict path**: the experimental semantic pruner is not invoked by the worker pipeline, so no model output can remove tests or dependency edges from the selection (see `docs/audit/RADIUS_AUDIT.md`).
-- **No Unsafe Code Execution**: Worker analysis is static parsing and graph traversal; untrusted repository code is never executed inside worker containers.
+- **No LLM on the verdict path**: the experimental semantic pruner is not invoked by the worker pipeline, so no model output can remove tests or dependency edges from the selection (see `docs/audit/RADIUS_AUDIT.md`). The `google-genai` and `google-generativeai` packages are still core dependencies (`pyproject.toml`) only because the legacy module imports them; moving them to an optional extra is a follow-up.
+- **Code execution is off by default**: with `WORKER_TEST_EXECUTION_MODE=disabled` (default) worker analysis is static parsing and graph traversal and no repository code runs. The optional `sandbox` mode runs tests in an ephemeral hardened container and `unsafe_in_process` is refused in `uat`/`production`; see [security/EXECUTION_ISOLATION.md](security/EXECUTION_ISOLATION.md).
+- **Third-party code egress**: nothing sends repository code to a third party by default. The only code-bearing path is the legacy Gemini pruner, which needs both `RADIUS_FEATURE_GEMINI_PRUNER=true` and `GEMINI_API_KEY`; leave them unset. Optional LLM intent extraction sends redacted intent text only (DEC-015/DEC-021).
