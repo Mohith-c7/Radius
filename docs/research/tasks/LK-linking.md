@@ -54,6 +54,7 @@ Goal: connect criteria to the code that implements them, and code to the tests/e
 - Steps: AST visitors for pytest/unittest asserts, `pytest.raises`, `mock.assert_*`, snapshot libs; link assertion operands back to symbols via data flow where feasible (best effort, documented); compute `strength_features` consumed by EV-06.
 - Acceptance: fixtures cover each assertion kind; tests with no assertions are detected.
 - Tests: property tests on random generated test bodies (no crashes).
+- Contract: see design/VERDICT_V2_SLICE.md (docs/research/design/; Verdict v2 alpha: emits AssertionFeatures (3.2) from radius_testing.assertions)
 
 ### LK-05 IEG builder and persistence   [ ]
 - Owner type: agent-ok
@@ -63,6 +64,7 @@ Goal: connect criteria to the code that implements them, and code to the tests/e
 - Goal: build the Intent-Evidence Graph per (analysis, head SHA) and persist nodes/edges (`criterion_symbol_link`, `symbol_test_link`, `test_assertion`, plus a view for the full graph). Migration `0011`.
 - Acceptance: graph reproducible from stored inputs; versioned per SHA; query "all evidence reachable from criterion c" is fast (indexes; tested on a large synthetic graph).
 - Tests: graph invariants (no orphan edges, no cross-tenant edges).
+- Contract: see design/VERDICT_V2_SLICE.md (docs/research/design/; Verdict v2 alpha: alpha scope is the in-memory IEG and JSON (3.4); ieg tables are Beta (migration 0017), not 0011)
 
 ### LK-06 Link combination and confidence   [x]
 - Owner type: agent-ok
