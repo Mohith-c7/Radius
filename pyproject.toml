@@ -93,6 +93,7 @@ filterwarnings = [
   "ignore::FutureWarning:google.generativeai.*",
 ]
 pythonpath = [
+  "clients/python",
   "apps/api",
   "apps/api/src",
   "apps/worker/src",
@@ -112,6 +113,7 @@ testpaths = [
   "tests",
   "apps/api/tests",
   "apps/worker/tests",
+  "clients/python/tests",
   "packages/analysis/tests",
   "packages/confidence/tests",
   "packages/evidence/tests",

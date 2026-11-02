@@ -806,3 +806,7 @@ Swagger documentation should be generated automatically from the implementation.
 These contracts define the public interface of Radius.
 
 The frontend, CLI, GitHub integration, and future SDKs should all rely on these contracts rather than implementation details.
+
+## Machine-readable contract and stability
+
+The generated OpenAPI 3.1 document is [`api/openapi.json`](api/openapi.json); regenerate it with `python scripts/export_openapi.py`. Stability levels, the breaking-change definition and the deprecation policy are in [`api/STABILITY.md`](api/STABILITY.md). A typed Python client for the stable routes lives in [`clients/python`](../clients/python/README.md).

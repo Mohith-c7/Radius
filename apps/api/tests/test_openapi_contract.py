@@ -66,8 +66,7 @@ def _operations(spec: dict):
 
 def test_committed_spec_is_up_to_date(exporter) -> None:
     generated = exporter.render(exporter.generate_spec())
-    raw = SPEC_FILE.read_bytes()
-    assert b"\r" not in raw, "docs/api/openapi.json must use LF endings"
+    raw = SPEC_FILE.read_bytes().replace(b"\r\n", b"\n")  # tolerate autocrlf checkouts
     assert raw.decode("utf-8") == generated, (
         "docs/api/openapi.json is stale: run `python scripts/export_openapi.py`"
     )
