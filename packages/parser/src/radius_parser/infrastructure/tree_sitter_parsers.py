@@ -21,6 +21,7 @@ class GoLanguageParser:
     """Extract symbols, imports, and exports from Go source files."""
 
     supported_language = SourceLanguage.GO
+    experimental = True  # no import-to-file resolution; see DEC-017
 
     def __init__(self, engine: ParserEngine | None = None) -> None:
         self._engine = engine or ParserEngine()
@@ -100,6 +101,7 @@ class JavaLanguageParser:
     """Extract symbols, imports, and exports from Java source files."""
 
     supported_language = SourceLanguage.JAVA
+    experimental = True  # no import-to-file resolution; see DEC-017
 
     def __init__(self, engine: ParserEngine | None = None) -> None:
         self._engine = engine or ParserEngine()
@@ -171,6 +173,7 @@ class RustLanguageParser:
     """Extract symbols, imports, and exports from Rust source files."""
 
     supported_language = SourceLanguage.RUST
+    experimental = True  # no import-to-file resolution; see DEC-017
 
     def __init__(self, engine: ParserEngine | None = None) -> None:
         self._engine = engine or ParserEngine()

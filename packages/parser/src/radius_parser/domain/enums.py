@@ -29,6 +29,7 @@ class SymbolType(StrEnum):
     NAMESPACE = "namespace"
     STRUCT = "struct"
     TRAIT = "trait"
+    TYPE_ALIAS = "type_alias"
 
 
 class SymbolVisibility(StrEnum):

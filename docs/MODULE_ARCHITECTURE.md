@@ -158,6 +158,21 @@ Extract interfaces
 
 Extract methods
 
+### Language support (DEC-017)
+
+| Language | Parser | Import resolution | Status |
+| --- | --- | --- | --- |
+| Python | stdlib `ast` | yes (absolute, relative, src-layout, `from pkg import mod`) | supported |
+| TypeScript / JavaScript (`.ts .tsx .mts .cts .js .jsx .mjs .cjs`) | tree-sitter (`tree-sitter-typescript`, `tree-sitter-javascript`) | yes: relative with extension/index resolution, `tsconfig` `baseUrl` + `paths`, nearest tsconfig per file, `extends` chains | supported |
+| Go, Java, Rust | tree-sitter | none (no dependency edges) | **experimental** |
+
+A JS/TS file with syntax errors is reported in `parse_failures`, like a Python
+file. Bare package imports and unresolvable aliases are classified external.
+Not resolved: package `exports`, workspace package names, computed specifiers.
+The parser registry flags Go/Java/Rust (`EXPERIMENTAL_LANGUAGES`), and
+`RepositoryParseResult.experimental_languages` plus a warning log record when
+they were used.
+
 Extract annotations
 
 Generate normalized metadata

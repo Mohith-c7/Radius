@@ -91,6 +91,13 @@ class RepositoryParseResult:
     evidence rather than aborting the analysis or being silently ignored.
     """
 
+    experimental_languages: tuple[str, ...] = field(default_factory=tuple)
+    """Languages parsed by experimental parsers in this run (Go/Java/Rust).
+
+    Their imports are not resolved to files, so the graph is incomplete for
+    them; consumers should treat that as reduced evidence.
+    """
+
     @property
     def file_count(self) -> int:
         """Return discovered source file count."""

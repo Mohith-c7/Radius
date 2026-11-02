@@ -124,3 +124,41 @@ Ratified: owner decision 2026-11-02 (task F-16).
 Commit `c2d5db6` ("test: verify commit identity for Mohith-c7") is an empty commit that exists on `dev` only. Decision: leave it. It will reach `main` naturally when `dev` is next promoted to `main` in a release (and `develop` if `dev` is ever merged back, as in the hotfix flow of DEC-005). Do not force-push `dev`, and do not add a revert.
 
 Rationale: the commit changes no files, so it is harmless. A revert would be another empty commit and only add noise to history, and a force-push would rewrite a shared protected branch and break the "never force-push" rule in `docs/github-branch-protection.md`. Revisit if we ever need a clean `main` history (for example for an audit or a public release), at which point the options are a documented exception or a rebuilt release branch agreed by the owner. This also reinforces the rule in DEC-005 and `docs/DEVELOPMENT_GUIDE.md`: never push test or throwaway commits to `dev` or `main`.
+
+## DEC-017: JS/TS parsing uses tree-sitter; Go/Java/Rust are experimental
+
+Context (F-09): JS/TS were read with line-based regexes, which cannot see
+comment/string context, multi-line statements, dynamic `import()` forms or
+symbol ranges, and tsconfig `paths` were merged repository-wide.
+
+Decision:
+
+- Python stays on the stdlib `ast` module (first-class language).
+- TypeScript and JavaScript are parsed with **tree-sitter** via the
+  `tree-sitter`, `tree-sitter-typescript` (pinned `==0.23.2`) and
+  `tree-sitter-javascript` (pinned `==0.25.0`) wheels. Reason: the project
+  already ships tree-sitter for Go/Java/Rust, the wheels are prebuilt for
+  Windows and Linux (CPython 3.12 abi3), parsing is in-process and
+  deterministic, and the tree is error-tolerant so syntax errors are detectable
+  (`has_error`) and reported as `parse_failures`.
+- Rejected: the **TypeScript compiler API**. It gives full type information but
+  needs a Node runtime and a subprocess/IPC boundary in the worker, adds a
+  second dependency toolchain to the sandboxed deployment, and Radius only needs
+  syntax-level facts plus path resolution, which is decidable without a type
+  checker.
+- Import resolution for JS/TS lives in `radius_graph.infrastructure.ts_resolver`
+  (nearest `tsconfig.json`/`jsconfig.json` per file, `extends` chains, `baseUrl`,
+  `paths`, extension and `index` resolution). Unresolved or bare specifiers are
+  classified external, never errors.
+- The regex import extractor survives only as `regex_import_fallback`, used when
+  a grammar wheel cannot be loaded; it is logged at ERROR level and is not on the
+  default path.
+- Go, Java and Rust parsers are unchanged but marked **experimental**
+  (`EXPERIMENTAL_LANGUAGES`, parser `experimental = True`, warning log and
+  `RepositoryParseResult.experimental_languages`). They do not resolve imports to
+  files.
+
+Consequences: JS/TS files with unsupported syntax (for example Flow) become
+parse failures, which lowers confidence instead of silently under-reporting
+dependencies. Workspace package-name resolution and package `exports` are
+follow-ups.

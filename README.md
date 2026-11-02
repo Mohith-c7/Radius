@@ -21,7 +21,7 @@ Can this Pull Request be merged safely?
 ## Key Capabilities
 
 1. **Multi-Language Code Property Graph (CPG)**:
-   - **Python** is parsed with the standard-library `ast` module; **TypeScript / JavaScript** imports and symbols are extracted with a lightweight regex parser (no tree-sitter, no tsconfig path aliases or package exports). Go, Java and Rust have tree-sitter parsers, but their imports are not yet resolved to files.
+   - **Python** is parsed with the standard-library `ast` module; **TypeScript / JavaScript** (`.ts .tsx .mts .cts .js .jsx .mjs .cjs`) are parsed with tree-sitter (imports incl. dynamic `import()`, `require`, re-exports and type-only imports; functions, classes, methods, interfaces, types, enums) and their imports are resolved to files, including relative extension/index resolution and `tsconfig.json` `baseUrl`/`paths` (nearest tsconfig per file, `extends` chains). Package `exports`, npm/pnpm workspace package names and runtime-computed specifiers are not resolved. Go, Java and Rust have tree-sitter parsers that are **experimental**: their imports are not resolved to files, so they contribute no dependency edges.
    - Resolves cross-file symbol references and import statements into a directed dependency graph.
 2. **Diff-Hunk Line Precision**:
    - Parses unified git diff hunks to identify exact modified line numbers.
