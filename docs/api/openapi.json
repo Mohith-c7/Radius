@@ -360,6 +360,58 @@
         ],
         "type": "object"
       },
+      "ApiKeyCreateRequest": {
+        "additionalProperties": false,
+        "description": "Create a key bound to the caller's organization.",
+        "properties": {
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Scopes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "scopes"
+        ],
+        "title": "ApiKeyCreateRequest",
+        "type": "object"
+      },
+      "ApiKeyRotateRequest": {
+        "additionalProperties": false,
+        "description": "Rotation options; the old key stays valid for the overlap window.",
+        "properties": {
+          "overlap_seconds": {
+            "default": 86400,
+            "minimum": 0.0,
+            "title": "Overlap Seconds",
+            "type": "integer"
+          }
+        },
+        "title": "ApiKeyRotateRequest",
+        "type": "object"
+      },
       "ApiResponse_BuildResultView_": {
         "properties": {
           "data": {
@@ -4890,6 +4942,280 @@
         "x-stability": "beta"
       }
     },
+    "/api/v1/api-keys": {
+      "get": {
+        "description": "List the organization's keys (prefix only).",
+        "operationId": "list_api_keys",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "List Api Keys",
+        "tags": [
+          "api-keys"
+        ],
+        "x-stability": "beta"
+      },
+      "post": {
+        "description": "Create a key for the caller's organization; the token is shown once.",
+        "operationId": "create_api_key",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiKeyCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Create Api Key",
+        "tags": [
+          "api-keys"
+        ],
+        "x-stability": "beta"
+      }
+    },
+    "/api/v1/api-keys/audit": {
+      "get": {
+        "description": "List create, rotate and revoke events.",
+        "operationId": "list_api_key_audit",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "List Api Key Audit",
+        "tags": [
+          "api-keys"
+        ],
+        "x-stability": "beta"
+      }
+    },
+    "/api/v1/api-keys/{key_id}": {
+      "delete": {
+        "description": "Revoke a key immediately.",
+        "operationId": "revoke_api_key",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Key Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Revoke Api Key",
+        "tags": [
+          "api-keys"
+        ],
+        "x-stability": "beta"
+      }
+    },
+    "/api/v1/api-keys/{key_id}/rotate": {
+      "post": {
+        "description": "Issue a replacement token; the old key expires after the overlap window.",
+        "operationId": "rotate_api_key",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Key Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiKeyRotateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Rotate Api Key",
+        "tags": [
+          "api-keys"
+        ],
+        "x-stability": "beta"
+      }
+    },
     "/api/v1/auth/forgot-password": {
       "post": {
         "description": "Request a password-reset email. Always accepted (no enumeration).",
@@ -6391,6 +6717,11 @@
       "description": "Analyses (verification runs) of a pull request head commit.",
       "name": "analyses",
       "x-stability": "stable"
+    },
+    {
+      "description": "",
+      "name": "api-keys",
+      "x-stability": "beta"
     },
     {
       "description": "Dashboard session endpoints. Internal; not part of the client contract.",

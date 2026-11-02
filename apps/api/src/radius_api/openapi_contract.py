@@ -32,6 +32,7 @@ TAG_STABILITY: dict[str, str] = {
     "graph": "beta",
     "coverage": "beta",
     "intent": "beta",
+    "api-keys": "beta",
     "verdict-v2": "alpha",
     "github-webhooks": "internal",
     "authentication": "internal",
