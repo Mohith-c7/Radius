@@ -14,12 +14,9 @@ queue. See docs/OBSERVABILITY.md.
 from __future__ import annotations
 
 import logging
-import threading
-from collections import OrderedDict
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
-from uuid import UUID
 
 from radius_shared.observability.context import get_correlation_context
 from radius_shared.observability.settings import ObservabilitySettings
@@ -154,29 +151,3 @@ def continue_trace(traceparent: str | None) -> Iterator[None]:
         yield
     finally:
         otel_context.detach(token)
-
-
-class TraceCarrierStore:
-    """Bounded in-process map of ``analysis_id`` -> ``traceparent``."""
-
-    def __init__(self, max_entries: int = 1024) -> None:
-        self._items: OrderedDict[UUID, str] = OrderedDict()
-        self._max = max_entries
-        self._lock = threading.Lock()
-
-    def put(self, analysis_id: UUID, traceparent: str | None) -> None:
-        if not traceparent:
-            return
-        with self._lock:
-            self._items[analysis_id] = traceparent
-            self._items.move_to_end(analysis_id)
-            while len(self._items) > self._max:
-                self._items.popitem(last=False)
-
-    def pop(self, analysis_id: UUID) -> str | None:
-        with self._lock:
-            return self._items.pop(analysis_id, None)
-
-
-#: Process-wide carrier used by the SQL queue at enqueue/claim time.
-TRACE_CARRIERS = TraceCarrierStore()

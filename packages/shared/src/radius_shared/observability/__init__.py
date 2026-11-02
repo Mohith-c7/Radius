@@ -9,7 +9,6 @@ from radius_shared.observability.context import (
 from radius_shared.observability.settings import ObservabilitySettings
 from radius_shared.observability.stage import stage
 from radius_shared.observability.tracing import (
-    TRACE_CARRIERS,
     configure_tracing,
     continue_trace,
     current_trace_id,
@@ -20,7 +19,6 @@ from radius_shared.observability.tracing import (
 
 __all__ = [
     "CORRELATION_KEYS",
-    "TRACE_CARRIERS",
     "ObservabilitySettings",
     "bind_correlation",
     "configure_tracing",
