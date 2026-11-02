@@ -1,3 +1,4 @@
+# ruff: noqa: E402, I001  (helper import needs the sys.path setup below; no conftest to avoid plugin-name clashes)
 """Symbol documents (LK-01 integration), call-graph neighbours, pipeline and evaluation hooks."""
 
 from __future__ import annotations
@@ -6,6 +7,13 @@ import json
 from pathlib import Path
 
 import pytest
+import sys as _sys
+from pathlib import Path as _Path
+
+_HERE = str(_Path(__file__).parent)
+if _HERE not in _sys.path:  # helper module lives next to the tests (importlib mode)
+    _sys.path.insert(0, _HERE)
+
 from linking_helpers import crit, sym
 from radius_analysis.symbol_changes import DictSnapshot, extract_symbol_changes
 from radius_analysis.symbol_changes.testing import dedent, make_diff

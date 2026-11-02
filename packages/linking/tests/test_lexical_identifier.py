@@ -1,8 +1,16 @@
+# ruff: noqa: E402, I001  (helper import needs the sys.path setup below; no conftest to avoid plugin-name clashes)
 """Lexical (BM25) and identifier/phrase linkers with hand-crafted cases."""
 
 from __future__ import annotations
 
 import pytest
+import sys as _sys
+from pathlib import Path as _Path
+
+_HERE = str(_Path(__file__).parent)
+if _HERE not in _sys.path:  # helper module lives next to the tests (importlib mode)
+    _sys.path.insert(0, _HERE)
+
 from linking_helpers import by_symbol, crit, sym
 from radius_linking.domain import LinkContext
 from radius_linking.infrastructure.linkers import (
