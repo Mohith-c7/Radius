@@ -76,6 +76,16 @@ class WorkerSettings(DatabaseSettings):
             "pipeline until LK-05, so it only gates the library entry point."
         ),
     )
+    tamper_rules_enabled: bool = Field(
+        default=False,
+        alias="RADIUS_FEATURE_TAMPER_RULES",
+        description=(
+            "EV-02: run the deterministic tamper rules (weakened or disabled tests, "
+            "CI/config weakening, hallucinated dependencies) on the diff and log finding "
+            "counts. Nothing is persisted yet (EV-01/LK-05); failures never affect the "
+            "analysis."
+        ),
+    )
     test_timeout_seconds: int = Field(default=600, alias="WORKER_TEST_TIMEOUT_SECONDS")
     dashboard_base_url: str = Field(default="", alias="DASHBOARD_BASE_URL")
     github_publish_results: bool = Field(
