@@ -71,7 +71,7 @@ def test_runner_references_verdict_v2_only_through_the_publish_and_outbox_hooks(
         for line in source.splitlines()
         if line.startswith("from radius_worker.verdict_v2")
     }
-    # VS-07/VS-08 hooks only; the Stage A/B hook (VS-05) is owned by another task.
+    # VS-07/VS-08 hooks only; the Stage A/B hook (VS-05) is a flag-guarded local import.
     assert imported <= {
         "radius_worker.verdict_v2.publish",
         "radius_worker.verdict_v2.requests",
