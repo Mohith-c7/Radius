@@ -64,6 +64,7 @@ exclude = [
   ".docker-smoke",
   ".docker-pip-smoke",
   "scripts",
+  "benchmarks/fixtures/intent",
 ]
 
 [tool.ruff.lint]
