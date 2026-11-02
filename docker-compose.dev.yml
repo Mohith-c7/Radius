@@ -1,0 +1,27 @@
+# LOCAL DEVELOPMENT override. Layered on docker-compose.yml by `make dev` and
+# `scripts/dev.ps1 dev`:
+#   docker compose --env-file .env -f docker-compose.yml -f docker-compose.dev.yml up --build -d --wait
+#
+# NOT FOR PRODUCTION. It switches the API to RADIUS_ENV=development, allows
+# http://localhost origins, auto-verifies sign-ups, prints sign-in links to the
+# API log (no mail server) and registers ONE random dev API key.
+#
+# Required values come from `.env`, which `make env` / `python scripts/gen_dev_env.py`
+# creates with random secrets (no shared literal key). If they are missing the
+# commands below stop with the message shown.
+services:
+  api:
+    environment:
+      RADIUS_ENV: development
+      # Dev key for the dashboard proxy; org:key legacy entry (see docs/security/API_KEYS.md).
+      API_KEYS: ${GITHUB_DEFAULT_ORGANIZATION_ID:?Run `make env` (creates .env with random local-dev values)}:${RADIUS_API_KEY:?Run `make env` (creates .env with a random local-dev API key)}
+      GITHUB_DEFAULT_ORGANIZATION_ID: ${GITHUB_DEFAULT_ORGANIZATION_ID}
+      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      FRONTEND_ORIGIN: http://localhost:3000
+      DEV_AUTO_VERIFY_EMAIL: "true"
+      EMAIL_DELIVERY_MODE: log
+
+  dashboard:
+    environment:
+      RADIUS_API_KEY: ${RADIUS_API_KEY:?Run `make env` (creates .env with a random local-dev API key)}
+      RADIUS_ORGANIZATION_ID: ${GITHUB_DEFAULT_ORGANIZATION_ID}

@@ -35,7 +35,7 @@ Variables documented: **121** (13 secret, 8 feature flags).
 | `DATABASE_URL` | str | `postgresql+psycopg://radius:radius@localhost:5432/radius` | api, worker | yes | - | PostgreSQL URL for the API, worker and migrations. `postgres://` and `postgresql://` are normalised to `postgresql+psycopg://`. The auth module (sign-in tables) reads the same variable, but its own default is `sqlite:///./radius.db`, so when the variable is unset the auth tables go to a local SQLite file while the main settings default to the local PostgreSQL URL. Always set it explicitly. |
 | `DEV_AUTO_VERIFY` | bool | `true` | api | no | - | Auth module: when `RADIUS_ENV=development` (and DEV_AUTO_VERIFY_EMAIL is unset), accounts are verified without e-mail unless this is `false`. In any other environment accounts are not auto-verified. |
 | `DEV_AUTO_VERIFY_EMAIL` | str | `unset` | api | no | - | Auth module: when set, `true/1/yes` auto-verifies new accounts without e-mail and any other value disables it, in any environment. Development convenience; leave unset in production. |
-| `EMAIL_DELIVERY_MODE` | str | `smtp` | api | no | - | Declared in the auth settings; no other code reads it (verified by grep). Mail is sent over SMTP when `SMTP_USERNAME` and `SMTP_PASSWORD` are set. |
+| `EMAIL_DELIVERY_MODE` | str | `smtp` | api | no | - | ``smtp`` (default) sends mail; ``log`` writes the message and its link to the API log (local dev only). |
 | `FRONTEND_ORIGIN` | str | `http://127.0.0.1:3000` | api | no | - | Auth module: dashboard origin used in e-mail verification/reset links, OAuth redirects and the auth CORS allow-list. |
 | `GITHUB_API_BASE_URL` | str | `https://api.github.com` | api, worker | no | - | GitHub REST base URL (change for GitHub Enterprise Server). |
 | `GITHUB_API_VERSION` | str | `2026-03-10` | api, worker | no | - | Value of the `X-GitHub-Api-Version` header sent to GitHub. |
@@ -58,7 +58,7 @@ Variables documented: **121** (13 secret, 8 feature flags).
 | `RADIUS_ALLOW_INSECURE_DEV` | bool | `false` | api, worker | no | - | Explicit opt-in to accept unsigned GitHub webhooks and API calls without configured API keys. Honoured only in development/test; ignored in every other environment. |
 | `RADIUS_ALLOW_UNSAFE_EXECUTION` | bool | `false` | worker | no | - | Required to use unsafe_in_process when RADIUS_ENV is uat or production. The worker refuses to start otherwise. |
 | `RADIUS_CORS_ALLOW_CREDENTIALS` | bool | `true` | api | no | - | Send `Access-Control-Allow-Credentials`. Never combined with `*`. |
-| `RADIUS_ENV` | RuntimeEnvironment | `development` | api, worker | no | - | Runtime environment: `development`, `test`, `uat` or `production`. Production tightens CORS validation and ignores demo seeding. |
+| `RADIUS_ENV` | RuntimeEnvironment | `development` | api, worker | no | - | Runtime environment: `development`, `test`, `uat` or `production`. Production tightens CORS validation (https origins only, no wildcard, no automatic localhost), ignores demo seeding, refuses the public session secret and `EMAIL_DELIVERY_MODE=log`. `docker-compose.yml` pins `production`; `docker-compose.dev.yml` (used by `make dev`) sets `development` for the api. |
 | `RADIUS_EVAL_ALLOW_REAL_LLM` | str | `unset` | evaluation CLI | no | - | Intent evaluation CLI only: must be `1`, together with `--allow-real-llm`, before a real provider is used. Tests and CI never set it. |
 | `RADIUS_EXTRAS` | str | `empty` | compose build | no | - | Compose build argument: extra Python dependency groups to install in the api and worker images (for example `llm`, `observability`). |
 | `RADIUS_HSTS_ENABLED` | bool | `false` | api | no | - | Send Strict-Transport-Security. Enable only when served over TLS. |
@@ -86,7 +86,7 @@ Variables documented: **121** (13 secret, 8 feature flags).
 | `RADIUS_WORKER_METRICS_PORT` | int | `0` | api, worker | no | - | Port for the worker's Prometheus endpoint; ``0`` disables it. |
 | `SERVICE_NAME` | str | `radius-api` | api, worker | no | - | Service name used in logs. Defaults differ per service (`radius-api`, `radius-worker`); normally left alone. |
 | `SESSION_COOKIE_SECURE` | bool | `false` | api | no | - | Auth module: set the Secure flag on the session cookie. Set true behind TLS. |
-| `SESSION_SECRET` | str | `(placeholder in code, change it)` | api | yes | - | Auth module: secret used to sign sessions (minimum 32 characters). The default in code is a public placeholder; always set your own. |
+| `SESSION_SECRET` | str | `(placeholder in code, change it)` | api | yes | - | Auth module: secret used to sign sessions (minimum 32 characters). The default in code and the `.env.example` placeholder are public; with `RADIUS_ENV=production` the API refuses to start with either. `docker-compose.yml` has no default and stops if it is unset; `make env` generates a random one for local dev. |
 | `SMTP_FROM_EMAIL` | str \| None | `unset` | api | no | - | Auth module: From address of verification and reset e-mails. |
 | `SMTP_HOST` | str | `smtp.gmail.com` | api | no | - | Auth module: SMTP server. |
 | `SMTP_PASSWORD` | str \| None | `(secret, no default)` | api | yes | - | Auth module: SMTP password. |

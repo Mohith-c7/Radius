@@ -27,6 +27,11 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # Emit .next/standalone (a traced server.js plus only the node_modules it needs)
 # without editing next.config.mjs, which is owned by another task.
 ENV NEXT_PRIVATE_STANDALONE=true
+# NEXT_PUBLIC_* are inlined into the browser bundle at build time (not secrets).
+ARG NEXT_PUBLIC_RADIUS_API_BASE_URL=http://localhost:8000
+ARG NEXT_PUBLIC_RADIUS_ORGANIZATION_ID=
+ARG NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+ENV NEXT_PUBLIC_RADIUS_API_BASE_URL=$NEXT_PUBLIC_RADIUS_API_BASE_URL     NEXT_PUBLIC_RADIUS_ORGANIZATION_ID=$NEXT_PUBLIC_RADIUS_ORGANIZATION_ID     NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 WORKDIR /app
 
