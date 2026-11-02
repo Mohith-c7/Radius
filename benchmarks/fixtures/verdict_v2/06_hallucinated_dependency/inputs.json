@@ -327,8 +327,10 @@
           {
             "criterion_id": "C1",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "parse_duration('2h30m') returns 9000 using units h, m, s with spaces ignored",
             "weight": 1.0
@@ -336,8 +338,10 @@
           {
             "criterion_id": "C2",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "text that is not a sequence of <number><unit> raises ValueError",
             "weight": 1.0
@@ -1006,8 +1010,10 @@
           {
             "criterion_id": "C1",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "parse_duration('2h30m') returns 9000 using units h, m, s with spaces ignored",
             "weight": 1.0
@@ -1015,8 +1021,10 @@
           {
             "criterion_id": "C2",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "text that is not a sequence of <number><unit> raises ValueError",
             "weight": 1.0
@@ -1063,6 +1071,7 @@
             "bm25_raw": null,
             "criterion_id": "C1",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_durations.py::test_parse_hours_and_minutes",
             "weight": 1.0
           },
@@ -1070,6 +1079,7 @@
             "bm25_raw": null,
             "criterion_id": "C1",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_durations.py::test_parse_seconds_only",
             "weight": 1.0
           },
@@ -1077,6 +1087,7 @@
             "bm25_raw": null,
             "criterion_id": "C1",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_durations.py::test_parse_with_spaces",
             "weight": 1.0
           },
@@ -1084,6 +1095,7 @@
             "bm25_raw": null,
             "criterion_id": "C2",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_durations.py::test_parse_rejects_empty",
             "weight": 1.0
           },
@@ -1091,6 +1103,7 @@
             "bm25_raw": null,
             "criterion_id": "C2",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_durations.py::test_parse_rejects_garbage",
             "weight": 1.0
           }

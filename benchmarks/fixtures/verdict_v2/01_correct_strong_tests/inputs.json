@@ -381,8 +381,10 @@
           {
             "criterion_id": "C1",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "apply_discount returns the price reduced by percent, rounded to 2 decimals",
             "weight": 1.0
@@ -390,8 +392,10 @@
           {
             "criterion_id": "C2",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "percent outside 0..100 inclusive raises ValueError",
             "weight": 1.0
@@ -1048,8 +1052,10 @@
           {
             "criterion_id": "C1",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "apply_discount returns the price reduced by percent, rounded to 2 decimals",
             "weight": 1.0
@@ -1057,8 +1063,10 @@
           {
             "criterion_id": "C2",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "percent outside 0..100 inclusive raises ValueError",
             "weight": 1.0
@@ -1105,6 +1113,7 @@
             "bm25_raw": null,
             "criterion_id": "C1",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_pricing.py::test_discount_hundred_is_free",
             "weight": 1.0
           },
@@ -1112,6 +1121,7 @@
             "bm25_raw": null,
             "criterion_id": "C1",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_pricing.py::test_discount_reduces_price",
             "weight": 1.0
           },
@@ -1119,6 +1129,7 @@
             "bm25_raw": null,
             "criterion_id": "C1",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_pricing.py::test_discount_rounds_to_cents",
             "weight": 1.0
           },
@@ -1126,6 +1137,7 @@
             "bm25_raw": null,
             "criterion_id": "C1",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_pricing.py::test_discount_zero_is_identity",
             "weight": 1.0
           },
@@ -1133,6 +1145,7 @@
             "bm25_raw": null,
             "criterion_id": "C2",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_pricing.py::test_discount_rejects_negative_percent",
             "weight": 1.0
           },
@@ -1140,6 +1153,7 @@
             "bm25_raw": null,
             "criterion_id": "C2",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_pricing.py::test_discount_rejects_percent_above_hundred",
             "weight": 1.0
           }

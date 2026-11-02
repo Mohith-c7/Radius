@@ -206,8 +206,10 @@
           {
             "criterion_id": "C1",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "normalize_email trims surrounding whitespace and lowercases the address",
             "weight": 1.0
@@ -215,8 +217,10 @@
           {
             "criterion_id": "C2",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "an address without '@' raises ValueError",
             "weight": 1.0
@@ -602,8 +606,10 @@
           {
             "criterion_id": "C1",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "normalize_email trims surrounding whitespace and lowercases the address",
             "weight": 1.0
@@ -611,8 +617,10 @@
           {
             "criterion_id": "C2",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "an address without '@' raises ValueError",
             "weight": 1.0
@@ -659,6 +667,7 @@
             "bm25_raw": null,
             "criterion_id": "C1",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_emails.py::test_normalize_handles_plain_address",
             "weight": 1.0
           },
@@ -666,6 +675,7 @@
             "bm25_raw": null,
             "criterion_id": "C1",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_emails.py::test_normalize_returns_something",
             "weight": 1.0
           }

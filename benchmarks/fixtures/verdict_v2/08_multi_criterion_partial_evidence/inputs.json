@@ -282,8 +282,10 @@
           {
             "criterion_id": "C1",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "a password needs at least 8 characters",
             "weight": 1.0
@@ -291,8 +293,10 @@
           {
             "criterion_id": "C2",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "a password needs at least one digit",
             "weight": 1.0
@@ -300,8 +304,10 @@
           {
             "criterion_id": "C3",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "a password needs at least one uppercase letter",
             "weight": 1.0
@@ -309,8 +315,10 @@
           {
             "criterion_id": "C4",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "a password must not be on the common-password list (case-insensitive)",
             "weight": 1.0
@@ -883,8 +891,10 @@
           {
             "criterion_id": "C1",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "a password needs at least 8 characters",
             "weight": 1.0
@@ -892,8 +902,10 @@
           {
             "criterion_id": "C2",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "a password needs at least one digit",
             "weight": 1.0
@@ -901,8 +913,10 @@
           {
             "criterion_id": "C3",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "a password needs at least one uppercase letter",
             "weight": 1.0
@@ -910,8 +924,10 @@
           {
             "criterion_id": "C4",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "a password must not be on the common-password list (case-insensitive)",
             "weight": 1.0
@@ -992,6 +1008,7 @@
             "bm25_raw": null,
             "criterion_id": "C1",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_validators.py::test_accepts_eight_characters",
             "weight": 1.0
           },
@@ -999,6 +1016,7 @@
             "bm25_raw": null,
             "criterion_id": "C1",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_validators.py::test_rejects_seven_characters",
             "weight": 1.0
           },
@@ -1006,6 +1024,7 @@
             "bm25_raw": null,
             "criterion_id": "C2",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_validators.py::test_rejects_missing_digit",
             "weight": 1.0
           },
@@ -1013,6 +1032,7 @@
             "bm25_raw": null,
             "criterion_id": "C3",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_validators.py::test_uppercase_rule_runs",
             "weight": 1.0
           }

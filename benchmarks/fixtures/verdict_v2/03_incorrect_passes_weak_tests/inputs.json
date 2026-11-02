@@ -253,8 +253,10 @@
           {
             "criterion_id": "C1",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "a value above hi returns hi",
             "weight": 1.0
@@ -262,8 +264,10 @@
           {
             "criterion_id": "C2",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "a value below lo returns lo",
             "weight": 1.0
@@ -271,8 +275,10 @@
           {
             "criterion_id": "C3",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "a value inside the range is returned unchanged",
             "weight": 1.0
@@ -721,8 +727,10 @@
           {
             "criterion_id": "C1",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "a value above hi returns hi",
             "weight": 1.0
@@ -730,8 +738,10 @@
           {
             "criterion_id": "C2",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "a value below lo returns lo",
             "weight": 1.0
@@ -739,8 +749,10 @@
           {
             "criterion_id": "C3",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "a value inside the range is returned unchanged",
             "weight": 1.0
@@ -804,6 +816,7 @@
             "bm25_raw": null,
             "criterion_id": "C1",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_limits.py::test_clamp_above_is_bounded",
             "weight": 1.0
           },
@@ -811,6 +824,7 @@
             "bm25_raw": null,
             "criterion_id": "C2",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_limits.py::test_clamp_returns_an_int",
             "weight": 1.0
           },
@@ -818,6 +832,7 @@
             "bm25_raw": null,
             "criterion_id": "C3",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_limits.py::test_clamp_inside_stays_in_range",
             "weight": 1.0
           }
