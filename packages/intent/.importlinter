@@ -1,0 +1,23 @@
+[importlinter]
+root_package = radius_intent
+include_external_packages = True
+
+[importlinter:contract:domain-is-pure]
+name = Intent domain imports only the standard library and itself
+type = forbidden
+source_modules =
+    radius_intent.domain
+forbidden_modules =
+    radius_intent.interfaces
+    radius_intent.application
+    radius_intent.infrastructure
+    sqlalchemy
+    fastapi
+    pydantic
+    httpx
+    requests
+    psycopg
+    alembic
+    google
+    anthropic
+    openai

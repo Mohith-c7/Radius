@@ -46,6 +46,7 @@ dev = [
   "opentelemetry-exporter-otlp-proto-http>=1.27.0",
   "prometheus-client>=0.21.0",
   "black==26.10.1",
+  "import-linter==2.15",
   "pytest==9.2.0",
   "ruff==0.17.3",
 ]
@@ -88,6 +89,7 @@ pythonpath = [
   "packages/confidence/src",
   "packages/graph/src",
   "packages/github/src",
+  "packages/intent/src",
   "packages/parser/src",
   "packages/repository/src",
   "packages/shared/src",
@@ -101,6 +103,7 @@ testpaths = [
   "packages/confidence/tests",
   "packages/graph/tests",
   "packages/github/tests",
+  "packages/intent/tests",
   "packages/parser/tests",
   "packages/repository/tests",
   "packages/shared/tests",
