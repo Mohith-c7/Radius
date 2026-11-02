@@ -21,6 +21,7 @@ This folder is the single source of truth for the next phase of Radius: a resear
 | `DESIGN.md` | Thesis, glossary, architecture, data model, algorithms, LLM governance, security, reproducibility, open decisions |
 | `IMPLEMENTATION_PLAN.md` | Rules for all contributors, definition of done, task template, dependency overview, milestones and gates, task index, risks |
 | `EVALUATION_PLAN.md` | Research questions, datasets, baselines, experiments (EP-xx), statistics, threats, paper outline, artifact checklist |
+| `preregistration/` | EP-02 pre-registration (`PREREGISTRATION.md`, DRAFT until the owner freezes it) and its changelog / freeze mechanism |
 | `PRODUCT_AND_GTM.md` | Personas, competitors, positioning, MVP, go-to-market, metrics |
 | `tasks/F-foundations.md` | Stabilize the prototype (M0) |
 | `tasks/IN-intent.md` | Intent layer (M1) -- research core |
