@@ -73,6 +73,7 @@ from radius_testing.infrastructure import (
 from radius_worker.queue import InMemoryAnalysisQueue
 from sqlalchemy.orm import Session, sessionmaker
 
+from radius_api.api_keys import InMemoryApiKeyStore
 from radius_api.idempotency import (
     InMemoryIdempotencyStore,
     SqlAlchemyIdempotencyStore,
@@ -125,6 +126,7 @@ class AppContainer:
     intent_repository: InMemoryIntentRepository = field(
         default_factory=InMemoryIntentRepository
     )
+    api_key_store: InMemoryApiKeyStore = field(default_factory=InMemoryApiKeyStore)
     #: Criterion extractors used by the intent snapshot service, in priority
     #: order for ties. Append here to add one (for example the IN-04 LLM
     #: extractor); the API layer does not care which extractors run.
