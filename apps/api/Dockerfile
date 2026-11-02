@@ -18,7 +18,9 @@ COPY apps/api/src ./apps/api/src
 COPY apps/worker/src ./apps/worker/src
 COPY packages ./packages
 
-RUN python -m pip install --no-cache-dir .
+# Pass RADIUS_EXTRAS="[observability]" to bundle OpenTelemetry/Prometheus.
+ARG RADIUS_EXTRAS=""
+RUN python -m pip install --no-cache-dir ".${RADIUS_EXTRAS}"
 
 EXPOSE 8000
 

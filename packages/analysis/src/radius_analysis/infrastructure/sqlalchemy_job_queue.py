@@ -9,8 +9,9 @@ from uuid import UUID
 
 from radius_shared.database import enums as db_enums
 from radius_shared.database import models as db_models
+from radius_shared.observability import TRACE_CARRIERS, current_traceparent, span
 from radius_shared.redaction import redact_secrets
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 LOGGER = logging.getLogger(__name__)
@@ -71,28 +72,42 @@ class SqlAlchemyAnalysisJobQueue:
     def enqueue(self, analysis_id: UUID) -> None:
         """Create a pending job idempotently for an analysis."""
 
-        row = self._session.scalar(
-            select(db_models.AnalysisJob).where(
-                db_models.AnalysisJob.analysis_id == analysis_id
-            )
-        )
-        if row is None:
-            self._session.add(
-                db_models.AnalysisJob(
-                    analysis_id=analysis_id,
-                    status=db_enums.AnalysisJobStatus.PENDING,
-                    attempts=0,
+        with span("queue.enqueue"):
+            # Remember the caller's trace so the worker can continue it. There is
+            # no column for this (no migration in F-10), so it is process-local.
+            TRACE_CARRIERS.put(analysis_id, current_traceparent())
+            row = self._session.scalar(
+                select(db_models.AnalysisJob).where(
+                    db_models.AnalysisJob.analysis_id == analysis_id
                 )
             )
-        elif row.status == db_enums.AnalysisJobStatus.FAILED:
-            # An explicit re-enqueue is a fresh run: without resetting the
-            # attempt counter an exhausted job would sit pending forever,
-            # because ``claim_next`` skips jobs at ``max_attempts``.
-            row.status = db_enums.AnalysisJobStatus.PENDING
-            row.attempts = 0
-            row.last_error = None
-            row.locked_at = None
-        self._session.flush()
+            if row is None:
+                self._session.add(
+                    db_models.AnalysisJob(
+                        analysis_id=analysis_id,
+                        status=db_enums.AnalysisJobStatus.PENDING,
+                        attempts=0,
+                    )
+                )
+            elif row.status == db_enums.AnalysisJobStatus.FAILED:
+                # An explicit re-enqueue is a fresh run: without resetting the
+                # attempt counter an exhausted job would sit pending forever,
+                # because ``claim_next`` skips jobs at ``max_attempts``.
+                row.status = db_enums.AnalysisJobStatus.PENDING
+                row.attempts = 0
+                row.last_error = None
+                row.locked_at = None
+            self._session.flush()
+
+    def depth_by_status(self) -> dict[str, int]:
+        """Return the number of jobs per status (for the queue-depth gauge)."""
+
+        rows = self._session.execute(
+            select(db_models.AnalysisJob.status, func.count()).group_by(
+                db_models.AnalysisJob.status
+            )
+        ).all()
+        return {str(getattr(status, "value", status)): count for status, count in rows}
 
     def claim_next(self) -> AnalysisJob | None:
         """Claim the next pending or stale running job."""

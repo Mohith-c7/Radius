@@ -1,0 +1,13 @@
+# Local-only Prometheus config for the `observability` compose profile.
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: radius-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api:8000"]
+  - job_name: radius-worker
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["worker:9100"]

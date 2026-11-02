@@ -17,6 +17,8 @@ COPY infra/database ./infra/database
 COPY apps/worker/src ./apps/worker/src
 COPY packages ./packages
 
-RUN python -m pip install --no-cache-dir .
+# Pass RADIUS_EXTRAS="[observability]" to bundle OpenTelemetry/Prometheus.
+ARG RADIUS_EXTRAS=""
+RUN python -m pip install --no-cache-dir ".${RADIUS_EXTRAS}"
 
 CMD ["python", "-m", "radius_worker"]

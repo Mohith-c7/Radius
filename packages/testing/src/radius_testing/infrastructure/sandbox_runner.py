@@ -58,6 +58,8 @@ from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
 
+from radius_shared.observability.metrics import record_sandbox_kill
+
 from radius_testing.domain.entities import TestRunPlan, TestRunResult
 from radius_testing.infrastructure.junit_parser import JUnitReportParser
 from radius_testing.infrastructure.subprocess_runner import (
@@ -463,6 +465,7 @@ class ContainerSandboxRunner:
                         f"timed out after {self._config.timeout_seconds} seconds"
                     )
                     self._kill_container(runtime_path, container_name)
+                    record_sandbox_kill("timeout")
                     process.kill()
                     _wait_quietly(process)
         finally:

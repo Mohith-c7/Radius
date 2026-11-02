@@ -22,14 +22,18 @@ from radius_shared.errors import (
     ValidationError,
 )
 from radius_shared.logging import configure_logging, get_logger
+from radius_shared.observability import ObservabilitySettings
+from radius_shared.observability import metrics as obs_metrics
 
 from radius_api.config import get_api_settings
 from radius_api.dependencies import AppContainer, configure_sql_storage
+from radius_api.observability import configure_api_observability
 from radius_api.routes.analyses import router as analyses_router
 from radius_api.routes.confidence import router as confidence_router
 from radius_api.routes.coverage import router as coverage_router
 from radius_api.routes.github_webhooks import router as github_webhooks_router
 from radius_api.routes.graph import router as graph_router
+from radius_api.routes.health import queue_depth_provider
 from radius_api.routes.health import router as health_router
 from radius_api.routes.repositories import router as repositories_router
 from radius_api.routes.tests import router as tests_router
@@ -117,6 +121,8 @@ def create_app() -> FastAPI:
     app.state.container = AppContainer()
     if settings.storage_backend == "sql":
         configure_sql_storage(app.state.container, settings)
+    configure_api_observability(app, ObservabilitySettings())
+    obs_metrics.set_queue_depth_provider(queue_depth_provider(app.state.container))
     app.add_exception_handler(RadiusError, radius_error_handler)
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(repositories_router, prefix="/api/v1")
