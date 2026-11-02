@@ -245,3 +245,20 @@ Evidence: branch `feature/verdict-v2-integration` (not yet merged to `develop`);
 - **Measured, not claimed.** On the 8 F-14 fixtures the real pipeline (LK-01..04, VS-04 relevance, EV-02 tamper, EV-06/07/08, VD-01..03) reproduces the design expectations in gold mode (hand-fed links) to 0.001 and reproduces every PR verdict in auto mode except fixture 01, where conservative criterion-to-test relevance gives `insufficient_evidence` instead of `verified` (never the unsafe direction). Six fixtures differ in at least one auto-mode criterion state; each is listed with its reason in `KNOWN_AUTO_DEVIATIONS`. Eight fixtures is a sanity check, not an evaluation: no precision or recall claim follows.
 - **Decision recorded (DEC-028).** A guarded import that cannot be verified offline is `medium` (`needs_review`); only a registry miss is `high` (`failed`).
 - **Still unverified.** Live GitHub (a fake client was used), a browser (the dashboard panel has unit tests only), PostgreSQL (SQLite in tests; Postgres tests are opt-in), calibration of every threshold, and any non-Python language.
+
+---
+
+## Entry 2026-11-02 (docs pass): doc and code mismatches from the first review
+
+Scope: documentation and one small flag; verified against the code on branch `docs/truth-and-operator-docs`. No gates were changed.
+
+| Mismatch in section 4.3 | State now |
+|---|---|
+| README and CHANGELOG said a flaky test "is treated as a failure" | Fixed. Both state the real defaults: reruns off (`WORKER_TEST_RERUNS=0`), `WORKER_FLAKY_POLICY=exclude` makes a flaky test neither pass nor fail and blocks `verified`; `fail` counts it as a failure. |
+| README said contribution and security files "are being added", linking "planned", ingestion "not built", licence pending | Fixed. README maturity table now lists intent ingestion (flag off, not live-validated), linking libraries, the flagged-off steps and the Verdict v2 alpha; Apache-2.0 is stated; contribution and security files are linked. |
+| F-05, F-06, F-07, F-10, F-13, F-14, F-15 (and F-02, F-03) unticked though merged | Ticked with commit references; F-03 and F-06 are `[~]` with the open part stated (capstone decision; no recorded live GitHub run). QS-05 ticked. A stray duplicate `LK-05 [x]` heading that held LK-04's notes was removed and LK-05 is `[~]` (alpha in-memory scope only). PRD-03 to PRD-08 and PRD-11 ticked in the backlog. |
+| Gemini pruner and dependencies contradict DEC-021 | Partly fixed. The pruner now needs the explicit opt-in `RADIUS_FEATURE_GEMINI_PRUNER=true` as well as `GEMINI_API_KEY` (default off, tested); `docs/DEPLOYMENT.md` and `docs/security/PROMPT_INJECTION.md` state that it sends code and diffs to Google and is outside the egress policy. **Still open:** `google-genai` and `google-generativeai` remain core dependencies; moving them to an extra changes `uv.lock`. |
+| M0 and M1 gates | Not changed. The live GitHub App run (F-06) and real gold data (IN-09/IN-10) are still missing. |
+| Capstone `.docx` and generator in the repo | Left in place (owner decision pending, PRD-09). |
+
+Also added: `docs/operations/` (PRD-17) with a configuration reference generated from the settings classes and checked by `tests/test_config_reference.py`, so the environment variable documentation can no longer drift silently. A similar automated check for task checkboxes versus merged task ids (review item 10) is still not built.
