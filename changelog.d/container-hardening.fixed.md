@@ -1,0 +1,1 @@
+The API and worker Docker images start again (they were missing `packages/intent` on `PYTHONPATH`) and now run as a non-root user with digest-pinned bases, locked Python dependencies, healthchecks and a smaller dashboard image. A new container-scan workflow runs Trivy on the images.
