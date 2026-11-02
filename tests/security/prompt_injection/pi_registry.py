@@ -16,10 +16,11 @@ catches them; do not register real features there.
 from __future__ import annotations
 
 from pi_harness import FeatureFactory, GuardedCriteriaFeature, NaiveCriteriaFeature
+from pi_intent_extract import IntentExtractAdapter
 
 REGISTERED_FEATURES: dict[str, FeatureFactory] = {
     "reference-guarded": GuardedCriteriaFeature,
-    # "intent-extract-llm (IN-04)": IntentExtractAdapter,
+    "intent-extract-llm (IN-04)": IntentExtractAdapter,
 }
 
 KNOWN_BAD_FEATURES: dict[str, FeatureFactory] = {
