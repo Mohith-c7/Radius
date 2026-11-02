@@ -486,6 +486,42 @@ tests that dynamically execute the changed lines (`sys.settrace`).
 
 ---
 
+## Symbol-level change extraction (LK-01)
+
+Behind `RADIUS_FEATURE_SYMBOL_CHANGES` (default `false`, worker setting
+`symbol_changes_enabled`). Lives in `packages/analysis`
+(`radius_analysis.symbol_changes`), not in a new package: it reuses the F-09
+tree-sitter grammars through `radius_parser.infrastructure.ecmascript_parser.parse_syntax_tree`
+and leaves F-08 untouched (F-08 answers "who references this name"; LK-01 keeps the
+per-definition fingerprints F-08 does not store).
+
+Pipeline (deterministic, algo version `symbol-changes-v1`, no LLM, no network):
+
+1. `diff_files.parse_unified_diff` parses the diff in both coordinate systems
+   (renames/copies, new/deleted/binary/mode-only files, "No newline" markers, CRLF,
+   quoted paths). Hunks are consumed by their header counts.
+2. A `SnapshotReader` port supplies base and head content (`DictSnapshot`,
+   `DirectorySnapshot`, `GitSnapshot`, or `DiffReversedSnapshot` which rebuilds the
+   base from head + diff).
+3. `index_python` (stdlib `ast`) and `index_ecmascript` (tree-sitter) list the
+   definitions of each version with signature, decorators, docstring and a
+   normalised own body.
+4. Definitions are matched by (qualified name, kind); leftovers are paired by body
+   similarity into `renamed` / `moved` / `moved_between_files`.
+5. Every changed line is attributed to its innermost symbol or to an unattributed
+   bucket; each touched symbol is classified (signature, body, decorator,
+   docstring/comment, formatting).
+6. Output: `SymbolChangeSet` (contract in `packages/analysis/README.md`).
+
+Budgets: `max_files`, `max_file_bytes`, `max_diff_bytes`, `time_budget_seconds`,
+`max_similarity_pairs`. Any per-file failure degrades to a file-level unit with a
+recorded reason. The worker step only logs counts (nothing is persisted before
+LK-05) and swallows failures.
+
+CLI: `python -m radius_analysis.symbol_changes --repo . --base REF --head REF`.
+
+---
+
 # Confidence Domain
 
 Purpose
