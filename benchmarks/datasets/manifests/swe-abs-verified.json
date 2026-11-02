@@ -1,0 +1,50 @@
+{
+  "id": "swe-abs-verified",
+  "name": "SWE-bench Verified with SWE-ABS strengthened tests",
+  "kind": "label-source",
+  "source": {
+    "type": "huggingface",
+    "url": "https://huggingface.co/datasets/OpenAgentLab/SWE-Bench_Verified_ABS",
+    "revision": "79fc07a8f4ce5e3720e069948073f5f910b7577b",
+    "revision_kind": "commit",
+    "paper": "arXiv 2603.00520"
+  },
+  "license": {
+    "name": "Apache License 2.0 (HF card: license: apache-2.0)",
+    "url": "https://huggingface.co/datasets/OpenAgentLab/SWE-Bench_Verified_ABS",
+    "spdx": "Apache-2.0",
+    "verdict": "open",
+    "evidence": "HF API cardData.license = apache-2.0, fetched 2026-11-02. Derived from SWE-bench Verified, whose own licence is UNKNOWN, so redistribution of derived rows is conditional."
+  },
+  "redistribution": {
+    "allowed": "conditional",
+    "notes": "Card says Apache-2.0 but the base data (SWE-bench Verified) has no declared licence; do not redistribute copies until resolved. Manifests and hashes are fine."
+  },
+  "status": "available",
+  "size": "500 rows; 3,168,881 bytes parquet",
+  "rqs": [
+    "RQ2",
+    "RQ3"
+  ],
+  "labels": [
+    "strengthened test_patch (SWE-ABS) vs original_test_patch",
+    "re-running agent patches under strengthened tests gives a 'plausible but incorrect' label"
+  ],
+  "risks": [
+    "SWE-ABS authors' own evaluation: use a second label source (UTBoost/PatchDiff) and audit disagreements",
+    "SWE-ABS is the closest prior art to claim 2; do not present as ours",
+    "strengthened tests are LLM/mutation generated and may over-reject; precision not independently audited",
+    "agent patches NOT included; they must come from swe-bench-experiments"
+  ],
+  "obtain": "python scripts/datasets.py fetch --id swe-abs-verified --yes",
+  "files": [
+    {
+      "path": "data/test-00000-of-00001.parquet",
+      "url": "https://huggingface.co/datasets/OpenAgentLab/SWE-Bench_Verified_ABS/resolve/79fc07a8f4ce5e3720e069948073f5f910b7577b/data/test-00000-of-00001.parquet",
+      "size": 3168881,
+      "sha256": "12df02a43cb624a88bbfadf25493f18b7daf551a5d6061d47109cd5b88bc6f97"
+    }
+  ],
+  "schema_version": 1,
+  "accessed": "2026-11-02"
+}

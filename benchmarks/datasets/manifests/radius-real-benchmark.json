@@ -1,0 +1,64 @@
+{
+  "id": "radius-real-benchmark",
+  "name": "Radius real-code mutation benchmark (benchmarks/real, 120 mutants, 4 own packages)",
+  "kind": "benchmark",
+  "source": {
+    "type": "local",
+    "url": "benchmarks/real",
+    "revision": "subjects pinned to 6e354274b5b42497e88c44bca9d7e6121c9e82fe (docs/benchmarks/REAL_REPO_BENCHMARK.md)",
+    "revision_kind": "commit"
+  },
+  "license": {
+    "name": "Radius internal - no licence granted (DEC-012: licence undecided, no LICENSE file)",
+    "url": "docs/decisions.md",
+    "verdict": "internal",
+    "evidence": "docs/decisions.md DEC-012."
+  },
+  "redistribution": {
+    "allowed": "no",
+    "notes": "No licence chosen yet (DEC-012)."
+  },
+  "status": "available",
+  "size": "4 subjects, 120 mutants, 16 structural scenarios",
+  "rqs": [
+    "RQ2",
+    "RQ3 (self-evaluation)"
+  ],
+  "labels": [
+    "full-suite-detected vs undetected per mutant (may include equivalent mutants)"
+  ],
+  "risks": [
+    "self-evaluation on own code, one language: must not be generalised",
+    "no intent annotations yet (EVALUATION_PLAN: extend)"
+  ],
+  "obtain": "in repo; python benchmarks/real/report.py",
+  "files": [
+    {
+      "path": "benchmarks/real/corpus.json",
+      "size": 4806,
+      "sha256": "8b80b03a8aceb1f3ed36d1a56e2f426f5ff02670fccea724e9e60d1d75b746e0"
+    },
+    {
+      "path": "benchmarks/real/results/confidence.jsonl",
+      "size": 33301,
+      "sha256": "f7d3638ad49ed1387c818c8bda561d0df592c652c262f40947fc40fac8c1c374"
+    },
+    {
+      "path": "benchmarks/real/results/graph.jsonl",
+      "size": 32085,
+      "sha256": "4eb1472aff62e471c7c62abd5bb2ee84f00179a783c000a1e10de4d116b208f0"
+    },
+    {
+      "path": "benchmarks/real/results/parser.jsonl",
+      "size": 38973,
+      "sha256": "9a02f1d9e345f2671e218bd8f4970d5f8d2338334b677d71aa090471daf37a06"
+    },
+    {
+      "path": "benchmarks/real/results/testing.jsonl",
+      "size": 38530,
+      "sha256": "782e058fb9801adf6d6dbfc74482b023944f137701babeb1bc75fbe8839d70ef"
+    }
+  ],
+  "schema_version": 1,
+  "accessed": "2026-11-02"
+}

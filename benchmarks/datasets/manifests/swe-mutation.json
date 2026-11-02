@@ -1,0 +1,38 @@
+{
+  "id": "swe-mutation",
+  "name": "SWE-Mutation (2,636 mutated variants of 800 instances)",
+  "kind": "benchmark",
+  "source": {
+    "type": "arxiv",
+    "url": "https://arxiv.org/abs/2605.22175",
+    "revision": "arXiv v1 (2026-05-21), ACL 2026 Findings",
+    "revision_kind": "version",
+    "paper": "arXiv 2605.22175"
+  },
+  "license": {
+    "name": "UNKNOWN for data - no artifact located (paper: CC BY-NC-SA 4.0, non-commercial)",
+    "url": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+    "verdict": "unknown",
+    "evidence": "arXiv page fetched 2026-11-02: no code/data link; paper licence CC BY-NC-SA 4.0. If the data follows it, it is non-commercial."
+  },
+  "redistribution": {
+    "allowed": "no",
+    "notes": "UNKNOWN - do not redistribute. Reference by manifest only."
+  },
+  "status": "blocked",
+  "size": "2,636 variants / 800 instances (abstract)",
+  "rqs": [
+    "RQ2"
+  ],
+  "labels": [
+    "mutated solutions designed to pass validation (detect/verify rates)"
+  ],
+  "risks": [
+    "no artifact",
+    "possible non-commercial licence"
+  ],
+  "obtain": "email authors",
+  "schema_version": 1,
+  "accessed": "2026-11-02",
+  "files": []
+}

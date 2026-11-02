@@ -43,6 +43,8 @@ Hypothesis thresholds above are *initial guesses* and are fixed in the pre-regis
 | Seeded-defect review tasks | RQ5 | Created from fixtures; humans find defects with/without triage. |
 | Agent trajectories | RQ4 | From our own runs of several agents on benchmark tasks (log everything via PR-01), plus partner data. |
 
+Inventory, manifests and tooling: `datasets/INVENTORY.md`, `benchmarks/datasets/manifests/`, `scripts/datasets.py`; rules and datasheet template: `datasets/DATA_HYGIENE.md`.
+
 Data hygiene: time-based and repo-based splits; deduplicate; no leakage of labels into features; document licenses; store hashes; release what is permitted.
 
 ## 4. Baselines (EP-06)
@@ -72,7 +74,7 @@ Fair comparison: same inputs, same splits, tuned with the same budget, report se
 |---|---|---|
 | EP-01 [x] DONE 2026-11-02 (outputs in `literature/`) | Literature review (traceability, mutation testing for AI code, PR verification tools, calibration/conformal, process mining of agents). Confirm or narrow the novelty claim. Maintain a reading list and a table of related work with dates and artifacts. | none (start now) |
 | EP-02 [~] DRAFT 2026-11-02 (not frozen; `preregistration/`) | Pre-registration: RQs, hypotheses, metrics, analysis plan, stopping rules, exclusion criteria. Freeze before running. | EP-01 |
-| EP-03 | Dataset assembly, licensing check, splits. | F-14 |
+| EP-03 [x] DONE 2026-11-02 (outputs: `datasets/`, `benchmarks/datasets/`, `scripts/datasets.py`) | Dataset assembly, licensing check, splits. | F-14 |
 | EP-04 | Gold annotation (IN-09, LK-07), agreement study. | EP-03 |
 | EP-05 | Experiment harness that calls the production pipeline, takes a dataset manifest + config, writes results with `algo_version`, seed, commit hash. One command reproduces any table. | M3 |
 | EP-06 | Baselines implemented and validated. | EP-05 |
@@ -150,3 +152,5 @@ Venue options to evaluate (check current calls and deadlines at the time): softw
 
 - 2026-11-02 (EP-02): added the pre-registration draft in `preregistration/` (`PREREGISTRATION.md`, `CHANGELOG.md` with the freeze mechanism); EP-02 marked DRAFT, not frozen.
 - 2026-11-02 (EP-01): verified UTBoost/PatchDiff/SWE-ABS figures against arXiv pages and added them with license/artifact status; added datasets (SWE-Bench+, SWT-Bench, SWE-Mutation, ImpossibleBench, AIDev, AgentLens-Bench status) and baselines B7-B12 plus the AgentProof disambiguation; ticked EP-01; extended the novelty-risk threat; added section 12 (literature gaps). No numeric claim in this plan was found wrong (the plan contained none from snippets); the figures that were previously only in search snippets are now sourced.
+
+- 2026-11-02 (EP-03): dataset inventory with primary-source licence verdicts (SWE-bench-family datasets declare no licence: UNKNOWN - do not redistribute; UTBoost, PatchDiff, SWE-Bench+, SWE-Mutation artifacts not located: blocked), manifest schema and tooling, split and leakage tooling, data-hygiene rules.
