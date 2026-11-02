@@ -1,6 +1,6 @@
 # Verdict v2 alpha: build-ready slice design
 
-**Status:** proposed design for owner sign-off. Date: 2026-11-02. Author: architect pass (docs only, no code).
+**Status:** decisions D1-D17 accepted as recommended in section 8.2 by owner delegation on 2026-11-02 (recorded as DEC-027 in `../../decisions.md`); the design is otherwise as proposed. Date: 2026-11-02. Author: architect pass (docs only, no code).
 **Companions (same folder):** `verdict_v2.schema.json` (JSON Schema of the stored/served verdict payload), `verdict_v2.example.08.json` (a complete payload for fixture 08), `verdict_v2.fixture_expectations.json` (machine-readable expectations for the 8 F-14 fixtures).
 **Reads with:** `../DESIGN.md` (6.3 to 6.5), `../tasks/{EV-evidence-quality,VD-verdict-v2,LK-linking}.md`, `../../decisions.md` (DEC-003, DEC-006 to DEC-009, DEC-026), `../preregistration/PREREGISTRATION.md` (RQ2 predictor UIM).
 
