@@ -131,7 +131,7 @@ Variables documented: **119** (11 secret, 8 feature flags).
 | `RADIUS_FEATURE_SYMBOL_CHANGES` | bool | `false` | worker | no | feature flag, off by default | LK-01: extract the changed symbols (function/method/class, with change kinds) for the diff and log their counts. Nothing is persisted yet (LK-05); failures never affect the analysis. |
 | `RADIUS_FEATURE_SYMBOL_IMPACT` | bool | `false` | worker | no | feature flag, off by default | F-08: narrow test selection and blast radius to tests that can reach the changed Python symbols. Falls back to file-level impact whenever symbol information is missing or low-confidence. |
 | `RADIUS_FEATURE_TAMPER_RULES` | bool | `false` | worker | no | feature flag, off by default | EV-02: run the deterministic tamper rules (weakened or disabled tests, CI/config weakening, hallucinated dependencies) on the diff and log finding counts. Nothing is persisted yet (EV-01/LK-05); failures never affect the analysis. |
-| `RADIUS_FEATURE_VERDICT_V2` | VerdictV2Mode | `off` | api, worker | no | alpha flag: off, shadow or on | Verdict v2 alpha flag: off (default), shadow or on (VD-07-lite). Off means no v2 code path runs and ``GET /analyses/{id}/verdict`` answers 404 with ``meta.reason = disabled``. Unrecognised values are treated as off. |
+| `RADIUS_FEATURE_VERDICT_V2` | VerdictV2Mode | `off` | api, worker | no | alpha flag: off, shadow or on | Verdict v2 alpha flag: off (default), shadow or on (VD-07-lite). Off means no v2 code path runs and ``GET /analyses/{id}/verdict-v2`` answers 404 with ``meta.reason = disabled``. Unrecognised values are treated as off. |
 
 ## LLM and third-party egress
 

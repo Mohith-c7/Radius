@@ -18,7 +18,7 @@ New entries come from fragments in [`changelog.d/`](changelog.d/README.md); see 
 - GitHub App integration: signed webhooks, `Radius confidence` check runs, PR comments with blast-radius tables, repository sync on installation, handling of installation removal.
 - Dashboard: repository, pull request and analysis pages, interactive graph visualiser, test selection hub, report ingestion, and Intent panel with criteria confirmation (IN-11). Email/password and Google/GitHub OAuth sign-in.
 - Optional sandboxed test execution that fails closed when its runtime is unavailable, with an adversarial test suite (F-07). Off by default.
-- Flaky-test detection, a rerun policy and quarantine listing; a flaky test counts as a failure.
+- Flaky-test detection (off by default: `WORKER_TEST_RERUNS=0`, sandbox mode only), a rerun policy and quarantine listing. With the default `WORKER_FLAKY_POLICY=exclude` a flaky test counts as neither pass nor fail and blocks `verified`; `fail` counts it as a failure. It is never counted as a pass.
 - Intent layer through milestone M1: domain model (IN-01), deterministic criterion extraction and `.radius/intent.yml` schema (IN-03), optional guarded LLM extraction (IN-04), testability rating (IN-05), versioned snapshots (IN-06), persistence migration (IN-07), intent API (IN-08), and wiring of the deterministic rater and gated LLM extractor into the API.
 - LLM input/output guard and a prompt-injection test corpus with stub models (QS-02).
 - Observability baseline with optional tracing and metrics, and trace propagation from API to worker (F-10).

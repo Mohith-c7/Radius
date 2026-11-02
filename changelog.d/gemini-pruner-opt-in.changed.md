@@ -1,0 +1,1 @@
+The legacy Gemini semantic pruner (not called by the analysis pipeline) is now enabled only when `RADIUS_FEATURE_GEMINI_PRUNER=true` is set in addition to `GEMINI_API_KEY`; before, the key alone enabled it. It sends caller source code and diffs to a third party, so leave both unset.

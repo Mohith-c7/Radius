@@ -72,14 +72,16 @@ git checkout <old commit> && docker compose build && docker compose up -d
 Never start the new API image against a downgraded database: its default command re-applies
 `alembic upgrade head`.
 
-Migrations `20261102_0013` and `20261102_0014` are intentional placeholders (no-op upgrades) created for the
-Verdict v2 alpha; they change nothing yet.
+Migrations `20261102_0013` and `20261102_0014` create the Verdict v2 alpha tables `verdict_v2` (stored bundles) and
+`verdict_v2_requests` (the re-score outbox used after CI uploads). The tables exist even when the flag is `off`.
+Downgrading past them drops those tables and their rows, which are derived data (v1 results are stored separately and are
+unaffected), but still prefer a backup.
 
 ## Compatibility notes for flags
 
 - All `RADIUS_FEATURE_*` flags default off; upgrading never turns one on. After an upgrade, compare the
   Feature flags table in [CONFIGURATION.md](CONFIGURATION.md) with your `.env`.
-- `RADIUS_FEATURE_VERDICT_V2` (alpha): `off` keeps v1 behavior byte for byte; `shadow` stores v2 results but publishes v1;
+- `RADIUS_FEATURE_VERDICT_V2` (alpha): `off` keeps v1 output unchanged (tests compare it); `shadow` stores v2 results but publishes v1;
   `on` publishes v2 and falls back to v1 on failure. It applies to **both** the API and the worker and
   needs `RADIUS_FEATURE_INTENT_INGESTION=true` to be useful. Set the same value on both services.
 - `RADIUS_FEATURE_INTENT_INGESTION` must also match on both services (the API stores PR text from webhooks;

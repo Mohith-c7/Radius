@@ -49,8 +49,8 @@ the code and not reproduced on a live stack say **Unverified**.
 | `insufficient_evidence` with "N flaky test(s) ... excluded from verification evidence" | Flaky handling is on: `WORKER_TEST_RERUNS` above 0 (default 0) with sandbox mode found a test that failed then passed. With `WORKER_FLAKY_POLICY=exclude` (default) that blocks `verified`; `fail` counts it as a failure ([FLAKY_TESTS.md](../FLAKY_TESTS.md)) |
 | `failed` | At least one test failed (stable failure) |
 | Score shown as "heuristic" | The 0-100 score is `heuristic_uncalibrated`, not a probability |
-| Verdict v2 endpoint answers 404 `disabled` | `RADIUS_FEATURE_VERDICT_V2` is `off` (default). It is an alpha; `shadow` stores v2 and still publishes v1 |
-| Intent, linking, tamper and assertion features have no visible effect | Intent ingestion, symbol changes, tamper rules and assertion extraction are off by default and, when on, only log counts or store snapshots; none feeds the v1 verdict |
+| `GET /api/v1/analyses/{id}/verdict-v2` answers 404 `disabled` | `RADIUS_FEATURE_VERDICT_V2` is `off` (default). It is an alpha (set it on api and worker); `shadow` stores v2 and still publishes v1. How to read it: [verdict-v2.md](../verdict-v2.md) |
+| Intent, linking, tamper and assertion features have no visible effect | They are off by default, and none of them feeds the v1 verdict. Intent ingestion stores snapshots; symbol changes, tamper rules and assertion extraction only log counts. Their results reach a verdict only through Verdict v2 (`RADIUS_FEATURE_VERDICT_V2`), which recomputes them itself |
 
 ## Where to look
 

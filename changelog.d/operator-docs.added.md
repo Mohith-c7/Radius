@@ -1,0 +1,1 @@
+Added operator documentation under `docs/operations/` (install, upgrade, backup and restore, hardening checklist, runbook, troubleshooting) and a generated environment variable reference (`python scripts/gen_config_reference.py`, checked by a unit test). `docker-compose.yml` now forwards the HTTP hardening, sign-in/SMTP and flagged-off worker step variables.
