@@ -1,0 +1,25 @@
+{
+  "name": "__APP_NAME__",
+  "url": "https://github.com/Mohith-c7/Radius",
+  "hook_attributes": {
+    "url": "__WEBHOOK_URL__",
+    "active": true
+  },
+  "redirect_url": "__REDIRECT_URL__",
+  "description": "Radius sandbox app for F-06 live validation. Publishes the 'Radius confidence' Check Run and one PR comment.",
+  "public": false,
+  "default_permissions": {
+    "metadata": "read",
+    "contents": "read",
+    "checks": "write",
+    "pull_requests": "write",
+    "issues": "read"
+  },
+  "default_events": [
+    "pull_request",
+    "push",
+    "issues",
+    "issue_comment",
+    "check_run"
+  ]
+}

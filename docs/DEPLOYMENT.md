@@ -64,6 +64,7 @@ The Next.js web console is available at `http://localhost:3000`.
 | **`GITHUB_APP_PRIVATE_KEY`** | RSA Private Key for the GitHub App (PEM format with `\n`). | `-----BEGIN RSA PRIVATE KEY-----\n...` |
 | **`GITHUB_WEBHOOK_SECRET`** | Shared secret configured in the GitHub App webhook settings. | `whsec_live_secret_string` |
 | **`GITHUB_DEFAULT_ORGANIZATION_ID`** | Default organization UUID assigned to webhook-created analyses. | `00000000-0000-4000-8000-000000000001` |
+| **`GITHUB_SINGLE_TENANT`** | `true` routes deliveries from installations not yet linked to an organization to `GITHUB_DEFAULT_ORGANIZATION_ID`. Safe only when one organization uses the App; default `false` rejects them (403). | `false` |
 | **`GITHUB_PUBLISH_RESULTS`** | Whether the worker publishes Check Runs and PR comments to GitHub. | `true` |
 | **`RADIUS_TRACING_ENABLED`** | Enable OpenTelemetry tracing (needs the `observability` extra). Off by default. See `docs/OBSERVABILITY.md`. | `false` |
 | **`RADIUS_OTLP_ENDPOINT`** | OTLP/HTTP traces endpoint; empty records spans without exporting. | `http://jaeger:4318/v1/traces` |
@@ -84,7 +85,7 @@ To configure Radius to automatically verify Pull Requests:
 
 1. Create a GitHub App under your GitHub Organization:
    - **Homepage URL**: `https://radius.yourcompany.com`
-   - **Webhook URL**: `https://api-radius.yourcompany.com/api/v1/github/webhooks`
+   - **Webhook URL**: `https://api-radius.yourcompany.com/api/v1/webhooks/github` (content type `application/json`)
    - **Webhook Secret**: Generate a secure 32+ character string and set as `GITHUB_WEBHOOK_SECRET`.
 2. Configure Permissions:
    - **Repository contents**: Read (to clone and parse repository ASTs)

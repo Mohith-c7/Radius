@@ -19,4 +19,6 @@ regexes = [
   '''MIIEowIBAAKCAQEAseededfakekeymaterial''',
   '''eyJhbGciOiJIUzI1NiJ9\.eyJzdWIiOiJzZWVkZWQifQ\.c2VlZGVkc2lnbmF0dXJl''',
   '''12345678-aaaa-bbbb-cccc-1234567890ab''',
+  # Placeholder PEM body in tests/test_github_app_manifest.py (F-06)
+  '''PRIVATE KEY-----.{1,4}AAA.{1,4}BBB.{1,4}-----END''',
 ]
