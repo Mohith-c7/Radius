@@ -11,6 +11,12 @@ from radius_testing.domain.entities import (
     TestRunResult,
 )
 from radius_testing.domain.enums import TestRunStatus
+from radius_testing.domain.flakiness import (
+    ExecutionSample,
+    FlakinessConfig,
+    SampleOutcome,
+    flakiness_score,
+)
 from radius_testing.dto.commands import (
     DiscoverTestsCommand,
     ExecuteTestRunCommand,
@@ -18,6 +24,8 @@ from radius_testing.dto.commands import (
     SelectTestsCommand,
 )
 from radius_testing.dto.responses import (
+    FlakyTestResponse,
+    FlakyTestsResponse,
     SelectedTestAttributionResponse,
     TestCaseResponse,
     TestDiscoveryResponse,
@@ -171,6 +179,57 @@ class TestingApplicationService:
     def get_test_statistics(self, analysis_id: UUID):
         """Return test execution statistics for an analysis."""
         return self._store.get_test_statistics(analysis_id)
+
+    def list_flaky_tests(
+        self,
+        repository_id: UUID,
+        config: FlakinessConfig | None = None,
+    ) -> FlakyTestsResponse:
+        """Score every test of a repository from its history; list the quarantined.
+
+        Deterministic: history rows arrive in a stable (timestamp, id) order and
+        the score is a pure function of them. The code key is the commit sha,
+        so only reruns of the same commit count as comparable observations.
+        """
+
+        cfg = config or FlakinessConfig()
+        by_test: dict[str, list[dict]] = {}
+        for row in self._store.list_test_samples(repository_id):
+            by_test.setdefault(row["test_path"], []).append(row)
+        quarantined: list[FlakyTestResponse] = []
+        insufficient = 0
+        for path in sorted(by_test):
+            rows = by_test[path]
+            samples = tuple(
+                ExecutionSample(SampleOutcome(row["status"]), row.get("commit_sha"))
+                for row in rows
+                if row["status"] in {item.value for item in SampleOutcome}
+            )
+            assessment = flakiness_score(samples, cfg)
+            if assessment.score is None:
+                insufficient += 1
+            if assessment.quarantined:
+                quarantined.append(
+                    FlakyTestResponse(
+                        test_path=path,
+                        test_name=rows[-1]["test_name"],
+                        score=assessment.score,
+                        comparable=assessment.comparable,
+                        flips=assessment.flips,
+                        samples_considered=assessment.samples_considered,
+                        quarantined=True,
+                        last_status=rows[-1]["status"],
+                    )
+                )
+        quarantined.sort(key=lambda item: (-(item.score or 0.0), item.test_path))
+        return FlakyTestsResponse(
+            repository_id=repository_id,
+            window=cfg.window,
+            min_comparable=cfg.min_comparable,
+            threshold=cfg.threshold,
+            quarantined=tuple(quarantined),
+            insufficient_history_count=insufficient,
+        )
 
     def get_recent_executions(
         self, repository_id: UUID | None = None, limit: int = 50

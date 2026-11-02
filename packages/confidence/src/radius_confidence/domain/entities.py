@@ -66,6 +66,10 @@ class TestEvidence:
     """Selected test files whose reported cases were all skipped."""
     contradictory_tests: tuple[str, ...] = ()
     """Test cases reported as passed in one upload and failed in another."""
+    flaky: int = 0
+    """Cases that failed then passed on rerun (F-11); not in ``passed`` or ``failed``."""
+    flaky_tests: tuple[str, ...] = ()
+    """Identities of the flaky cases. They are never a verified pass."""
 
 
 @dataclass(frozen=True, slots=True)
