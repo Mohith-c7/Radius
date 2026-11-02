@@ -162,6 +162,19 @@ def test_each_new_analysis_gets_an_intent_snapshot_automatically(monkeypatch) ->
     assert job_status(factory, analysis_id) == db_enums.AnalysisJobStatus.COMPLETED
 
 
+def test_worker_built_criteria_are_rated_not_unrated(monkeypatch) -> None:
+    """Ratings are computed when the snapshot is built (docs/API_CONTRACTS.md). Unrated criteria
+    make Verdict v2 rule R2a fire for every PR, so ``verified`` would be unreachable."""
+
+    factory, github, http = factory_for_tests(), TokenOnlyGitHub(), install_recorded_scenario(FakeGitHub())
+    analysis_id, org_id = persist(factory)
+    assert runtime(monkeypatch, factory, github, http).run_once() is True
+
+    history, _ = intent_state(factory, org_id, analysis_id)
+    assert history[0].criteria
+    assert all(c.testability.value != "unrated" for c in history[0].criteria)
+
+
 def test_rerunning_the_job_is_idempotent(monkeypatch) -> None:
     factory, github, http = factory_for_tests(), TokenOnlyGitHub(), install_recorded_scenario(FakeGitHub())
     analysis_id, org_id = persist(factory)

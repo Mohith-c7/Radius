@@ -41,6 +41,7 @@ from radius_github.intent_sources import (
 from radius_intent.application import IntentSnapshotService
 from radius_intent.domain import IntentSourceKind
 from radius_intent.infrastructure import SqlAlchemyIntentRepository, default_extractors
+from radius_intent.infrastructure.testability import DeterministicTestabilityRater
 from radius_shared.database import enums as db_enums
 from radius_shared.database import models as db_models
 from radius_shared.logging import get_logger
@@ -143,7 +144,10 @@ def _ingest(
     repo = SqlAlchemyIntentRepository(session)
     service = IntentIngestionService(
         repo,
-        IntentSnapshotService(repo, default_extractors()),
+        # The rater makes criteria testable (docs/API_CONTRACTS.md: ratings are computed
+        # when the snapshot is built); without it every criterion stays ``unrated`` and
+        # Verdict v2 rule R2a (no behavioral_testable criterion) fires for every PR.
+        IntentSnapshotService(repo, default_extractors(), rater=DeterministicTestabilityRater()),
         clock=clock,
     )
     collector = GitHubIntentCollector(

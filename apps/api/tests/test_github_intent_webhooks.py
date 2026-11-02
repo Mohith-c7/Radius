@@ -114,6 +114,17 @@ def test_opened_pr_gets_title_and_body_as_intent_with_a_snapshot() -> None:
     assert all(c.origin.source.source_id == "pr-body" for c in snapshot.criteria)
 
 
+def test_webhook_built_criteria_are_rated_testable_not_unrated() -> None:
+    """The snapshot is rated when built (docs/API_CONTRACTS.md); an unrated criterion would make
+    Verdict v2 rule R2a ("no behavioral_testable criterion") fire for every webhook-built PR."""
+
+    rig = MemoryRig()
+    snapshot = rig.latest(opened(rig))
+    assert snapshot.criteria
+    assert all(c.testability.value != "unrated" for c in snapshot.criteria)
+    assert any(c.testability.value == "behavioral_testable" for c in snapshot.criteria)
+
+
 def test_redelivery_and_identical_resync_create_no_second_version() -> None:
     rig = MemoryRig()
     analysis_id = opened(rig)

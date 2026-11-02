@@ -260,7 +260,9 @@ def build_ingestion_service(
 
     return IntentIngestionService(
         repository,
-        IntentSnapshotService(repository, container.intent_extractors),
+        IntentSnapshotService(
+            repository, container.intent_extractors, rater=container.intent_rater
+        ),
         clock=container.clock,
     )
 
