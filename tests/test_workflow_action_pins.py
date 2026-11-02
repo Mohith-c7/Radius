@@ -14,7 +14,16 @@ _spec.loader.exec_module(module)
 
 
 def test_all_workflow_actions_are_sha_pinned() -> None:
-    assert module.find_violations(ROOT / ".github" / "workflows") == []
+    assert module.find_violations(ROOT / ".github" / "workflows", *module.action_files(ROOT)) == []
+
+
+def test_shipped_composite_actions_are_scanned(tmp_path: Path) -> None:
+    action = tmp_path / "action.yml"
+    action.write_text(
+        "runs:\n  steps:\n    - uses: actions/checkout@v4\n",
+        encoding="utf-8",
+    )
+    assert len(module.find_violations(tmp_path, action)) == 1
 
 
 def test_detects_unpinned_actions(tmp_path: Path) -> None:
