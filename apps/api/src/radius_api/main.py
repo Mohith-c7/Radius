@@ -9,7 +9,6 @@ from app.database import Base as AuthBase
 from app.database import engine as auth_engine
 from app.routes_auth import router as auth_router
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from radius_shared.config import RuntimeEnvironment
 from radius_shared.database.base import Base as DomainBase
@@ -27,6 +26,8 @@ from radius_shared.observability import metrics as obs_metrics
 
 from radius_api.config import get_api_settings
 from radius_api.dependencies import AppContainer, configure_sql_storage
+from radius_api.middleware.hardening import install_http_hardening
+from radius_api.middleware.security_headers import SecurityHeadersMiddleware
 from radius_api.observability import configure_api_observability
 from radius_api.routes.analyses import router as analyses_router
 from radius_api.routes.confidence import router as confidence_router
@@ -101,29 +102,19 @@ def create_app() -> FastAPI:
         description="Software verification API for Radius.",
         lifespan=lifespan,
     )
-    allow_origins = [
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3001",
-    ]
-    if settings.cors_origins:
-        allow_origins.extend(
-            [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
-        )
-
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=allow_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
     app.state.settings = settings
+    install_http_hardening(app, settings)
     app.state.container = AppContainer()
     if settings.storage_backend == "sql":
         configure_sql_storage(app.state.container, settings)
     configure_api_observability(app, ObservabilitySettings())
+    # Added last = outermost, so even correlation-id and 429/413 replies get
+    # the security headers.
+    app.add_middleware(
+        SecurityHeadersMiddleware,
+        hsts_enabled=settings.hsts_enabled,
+        hsts_max_age=settings.hsts_max_age,
+    )
     obs_metrics.set_queue_depth_provider(queue_depth_provider(app.state.container))
     app.add_exception_handler(RadiusError, radius_error_handler)
     app.include_router(health_router, prefix="/api/v1")
