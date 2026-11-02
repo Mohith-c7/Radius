@@ -550,6 +550,14 @@ description: `packages/testing/src/radius_testing/linking/README.md`.
   fixture sanity only). Semantic linker, persistence (LK-05) and pipeline wiring are
   not done.
 
+## Test assertion extraction (LK-04)
+
+Lives in `packages/testing` as `radius_testing.assertions`, next to `radius_testing.linking` (DEC-003: no new package). Full description: `packages/testing/src/radius_testing/assertions/README.md`.
+
+* Input: test file paths, a repository snapshot (`{path: text}` or `read(path)`), optional LK-03 `SymbolTestLink`s and an optional `SymbolResolver` port; output: `AssertionSet` of `AssertionRecord(test_id, kind, subject, expected, comparator, strength_features, location, framework, confidence)` with canonical JSON and `algo_version`.
+* Static only (stdlib `ast`; F-09 tree-sitter for partial TS/JS): pytest/unittest/mock/hypothesis/snapshot assertions, helper following to depth 2, loop/parametrize/try-swallow/dead/`mock_only`/`circular` flags.
+* Consumers: EV-06 turns `strength_features` into `a_static` (this module computes no score); LK-05 persists the records and resolves `subject_refs`. Flag `RADIUS_FEATURE_ASSERTION_EXTRACTION` (default off) only logs counts in the worker; `scripts/assertion_dump.py` prints JSON.
+
 ---
 
 # Confidence Domain
@@ -671,6 +679,8 @@ Deterministic linkers (explicit hints, BM25 lexical, identifier/phrase, structur
 Non Responsibilities
 
 Persistence and the IEG (LK-05), fitting calibrators on gold labels (LK-07; the calibration machinery itself lives here), the RQ1 gold set and results (LK-07), producing symbol-to-test links (LK-03), judging whether the code is correct.
+
+Persistence and the IEG (LK-05), calibration of link confidence (LK-06), the RQ1 gold set and results (LK-07), symbol-to-test linking (LK-03), assertion strength scoring (EV-06), judging whether the code is correct.
 
 ---
 

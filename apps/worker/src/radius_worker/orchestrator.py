@@ -41,6 +41,11 @@ from radius_parser.extractors.typescript import TypeScriptExtractor
 from radius_shared.logging import get_logger
 from radius_shared.observability import stage
 from radius_testing.application import TestingApplicationService
+from radius_testing.assertions import (
+    discover_test_files,
+    extract_assertions,
+    log_counts,
+)
 from radius_testing.dto import (
     DiscoverTestsCommand,
     ExecuteTestRunCommand,
@@ -121,6 +126,7 @@ class Phase1AnalysisOrchestrator:
         symbol_impact_enabled: bool = False,
         symbol_changes_enabled: bool = False,
         tamper_rules_enabled: bool = False,
+        assertion_extraction_enabled: bool = False,
         flaky_policy: str = "exclude",
     ) -> None:
         self._analysis = analysis_service
@@ -133,6 +139,7 @@ class Phase1AnalysisOrchestrator:
         self._symbol_impact_enabled = symbol_impact_enabled
         self._symbol_changes_enabled = symbol_changes_enabled
         self._tamper_rules_enabled = tamper_rules_enabled
+        self._assertion_extraction_enabled = assertion_extraction_enabled
         self._flaky_policy = flaky_policy
 
     def execute(self, command: ExecuteAnalysisCommand) -> AnalysisExecutionResult:
@@ -157,6 +164,8 @@ class Phase1AnalysisOrchestrator:
             )
             if self._tamper_rules_enabled:
                 self._analyze_tampering(command, symbol_result)
+        if self._assertion_extraction_enabled:
+            self._extract_assertions(command)
 
         # NOTE: the experimental LLM "semantic pruning" step is intentionally
         # NOT part of this pipeline. It could remove files (and therefore
@@ -379,6 +388,25 @@ class Phase1AnalysisOrchestrator:
             },
         )
         return result
+
+    def _extract_assertions(self, command: ExecuteAnalysisCommand) -> None:
+        """LK-04: log test-assertion counts. Stores nothing (persistence is LK-05)."""
+
+        try:
+            with stage("assertion_extraction"):
+                files = discover_test_files(command.repository_path)
+                result = extract_assertions(files, DirectorySnapshot(command.repository_path))
+        except Exception:  # an optional, informational step must never fail the analysis
+            LOGGER.warning(
+                "Assertion extraction failed; continuing without it",
+                extra={"analysis_id": str(command.analysis_id)},
+                exc_info=True,
+            )
+            return
+        LOGGER.info(
+            "Test assertions extracted",
+            extra={"analysis_id": str(command.analysis_id), **log_counts(result), "by_kind": str(result.counts()["by_kind"])},
+        )
 
     def _analyze_tampering(
         self, command: ExecuteAnalysisCommand, symbol_result: SymbolChangeSet | None
