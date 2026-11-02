@@ -1,10 +1,11 @@
 """Publish the stored verdict v2 to GitHub (VS-07/VS-08).
 
-One Check Run (same name as v1) and one PR comment carrying a DISTINCT v2
-marker. The body comes from the renderer port (``radius_github.verdict_v2``);
-nothing here builds markdown from untrusted text. A v1 comment of the same PR is
-adopted (updated in place) when no v2 comment exists, so a PR never shows two
-Radius comments.
+One Check Run (same name as v1) and ONE PR comment per pull request (design
+D10). The body comes from the real renderer (``radius_github.verdict_v2.markdown``);
+nothing here builds markdown from untrusted text. The renderer emits the v1
+marker on line 1 and a v2 marker (``rev`` and content digest) on line 2, so the
+v1 and v2 comments are the same comment: ``plan_upsert`` finds it (a v1 comment
+is adopted) and creates, updates in place or skips by content digest.
 
 Rules, in order, for ``publish_latest``:
 
@@ -32,7 +33,8 @@ from typing import Any, Literal
 from uuid import UUID
 
 from radius_github.client import GitHubAppClient
-from radius_github.publisher import CHECK_RUN_NAME, COMMENT_MARKER
+from radius_github.publisher import CHECK_RUN_NAME
+from radius_github.verdict_v2 import markdown as v2_markdown
 from radius_github.verdict_v2.ports import VerdictRenderer
 from radius_github.verdict_v2.view import VerdictV2View
 from radius_shared.database import enums as db_enums
@@ -47,22 +49,6 @@ from sqlalchemy.orm import Session
 from radius_worker.config import WorkerSettings
 
 LOGGER = logging.getLogger(__name__)
-
-#: Distinct hidden marker of the v2 comment (the v1 marker stays COMMENT_MARKER).
-V2_COMMENT_MARKER = "<!-- radius-verdict-v2 -->"
-
-_CONCLUSIONS = {
-    "verified": "success",
-    "failed": "failure",
-    "insufficient_evidence": "neutral",
-    "needs_review": "neutral",
-}
-_LABELS = {
-    "verified": "Verified",
-    "failed": "Failed",
-    "insufficient_evidence": "Not verified - insufficient evidence",
-    "needs_review": "Needs review",
-}
 
 Status = Literal["published", "unchanged", "skipped"]
 
@@ -88,45 +74,18 @@ class PublishOutcome:
 
 
 def check_run_fields(view: VerdictV2View) -> tuple[str, str]:
-    """Return ``(title, conclusion)``; a pending verdict is completed neutral."""
+    """Return ``(title, conclusion)`` from the renderer; pending is completed neutral."""
 
-    if view.pending:
-        return "Radius v2: awaiting CI test results", "neutral"
-    verdict = view.verdict or ""
-    label = _LABELS.get(verdict, "Not available")
-    summary = view.summary
-    title = f"Radius v2: {label} ({summary.proven}/{summary.criteria_total} criteria proven)"
-    return title, _CONCLUSIONS.get(verdict, "neutral")
-
-
-def ensure_v2_marker(body: str) -> str:
-    return body if V2_COMMENT_MARKER in body else f"{V2_COMMENT_MARKER}\n{body}"
+    return v2_markdown.check_title(view), v2_markdown.check_conclusion(view)
 
 
 def rendered_digest(title: str, conclusion: str, summary: str, body: str) -> str:
-    blob = json.dumps([title, conclusion, summary, body], ensure_ascii=False)
+    """Digest of what is published; the comment part ignores the revision number."""
+
+    blob = json.dumps(
+        [title, conclusion, summary, v2_markdown.comment_digest(body)], ensure_ascii=False
+    )
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
-
-
-def _is_bot(comment: dict[str, Any]) -> bool:
-    user = comment.get("user")
-    if user is None:
-        return True
-    return isinstance(user, dict) and str(user.get("type", "")).lower() == "bot"
-
-
-def find_comment(comments: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """Bot comment with the v2 marker, else a bot comment with the v1 marker."""
-
-    for marker in (V2_COMMENT_MARKER, COMMENT_MARKER):
-        for comment in comments:
-            if (
-                marker in str(comment.get("body", ""))
-                and comment.get("id") is not None
-                and _is_bot(comment)
-            ):
-                return comment
-    return None
 
 
 def _latest_check_run(runs: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -139,16 +98,18 @@ def _latest_check_run(runs: list[dict[str, Any]]) -> dict[str, Any] | None:
 class VerdictV2Publisher:
     """Writes the Check Run and the comment through the existing GitHub client."""
 
-    def __init__(self, client: GitHubAppClient, renderer: VerdictRenderer) -> None:
+    def __init__(
+        self, client: GitHubAppClient, renderer: VerdictRenderer | None = None
+    ) -> None:
         self._client = client
-        self._renderer = renderer
+        self._renderer = renderer if renderer is not None else v2_markdown.MarkdownRenderer()
 
     def render(self, view: VerdictV2View) -> tuple[str, str, str, str, str]:
         """Return ``(title, conclusion, summary, body, digest)``."""
 
         title, conclusion = check_run_fields(view)
         summary = self._renderer.render_check_summary(view)
-        body = ensure_v2_marker(self._renderer.render_comment(view))
+        body = self._renderer.render_comment(view)
         return title, conclusion, summary, body, rendered_digest(title, conclusion, summary, body)
 
     def publish(
@@ -190,18 +151,17 @@ class VerdictV2Publisher:
             self._client.create_check_run(**args)
         else:
             self._client.update_check_run(**args, check_run_id=int(check["id"]))
-        existing = find_comment(
-            self._client.list_issue_comments(
-                token=token, owner=owner, repo=repo, issue_number=pull_request_number
-            )
+        comments = self._client.list_issue_comments(
+            token=token, owner=owner, repo=repo, issue_number=pull_request_number
         )
-        if existing is None:
+        plan = v2_markdown.plan_upsert(comments, body)
+        if plan.action == "create":
             self._client.create_issue_comment(
                 token=token, owner=owner, repo=repo, issue_number=pull_request_number, body=body
             )
-        else:
+        elif plan.action == "update" and plan.comment_id is not None:
             self._client.update_issue_comment(
-                token=token, owner=owner, repo=repo, comment_id=int(existing["id"]), body=body
+                token=token, owner=owner, repo=repo, comment_id=plan.comment_id, body=body
             )
         return digest, True
 
@@ -211,33 +171,10 @@ class VerdictV2Publisher:
 # --------------------------------------------------------------------------
 
 
-class _ModuleRenderer:
-    def __init__(self, module: Any) -> None:
-        self._module = module
+def load_renderer() -> VerdictRenderer:
+    """The real renderer (VD-06): ``MarkdownRenderer`` over the pure functions."""
 
-    def render_comment(self, view: VerdictV2View) -> str:
-        return self._module.render_comment(view)
-
-    def render_check_summary(self, view: VerdictV2View) -> str:
-        return self._module.render_check_summary(view)
-
-
-def load_renderer() -> VerdictRenderer | None:
-    """The real renderer (VD-06) when it is installed, else ``None``.
-
-    Looks for ``radius_github.verdict_v2.markdown`` exposing ``render_comment``
-    and ``render_check_summary``. Without it v2 is never published (v1 stays).
-    """
-
-    try:
-        from radius_github.verdict_v2 import markdown  # type: ignore[attr-defined]
-    except ImportError:
-        return None
-    if callable(getattr(markdown, "render_comment", None)) and callable(
-        getattr(markdown, "render_check_summary", None)
-    ):
-        return _ModuleRenderer(markdown)
-    return None
+    return v2_markdown.MarkdownRenderer()
 
 
 # --------------------------------------------------------------------------

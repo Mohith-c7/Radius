@@ -13,6 +13,7 @@ from uuid import UUID
 import pytest
 import radius_worker.runner as worker_runner
 from radius_evidence.domain.inputs import StageAInput
+from radius_github.verdict_v2.markdown import MarkdownRenderer, parse_v2_marker
 from radius_github.verdict_v2.view import VerdictV2View
 from radius_shared.database import enums as db_enums
 from radius_shared.database.base import Base
@@ -38,16 +39,15 @@ T0 = datetime(2026, 11, 2, 10, 0, tzinfo=UTC)
 BOT = {"type": "Bot"}
 
 
-class FakeRenderer:
+class FakeRenderer(MarkdownRenderer):
+    """The REAL renderer (VD-06), counting calls."""
+
     def __init__(self) -> None:
         self.calls = 0
 
     def render_comment(self, view: VerdictV2View) -> str:
         self.calls += 1
-        return f"## v2 {view.verdict} rev {view.revision} uim {view.summary.uim}"
-
-    def render_check_summary(self, view: VerdictV2View) -> str:
-        return f"{view.summary.proven}/{view.summary.criteria_total} proven"
+        return super().render_comment(view)
 
 
 class FakeGitHub:
@@ -236,10 +236,12 @@ def test_publish_creates_one_check_run_and_one_comment_with_the_v2_marker() -> N
     run = env.github.check_runs[0]
     assert run["name"] == "Radius confidence"
     assert run["conclusion"] == "neutral"
-    assert run["title"] == "Radius v2: Not verified - insufficient evidence (0/2 criteria proven)"
-    assert run["summary"] == "0/2 proven"
+    assert run["title"].startswith("Radius v2: ") and "criteria proven" in run["title"]
+    assert "**Why:**" in run["summary"]
     assert len(env.github.comments) == 1
-    assert env.github.comments[0]["body"].startswith(pub.V2_COMMENT_MARKER)
+    body = env.github.comments[0]["body"]
+    assert body.startswith("<!-- radius-confidence-report -->\n<!-- radius-verdict-v2")
+    assert parse_v2_marker(body) is not None
     with env.factory() as session:
         stored = SqlVerdictV2Repository(session).latest(env.org_a, env.analysis)
     assert stored.published_digest == outcome.digest
@@ -261,7 +263,7 @@ def test_identical_republish_is_a_no_op_and_changes_update_in_place() -> None:
     assert changed.status == "published"
     assert len(env.github.check_runs) == 1
     assert len(env.github.comments) == 1
-    assert "rev 2" in env.github.comments[0]["body"]
+    assert parse_v2_marker(env.github.comments[0]["body"])[0] == 2
     assert env.github.check_runs[0]["conclusion"] == "success"
 
 
@@ -284,13 +286,15 @@ def test_an_existing_v1_comment_is_adopted_not_duplicated() -> None:
     env.publish()
     assert len(env.github.comments) == 1
     assert env.github.comments[0]["id"] == 99
-    assert pub.V2_COMMENT_MARKER in env.github.comments[0]["body"]
+    # one comment per PR (D10): the v1 comment is adopted and now carries both markers
+    assert parse_v2_marker(env.github.comments[0]["body"]) is not None
+    assert env.github.comments[0]["body"].startswith("<!-- radius-confidence-report -->")
 
 
 def test_a_human_comment_quoting_the_marker_is_never_edited() -> None:
     env = Env()
     env.github.comments.append(
-        {"id": 5, "user": {"type": "User"}, "body": f"quote {pub.V2_COMMENT_MARKER}"}
+        {"id": 5, "user": {"type": "User"}, "body": "quote <!-- radius-verdict-v2 rev=1 digest=abcdef12 -->"}
     )
     env.store()
     env.publish()
@@ -465,7 +469,7 @@ def test_ci_results_trigger_recompute_and_in_place_republish() -> None:
     assert _pending(env) is None
     assert len(env.github.check_runs) == 1 and len(env.github.comments) == 1
     assert env.github.check_runs[0]["conclusion"] == "success"
-    assert "rev 2" in env.github.comments[0]["body"]
+    assert parse_v2_marker(env.github.comments[0]["body"])[0] == 2
 
 
 def test_replayed_requests_collapse_into_one_publish() -> None:
@@ -574,7 +578,7 @@ def test_run_loop_pass_consumes_the_outbox(monkeypatch) -> None:
     runtime = _runtime(env, monkeypatch)
     runtime._process_verdict_v2_requests()
     assert _pending(env) is None
-    assert env.github.comments[0]["body"].startswith(pub.V2_COMMENT_MARKER)
+    assert parse_v2_marker(env.github.comments[0]["body"]) is not None
 
 
 def test_job_publish_uses_v2_when_on_and_ok_and_v1_otherwise(monkeypatch) -> None:
