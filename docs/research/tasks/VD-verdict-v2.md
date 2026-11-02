@@ -4,7 +4,7 @@ Goal: compute and publish a deterministic, explainable, per-criterion verdict. S
 
 ---
 
-### VD-01 Support `S(c)` aggregation   [ ]
+### VD-01 Support `S(c)` aggregation   [x]
 - Owner type: agent-ok
 - Depends on: EV-08, LK-06
 - Branch: `feature/verdict-support`
@@ -15,7 +15,7 @@ Goal: compute and publish a deterministic, explainable, per-criterion verdict. S
 - Research hook: store all intermediate values for ablations.
 - Contract: see design/VERDICT_V2_SLICE.md (docs/research/design/; Verdict v2 alpha: S(c) formula and caps in 3.9)
 
-### VD-02 UIM and per-criterion states   [ ]
+### VD-02 UIM and per-criterion states   [x]
 - Owner type: agent-ok
 - Depends on: VD-01, IN-05
 - Branch: `feature/verdict-criterion-states`
