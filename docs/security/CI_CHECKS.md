@@ -76,7 +76,7 @@ fails if any workflow `uses:` is not SHA-pinned or lacks a version comment.
 
 ### Dependabot
 
-`.github/dependabot.yml`: weekly (Monday 05:00 UTC) updates for GitHub Actions, pip, npm (pnpm workspace), docker (`apps/api`, `apps/worker`, `apps/dashboard`) and docker-compose. Minor/patch updates are grouped per ecosystem; majors arrive as individual PRs. PR limits 5 (3 for compose). Commit prefixes: `ci(deps)` for Actions, `build(deps)` / `build(deps-dev)` otherwise. No `labels:` are set because the label set is created by PRD-04. Dependabot alerts and security updates must be enabled in repository settings (separate from this file).
+`.github/dependabot.yml`: weekly (Monday 05:00 UTC) updates for GitHub Actions, pip, npm (pnpm workspace), docker (`apps/api`, `apps/worker`, `apps/dashboard`) and docker-compose. Minor/patch updates are grouped per ecosystem; majors arrive as individual PRs, except semver-major updates of `next`, `react`, `react-dom`, `@types/react`, `@types/react-dom`, `typescript`, `eslint` and `eslint-config-next`, which are ignored (handled in planned upgrade tasks; security updates still apply). The pip ecosystem uses `versioning-strategy: increase-if-necessary` so lower bounds are only raised when required. PR limits 5 (3 for compose). Commit prefixes: `ci(deps)` for Actions, `build(deps)` / `build(deps-dev)` otherwise. No `labels:` are set because the label set is created by PRD-04. Dependabot alerts and security updates must be enabled in repository settings (separate from this file).
 
 ### Run locally
 
@@ -125,8 +125,23 @@ Verified locally: actionlint 1.7.7 clean on all workflows, YAML parse of `depend
 ## Dependency audit
 
 - Python: `pip-audit 2.10.1` over the frozen environment (125 packages): **0 known vulnerabilities**. The job is therefore strictly blocking with no baseline file.
-- Node: `pnpm audit` (pnpm 9.15.0, 380 dependencies): **27 advisory records (22 unique advisories): 3 critical, 16 high, 8 moderate** (affecting `next`, `postcss`, `sharp`, `brace-expansion`, `js-yaml`, `nanoid`, `source-map-js`, `minimatch`). These are real and untriaged, so they are recorded in `.github/security/audit-baseline.json` with `added: 2026-11-02` and `expires: 2027-01-31`.
-- Gate (`scripts/ci/audit_gate.py`): fails on any high/critical advisory not in the baseline, and fails on any baseline entry past its expiry (checked with `--today 2027-02-01`: exit 1). Moderate/low are reported only. Remove entries as they are fixed; do not extend an expiry without a written reason. Because the baseline expires, the job will turn red on 2027-01-31 unless these are remediated, by design.
+- Node: `pnpm audit` (pnpm 9.15.0). On 2026-11-02 the initial baseline held 22 unique advisories (3 critical, 16 high, 8 moderate). After the upgrade below the audit reports **0 critical, 0 high, 0 low and 1 moderate** (`minimatch` 3.1.5, ESLint tooling, see baseline). The baseline file now contains only that moderate entry (added 2026-11-02, expires 2027-01-31).
+
+  | Advisory | Package (severity) | Fix | How |
+  | --- | --- | --- | --- |
+  | GHSA-2464-fhr4-w9xw, GHSA-p3m5-59mp-jv5r | next (critical, high) | next 15.5.28 | direct bump `^15.5.28` (also `eslint-config-next`) |
+  | GHSA-2xp9-vwfh-vxw4, GHSA-p293-qw3h-jr36 | next (critical) | next >= 15.5.24 | same bump |
+  | GHSA-4jqv-mc3x-m676, GHSA-mcj8-r9mp-w47p | next (moderate) | next >= 15.5.27 | same bump |
+  | GHSA-6g55-p6wh-862q, GHSA-r28c-9q8g-f849, GHSA-fxqj-rqcc-2cmp, GHSA-qx2v-qp2m-jg93 | postcss (high/moderate) | postcss 8.5.32 (>= 8.5.23) | override `postcss@<8.5.23`; `next` pins 8.4.31 exactly and no 15.x release moves it |
+  | GHSA-2v37-7h3g-55p8 | nanoid (high) | nanoid 3.3.20 (>= 3.3.18) | override (transitive of postcss) |
+  | GHSA-68fv-2mgg-jv7q | source-map-js (high) | 1.2.2 | override (transitive of postcss) |
+  | GHSA-f88m-g3jw-g9cj, GHSA-rgj7-g3m4-5g8c, GHSA-wq5f-xc86-pv6w | sharp (high) | sharp 0.35.5 | override `sharp@<0.35.5`; next 15.5.28 declares `^0.34.3 \|\| ^0.35.5` so this is within its range |
+  | GHSA-2883-xcg3-v3hh, GHSA-5p4m-2wfm-xmqj | js-yaml (high) | 4.3.2 | override (via `@eslint/eslintrc`) |
+  | GHSA-6j4f-fj2g-mc7p, GHSA-qhr7-859c-m2p7, GHSA-rgw5-rvv9-x895, GHSA-q2hr-2g5m-vwhr | brace-expansion (high/moderate) | 1.1.21 and 5.0.12 | overrides for the 1.x and 4-5.x lines |
+  | GHSA-g3hv-75wg-m249 | minimatch (moderate) | 11.0.1 for the 10.x copy (override); the 3.x copy stays | 11.x has no CommonJS default export, so forcing it on `@eslint/eslintrc` breaks `eslint .` (verified); baselined |
+
+  Overrides live in the root `package.json` under `pnpm.overrides`. Remove each one when its parent releases a patched dependency range. The Next.js 16 bump proposed by Dependabot (16.4.3) was not needed: a patched 15.x line exists, so no major was taken.
+- Gate (`scripts/ci/audit_gate.py`): fails on any high/critical advisory not in the baseline, and fails on any baseline entry past its expiry (checked with `--today 2027-02-01`: exit 1). Moderate/low are reported only. Remove entries as they are fixed; do not extend an expiry without a written reason. The baseline is now near-empty. For a new advisory: upgrade to the first patched version (direct bump, or a `pnpm.overrides` entry for transitive dev tooling), re-run `pnpm audit --json > pnpm-audit.json && python scripts/ci/audit_gate.py pnpm-audit.json .github/security/audit-baseline.json`, and only baseline it (id, justification, expiry) when no patched release exists or the fix breaks the build. Because entries expire, the job turns red on the expiry date by design.
 - Container image scanning (Trivy), mentioned in QS-05, is not included; see follow-ups.
 
 ## SBOM and licenses
