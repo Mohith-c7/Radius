@@ -31,7 +31,7 @@ Goal: connect criteria to the code that implements them, and code to the tests/e
 - Acceptance: Top-k hit rate and MRR measured on the gold set (LK-07); every non-explicit link has provenance; links outside changed+blast set are not created.
 - Tests: per-method unit tests; determinism tests (same inputs, same ranking); embedding cache tests.
 
-### LK-03 Symbol-to-test linkers (incl. dynamic coverage contexts)   [ ]
+### LK-03 Symbol-to-test linkers (incl. dynamic coverage contexts)   [~]
 - Owner type: pair
 - Depends on: LK-01, F-07
 - Branch: `feature/linking-symbol-test`
@@ -42,6 +42,7 @@ Goal: connect criteria to the code that implements them, and code to the tests/e
 - Tests: fixtures with indirect calls, fixtures/parametrized tests, monkeypatching; coverage context merge tests.
 - Research hook: compares static vs dynamic linking quality (RQ1/RQ2 context). Cost recorded (time).
 - Risks: dynamic coverage needs execution; cache by (symbol hash, test hash).
+- Done (static+naming+dynamic done; semantic pending): `radius_testing.linking` in `packages/testing` (README there): `StaticLinker` (import-aware Python, fixtures/conftest, parametrize, inheritance, depth-3 decay, F-08 name layer, partial TS/JS), `NamingLinker`, `DynamicCoverageLinker` (coverage.py per-test contexts, F-07 sandbox only, flag `RADIUS_FEATURE_COVERAGE_CONTEXTS`, offline `.coverage` parsing), monotone `combine_links`, and `scripts/test_link_eval.py` (fixture sanity numbers only). Remaining: semantic/embedding linker, TS depth, `(symbol hash, test hash)` cache (LK-09), persistence (LK-05).
 
 ### LK-04 Test assertion extraction   [ ]
 - Owner type: agent-ok
