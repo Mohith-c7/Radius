@@ -43,13 +43,18 @@ Port: `radius_intent.interfaces.IntentRepository` (plus `CriterionStateChange` a
 
 ## Snapshots and versioning (IN-06)
 
-`radius_intent.application.IntentSnapshotService(repository, extractors, fetcher=None)` turns sources plus extracted criteria into immutable, versioned snapshots. It depends only on the domain and ports (import-linter contract `application-uses-domain-and-ports-only`), reads no clock (`now` is an argument) and does no HTTP or LLM calls.
+Pipeline order (wired by default in the API): sources -> extractors (manual, deterministic, optional LLM) -> merge (`select_criteria`) -> testability (`TestabilityRater`, default `DeterministicTestabilityRater`) -> carry-over (`plan_merge`) -> persist. Rating is a pure function of the criterion, so it is deterministic and a rebuild with unchanged inputs still returns the existing snapshot; a criterion that arrives already rated keeps its rating, a rater failure becomes a `rater_failed` diagnostic and leaves it `unrated`. Without a `rater` the service leaves criteria `unrated`.
+
+`radius_intent.application.IntentSnapshotService(repository, extractors, fetcher=None, *, rater=None)` turns sources plus extracted criteria into immutable, versioned snapshots. It depends only on the domain and ports (import-linter contract `application-uses-domain-and-ports-only`), reads no clock (`now` is an argument) and does no HTTP or LLM calls.
 
 ```
 sources (IntentSource | SourceRequest -> IntentSourceFetcher)      absent -> diagnostic, not an error
         |
         v   each CriterionExtractor, per source (a failure is isolated + reported)
    candidates --select_criteria--> live criteria (dedupe, total order)
+        |
+        v   rater.rate(c) for every criterion still `unrated` (never overrides a rating)
+   live criteria with testability + rationale
         |
         v   plan_merge(live, latest snapshot)   carry-over table below
    seeds + planned state changes
@@ -243,7 +248,7 @@ Origin and hints: a Gherkin scenario (the extractor's `Scenario: ...` text), a l
 
 ### Pipeline integration point (IN-06)
 
-`rate_criteria(criteria, rater=None) -> tuple[Criterion, ...]` and `rate_criteria_report(...) -> RatingReport` (criteria plus per-criterion `TestabilityResult`, `counts()`, `needs_clarification()`). They only call `Criterion.with_testability`, so ids, text, spans, weights, hints and confirmation state are untouched, order is preserved and re-rating is idempotent. IN-06's snapshot service should call it on the extractor output before building the snapshot; `testability` and `testability_rationale` are already persisted by IN-07 (plain strings, no migration). Changing rules requires bumping `TESTABILITY_RULES_VERSION` and re-rating.
+`rate_criteria(criteria, rater=None) -> tuple[Criterion, ...]` and `rate_criteria_report(...) -> RatingReport` (criteria plus per-criterion `TestabilityResult`, `counts()`, `needs_clarification()`). They only call `Criterion.with_testability`, so ids, text, spans, weights, hints and confirmation state are untouched, order is preserved and re-rating is idempotent. The snapshot service applies the rater through the `TestabilityRater` port (`IntentSnapshotService(..., rater=)`) after the merge and before persistence; `testability` and `testability_rationale` are already persisted by IN-07 (plain strings, no migration). Changing rules requires bumping `TESTABILITY_RULES_VERSION` and re-rating.
 
 ### How other tasks use it
 
@@ -259,7 +264,8 @@ English word lists only; other languages get language-neutral cues (code referen
 
 The REST surface is documented in `docs/API_CONTRACTS.md` (Intent APIs); code is in `apps/api` (`routes/intent.py`, `intent_management.py`, `intent_presenter.py`, `schemas/intent.py`).
 
-- **Wiring.** `AppContainer` (`radius_api.dependencies`) owns `intent_repository` (memory), `intent_extractors` and `clock`. `get_intent_service` builds an `IntentManagementService(repository, IntentSnapshotService(repository, extractors))` per request: with `STORAGE_BACKEND=sql` it uses `SqlAlchemyIntentRepository` on the request-scoped session (one commit per request, rollback on any error, shared with the analysis and repository services).
+- **Wiring.** `AppContainer` (`radius_api.dependencies`) owns `intent_repository` (memory), `intent_extractors`, `intent_rater` (default `DeterministicTestabilityRater`, applied on memory and sql), `llm_config`, `llm_provider_factory` and `clock`. `get_intent_service` builds an `IntentManagementService(repository, IntentSnapshotService(repository, extractors))` per request: with `STORAGE_BACKEND=sql` it uses `SqlAlchemyIntentRepository` on the request-scoped session (one commit per request, rollback on any error, shared with the analysis and repository services).
+- **LLM extractor (IN-04).** `AppContainer.llm_extractor_for(org)` returns an `LlmCriterionExtractor` only when `RADIUS_LLM_INTENT_ENABLED` is on AND the org is in `RADIUS_LLM_INTENT_ORGS` (or `*`); it is appended after the static extractors for that org's builds only. Default: off, nothing is registered and no provider is built. The provider is built lazily on first use (`llm_provider_factory`, default `AnthropicProvider`); a missing `anthropic` package or `ANTHROPIC_API_KEY` logs a warning and the extractor stays unregistered (fail closed, requests unaffected). The extractor's own per-call egress gate still applies. Tests inject `FakeProvider` through `llm_provider_factory`.
 - **Adding an extractor (IN-04).** Append it to `AppContainer.intent_extractors` (default: `ManualCriterionExtractor`, `DeterministicCriterionExtractor`). Order is the tie-break index of `select_criteria`. Nothing else in the API changes; `tests/test_intent_api.py::test_extractors_are_wired_through_the_container` shows the pattern.
 - **Source model.** The API never stores "the current text" outside the repository: the current sources are the refs of the latest snapshot resolved against `get_sources`. A submit replaces the source with the same `(kind, source_id)` and passes the complete current set to `on_sources_changed` (a source missing from that set would be orphaned). The `trigger` written to audit reasons is `api.sources_submitted`, `api.rebuild` or `api.manual_criterion`.
 - **Manual criteria.** `ManualCriterionExtractor` (`radius_intent.infrastructure.manual`) turns a source of kind `comment` and id `manual:<hash of normalized text>` into one `human` criterion. Because it is an ordinary source, rebuilds re-derive it, `human` outranks `deterministic` in the merge, and its id is stable. The API confirms it on creation (audit actor = caller).
