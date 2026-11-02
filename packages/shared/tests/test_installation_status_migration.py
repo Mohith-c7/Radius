@@ -1,4 +1,4 @@
-"""Migration 0011 adds organizations.github_installation_status (up and down)."""
+"""Migration 0012 adds organizations.github_installation_status (up and down)."""
 
 from __future__ import annotations
 
@@ -17,8 +17,8 @@ def _load():
         for p in Path(__file__).resolve().parents
         if (p / "infra" / "database" / "migrations").is_dir()
     )
-    path = root / "infra/database/migrations/versions/20261102_0011_organization_installation_status.py"
-    spec = importlib.util.spec_from_file_location("mig_0011", path)
+    path = root / "infra/database/migrations/versions/20261102_0012_organization_installation_status.py"
+    spec = importlib.util.spec_from_file_location("mig_0012", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -26,7 +26,7 @@ def _load():
 
 def test_installation_status_migration_up_and_down() -> None:
     module = _load()
-    assert module.down_revision == "20261102_0010"
+    assert module.down_revision == "20261102_0011"
     engine = create_engine("sqlite+pysqlite:///:memory:")
     with engine.begin() as conn:
         conn.execute(sa.text("create table organizations (id integer primary key, name text)"))
