@@ -60,6 +60,7 @@ import { scoreKindLabel } from "../lib/score-kind";
 import { ConfidenceRing, OpenLink, PageHeading, Status } from "./ui";
 import { InteractiveGraphViewer } from "./interactive-graph";
 import { IntentPanel } from "./intent-panel";
+import { VerdictV2Panel } from "./verdict-v2-panel";
 
 type LoadState<T> =
   | { status: "loading" }
@@ -1402,6 +1403,7 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
       </div>
 
       <IntentPanel analysisId={analysisId} />
+      <VerdictV2Panel analysisId={analysisId} />
 
       <div id="impact" style={{ marginTop: "24px", display: "grid", gap: "20px" }}>
         <BlastRadiusVisualizerCard blast={blast} graph={graph} analysisId={analysisId} />
