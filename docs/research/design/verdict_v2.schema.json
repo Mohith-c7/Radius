@@ -1,0 +1,653 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://radius.invalid/schemas/verdict_v2.schema.json",
+  "title": "Verdict v2 payload (data of GET /api/v1/analyses/{id}/verdict; also the stored verdict_v2.* summary)",
+  "description": "Contract of docs/research/design/VERDICT_V2_SLICE.md. Consumers must ignore unknown properties. All text fields derived from PR or issue content are untrusted.",
+  "type": "object",
+  "required": [
+    "verdict_version",
+    "algo_version",
+    "profile",
+    "mode",
+    "status",
+    "analysis_id",
+    "head_sha",
+    "revision",
+    "verdict",
+    "pending",
+    "reasons",
+    "score",
+    "score_kind",
+    "summary",
+    "criteria",
+    "justification"
+  ],
+  "properties": {
+    "verdict_version": {
+      "const": 2
+    },
+    "algo_version": {
+      "type": "string"
+    },
+    "profile": {
+      "type": "string"
+    },
+    "mode": {
+      "enum": [
+        "shadow",
+        "on"
+      ]
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "error",
+        "skipped"
+      ]
+    },
+    "analysis_id": {
+      "type": "string"
+    },
+    "head_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "computed_at": {
+      "type": "string"
+    },
+    "verdict": {
+      "enum": [
+        "verified",
+        "failed",
+        "insufficient_evidence",
+        "needs_review",
+        null
+      ]
+    },
+    "pending": {
+      "type": "boolean"
+    },
+    "reasons": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code",
+          "detail"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "rule_id": {
+            "type": "string"
+          },
+          "ref": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "score": {
+      "type": "null",
+      "description": "v2 has no number until calibration exists"
+    },
+    "score_kind": {
+      "const": "none"
+    },
+    "trust_probability": {
+      "type": "null"
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "criteria_total",
+        "proven",
+        "weak",
+        "unevidenced",
+        "contradicted",
+        "excluded",
+        "uim",
+        "intent_coverage",
+        "evidence_basis"
+      ],
+      "properties": {
+        "criteria_total": {
+          "type": "integer"
+        },
+        "proven": {
+          "type": "integer"
+        },
+        "weak": {
+          "type": "integer"
+        },
+        "unevidenced": {
+          "type": "integer"
+        },
+        "contradicted": {
+          "type": "integer"
+        },
+        "excluded": {
+          "type": "integer"
+        },
+        "uim": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "intent_coverage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "tamper": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer"
+          }
+        },
+        "evidence_basis": {
+          "enum": [
+            "static_only"
+          ]
+        }
+      }
+    },
+    "criteria": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "criterion_id",
+          "text",
+          "state",
+          "S",
+          "S_raw",
+          "weight",
+          "flags",
+          "items"
+        ],
+        "properties": {
+          "criterion_id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string",
+            "description": "UNTRUSTED text. Render as text only."
+          },
+          "state": {
+            "enum": [
+              "proven",
+              "weak",
+              "unevidenced",
+              "contradicted",
+              "excluded"
+            ]
+          },
+          "S": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "S_raw": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "weight": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1
+          },
+          "testability": {
+            "type": "string"
+          },
+          "lifecycle": {
+            "type": "string"
+          },
+          "flags": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "tampered",
+                "flaky_evidence",
+                "stale_evidence",
+                "low_link_confidence",
+                "unconfirmed",
+                "pending_results",
+                "static_only",
+                "no_strong_assertion",
+                "needs_typed_evidence",
+                "no_linked_test"
+              ]
+            }
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "code",
+                "detail"
+              ],
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "detail": {
+                  "type": "string"
+                },
+                "rule_id": {
+                  "type": "string"
+                },
+                "ref": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
+          },
+          "best_link": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "evidence_id",
+                "test_id",
+                "outcome",
+                "a_static",
+                "d_eff",
+                "i",
+                "f",
+                "q",
+                "l",
+                "term",
+                "status"
+              ],
+              "properties": {
+                "evidence_id": {
+                  "type": "string"
+                },
+                "test_id": {
+                  "type": "string"
+                },
+                "outcome": {
+                  "enum": [
+                    "passed",
+                    "failed",
+                    "error",
+                    "skipped",
+                    "flaky",
+                    "not_run"
+                  ]
+                },
+                "a_static": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "d_eff": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "i": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "f": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "flaky_f": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "tamper_penalty": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "q": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "l_cs": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "l_st": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "r_ct": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "l": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "term": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "group_symbol": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "rank_in_group": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "discount": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "contribution": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "description": "counted | gated:<reason>"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "tamper_findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "finding_id",
+          "rule_id",
+          "severity",
+          "path",
+          "reason"
+        ],
+        "properties": {
+          "finding_id": {
+            "type": "string"
+          },
+          "rule_id": {
+            "type": "string"
+          },
+          "check": {
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "info",
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ]
+          },
+          "confidence": {
+            "type": "number"
+          },
+          "path": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "test_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "old_snippet": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "new_snippet": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "unlinked_symbols": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "next_actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code",
+          "text"
+        ],
+        "properties": {
+          "criterion_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "code": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "justification": {
+      "type": "object",
+      "required": [
+        "schema",
+        "verdict",
+        "decided_by",
+        "rules",
+        "thresholds",
+        "versions",
+        "config_digest",
+        "profile",
+        "inputs_digest"
+      ],
+      "properties": {
+        "schema": {
+          "const": "verdict-v2-justification-1"
+        },
+        "verdict": {
+          "enum": [
+            "verified",
+            "failed",
+            "insufficient_evidence",
+            "needs_review"
+          ]
+        },
+        "decided_by": {
+          "type": "string"
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "label",
+              "fired",
+              "inputs"
+            ],
+            "properties": {
+              "id": {
+                "enum": [
+                  "R1a",
+                  "R1b",
+                  "R1c",
+                  "R2p",
+                  "R2a",
+                  "R2b",
+                  "R2c",
+                  "R2d",
+                  "R3a",
+                  "R3b",
+                  "R3c",
+                  "R4"
+                ]
+              },
+              "label": {
+                "type": "string"
+              },
+              "fired": {
+                "type": "boolean"
+              },
+              "inputs": {
+                "type": "object"
+              },
+              "refs": {
+                "type": "object",
+                "properties": {
+                  "criterion_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "evidence_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "finding_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "minItems": 1
+        },
+        "thresholds": {
+          "type": "object"
+        },
+        "versions": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "config_digest": {
+          "type": "string"
+        },
+        "profile": {
+          "type": "string"
+        },
+        "inputs_digest": {
+          "type": "string"
+        }
+      }
+    },
+    "v1": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Copy of the v1 result with its own honest score_kind; null when v1 is absent",
+      "properties": {
+        "verification_status": {
+          "type": "string"
+        },
+        "confidence_score": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "score_kind": {
+          "type": "string"
+        },
+        "risk_level": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "dashboard_url": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "error": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "present when status is error or skipped",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "fallback": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}
