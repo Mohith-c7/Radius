@@ -73,7 +73,7 @@ class SuppressionRule(BaseRule):
                         break
         if len(hits) < context.config.params.min_added_suppressions:
             return []
-        # One finding per (file, check): a file with many `# noqa` lines is one finding that
+        # One finding per (file, check): a file with many suppression comments is one finding that
         # says how many, not a wall of identical low findings (replay 2026-11, F-T3). The
         # severity is that of the check (low, `nosec` medium); it is never raised by counting.
         groups: dict[tuple[str, str], list[tuple[int, str, str]]] = {}
