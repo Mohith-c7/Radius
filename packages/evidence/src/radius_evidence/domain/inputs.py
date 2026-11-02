@@ -8,6 +8,7 @@ directly. Plain data only.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from radius_evidence.domain.enums import Outcome
 from radius_evidence.domain.model import AssertionFeatures, Reason
@@ -117,6 +118,9 @@ class StageAInput(Serializable):
     agent_signal_by_test: dict[str, bool] = field(default_factory=dict)
     degraded: tuple[str, ...] = ()  # e.g. "truncated", "unsupported_language:ts"
     algo_versions: dict[str, str] = field(default_factory=dict)
+    #: Contract 3: raw ``.radius/policy.yml`` / ``waivers.yml`` captured at the BASE ref
+    #: (``radius_evidence.policy.repo_config``). Empty = no repository config read.
+    repo_config: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)

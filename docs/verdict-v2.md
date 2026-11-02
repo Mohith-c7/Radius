@@ -41,6 +41,8 @@ Rules are checked in this order. Every rule is evaluated and recorded; the first
 | 11 | R3c | a proven criterion rests on a weak criterion-to-code link (below 0.50) | Needs human review |
 | 12 | R4 | none of the above | Verified |
 
+With a repository policy that has `require` or `evidence` entries, two more rules sit between R2d and R3a: **P1** (a criterion or changed code under a required path is below the required state) and **P2** (a criterion has no counted test that is not agent-authored). Both give `Not verified - insufficient evidence`. Without such a policy the list is exactly the twelve rules above. See [Repository policy and waivers](policy.md).
+
 Because failures come first, a tamper finding fails the verdict immediately, without waiting for CI. A pending PR (R2p) is published as a completed, neutral check, never left "in progress"; the comment updates itself when results arrive.
 
 Unproven intent mass (UIM) is the weighted share of non-excluded criteria whose support is below 0.50. Intent coverage is the share of behavioral changes that a stated criterion accounts for.
@@ -72,6 +74,12 @@ One comment per pull request, updated in place. Layout:
 A full example (fixture 08) is in `packages/github/tests/golden_verdict_v2/fixture_08_worked_example.md`.
 
 The Check Run keeps the name `Radius confidence`. Its conclusion is `success` only for a verified, non-pending result; `failure` for failed; `neutral` for everything else, so a missing or weak verdict never shows green.
+
+With `.radius/policy.yml` on the base branch, `mode: blocking` maps every unverified result to `failure` (so a required check actually blocks) and `mode: advisory` never reports `failure`; the verdict is the same either way. The comment then shows a `Policy:` line (mode, source ref, number of settings applied) and a collapsible Policy section with the policy line each setting came from. Tamper findings accepted by a valid waiver are listed as `WAIVED` with the waiver id, owner, expiry and reason, and a Waivers section lists what was applied and what was ignored (expired, invalid). Details: [policy.md](policy.md).
+
+## Policy and waivers (VD-04, VD-05)
+
+`.radius/policy.yml` and `.radius/waivers.yml` are read from the **base branch**, never from the pull request, so a PR cannot weaken its own rules or waive its own findings. They change thresholds within safe bounds, require criterion states per path, set tamper severities (lowering or disabling a `high` finding needs a recorded `allow_disable` reason), require a non-agent-authored test, exclude paths from coverage, and set advisory or blocking mode. A waiver is owned, expires (90 days at most), is shown as WAIVED, is stored in the verdict's audit record, and can never cover a contradicted criterion or a failed CI case. The API payload gains optional `policy`, `waivers`, `summary.tamper_waived` and `tamper_findings[].waived/.waiver` fields (contract 3). Full guide: [policy.md](policy.md); samples: `.radius/policy.example.yml`, `.radius/waivers.example.yml`.
 
 ## Limits and safety
 

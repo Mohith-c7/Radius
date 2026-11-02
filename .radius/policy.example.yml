@@ -1,0 +1,39 @@
+# Sample .radius/policy.yml for Radius Verdict v2. Copy to .radius/policy.yml on the
+# BASE (default) branch; Radius never reads it from a pull request head unless
+# `head_policy: tighten_only` is set here. Guide: docs/policy.md
+version: 1
+
+# advisory: the Check Run is never "failure". blocking: every unverified result fails the check.
+# The verdict itself is not affected by the mode.
+mode: advisory
+
+# head_policy: tighten_only   # let a PR add stricter settings for itself (never looser)
+
+thresholds:                    # each value has a safe range, see docs/policy.md
+  tau_support: 0.5
+  uim_max: 0.2
+  intent_coverage_min: 0.5
+  link_review_min: 0.5
+  cap_static: 0.6
+
+tamper:
+  fail_on_at_least: high       # medium | high
+  review_on_at_least: medium   # low | medium | high
+  rules:
+    T016: low                  # lower a low-risk rule
+    T012:unverified_guarded_import: medium
+    # Lowering or disabling a rule whose finding is high/critical needs a recorded reason:
+    # T005:
+    #   enabled: false
+    #   allow_disable: "Security signed off on this, ticket SEC-12"
+
+require:                       # every criterion linked to these paths must be proven
+  - paths: ["src/auth/**", "src/payments/**"]
+    min_state: proven
+
+evidence:
+  require_non_agent_test: true # at least one counted test that is not agent-authored
+  paths: ["src/auth/**"]
+
+exclude:                       # changed code here is not counted as behavioral change
+  paths: ["docs/**", "**/*.md"]

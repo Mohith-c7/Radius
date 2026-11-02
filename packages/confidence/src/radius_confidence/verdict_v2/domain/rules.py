@@ -21,6 +21,7 @@ from radius_evidence.domain.inputs import TamperFindingInput
 from radius_evidence.domain.states import UimResult
 
 from radius_confidence.verdict_v2.domain.model import (
+    POLICY_RULE_ORDER,
     RULE_ORDER,
     CriterionVerdict,
     RuleResult,
@@ -32,7 +33,9 @@ from radius_confidence.verdict_v2.domain.model import (
 BEHAVIORAL_TESTABILITY: frozenset[str] = frozenset({"behavioral_testable", "testable"})
 
 #: Degraded markers that block a verdict (R2d): exact or ``prefix*`` forms.
-BLOCKING_DEGRADED_EXACT: frozenset[str] = frozenset({"truncated"})
+BLOCKING_DEGRADED_EXACT: frozenset[str] = frozenset(
+    {"truncated", "policy_invalid", "policy_unreadable"}
+)
 BLOCKING_DEGRADED_PREFIXES: tuple[str, ...] = ("unsupported_language:", "snapshot_missing:")
 
 #: rule id -> (verdict, reason code, label). Single source of the mapping.
@@ -49,6 +52,16 @@ RULE_TABLE: dict[str, tuple[Verdict, str, str]] = {
     "R2b": (Verdict.INSUFFICIENT_EVIDENCE, "unproven_intent_mass", "unproven intent mass"),
     "R2c": (Verdict.INSUFFICIENT_EVIDENCE, "low_intent_coverage", "intent coverage"),
     "R2d": (Verdict.INSUFFICIENT_EVIDENCE, "analysis_degraded", "analysis degraded"),
+    "P1": (
+        Verdict.INSUFFICIENT_EVIDENCE,
+        "policy_requirement_unmet",
+        "policy requirement unmet",
+    ),
+    "P2": (
+        Verdict.INSUFFICIENT_EVIDENCE,
+        "policy_min_evidence",
+        "policy minimum evidence",
+    ),
     "R3a": (Verdict.NEEDS_REVIEW, "tamper_medium", "medium tamper finding"),
     "R3b": (Verdict.NEEDS_REVIEW, "flaky_dependency", "flaky dependency"),
     "R3c": (
@@ -77,6 +90,10 @@ class AnalysisFacts:
     degraded: tuple[str, ...] = ()
     behavioral_symbols: int = 0
     flaky_test_ids: frozenset[str] = frozenset()
+    #: Contract 3: True when the repository policy adds P1/P2 (then both are evaluated).
+    policy_rules: bool = False
+    policy_unmet_required: tuple[dict[str, Any], ...] = ()
+    policy_unmet_evidence: tuple[dict[str, Any], ...] = ()
 
 
 def severity_rank(label: str) -> int:
@@ -248,6 +265,26 @@ def evaluate_rules(
         {"degraded": sorted(set(facts.degraded)), "blocking": blocking},
     )
 
+    if facts.policy_rules:
+        # P1: a criterion (or changed symbol) under a required path is below the required state.
+        p1_criteria = sorted(
+            {str(u["criterion_id"]) for u in facts.policy_unmet_required if u.get("criterion_id")}
+        )
+        put(
+            "P1",
+            bool(facts.policy_unmet_required),
+            {"unmet": [dict(u) for u in facts.policy_unmet_required]},
+            _refs(criterion_ids=p1_criteria),
+        )
+        # P2: the policy asks for a non-agent-authored test and a criterion has none.
+        p2_criteria = sorted({str(u["criterion_id"]) for u in facts.policy_unmet_evidence})
+        put(
+            "P2",
+            bool(facts.policy_unmet_evidence),
+            {"unmet": [dict(u) for u in facts.policy_unmet_evidence]},
+            _refs(criterion_ids=p2_criteria),
+        )
+
     # R3a: unwaived medium (or higher) tamper finding.
     medium = sorted(t.finding_id for rank, t in ranked if rank >= review_rank)
     put(
@@ -292,7 +329,8 @@ def evaluate_rules(
     # R4 fires only when nothing above did.
     put("R4", not any(r.fired for r in results.values()), {})
 
-    return tuple(results[rule_id] for rule_id in RULE_ORDER)
+    order = POLICY_RULE_ORDER if facts.policy_rules else RULE_ORDER
+    return tuple(results[rule_id] for rule_id in order)
 
 
 def decide(rules: Sequence[RuleResult]) -> RuleResult:
