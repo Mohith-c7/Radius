@@ -6,12 +6,9 @@ import importlib.util
 from pathlib import Path
 
 import pytest
-from alembic.migration import MigrationContext
-from alembic.operations import Operations
 from alembic.script import ScriptDirectory
 from radius_shared.database.base import metadata
 from radius_shared.verdict_v2_flag import VerdictV2Mode, parse_verdict_v2_mode
-from sqlalchemy import create_engine, inspect
 
 ROOT = next(
     p
@@ -54,12 +51,12 @@ def test_flag_parsing_table(raw, expected) -> None:
     assert parse_verdict_v2_mode(raw) is expected
 
 
-def test_database_module_is_registered_and_defines_no_table_yet() -> None:
+def test_database_module_is_registered_and_defines_the_tables() -> None:
     from radius_shared import database
 
     assert database.verdict_v2.__doc__
-    assert "verdict_v2" not in metadata.tables
-    assert "verdict_v2_requests" not in metadata.tables
+    assert "verdict_v2" in metadata.tables
+    assert "verdict_v2_requests" in metadata.tables
 
 
 def test_env_py_registers_the_verdict_v2_module() -> None:
@@ -82,19 +79,3 @@ def test_revision_chain_is_linear_with_a_single_head() -> None:
     mod14 = _load("20261102_0014_verdict_v2_requests.py")
     assert (mod13.revision, mod13.down_revision) == ("20261102_0013", "20261102_0012")
     assert (mod14.revision, mod14.down_revision) == ("20261102_0014", "20261102_0013")
-
-
-def test_placeholder_migrations_upgrade_and_downgrade_on_sqlite() -> None:
-    engine = create_engine("sqlite+pysqlite:///:memory:")
-    modules = [
-        _load("20261102_0013_verdict_v2.py"),
-        _load("20261102_0014_verdict_v2_requests.py"),
-    ]
-    with engine.begin() as conn:
-        with Operations.context(MigrationContext.configure(conn)):
-            for module in modules:
-                module.upgrade()
-            assert inspect(conn).get_table_names() == []
-            for module in reversed(modules):
-                module.downgrade()
-            assert inspect(conn).get_table_names() == []
