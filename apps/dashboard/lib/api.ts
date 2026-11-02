@@ -156,13 +156,21 @@ export const radiusConfig = {
   apiBaseUrl:
     process.env.NEXT_PUBLIC_RADIUS_API_BASE_URL ?? "http://localhost:8000",
   organizationId: process.env.NEXT_PUBLIC_RADIUS_ORGANIZATION_ID ?? "",
-  apiKey: process.env.NEXT_PUBLIC_RADIUS_API_KEY ?? "",
 };
 
+// The browser never talks to the Radius API directly and never holds the API
+// key. Requests go to the same-origin proxy (app/api/radius), which attaches
+// the server-only RADIUS_API_KEY. During SSR (no window) the absolute
+// dashboard URL is needed; RADIUS_DASHBOARD_INTERNAL_URL provides it.
+const PROXY_PREFIX = "/api/radius";
+
 function apiUrl(path: string) {
-  const base = radiusConfig.apiBaseUrl.replace(/\/$/, "");
   const normalized = path.startsWith("/") ? path : `/${path}`;
-  return `${base}/api/v1${normalized}`;
+  const origin =
+    typeof window === "undefined"
+      ? (process.env.RADIUS_DASHBOARD_INTERNAL_URL ?? "http://localhost:3000")
+      : "";
+  return `${origin}${PROXY_PREFIX}${normalized}`;
 }
 
 function buildQuery(params: Record<string, string | undefined>) {
@@ -189,8 +197,7 @@ export async function radiusFetch<T>(
 ): Promise<T> {
   const { idempotencyKey, headers, body, ...requestInit } = init;
   const requestHeaders = new Headers(headers);
-  requestHeaders.set("X-Radius-Organization-Id", requireOrganizationId());
-  if (radiusConfig.apiKey) requestHeaders.set("X-Radius-API-Key", radiusConfig.apiKey);
+  requireOrganizationId();
   if (idempotencyKey) requestHeaders.set("Idempotency-Key", idempotencyKey);
   if (body && !requestHeaders.has("Content-Type")) {
     requestHeaders.set("Content-Type", "application/json");

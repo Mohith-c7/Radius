@@ -2296,7 +2296,7 @@ export function SettingsData() {
             </div>
             <div>
               <span>API key</span>
-              <strong>{radiusConfig.apiKey ? "Configured" : "Not configured"}</strong>
+              <strong>Held server-side (never sent to the browser)</strong>
             </div>
           </div>
         </section>

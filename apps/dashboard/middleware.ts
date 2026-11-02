@@ -4,6 +4,12 @@ const publicPaths = ["/login", "/signup", "/forgot-password", "/reset-password",
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const hasSession = Boolean(request.cookies.get("radius_session")?.value);
+  if (pathname.startsWith("/api/radius/") && !hasSession && process.env.NODE_ENV !== "development") {
+    return NextResponse.json(
+      { success: false, data: null, error: { code: "UNAUTHENTICATED", message: "Sign in required." } },
+      { status: 401 },
+    );
+  }
   const isPublic = publicPaths.some((path) => pathname === path);
   if (process.env.NODE_ENV === "development") {
     if (hasSession && (pathname === "/login" || pathname === "/signup")) {
