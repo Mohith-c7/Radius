@@ -117,7 +117,7 @@ rule.
 | test deleted | T001 : `test_deleted` |
 | parametrize cases removed | T001 : `parametrize_case_removed` |
 | commented-out tests | T001 : `commented_out_test` |
-| skip / xfail / skipif / `unittest.skip` / `if False` / module or class marks | T002 : `skip`, `skipif`, `xfail`, `runtime_skip`, `module_skip` |
+| skip / xfail / skipif / `unittest.skip` / `if False` / module or class marks | T002 : `skip`, `skipif`, `xfail`, `runtime_skip`, `runtime_skip_new`, `runtime_skip_conditional`, `runtime_skip_guarded`, `module_skip` |
 | assert deleted / count reduced | T003 : `assertion_removed` |
 | test body emptied (`pass`, `...`) | T003 : `body_emptied` |
 | commented-out assertion | T003 : `commented_out_assertion` |

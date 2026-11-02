@@ -50,7 +50,10 @@ class SuppressionRule(BaseRule):
         example_after="value = parse(raw)  # type: ignore",
         limitations="Benign idioms are skipped: `# noqa` limited to F401/E402/E501/I001 and "
         "`type: ignore[import...]`. Marker detection is textual and can match inside strings. "
-        "Use `params.min_added_suppressions` to report only above a PR-wide count.",
+        "Use `params.min_added_suppressions` to report only above a PR-wide count. Several "
+        "suppressions of the same kind in one file are reported as one summarized finding "
+        "(with the line numbers), never as one finding per line; severity is that of the "
+        "check and does not grow with the count.",
         maps_to="T013",
     )
 
@@ -70,13 +73,38 @@ class SuppressionRule(BaseRule):
                         break
         if len(hits) < context.config.params.min_added_suppressions:
             return []
-        return [
-            context.finding(
-                self, check, view.path, f"`{marker}` suppresses a checker on a changed line",
-                new_range=(n, n), new=text, confidence=0.9,
-            )
-            for view, n, text, check, marker in hits
-        ]
+        # One finding per (file, check): a file with many suppression comments is one finding that
+        # says how many, not a wall of identical low findings (replay 2026-11, F-T3). The
+        # severity is that of the check (low, `nosec` medium); it is never raised by counting.
+        groups: dict[tuple[str, str], list[tuple[int, str, str]]] = {}
+        order: list[tuple[str, str]] = []
+        for view, n, text, check, marker in hits:
+            key = (view.path, check)
+            if key not in groups:
+                groups[key] = []
+                order.append(key)
+            groups[key].append((n, text, marker))
+        out: list[Finding] = []
+        for path, check in order:
+            items = groups[(path, check)]
+            first_n, first_text, first_marker = items[0]
+            if len(items) == 1:
+                out.append(context.finding(
+                    self, check, path,
+                    f"`{first_marker}` suppresses a checker on a changed line",
+                    new_range=(first_n, first_n), new=first_text, confidence=0.9,
+                ))
+                continue
+            lines = [n for n, _t, _m in items]
+            out.append(context.finding(
+                self, check, path,
+                f"{len(items)} `{first_marker}`-style suppressions were added in this file "
+                f"(lines {', '.join(str(n) for n in lines[:5])}"
+                f"{', ...' if len(lines) > 5 else ''})",
+                new_range=(min(lines), max(lines)), new=first_text, confidence=0.9,
+                evidence=tuple(f"line {n}: {' '.join(t.split())[:120]}" for n, t, _m in items[:5]),
+            ))
+        return out
 
     @staticmethod
     def _benign(check: str, m: re.Match[str], line: str) -> bool:

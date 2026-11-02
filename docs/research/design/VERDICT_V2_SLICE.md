@@ -533,6 +533,7 @@ This is "intent coverage": which behavioral changes are accounted for by a state
 | R1c | any unwaived tamper finding with severity >= `fail_on_tamper_at_least` (high) | `failed` | `tamper_high` |
 | R2p | no CI upload received yet for this head (`results_received == False`) | `insufficient_evidence`, `pending=true` | `awaiting_test_results` |
 | R2a | no non-excluded criterion exists, or none of testability `behavioral_testable`, while `B` is non-empty | `insufficient_evidence` | `intent_missing_or_untestable` |
+| R2e | (DEC-031) no non-excluded criterion and `B` is empty and no tamper finding at `review_on_tamper_at_least` or above; reason code `not_applicable` instead when every changed path is documentation / inert | `insufficient_evidence` | `no_intent_criteria` (or `not_applicable`) |
 | R2b | `UIM > uim_max` | `insufficient_evidence` | `unproven_intent_mass` |
 | R2c | `intent_coverage < min_intent_coverage` | `insufficient_evidence` | `low_intent_coverage` |
 | R2d | `degraded` contains `truncated`, `unsupported_language:*` for a behavioral file, or `snapshot_missing:*` | `insufficient_evidence` | `analysis_degraded` |
@@ -541,7 +542,7 @@ This is "intent coverage": which behavioral changes are accounted for by a state
 | R3c | a `proven` criterion with `low_link_confidence` | `needs_review` | `weak_link_for_proven_criterion` |
 | R4 | none above | `verified` | `all_rules_passed` |
 
-R2p precedes R2a/b/c so that an unscored PR says "awaiting CI" instead of listing every criterion as unproven; R1 precedes it so a tamper `failed` shows immediately, without waiting for CI. `needs_review` in the alpha is reachable only through the policy-style triggers R3a to R3c, as VD-03 requires until calibration exists (CA-04). A PR with no behavioral change and no criteria (docs only, `B` empty) has R2a not firing and `UIM = 0`: it passes R2 and reaches R4 only if `intent_coverage` is 1.0 (empty `B`); EV-13 (non-behavioral evidence) will state that explicitly, until then the comment says "no behavioral change detected".
+R2p precedes R2a/b/c so that an unscored PR says "awaiting CI" instead of listing every criterion as unproven; R1 precedes it so a tamper `failed` shows immediately, without waiting for CI. `needs_review` in the alpha is reachable only through the policy-style triggers R3a to R3c, as VD-03 requires until calibration exists (CA-04). A PR with no behavioral change and no criteria (docs only, `B` empty) has R2a not firing and `UIM = 0`: (superseded by DEC-031: it no longer reaches R4, R2e decides; the original text follows) it passes R2 and reaches R4 only if `intent_coverage` is 1.0 (empty `B`); EV-13 (non-behavioral evidence) will state that explicitly, until then the comment says "no behavioral change detected".
 
 **Justification tree.** `justification` is stored and served as JSON (schema in `verdict_v2.schema.json`):
 

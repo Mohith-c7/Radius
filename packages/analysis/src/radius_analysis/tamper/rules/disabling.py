@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import difflib
 import re
 
 from radius_analysis.tamper.context import FileView, TamperContext
@@ -12,10 +13,43 @@ from radius_analysis.tamper.rules._common import pairs, test_id, test_views
 from radius_analysis.tamper.rules.base import BaseRule
 
 _COMMENTED_TEST = re.compile(r"^\s*#\s*(async\s+)?def\s+(test\w*)\s*\(")
+_DEF_NAME = re.compile(r"\b(async\s+def|def)\s+\w+")
+
+#: A deleted test whose body is at least this similar (name ignored) to a test added in the
+#: same PR is a rename or move, not a deletion (replay 2026-11, finding F-T1).
+RENAME_SIMILARITY = 0.6
 
 
 def _norm(line: str) -> str:
     return " ".join(line.split())
+
+
+def _body_key(fn: TestFn) -> str:
+    """Test source with the function name blanked and whitespace collapsed."""
+
+    return _norm(_DEF_NAME.sub(r"\1 _", fn.text, count=1))
+
+
+def _is_rename_of(deleted: TestFn, pool: list[tuple[str, TestFn]]) -> bool:
+    """Consume and return True when an added test looks like ``deleted`` renamed or moved.
+
+    A candidate must keep assertions when the deleted test had any (an emptied copy is a
+    weakening, not a rename). Each added test explains at most one deleted test."""
+
+    key = _body_key(deleted)
+    best: tuple[float, int] | None = None
+    for i, (_path, cand) in enumerate(pool):
+        if deleted.assertions and not cand.assertions:
+            continue
+        if deleted.called and len(deleted.called & cand.called) / len(deleted.called | cand.called) < 0.5:
+            continue  # a rename keeps calling the same code under test
+        ratio = difflib.SequenceMatcher(None, key, _body_key(cand), autojunk=False).ratio()
+        if ratio >= RENAME_SIMILARITY and (best is None or ratio > best[0]):
+            best = (ratio, i)
+    if best is None:
+        return False
+    del pool[best[1]]
+    return True
 
 
 class DeletedTestRule(BaseRule):
@@ -34,7 +68,10 @@ class DeletedTestRule(BaseRule):
         example_after="# (test removed, reserve() still exists)",
         limitations="The code under test is inferred from the names the test calls; if every "
         "called name is a symbol removed in the same PR the deletion is treated as legitimate. "
-        "Tests moved to another file with an identical body are not reported.",
+        "Tests moved to another file with an identical body, and tests renamed or moved with "
+        "a body at least 60% similar to a test added in the same PR (name ignored, assertions "
+        "kept), are not reported; a deliberate rename plus weakening below that similarity "
+        "is still a deletion.",
         maps_to="T001",
     )
 
@@ -42,6 +79,7 @@ class DeletedTestRule(BaseRule):
         out: list[Finding] = []
         removed_names = context.removed_symbol_names()
         moved_keys = self._head_test_texts(context)
+        added_pool = self._added_tests(context)
         for view in test_views(context):
             head_mod = context.tests_of(view, "head")
             commented = {
@@ -61,6 +99,8 @@ class DeletedTestRule(BaseRule):
             for p in pairs(context, view):
                 if p.base is not None and p.head is None:
                     if p.base.name in commented or p.base.text in moved_keys:
+                        continue
+                    if _is_rename_of(p.base, added_pool):
                         continue
                     sut = p.base.called - {
                         q.rsplit(".", 1)[-1] for q in (head_mod.tests if head_mod else {})
@@ -93,6 +133,19 @@ class DeletedTestRule(BaseRule):
         return out
 
     @staticmethod
+    def _added_tests(ctx: TamperContext) -> list[tuple[str, TestFn]]:
+        """Tests present at head with no base counterpart (candidates for a rename target)."""
+
+        out: list[tuple[str, TestFn]] = []
+        for view in test_views(ctx):
+            out.extend(
+                (view.path, p.head)
+                for p in pairs(ctx, view)
+                if p.base is None and p.head is not None
+            )
+        return out
+
+    @staticmethod
     def _head_test_texts(ctx: TamperContext) -> set[str]:
         texts: set[str] = set()
         for view in test_views(ctx):
@@ -117,16 +170,64 @@ def _label(deco: str) -> tuple[str, float] | None:
     return None
 
 
-def _skip_calls(fn: TestFn) -> set[str]:
-    calls = set()
-    for node in ast.walk(fn.node):
-        if isinstance(node, ast.Call):
-            text = unparse(node.func)
-            if text in ("pytest.skip", "pytest.xfail", "self.skipTest", "unittest.SkipTest"):
-                calls.add(unparse(node))
-    for node in ast.walk(fn.node):
-        if isinstance(node, ast.If) and isinstance(node.test, ast.Constant) and not node.test.value:
-            calls.add(f"if {unparse(node.test)}: ...")
+_SKIP_FUNCS = ("pytest.skip", "pytest.xfail", "self.skipTest", "unittest.SkipTest")
+
+#: Conditions that look at the environment (platform, env vars, installed packages, files,
+#: tool availability). A skip under one of these is a guard, not a disabled test.
+_ENV_GUARD = re.compile(
+    r"sys\.platform|\bplatform\b|os\.name|os\.environ|getenv|version_info|find_spec|importlib"
+    r"|import_module|importorskip|which\(|\.exists\(|\.is_file\(|\.is_dir\(|isfile|isdir"
+    r"|installed|available|_HAS_|HAVE_|\bhas_\w+|returncode|\bis None\b",
+    re.IGNORECASE,
+)
+_ENV_EXCEPTIONS = {
+    "ImportError", "ModuleNotFoundError", "OSError", "FileNotFoundError", "EnvironmentError",
+    "subprocess.CalledProcessError", "CalledProcessError",
+}
+
+
+def _guard_of(ancestors: list[ast.AST]) -> str:
+    """Return an empty string (unconditional), "env" (environment guard) or "cond"."""
+
+    kind = ""
+    for node in ancestors:
+        if isinstance(node, ast.If):
+            test = node.test
+            if isinstance(test, ast.Constant) and not test.value:
+                continue  # `if False:` is the disabling pattern, not a guard
+            if _ENV_GUARD.search(unparse(test)):
+                return "env"
+            kind = "cond"
+        elif isinstance(node, ast.ExceptHandler):
+            names: list[str] = []
+            if isinstance(node.type, ast.Tuple):
+                names = [unparse(e) for e in node.type.elts]
+            elif node.type is not None:
+                names = [unparse(node.type)]
+            if names and all(n in _ENV_EXCEPTIONS for n in names):
+                return "env"
+            kind = "cond"
+    return kind
+
+
+def _walk_with_ancestors(node: ast.AST, ancestors: tuple[ast.AST, ...] = ()):  # noqa: ANN202
+    yield node, ancestors
+    for child in ast.iter_child_nodes(node):
+        yield from _walk_with_ancestors(child, (*ancestors, node))
+
+
+def _skip_calls(fn: TestFn) -> dict[str, str]:
+    """Runtime skip call (or ``if False``) text -> guard kind (see ``_guard_of``)."""
+
+    calls: dict[str, str] = {}
+    for node, ancestors in _walk_with_ancestors(fn.node):
+        if isinstance(node, ast.Call) and unparse(node.func) in _SKIP_FUNCS:
+            text = unparse(node)
+            guard = _guard_of(list(ancestors))
+            if text not in calls or not guard:  # the strictest reading wins
+                calls[text] = guard
+        elif isinstance(node, ast.If) and isinstance(node.test, ast.Constant) and not node.test.value:
+            calls[f"if {unparse(node.test)}: ..."] = ""
     return calls
 
 
@@ -137,7 +238,20 @@ class SkippedTestRule(BaseRule):
         "skip": CheckSpec(Severity.HIGH, "skip marker / unittest.skip added"),
         "skipif": CheckSpec(Severity.MEDIUM, "conditional skip added"),
         "xfail": CheckSpec(Severity.HIGH, "xfail / expectedFailure added"),
-        "runtime_skip": CheckSpec(Severity.HIGH, "pytest.skip()/xfail() or `if False` in the body"),
+        "runtime_skip": CheckSpec(
+            Severity.HIGH,
+            "unconditional pytest.skip()/xfail() or `if False` added to a test that existed",
+        ),
+        "runtime_skip_new": CheckSpec(
+            Severity.MEDIUM, "unconditional pytest.skip()/xfail() in a test new in this PR"
+        ),
+        "runtime_skip_conditional": CheckSpec(
+            Severity.MEDIUM, "pytest.skip()/xfail() under a non-environment condition"
+        ),
+        "runtime_skip_guarded": CheckSpec(
+            Severity.LOW,
+            "pytest.skip() under an environment guard (platform, env var, optional import, file)",
+        ),
         "module_skip": CheckSpec(Severity.HIGH, "module-level pytestmark skip/xfail added"),
     }
     doc = RuleDoc(
@@ -147,7 +261,12 @@ class SkippedTestRule(BaseRule):
         example_before="def test_rejects_non_positive():",
         example_after='@pytest.mark.skip(reason="flaky")\ndef test_rejects_non_positive():',
         limitations="`skipif` with a platform/version condition is often legitimate "
-        "(severity medium, confidence 0.5). Skips that exist at base are not reported.",
+        "(severity medium, confidence 0.5). Skips that exist at base are not reported. A "
+        "runtime skip under an `if` on the platform, environment, installed packages or files, "
+        "or in an `except ImportError`-style handler, is `runtime_skip_guarded` (low); only an "
+        "unconditional skip added to a test that already existed is high. The guard is "
+        "recognised textually, so a skip hidden behind an innocent-looking environment "
+        "condition is reported low.",
         maps_to="T002",
     )
 
@@ -201,14 +320,24 @@ class SkippedTestRule(BaseRule):
                 symbol=sym, test_id=test_id(view.path, sym),
                 new_range=(head.start, head.start), new=f"@{deco}", confidence=conf,
             ))
-        base_calls = _skip_calls(base) if base else set()
-        for call in sorted(_skip_calls(head) - base_calls):
+        base_calls = _skip_calls(base) if base else {}
+        head_calls = _skip_calls(head)
+        for call in sorted(set(head_calls) - set(base_calls)):
+            guard = head_calls[call]
+            if guard == "env":
+                check, conf, note = "runtime_skip_guarded", 0.6, "under an environment guard"
+            elif guard == "cond":
+                check, conf, note = "runtime_skip_conditional", 0.6, "under a condition"
+            elif base is None:
+                check, conf, note = "runtime_skip_new", 0.7, "unconditionally, in a new test"
+            else:
+                check, conf, note = "runtime_skip", 0.8, "unconditionally"
             out.append(ctx.finding(
-                self, "runtime_skip", view.path,
-                f"`{call}` was added to the body of `{head.qualname}`; the test can skip or "
-                "never run its checks",
+                self, check, view.path,
+                f"`{call}` was added {note} to the body of `{head.qualname}`; the test can skip "
+                "or never run its checks",
                 symbol=head.qualname, test_id=test_id(view.path, head.qualname),
-                new_range=(head.start, head.end), new=call, confidence=0.8,
+                new_range=(head.start, head.end), new=call, confidence=conf,
             ))
         return out
 
