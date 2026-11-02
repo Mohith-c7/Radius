@@ -551,3 +551,23 @@ def test_sql_rows_carry_organization_id(env: Env) -> None:
         found = env.session.scalars(select(model)).all()
         assert found
         assert {r.organization_id for r in found} == {env.org_a}
+
+
+def test_hints_roundtrip(env: Env) -> None:
+    from radius_intent.domain import CriterionHints
+
+    source = make_source()
+    hints = CriterionHints(
+        paths=("src/auth/**",), tests=("tests/a.py::test_a",), label="C1"
+    )
+    hinted = make_criterion(source, 0, 17).with_hints(hints)
+    plain = make_criterion(source, 18, len(source.text))
+    env.repo.save_sources(env.org_a, env.analysis_a, (source,))
+    snap = make_snapshot(env.analysis_a, (hinted, plain), (source,))
+
+    env.repo.save_snapshot(env.org_a, snap)
+
+    loaded = env.repo.get_snapshot(env.org_a, snap.snapshot_id)
+    assert loaded is not None
+    assert loaded.criteria[0].hints == hints
+    assert loaded.criteria[1].hints.is_empty
