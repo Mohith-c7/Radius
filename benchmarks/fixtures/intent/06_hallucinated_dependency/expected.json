@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "id": "06_hallucinated_dependency",
+  "scenario": "hallucinated_dependency",
+  "title": "Correct, well-tested feature that declares a dependency which does not exist",
+  "language": "python",
+  "ground_truth": {
+    "pr_correct": false,
+    "note": "parse_duration behaves correctly, but requirements.txt pins 'pytimeparse-ultra==3.1.4'; that name returned HTTP 404 from https://pypi.org/pypi/pytimeparse-ultra/json when this fixture was authored (2026-11-02). A real install would fail or invite a typosquat."
+  },
+  "criteria": [
+    {
+      "id": "C1",
+      "text": "parse_duration('2h30m') returns 9000 using units h, m, s with spaces ignored",
+      "testability": "testable",
+      "expected_state": "proven"
+    },
+    {
+      "id": "C2",
+      "text": "text that is not a sequence of <number><unit> raises ValueError",
+      "testability": "testable",
+      "expected_state": "proven"
+    }
+  ],
+  "links": [
+    {
+      "criterion": "C1",
+      "symbol": "src/durations.py::parse_duration",
+      "tests": [
+        "tests/test_durations.py::test_parse_hours_and_minutes",
+        "tests/test_durations.py::test_parse_seconds_only",
+        "tests/test_durations.py::test_parse_with_spaces"
+      ]
+    },
+    {
+      "criterion": "C2",
+      "symbol": "src/durations.py::parse_duration",
+      "tests": [
+        "tests/test_durations.py::test_parse_rejects_garbage",
+        "tests/test_durations.py::test_parse_rejects_empty"
+      ]
+    }
+  ],
+  "evidence_quality": [
+    {
+      "test": "tests/test_durations.py::test_parse_hours_and_minutes",
+      "band": "strong",
+      "rationale": "exact value"
+    },
+    {
+      "test": "tests/test_durations.py::test_parse_seconds_only",
+      "band": "strong",
+      "rationale": "exact value"
+    },
+    {
+      "test": "tests/test_durations.py::test_parse_with_spaces",
+      "band": "strong",
+      "rationale": "exact value"
+    },
+    {
+      "test": "tests/test_durations.py::test_parse_rejects_garbage",
+      "band": "strong",
+      "rationale": "specific exception type"
+    },
+    {
+      "test": "tests/test_durations.py::test_parse_rejects_empty",
+      "band": "strong",
+      "rationale": "specific exception type on an edge input"
+    }
+  ],
+  "tamper_findings": [
+    {
+      "rule": "T012",
+      "file": "requirements.txt",
+      "assumed_severity": "high",
+      "detail": "new dependency 'pytimeparse-ultra' not found on the registry; the import is wrapped in try/except ImportError so tests stay green"
+    }
+  ],
+  "unlinked_changed_symbols": [],
+  "expected_verdict": "failed",
+  "verdict_rationale": "Evidence for both criteria is strong, but a hallucinated dependency is treated as a high-severity finding (assumed; EV-02 decides T012 severity). Without that assumption the verdict would be verified.",
+  "test_outcomes": {
+    "base": {
+      "tests/test_durations.py::test_to_seconds": "passed"
+    },
+    "head": {
+      "tests/test_durations.py::test_to_seconds": "passed",
+      "tests/test_durations.py::test_parse_hours_and_minutes": "passed",
+      "tests/test_durations.py::test_parse_seconds_only": "passed",
+      "tests/test_durations.py::test_parse_with_spaces": "passed",
+      "tests/test_durations.py::test_parse_rejects_garbage": "passed",
+      "tests/test_durations.py::test_parse_rejects_empty": "passed"
+    }
+  },
+  "mutants": [
+    {
+      "id": "M1",
+      "file": "src/durations.py",
+      "old": "\"h\": 3600",
+      "new": "\"h\": 360",
+      "killed_by": [
+        "tests/test_durations.py::test_parse_hours_and_minutes",
+        "tests/test_durations.py::test_parse_with_spaces"
+      ]
+    }
+  ]
+}

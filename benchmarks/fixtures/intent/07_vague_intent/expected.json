@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "id": "07_vague_intent",
+  "scenario": "vague_intent",
+  "title": "PR whose only stated intent is 'better and faster'",
+  "language": "python",
+  "ground_truth": {
+    "pr_correct": null,
+    "note": "Nothing testable is stated, so correctness relative to intent is undefined. The refactor of summarize preserves behaviour; the new top() is not mentioned in the intent."
+  },
+  "criteria": [
+    {
+      "id": "C1",
+      "text": "report generation is better",
+      "testability": "vague",
+      "expected_state": "excluded"
+    },
+    {
+      "id": "C2",
+      "text": "report generation is faster",
+      "testability": "non_functional",
+      "expected_state": "unevidenced"
+    }
+  ],
+  "links": [
+    {
+      "criterion": "C1",
+      "symbol": "src/report.py::summarize",
+      "tests": []
+    },
+    {
+      "criterion": "C2",
+      "symbol": "src/report.py::summarize",
+      "tests": []
+    }
+  ],
+  "evidence_quality": [
+    {
+      "test": "tests/test_report.py::test_summarize_groups_and_sorts",
+      "band": "strong",
+      "rationale": "exact value; protects existing behaviour but supports no stated criterion"
+    },
+    {
+      "test": "tests/test_report.py::test_top_is_bounded",
+      "band": "weak",
+      "rationale": "length upper bound only"
+    }
+  ],
+  "tamper_findings": [],
+  "unlinked_changed_symbols": [
+    "src/report.py::top"
+  ],
+  "expected_verdict": "insufficient_evidence",
+  "verdict_rationale": "No testable criterion can be extracted and the diff changes behaviour (new top()), so intent is effectively missing (DESIGN.md 6.1 step 6, 6.5 rule 2). Radius should ask the author for clarification rather than verify.",
+  "test_outcomes": {
+    "base": {
+      "tests/test_report.py::test_summarize_groups_and_sorts": "passed"
+    },
+    "head": {
+      "tests/test_report.py::test_summarize_groups_and_sorts": "passed",
+      "tests/test_report.py::test_top_is_bounded": "passed"
+    }
+  }
+}

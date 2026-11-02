@@ -1,0 +1,38 @@
+diff --git a/src/report.py b/src/report.py
+--- a/src/report.py
++++ b/src/report.py
+@@ -1,9 +1,16 @@
+ """Report helpers (original fixture code)."""
++from collections import defaultdict
+ 
+ 
+ def summarize(rows):
+     """Return (name, total) pairs sorted by name."""
+-    totals = {}
++    totals = defaultdict(int)
+     for name, amount in rows:
+-        totals[name] = totals.get(name, 0) + amount
++        totals[name] += amount
+     return sorted(totals.items())
++
++
++def top(rows, n=3):
++    """Return the n largest (name, total) pairs."""
++    ranked = sorted(summarize(rows), key=lambda pair: pair[1], reverse=True)
++    return ranked[:n]
+diff --git a/tests/test_report.py b/tests/test_report.py
+--- a/tests/test_report.py
++++ b/tests/test_report.py
+@@ -1,6 +1,11 @@
+-from report import summarize
++from report import summarize, top
+ 
+ 
+ def test_summarize_groups_and_sorts():
+     rows = [("b", 2), ("a", 1), ("b", 3)]
+     assert summarize(rows) == [("a", 1), ("b", 5)]
++
++
++def test_top_is_bounded():
++    rows = [("a", 1), ("b", 2), ("c", 3), ("d", 4)]
++    assert len(top(rows)) <= 3

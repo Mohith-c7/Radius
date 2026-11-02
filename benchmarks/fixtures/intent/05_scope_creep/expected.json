@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "id": "05_scope_creep",
+  "scenario": "scope_creep",
+  "title": "Correct feature plus two unrelated behaviour changes outside the stated intent",
+  "language": "python",
+  "ground_truth": {
+    "pr_correct": null,
+    "note": "slugify is correct and well tested. round_money and REQUEST_TIMEOUT_SECONDS changed with no stated intent; round_money now rounds half up (2.675 -> 2.68) where the old code gave 2.67, and the timeout is 10x."
+  },
+  "criteria": [
+    {
+      "id": "C1",
+      "text": "slugify lowercases and replaces each run of non-alphanumeric characters with a single '-'",
+      "testability": "testable",
+      "expected_state": "proven"
+    },
+    {
+      "id": "C2",
+      "text": "leading and trailing '-' are removed",
+      "testability": "testable",
+      "expected_state": "proven"
+    }
+  ],
+  "links": [
+    {
+      "criterion": "C1",
+      "symbol": "src/text_utils.py::slugify",
+      "tests": [
+        "tests/test_text_utils.py::test_slugify_basic",
+        "tests/test_text_utils.py::test_slugify_treats_underscore_as_separator"
+      ]
+    },
+    {
+      "criterion": "C2",
+      "symbol": "src/text_utils.py::slugify",
+      "tests": [
+        "tests/test_text_utils.py::test_slugify_basic",
+        "tests/test_text_utils.py::test_slugify_collapses_whitespace",
+        "tests/test_text_utils.py::test_slugify_empty"
+      ]
+    }
+  ],
+  "evidence_quality": [
+    {
+      "test": "tests/test_text_utils.py::test_slugify_basic",
+      "band": "strong",
+      "rationale": "exact value with punctuation and edge hyphen"
+    },
+    {
+      "test": "tests/test_text_utils.py::test_slugify_collapses_whitespace",
+      "band": "strong",
+      "rationale": "exact value for runs of whitespace and edge whitespace"
+    },
+    {
+      "test": "tests/test_text_utils.py::test_slugify_empty",
+      "band": "strong",
+      "rationale": "exact value for empty input"
+    },
+    {
+      "test": "tests/test_text_utils.py::test_slugify_treats_underscore_as_separator",
+      "band": "strong",
+      "rationale": "exact value for a non-alphanumeric separator"
+    }
+  ],
+  "tamper_findings": [],
+  "unlinked_changed_symbols": [
+    "src/billing.py::round_money",
+    "src/config.py::REQUEST_TIMEOUT_SECONDS"
+  ],
+  "expected_verdict": "insufficient_evidence",
+  "verdict_rationale": "Both stated criteria are proven, but two changed symbols have no linked criterion and no test exercising the new behaviour, so coverage of changed symbols by linked evidence is below the floor (DESIGN.md 6.5 rule 2). The existing round_money test stays green and is not evidence for the changed rounding.",
+  "test_outcomes": {
+    "base": {
+      "tests/test_text_utils.py::test_title_case": "passed",
+      "tests/test_billing.py::test_round_money_two_places": "passed"
+    },
+    "head": {
+      "tests/test_text_utils.py::test_title_case": "passed",
+      "tests/test_text_utils.py::test_slugify_basic": "passed",
+      "tests/test_text_utils.py::test_slugify_collapses_whitespace": "passed",
+      "tests/test_text_utils.py::test_slugify_empty": "passed",
+      "tests/test_text_utils.py::test_slugify_treats_underscore_as_separator": "passed",
+      "tests/test_billing.py::test_round_money_two_places": "passed"
+    }
+  },
+  "mutants": [
+    {
+      "id": "M1",
+      "file": "src/text_utils.py",
+      "old": ".strip(\"-\")",
+      "new": "",
+      "killed_by": [
+        "tests/test_text_utils.py::test_slugify_basic",
+        "tests/test_text_utils.py::test_slugify_collapses_whitespace"
+      ]
+    },
+    {
+      "id": "M2",
+      "file": "src/billing.py",
+      "old": "return float(Decimal(str(amount)).quantize(Decimal(\"0.01\"), ROUND_HALF_UP))",
+      "new": "return float(int(amount * 100) / 100)",
+      "killed_by": []
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+import pytest
+
+from pricing import apply_discount, line_total
+
+
+def test_line_total_multiplies():
+    assert line_total(2.5, 4) == 10.0
+
+
+def test_discount_reduces_price():
+    assert apply_discount(200.0, 25) == 150.0
+
+
+def test_discount_zero_is_identity():
+    assert apply_discount(80.0, 0) == 80.0
+
+
+def test_discount_hundred_is_free():
+    assert apply_discount(80.0, 100) == 0.0
+
+
+def test_discount_rounds_to_cents():
+    assert apply_discount(9.99, 15) == 8.49
+
+
+def test_discount_rejects_negative_percent():
+    with pytest.raises(ValueError):
+        apply_discount(10.0, -1)
+
+
+def test_discount_rejects_percent_above_hundred():
+    with pytest.raises(ValueError):
+        apply_discount(10.0, 101)

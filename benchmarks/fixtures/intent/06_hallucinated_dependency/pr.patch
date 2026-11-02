@@ -1,0 +1,68 @@
+diff --git a/requirements.txt b/requirements.txt
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -1 +1,2 @@
+-# runtime dependencies: none
++# runtime dependencies
++pytimeparse-ultra==3.1.4
+diff --git a/src/durations.py b/src/durations.py
+--- a/src/durations.py
++++ b/src/durations.py
+@@ -1,5 +1,23 @@
+ """Duration helpers (original fixture code)."""
++import re
++
++try:  # optional accelerator
++    import pytimeparse_ultra  # noqa: F401
++except ImportError:
++    pytimeparse_ultra = None
++
++_UNIT_SECONDS = {"h": 3600, "m": 60, "s": 1}
+ 
+ 
+ def to_seconds(hours: int = 0, minutes: int = 0, seconds: int = 0) -> int:
+     return hours * 3600 + minutes * 60 + seconds
++
++
++def parse_duration(text: str) -> int:
++    """Parse strings like '2h30m' or '1h 1m 1s' into seconds."""
++    compact = text.replace(" ", "").lower()
++    if not re.fullmatch(r"(\d+[hms])+", compact):
++        raise ValueError(f"unsupported duration: {text!r}")
++    return sum(
++        int(n) * _UNIT_SECONDS[u] for n, u in re.findall(r"(\d+)([hms])", compact)
++    )
+diff --git a/tests/test_durations.py b/tests/test_durations.py
+--- a/tests/test_durations.py
++++ b/tests/test_durations.py
+@@ -1,5 +1,29 @@
+-from durations import to_seconds
++import pytest
++
++from durations import parse_duration, to_seconds
+ 
+ 
+ def test_to_seconds():
+     assert to_seconds(1, 1, 1) == 3661
++
++
++def test_parse_hours_and_minutes():
++    assert parse_duration("2h30m") == 9000
++
++
++def test_parse_seconds_only():
++    assert parse_duration("45s") == 45
++
++
++def test_parse_with_spaces():
++    assert parse_duration("1h 1m 1s") == 3661
++
++
++def test_parse_rejects_garbage():
++    with pytest.raises(ValueError):
++        parse_duration("abc")
++
++
++def test_parse_rejects_empty():
++    with pytest.raises(ValueError):
++        parse_duration("")

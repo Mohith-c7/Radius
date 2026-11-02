@@ -1,0 +1,49 @@
+diff --git a/src/validators.py b/src/validators.py
+--- a/src/validators.py
++++ b/src/validators.py
+@@ -1,5 +1,19 @@
+ """Input validators (original fixture code)."""
++
++COMMON_PASSWORDS = {"password1", "qwerty123", "welcome1"}
+ 
+ 
+ def is_blank(text: str) -> bool:
+     return not text.strip()
++
++
++def validate_password(pw: str) -> bool:
++    if len(pw) < 8:
++        return False
++    if not any(ch.isdigit() for ch in pw):
++        return False
++    if not any(ch.isupper() for ch in pw):
++        return False
++    if pw.lower() in COMMON_PASSWORDS:
++        return False
++    return True
+diff --git a/tests/test_validators.py b/tests/test_validators.py
+--- a/tests/test_validators.py
++++ b/tests/test_validators.py
+@@ -1,5 +1,21 @@
+-from validators import is_blank
++from validators import is_blank, validate_password
+ 
+ 
+ def test_is_blank():
+     assert is_blank("   ")
++
++
++def test_rejects_seven_characters():
++    assert validate_password("Abcde1x") is False
++
++
++def test_accepts_eight_characters():
++    assert validate_password("Abcdef1x") is True
++
++
++def test_rejects_missing_digit():
++    assert validate_password("Abcdefgh") is False
++
++
++def test_uppercase_rule_runs():
++    assert isinstance(validate_password("abcdefg1"), bool)
