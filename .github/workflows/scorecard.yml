@@ -25,19 +25,11 @@ jobs:
       actions: read
       security-events: write # upload SARIF
       id-token: write # publish results (OIDC) for the badge and API
-    env:
-      SCORECARD_TOKEN: ${{ secrets.SCORECARD_TOKEN }}
-      IS_PUBLIC: ${{ github.event.repository.private == false }}
+    # Scorecard's publish step rejects workflows whose analysis job has `env:` variables or `run:` steps
+    # (https://github.com/ossf/scorecard-action#workflow-restrictions), so none are used here. Without the
+    # optional SCORECARD_TOKEN secret the default token is used and Branch-Protection is incomplete
+    # (see docs/security/CI_CHECKS.md).
     steps:
-      - name: Report token and visibility status
-        run: |
-          if [ -z "$SCORECARD_TOKEN" ]; then
-            echo "::notice title=Scorecard::Secret SCORECARD_TOKEN is not set. Running with the default token: the Branch-Protection check will be incomplete. See docs/security/CI_CHECKS.md."
-          fi
-          if [ "$IS_PUBLIC" != "true" ]; then
-            echo "::notice title=Scorecard::Repository is not public: results are NOT published (badge/API unavailable); SARIF upload still runs."
-          fi
-
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
