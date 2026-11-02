@@ -1,0 +1,57 @@
+{
+  "id": "impossiblebench-swebench",
+  "name": "Impossible-SWEbench (original / oneoff / conflicting)",
+  "kind": "benchmark",
+  "source": {
+    "type": "huggingface",
+    "url": "https://huggingface.co/datasets/fjzzq2002/impossible_swebench",
+    "revision": "9c2d34f364b7229e8c0ff807c646100bdc18bbb5",
+    "revision_kind": "commit",
+    "paper": "arXiv 2510.20270"
+  },
+  "license": {
+    "name": "UNKNOWN - no licence on the HF dataset (code repo is MIT)",
+    "url": "https://huggingface.co/datasets/fjzzq2002/impossible_swebench",
+    "verdict": "unknown",
+    "evidence": "HF API metadata 2026-11-02: no license tag. github.com/safety-research/impossiblebench README states MIT for the repo."
+  },
+  "redistribution": {
+    "allowed": "no",
+    "notes": "UNKNOWN - do not redistribute. Reference by manifest only."
+  },
+  "status": "available",
+  "size": "3 parquet splits, about 1.6 MB each (row counts UNVERIFIED)",
+  "rqs": [
+    "RQ2"
+  ],
+  "labels": [
+    "conflicting / one-off test mutations: a pass implies spec-violating test exploitation"
+  ],
+  "risks": [
+    "derived from SWE-bench (same licence gap)",
+    "row counts not verified"
+  ],
+  "obtain": "python scripts/datasets.py fetch --id impossiblebench-swebench --yes",
+  "files": [
+    {
+      "path": "data/conflicting-00000-of-00001.parquet",
+      "url": "https://huggingface.co/datasets/fjzzq2002/impossible_swebench/resolve/9c2d34f364b7229e8c0ff807c646100bdc18bbb5/data/conflicting-00000-of-00001.parquet",
+      "size": 1594480,
+      "sha256": "25d96f864431f9279375c94df05ffdaeeafbcacde0be8b2b0a0333daefa4186d"
+    },
+    {
+      "path": "data/oneoff-00000-of-00001.parquet",
+      "url": "https://huggingface.co/datasets/fjzzq2002/impossible_swebench/resolve/9c2d34f364b7229e8c0ff807c646100bdc18bbb5/data/oneoff-00000-of-00001.parquet",
+      "size": 1587748,
+      "sha256": "6308b6fa360213dc40a5bb5e39217efcc440f48c76b8caaf00bbf3497cb67462"
+    },
+    {
+      "path": "data/original-00000-of-00001.parquet",
+      "url": "https://huggingface.co/datasets/fjzzq2002/impossible_swebench/resolve/9c2d34f364b7229e8c0ff807c646100bdc18bbb5/data/original-00000-of-00001.parquet",
+      "size": 1567698,
+      "sha256": "4ad148f9812e9a347ec529690bff8fed49b8ec7d0256e3b6768d375fed499f3b"
+    }
+  ],
+  "schema_version": 1,
+  "accessed": "2026-11-02"
+}

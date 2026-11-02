@@ -1,0 +1,43 @@
+{
+  "id": "swe-bench-experiments",
+  "name": "SWE-bench leaderboard submissions (agent patches, logs, trajectories)",
+  "kind": "trajectories",
+  "source": {
+    "type": "github",
+    "url": "https://github.com/SWE-bench/experiments",
+    "revision": "UNVERIFIED (GitHub API rate-limited on 2026-11-02; pin the commit at first clone)",
+    "revision_kind": "UNVERIFIED"
+  },
+  "license": {
+    "name": "UNKNOWN - no licence stated on the repository page",
+    "url": "https://github.com/SWE-bench/experiments",
+    "verdict": "unknown",
+    "evidence": "Repo page fetched 2026-11-02 shows no licence name. Artifacts live in submitters' own repos or S3, each with its own terms."
+  },
+  "redistribution": {
+    "allowed": "no",
+    "notes": "UNKNOWN - do not redistribute. Reference by manifest only."
+  },
+  "status": "requested",
+  "size": "not stated on the page",
+  "rqs": [
+    "RQ2",
+    "RQ3",
+    "RQ4"
+  ],
+  "labels": [
+    "per-instance resolved/unresolved (report.json)",
+    "agent patches (all_preds.jsonl, logs/patch.diff)",
+    "trajectories (trajs/)"
+  ],
+  "risks": [
+    "resolved label = official tests only, i.e. exactly the weak-test label under study",
+    "submitter artifacts may be missing or moved (older entries on S3)",
+    "per-submission licence unknown"
+  ],
+  "obtain": "git clone https://github.com/SWE-bench/experiments; python -m analysis.download_logs evaluation/verified/<date_model> (no credentials)",
+  "notes": "Per-submission selection and hashes to be added when chosen (EP-05/EP-06).",
+  "schema_version": 1,
+  "accessed": "2026-11-02",
+  "files": []
+}

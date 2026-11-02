@@ -1,0 +1,39 @@
+{
+  "id": "swt-bench",
+  "name": "SWT-Bench (issue-reproduction tests; bm25_27k prompts)",
+  "kind": "benchmark",
+  "source": {
+    "type": "github",
+    "url": "https://github.com/logic-star-ai/SWT-Bench",
+    "revision": "UNVERIFIED (API rate-limited; pin at first clone)",
+    "revision_kind": "UNVERIFIED",
+    "paper": "arXiv 2406.12952"
+  },
+  "license": {
+    "name": "UNKNOWN for data - code repo states MIT; HF dataset cards not fetched",
+    "url": "https://github.com/logic-star-ai/SWT-Bench",
+    "spdx": "MIT",
+    "verdict": "unknown",
+    "evidence": "README fetched 2026-11-02: 'MIT. Check LICENSE.md' for the repo; dataset licence (nmuendler/SWT-Bench_*_bm25_27k_zsb/zsp) unverified."
+  },
+  "redistribution": {
+    "allowed": "no",
+    "notes": "UNKNOWN - do not redistribute. Reference by manifest only."
+  },
+  "status": "requested",
+  "size": "Full 2294, Lite 276, Verified 433 instances (README gold validation table)",
+  "rqs": [
+    "RQ2"
+  ],
+  "labels": [
+    "fail-to-pass reproduction tests (issue-to-test)"
+  ],
+  "risks": [
+    "HF revisions and hashes not yet pinned",
+    "same SWE-bench contamination"
+  ],
+  "obtain": "datasets under https://huggingface.co/datasets/nmuendler/ (for example SWT-Bench_Verified_bm25_27k_zsb); pin revision, then add files to this manifest",
+  "schema_version": 1,
+  "accessed": "2026-11-02",
+  "files": []
+}

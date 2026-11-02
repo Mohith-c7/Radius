@@ -1,0 +1,39 @@
+{
+  "id": "swe-abs-code",
+  "name": "SWE-ABS code and evaluation scripts",
+  "kind": "label-source",
+  "source": {
+    "type": "github",
+    "url": "https://github.com/OpenAgentEval/SWE-ABS",
+    "revision": "UNVERIFIED (main, 31 commits per page; API rate-limited; pin at first clone)",
+    "revision_kind": "UNVERIFIED",
+    "paper": "arXiv 2603.00520"
+  },
+  "license": {
+    "name": "MIT License",
+    "url": "https://github.com/OpenAgentEval/SWE-ABS/blob/main/LICENSE",
+    "spdx": "MIT",
+    "verdict": "open",
+    "evidence": "Repo page fetched 2026-11-02 states MIT (LICENSE file)."
+  },
+  "redistribution": {
+    "allowed": "yes",
+    "notes": "Code only, MIT terms (keep notice). HF also lists OpenAgentLab/SWE-bench_Pro-ABS (not inventoried)."
+  },
+  "status": "requested",
+  "size": "not stated",
+  "rqs": [
+    "RQ2",
+    "RQ3"
+  ],
+  "labels": [
+    "none (code)"
+  ],
+  "risks": [
+    "26 stars, no releases: pin by commit"
+  ],
+  "obtain": "git clone https://github.com/OpenAgentEval/SWE-ABS",
+  "schema_version": 1,
+  "accessed": "2026-11-02",
+  "files": []
+}

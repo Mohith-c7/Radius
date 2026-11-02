@@ -1,0 +1,37 @@
+{
+  "id": "agentlens-bench",
+  "name": "AgentLens-Bench trajectories",
+  "kind": "trajectories",
+  "source": {
+    "type": "none",
+    "url": "https://arxiv.org/abs/2605.12925",
+    "revision": "not released as of arXiv v4 (2026-10-05) per EP-01",
+    "revision_kind": "none",
+    "paper": "arXiv 2605.12925"
+  },
+  "license": {
+    "name": "UNKNOWN - not released",
+    "url": "https://arxiv.org/abs/2605.12925",
+    "verdict": "unknown",
+    "evidence": "EP-01 related-work.md; not re-fetched in EP-03."
+  },
+  "redistribution": {
+    "allowed": "no",
+    "notes": "UNKNOWN - do not redistribute. Reference by manifest only."
+  },
+  "status": "blocked",
+  "size": "2,614 OpenHands trajectories (abstract, per EP-01)",
+  "rqs": [
+    "RQ4"
+  ],
+  "labels": [
+    "Ideal/Solid/Lucky process tiers"
+  ],
+  "risks": [
+    "not released; do not plan on it"
+  ],
+  "obtain": "re-check periodically; email authors",
+  "schema_version": 1,
+  "accessed": "2026-11-02",
+  "files": []
+}

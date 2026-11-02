@@ -1,0 +1,39 @@
+{
+  "id": "swe-bench-plus",
+  "name": "SWE-Bench+ (leakage-filtered SWE-bench)",
+  "kind": "label-source",
+  "source": {
+    "type": "arxiv",
+    "url": "https://arxiv.org/abs/2410.06992",
+    "revision": "arXiv v2",
+    "revision_kind": "version",
+    "paper": "arXiv 2410.06992"
+  },
+  "license": {
+    "name": "UNKNOWN - no artifact located (paper is CC BY 4.0, which does not cover data)",
+    "url": "https://arxiv.org/abs/2410.06992",
+    "verdict": "unknown",
+    "evidence": "arXiv page fetched 2026-11-02: no dataset or repo link."
+  },
+  "redistribution": {
+    "allowed": "no",
+    "notes": "UNKNOWN - do not redistribute. Ask authors (Aleithan et al.)."
+  },
+  "status": "blocked",
+  "size": "n/a",
+  "rqs": [
+    "RQ2"
+  ],
+  "labels": [
+    "solution-leakage flags (32.67% of successful patches, SWE-Agent+GPT-4)",
+    "weak-test flags (31.08%)"
+  ],
+  "risks": [
+    "single-agent sample",
+    "no artifact"
+  ],
+  "obtain": "email authors",
+  "schema_version": 1,
+  "accessed": "2026-11-02",
+  "files": []
+}

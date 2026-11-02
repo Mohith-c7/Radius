@@ -1,0 +1,49 @@
+{
+  "id": "swe-bench-verified",
+  "name": "SWE-bench Verified (500 instances)",
+  "kind": "benchmark",
+  "source": {
+    "type": "huggingface",
+    "url": "https://huggingface.co/datasets/SWE-bench/SWE-bench_Verified",
+    "revision": "78f471bf655a3137b2e8a75af1501690ec009ec3",
+    "revision_kind": "commit",
+    "paper": "arXiv 2310.06770"
+  },
+  "license": {
+    "name": "UNKNOWN - no licence declared on the Hugging Face dataset card or API metadata",
+    "url": "https://huggingface.co/datasets/SWE-bench/SWE-bench_Verified",
+    "verdict": "unknown",
+    "evidence": "HF API metadata and README front matter fetched 2026-11-02: no license field. GitHub code repo is MIT (github.com/SWE-bench/SWE-bench); that licence is stated for the repository, not the dataset. Instances derive from public GitHub repos with their own licences."
+  },
+  "redistribution": {
+    "allowed": "no",
+    "notes": "UNKNOWN - do not redistribute. Reference by manifest only."
+  },
+  "status": "available",
+  "size": "500 rows (test); 6,304,616 bytes parquet",
+  "rqs": [
+    "RQ2",
+    "RQ3"
+  ],
+  "labels": [
+    "FAIL_TO_PASS / PASS_TO_PASS gold tests",
+    "gold patch",
+    "human-validated task quality (per card)"
+  ],
+  "risks": [
+    "contamination: issues predate most LLM cut-offs (SWE-Bench+: >94% before cut-off dates)",
+    "weak tests / solution leakage (SWE-Bench+, UTBoost, PatchDiff)",
+    "12 Python repos only; time/repo splits are small"
+  ],
+  "obtain": "python scripts/datasets.py fetch --id swe-bench-verified --yes",
+  "files": [
+    {
+      "path": "data/test-00000-of-00001.parquet",
+      "url": "https://huggingface.co/datasets/SWE-bench/SWE-bench_Verified/resolve/78f471bf655a3137b2e8a75af1501690ec009ec3/data/test-00000-of-00001.parquet",
+      "size": 6304616,
+      "sha256": "030cfd7f2a704c4c0226e7f104c725a3b41230b1d3517f9c915ad7ea5be3fa25"
+    }
+  ],
+  "schema_version": 1,
+  "accessed": "2026-11-02"
+}

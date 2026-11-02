@@ -1,0 +1,40 @@
+{
+  "id": "patchdiff",
+  "name": "PatchDiff differential patch testing data",
+  "kind": "label-source",
+  "source": {
+    "type": "arxiv",
+    "url": "https://arxiv.org/abs/2503.15223",
+    "revision": "arXiv v2 / ICSE 2026",
+    "revision_kind": "version",
+    "doi": "10.1145/3744916.3764576",
+    "paper": "arXiv 2503.15223"
+  },
+  "license": {
+    "name": "UNKNOWN - no artifact located",
+    "url": "https://arxiv.org/abs/2503.15223",
+    "verdict": "unknown",
+    "evidence": "arXiv, HF papers, alphaXiv, ICSE pages: no artifact link (search 2026-11-02)."
+  },
+  "redistribution": {
+    "allowed": "no",
+    "notes": "UNKNOWN - do not redistribute. Owner must ask authors (Wang, Pradel, Liu)."
+  },
+  "status": "blocked",
+  "size": "n/a",
+  "rqs": [
+    "RQ2",
+    "RQ3"
+  ],
+  "labels": [
+    "plausible patches behaving differently from gold (29.6%)",
+    "manually judged certainly-incorrect subset"
+  ],
+  "risks": [
+    "no artifact; only 3 tools on Verified"
+  ],
+  "obtain": "email authors; check ICSE artifact track",
+  "schema_version": 1,
+  "accessed": "2026-11-02",
+  "files": []
+}
