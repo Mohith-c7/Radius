@@ -287,3 +287,29 @@ Decided by delegation (LK-02 implementer), 2026-11-02. Justified under DEC-003 a
 - **The LLM only re-ranks.** It can reorder and explain candidates produced by the deterministic linkers; the pipeline discards any symbol that was not a candidate, and the verdict never reads its output (DEC-009).
 
 Revisit when: the code-egress policy is designed, LK-06 replaces the combination, or a second consumer needs the linking domain split further.
+
+## DEC-027: Verdict v2 alpha slice decisions D1-D17 accepted as recommended, and `packages/evidence`
+
+Accepted as recommended in `docs/research/design/VERDICT_V2_SLICE.md` section 8.2, by owner delegation 2026-11-02. This also records D14: the new package `packages/evidence` (import name `radius_evidence`) is justified under DEC-003 and DEC-007 because the first task that needs it (VS-00) starts now. It is a stdlib-only domain below `confidence`; producers never import it and it never imports them (`packages/evidence/.importlinter`, wired into `ci.yml`). Sub-package placements are as in design section 2.1 (`radius_confidence.verdict_v2`, `radius_github.verdict_v2`, `radius_testing.assertions`, `radius_linking` for relevance, `apps/worker/.../verdict_v2`).
+
+| ID | Decision | Chosen option | Reason |
+| --- | --- | --- | --- |
+| D1 | Normalize tables now or store the bundle first | Bundle JSON first (table `verdict_v2`); normalized tables are Beta projections | Removes four migrations from the critical path and nothing is reworked later. |
+| D2 | Profile for cap and threshold | `alpha-static` (`cap_static` 0.6, `tau_support` 0.5), versioned and labelled; DESIGN defaults 0.4/0.6 kept as a second profile | Both values are in the pre-registered sweep grid; under 0.4/0.6 nothing is `proven` and no PR is `verified`. |
+| D3 | Sixth criterion state | No; `tampered` is a flag, `weak` covers partial | Keeps DEC-008 intact. |
+| D4 | When `needs_review` is reachable | Only through rules R3a to R3c until calibration (CA-04) | Abstention without calibration would be invented. |
+| D5 | May the alpha emit `verified` from static evidence | Yes, labelled "static assertion strength only" | Strictness comes from UIM, coverage and tamper rules; a permanent neutral would hide the product. |
+| D6 | Criterion-to-test relevance method | Lexical plus `tests:` hints now; embeddings only if the VS-04 measurement shows the need | Cheap, deterministic, explainable; a missing edge is reported, never silently credited. |
+| D7 | Worker-run (sandbox) results | Alpha uses CI-uploaded per-case results only; stated in the comment | Sandbox results are aggregate only today. |
+| D8 | Meaning of "coverage" in the PR rules | Intent coverage as defined in design 3.9, including the `<module>` same-file rule | Gives the scope-creep signal; revisit with LK-05 blast-radius candidates. |
+| D9 | Republish transport | Outbox table plus worker consumer | The API deliberately holds no GitHub credentials. |
+| D10 | Check Run name and comment marker | Keep `Radius confidence` and `<!-- radius-confidence-report -->` | Branch protection and in-place comment updates keep working. |
+| D11 | Non-Python behavioral changes | `insufficient_evidence` with `analysis_degraded` (R2d); TypeScript arrives with EV-14 | Honest result instead of a guess. |
+| D12 | EV-02 severities for T001, T002, T004, T005, T012 | Confirmed as the configured defaults (high), still overridable by configuration; rule R1c reads severity from the engine and never hard-codes rule ids | `fail_on_tamper_at_least = high` depends on them. |
+| D13 | Authorship default | `unknown` (i = 0.8); `agent` (0.6) only from commit trailers | Accepted for the alpha; known to under-weight agent PRs without trailers. |
+| D14 | Record a DEC for the package and placements | Done by this entry | Required by DEC-003 and DEC-007. |
+| D15 | Shape of the flag | Three-valued `off\|shadow\|on`; boolean spellings stay valid | Shadow mode is the free evaluation hook (VD-07). |
+| D16 | IEG persistence tables | Generic `ieg_nodes` and `ieg_edges`; named link tables only as views if needed | New node and edge kinds need no migration. |
+| D17 | Alpha UIM versus the pre-registered UIM | Every stored result carries `profile`; alpha-static results are never pooled with confirmatory data; the pre-registration may add the profile as an amendment before freeze | Keeps the confirmatory analysis clean. |
+
+Revisit when: calibration exists (CA-*), mutation evidence lands (EV-04), or the first measurements (VS-04, the 8 F-14 fixtures) contradict a default; defaults are hypotheses, not results.

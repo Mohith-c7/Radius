@@ -674,6 +674,42 @@ Persistence and the IEG (LK-05), fitting calibrators on gold labels (LK-07; the 
 
 ---
 
+# Evidence Domain (research, DEC-027)
+
+Package: `packages/evidence` (import name `radius_evidence`).
+
+Purpose
+
+Turn validated outcomes (CI test results, tamper findings) into quality-weighted evidence for each stated criterion, and compute per-criterion support, the unproven intent mass (UIM) and per-criterion states for the Verdict v2 alpha (`docs/research/design/VERDICT_V2_SLICE.md`).
+
+---
+
+Inputs
+
+Plain DTOs (`domain/inputs.py`): criteria, changed symbols, criterion-symbol / symbol-test / criterion-test edges, assertion features, tamper findings and per-case CI outcomes. Producers (`radius_analysis`, `radius_intent`, `radius_linking`, `radius_testing`) are adapted to these in `apps/worker/src/radius_worker/verdict_v2/`; the evidence package never imports them.
+
+---
+
+Outputs
+
+`EvidenceItem`, `EvidenceQuality` (one row per evidence and criterion), `Ieg` nodes and edges, `SupportResult` (`S(c)`), `CriterionStateResult` and `UimResult`, all frozen dataclasses with stable JSON (`to_json` / `from_json`). Parameters live in one `VerdictV2Config` (profile `alpha-static`).
+
+---
+
+Responsibilities
+
+Typed contracts and pure functions only. `domain/` imports the standard library and itself (import-linter contract and AST test); `application/` depends on the domain; `infrastructure/` may use `radius_shared` and SQLAlchemy (Beta projection tables). `__init__.py` files are docstring-only: import by full module path.
+
+Related sub-packages: `radius_confidence.verdict_v2` (PR-level rules, justification, storage), `radius_github.verdict_v2` (renderer, no domain imports), `apps/worker/src/radius_worker/verdict_v2` (composition root). Boundaries are enforced by `packages/evidence/.importlinter`.
+
+---
+
+Non Responsibilities
+
+Mutation testing (EV-04), calibration (CA-*), the policy engine (VD-04/05), persistence of normalized evidence tables (Beta), any LLM call, judging whether code is correct.
+
+---
+
 # Presentation Domain
 
 Purpose
