@@ -429,6 +429,8 @@ Verdict v2 alpha (DEC-027), behind `RADIUS_FEATURE_VERDICT_V2` (`off` default,
 Design: `docs/research/design/VERDICT_V2_SLICE.md`; payload schema:
 `docs/research/design/verdict_v2.schema.json`.
 
+Contract 4 (`contract_version` `verdict-v2-contract-4`, all additions optional): top-level `alpha` (always `true`), `calibrated` (always `false`), `evidence_basis` (`static_only`) and `presentation` (`verdict_label`, `state_labels`, `legend`, `disclaimer`, `summary_text`: the user-facing wording, where internal `proven` reads SUPPORTED and `verified` reads "Supported by static evidence (alpha)"; clients should show these instead of the raw enum values); `summary.author_hint_criteria`; per criterion `provenance` and `hints[]` (`kind`, `value`, `provenance`, one of `author_pr_body | author_head_spec | base_spec | human_confirmed | llm_proposed`), and the flag and reason code `author_supplied_hint`. Enum values and existing fields are unchanged. See `docs/security/VERDICT_V2_THREAT_MODEL.md`.
+
 ### Responses
 
 | Status | When |

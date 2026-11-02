@@ -128,12 +128,14 @@ test("every state has a label, an icon and a tone, and the labels are distinct",
     labels.add(meta.label);
   }
   assert.equal(labels.size, 5);
-  assert.equal(m.stateMeta("unevidenced").label, "Unproven");
+  assert.equal(m.stateMeta("unevidenced").label, "Unsupported");
+  assert.equal(m.stateMeta("proven").label, "Supported");
   assert.equal(m.stateMeta("contradicted").tone, "bad");
 });
 
 test("verdict meta covers the four states, pending and unavailable", () => {
-  assert.equal(m.verdictMeta("verified", false, "ok").tone, "good");
+  assert.equal(m.verdictMeta("verified", false, "ok").label, "Supported by static evidence (alpha)");
+  assert.notEqual(m.verdictMeta("verified", false, "ok").tone, "good");
   assert.equal(m.verdictMeta("failed", false, "ok").tone, "bad");
   assert.equal(m.verdictMeta("needs_review", false, "ok").label, "Needs review");
   assert.match(m.verdictMeta("insufficient_evidence", false, "ok").label, /insufficient evidence/);
@@ -155,7 +157,7 @@ test("header tags always carry the honesty labels", () => {
 });
 
 test("headline explains unavailable and pending verdicts", () => {
-  assert.match(m.headline(parse()), /unproven intent mass 0.75/);
+  assert.match(m.headline(parse()), /unsupported intent mass 0.75/);
   assert.match(
     m.headline({ reasons: [], status: "error", error: { code: "TimeoutError", fallback: "v1" }, pending: false }),
     /v1 result is used/,
@@ -332,4 +334,51 @@ test("the panel source renders untrusted text as React text only", () => {
   assert.ok(!/from\s+["'][^"']*(markdown|marked|remark|sanitize)[^"']*["']/i.test(code));
   // Honesty labels are part of the header model, not optional copy.
   assert.ok(source.includes("headerTags(verdict)"));
+});
+
+// --- honesty and provenance (alpha) ---------------------------------------------
+
+test("the wording never says proven or verified and carries a legend", () => {
+  assert.match(m.DISCLAIMER, /not a proof of correctness/);
+  assert.match(m.DISCLAIMER, /uncalibrated/);
+  assert.equal(
+    m.LEGEND,
+    "supported = static assertion strength above threshold; not a proof of correctness",
+  );
+  for (const state of m.SUPPORT_STATES) {
+    assert.doesNotMatch(m.stateMeta(state).label, /proven|verified/i, state);
+  }
+  assert.doesNotMatch(m.verdictMeta("verified", false, "ok").label, /^Verified/);
+  assert.notEqual(m.verdictMeta("verified", false, "ok").tone, "good");
+});
+
+test("provenance and hints are parsed, defaulted and labelled", () => {
+  const raw = clone();
+  raw.criteria[0].provenance = "author_head_spec";
+  raw.criteria[0].hints = [
+    { kind: "tests", value: "tests/test_a.py", provenance: "author_head_spec" },
+    "junk",
+  ];
+  const v = parse(raw);
+  assert.equal(v.criteria[0].provenance, "author_head_spec");
+  assert.deepEqual(v.criteria[0].hints, [
+    { kind: "tests", value: "tests/test_a.py", provenance: "author_head_spec" },
+  ]);
+  const old = clone();
+  delete old.criteria[0].provenance;
+  delete old.criteria[0].hints;
+  assert.equal(parse(old).criteria[0].provenance, "author_pr_body");
+  assert.deepEqual(parse(old).criteria[0].hints, []);
+  assert.equal(m.provenanceLabel("base_spec"), "Base branch spec");
+  assert.equal(m.provenanceLabel("something_new"), "something new");
+});
+
+test("author-supplied hint reliance is counted from flags or the summary", () => {
+  const raw = clone();
+  assert.equal(m.authorHintCount(parse(raw)), 0);
+  raw.criteria[0].flags = ["author_supplied_hint"];
+  assert.equal(m.authorHintCount(parse(raw)), 1);
+  raw.summary.author_hint_criteria = 3;
+  assert.equal(m.authorHintCount(parse(raw)), 3);
+  assert.equal(m.flagLabel("author_supplied_hint"), "Relies on author-supplied test hint");
 });

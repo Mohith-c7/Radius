@@ -59,7 +59,7 @@ SECRET_RE = re.compile(r"(SECRET|PASSWORD|PRIVATE_KEY|API_KEY)")
 #: Credentials embedded in the value although the name does not say so.
 EXTRA_SECRET = {"DATABASE_URL"}
 #: Names that look like env vars in the source but are not.
-NOT_ENV = {"RADIUS_ERROR", "RADIUS_DATA_"}
+NOT_ENV = {"RADIUS_ERROR", "RADIUS_DATA_", "GITHUB_RATE_LIMITED"}  # last: an error code, not a variable
 #: Variables set by tooling or CI rather than read by the application.
 SCAN_PATTERN = re.compile(r"""["']((?:RADIUS|WORKER|GITHUB|REPOSITORY|STORAGE)_[A-Z0-9_]*[A-Z0-9])["']""")
 STATUS_OVERRIDE = {
@@ -79,7 +79,7 @@ DESCRIPTIONS = {
     "API_KEYS": "Comma-separated `org_id:key` pairs accepted in `X-Radius-API-Key` / Bearer auth. With none configured the API rejects requests unless `RADIUS_ALLOW_INSECURE_DEV` applies (development/test only).",
     "DASHBOARD_BASE_URL": "Canonical public dashboard URL; the worker uses it to build the analysis link in the check run and PR comment.",
     "DATABASE_URL": "PostgreSQL URL for the API, worker and migrations. `postgres://` and `postgresql://` are normalised to `postgresql+psycopg://`. The auth module (sign-in tables) reads the same variable, but its own default is `sqlite:///./radius.db`, so when the variable is unset the auth tables go to a local SQLite file while the main settings default to the local PostgreSQL URL. Always set it explicitly.",
-    "EMAIL_DELIVERY_MODE": "Declared in the auth settings; no other code reads it (verified by grep). Mail is sent over SMTP when `SMTP_USERNAME` and `SMTP_PASSWORD` are set.",
+    "EMAIL_DELIVERY_MODE": "Auth module: `smtp` (default) sends mail over SMTP when `SMTP_USERNAME` and `SMTP_PASSWORD` are set; `log` writes the message, including the verification or reset link, to the API log instead (local development only, refused when `RADIUS_ENV=production`). Any other value is rejected at start-up.",
     "FRONTEND_ORIGIN": "Auth module: dashboard origin used in e-mail verification/reset links, OAuth redirects and the auth CORS allow-list.",
     "GITHUB_API_BASE_URL": "GitHub REST base URL (change for GitHub Enterprise Server).",
     "GITHUB_API_VERSION": "Value of the `X-GitHub-Api-Version` header sent to GitHub.",
@@ -97,7 +97,7 @@ DESCRIPTIONS = {
     "GOOGLE_CLIENT_SECRET": "Auth module: Google OAuth sign-in client secret (optional).",
     "GOOGLE_REDIRECT_URI": "Auth module: Google OAuth redirect URI (optional).",
     "RADIUS_CORS_ALLOW_CREDENTIALS": "Send `Access-Control-Allow-Credentials`. Never combined with `*`.",
-    "RADIUS_ENV": "Runtime environment: `development`, `test`, `uat` or `production`. Production tightens CORS validation and ignores demo seeding.",
+    "RADIUS_ENV": "Runtime environment: `development`, `test`, `uat` or `production`. Production tightens CORS validation (https origins only, no wildcard, no automatic localhost), ignores demo seeding, refuses the public session secret and `EMAIL_DELIVERY_MODE=log`. `docker-compose.yml` pins `production`; `docker-compose.dev.yml` (used by `make dev`) sets `development` for the api.",
     "RADIUS_HSTS_MAX_AGE": "`max-age` in seconds of the Strict-Transport-Security header when HSTS is enabled.",
     "RADIUS_LOG_LEVEL": "Structured log level: DEBUG, INFO, WARNING, ERROR or CRITICAL.",
     "RADIUS_MAX_BODY_BYTES": "Default request body cap in bytes; over it the API answers 413.",
@@ -114,7 +114,7 @@ DESCRIPTIONS = {
     "REPOSITORY_CACHE_DIR": "Worker: directory for cloned repositories (a volume in Compose: `/var/lib/radius/repositories`).",
     "SERVICE_NAME": "Service name used in logs. Defaults differ per service (`radius-api`, `radius-worker`); normally left alone.",
     "SESSION_COOKIE_SECURE": "Auth module: set the Secure flag on the session cookie. Set true behind TLS.",
-    "SESSION_SECRET": "Auth module: secret used to sign sessions (minimum 32 characters). The default in code is a public placeholder; always set your own.",
+    "SESSION_SECRET": "Auth module: secret used to sign sessions (minimum 32 characters). The default in code and the `.env.example` placeholder are public; with `RADIUS_ENV=production` the API refuses to start with either. `docker-compose.yml` has no default and stops if it is unset; `make env` generates a random one for local dev.",
     "SMTP_FROM_EMAIL": "Auth module: From address of verification and reset e-mails.",
     "SMTP_HOST": "Auth module: SMTP server.",
     "SMTP_PASSWORD": "Auth module: SMTP password.",
@@ -290,6 +290,8 @@ def extra_entries() -> list[Entry]:
         e("GEMINI_API_KEY", "str", "unset", "Legacy Gemini SemanticPruner. Used only when RADIUS_FEATURE_GEMINI_PRUNER is also true. Sends caller source and diffs to Google; not covered by the DEC-021 egress policy. Leave unset.", {"none (legacy)"}, "packages/analysis/src/radius_analysis/ai/pruner.py"),
         e("RADIUS_FEATURE_GEMINI_PRUNER", "bool", "false", "Explicit opt-in for the legacy Gemini SemanticPruner. The pruner is not called by the live analysis pipeline (only by `scripts/run_phase2_poc.py` and tests).", {"none (legacy)"}, "packages/analysis/src/radius_analysis/ai/pruner.py", "legacy opt-in, not on the live path"),
         e("RADIUS_FEATURE_ASSERTION_EXTRACTION", "bool", "false", "LK-04 library entry point also reads this flag from the process environment (the worker reads it through its settings, see above).", {"worker"}, "packages/testing/src/radius_testing/assertions/service.py"),
+        e("RADIUS_FEATURE_MUTATION", "bool", "false", "EV-04/05 mutation-evidence prototype library flag (`radius_testing.mutation`). Library only: nothing in the worker calls it yet.", {"library"}, "packages/testing/src/radius_testing/mutation/__init__.py"),
+        e("RADIUS_MUTATION_ALLOW_LOCAL", "bool", "unset", "Dev/tests only: allows the mutation prototype's local subprocess runner, which executes code on the host and is unsafe for untrusted repositories. Never set in production.", {"library"}, "packages/testing/src/radius_testing/mutation/runner.py"),
         e("RADIUS_FEATURE_COVERAGE_CONTEXTS", "bool", "false", "LK-03 library entry point reads this flag directly from the process environment.", {"worker"}, "packages/testing/src/radius_testing/linking/dynamic.py"),
         e("RADIUS_EVAL_ALLOW_REAL_LLM", "str", "unset", "Intent evaluation CLI only: must be `1`, together with `--allow-real-llm`, before a real provider is used. Tests and CI never set it.", {"evaluation CLI"}, "packages/intent/src/radius_intent/evaluation/extractors.py"),
         e("DEV_AUTO_VERIFY_EMAIL", "str", "unset", "Auth module: when set, `true/1/yes` auto-verifies new accounts without e-mail and any other value disables it, in any environment. Development convenience; leave unset in production.", {"api"}, "apps/api/src/app/auth.py"),

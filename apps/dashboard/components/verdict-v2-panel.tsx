@@ -33,7 +33,17 @@ import { ReactNode, useCallback, useEffect, useId, useRef, useState } from "reac
 
 import { getVerdictV2 } from "../lib/verdict-v2";
 import {
+  authorHintCount,
   classifyVerdictError,
+  disclaimerText,
+  hasPolicySection,
+  legendText,
+  policyModeLabel,
+  settingLine,
+  stateLabel,
+  waiverCodeLabel,
+  waivedFindings,
+  provenanceLabel,
   evidenceSummary,
   flagLabel,
   formatPercent,
@@ -171,11 +181,17 @@ function VerdictView({ verdict }: { verdict: VerdictV2 }) {
   return (
     <>
       <header className="vv2-head">
+        <p className="vv2-disclaimer" role="note">
+          <strong>Alpha - static evidence only - uncalibrated.</strong> {disclaimerText(verdict)}
+        </p>
         <p className={`vv2-verdict ${meta.tone}`}>
           <VerdictIcon size={20} aria-hidden="true" />
-          <strong>{meta.label}</strong>
+          <strong>{verdict.presentation?.verdict_label || meta.label}</strong>
         </p>
         <p className="vv2-why">{headline(verdict)}</p>
+        {verdict.presentation?.summary_text ? (
+          <p className="vv2-why">{verdict.presentation.summary_text}</p>
+        ) : null}
         <ul className="vv2-tags" aria-label="About this verdict">
           {headerTags(verdict).map((tag) => (
             <li key={tag.key}>
@@ -188,6 +204,14 @@ function VerdictView({ verdict }: { verdict: VerdictV2 }) {
       {available ? (
         <>
           <SummaryStrip verdict={verdict} />
+          {authorHintCount(verdict) > 0 ? (
+            <p className="vv2-state" role="status">
+              <AlertTriangle size={16} aria-hidden="true" /> {authorHintCount(verdict)}{" "}
+              {authorHintCount(verdict) === 1 ? "criterion relies" : "criteria rely"} on
+              author-supplied test hints. Their link strength is capped; confirm the criteria in
+              the intent panel to lift the cap.
+            </p>
+          ) : null}
           <CriteriaTable verdict={verdict} />
           <TamperSection verdict={verdict} />
           <ListSection
@@ -196,6 +220,7 @@ function VerdictView({ verdict }: { verdict: VerdictV2 }) {
             empty="Every behavioural change is covered by a criterion."
           />
           <NextActions verdict={verdict} />
+          <PolicySection verdict={verdict} />
           <JustificationSection verdict={verdict} />
           {verdict.v1 ? (
             <details className="vv2-details">
@@ -233,7 +258,7 @@ function SummaryStrip({ verdict }: { verdict: VerdictV2 }) {
         {summaryCounts(verdict.summary).map(({ state, count, meta }) => (
           <li key={state}>
             <Chip tone={meta.tone} icon={meta.icon}>
-              {count} {meta.label.toLowerCase()}
+              {count} {stateLabel(verdict, state).toLowerCase()}
             </Chip>
           </li>
         ))}
@@ -241,7 +266,7 @@ function SummaryStrip({ verdict }: { verdict: VerdictV2 }) {
       <div className="vv2-meters">
         <label className="vv2-meter">
           <span>
-            Unproven intent mass {formatScore(verdict.summary.uim)}
+            Unsupported intent mass {formatScore(verdict.summary.uim)}
             {bars.uimMaxPercent !== null ? ` (limit ${(bars.uimMaxPercent / 100).toFixed(2)})` : ""}
             {bars.uimOverLimit ? ": over the limit" : ""}
           </span>
@@ -281,7 +306,7 @@ function CriteriaTable({ verdict }: { verdict: VerdictV2 }) {
       <table className="vv2-table">
         <caption>
           Criteria. Support must reach the threshold {formatScore(verdict.tauSupport)} to count as
-          proven.
+          supported. Legend: {legendText(verdict)}.
         </caption>
         <thead>
           <tr>
@@ -298,6 +323,7 @@ function CriteriaTable({ verdict }: { verdict: VerdictV2 }) {
             <CriterionRows
               key={`${criterion.criterion_id}-${index}`}
               criterion={criterion}
+              label={stateLabel(verdict, criterion.state)}
               tau={verdict.tauSupport}
               expanded={open.has(criterion.criterion_id)}
               onToggle={() => toggle(criterion.criterion_id)}
@@ -314,11 +340,13 @@ function CriteriaTable({ verdict }: { verdict: VerdictV2 }) {
 
 function CriterionRows({
   criterion,
+  label,
   tau,
   expanded,
   onToggle,
 }: {
   criterion: Criterion;
+  label: string;
   tau: number;
   expanded: boolean;
   onToggle: () => void;
@@ -345,7 +373,7 @@ function CriterionRows({
         </td>
         <th scope="row" className="vv2-criterion">{criterion.text || "(no text)"}</th>
         <td>
-          <Chip tone={meta.tone} icon={meta.icon}>{meta.label}</Chip>
+          <Chip tone={meta.tone} icon={meta.icon}>{label}</Chip>
         </td>
         <td>
           <div className="vv2-bar" aria-hidden="true">
@@ -386,6 +414,14 @@ function CriterionDetails({ criterion }: { criterion: Criterion }) {
   return (
     <div className="vv2-detail">
       <p className="vv2-muted">{meta.description}</p>
+      <p className="vv2-small">
+        Criterion source: {provenanceLabel(criterion.provenance)}
+        {criterion.hints.length > 0
+          ? `. Hints: ${criterion.hints
+              .map((h) => `${h.kind} ${h.value} (${provenanceLabel(h.provenance)})`)
+              .join("; ")}`
+          : ""}
+      </p>
       {criterion.reasons.length > 0 ? (
         <ul className="vv2-reasons">
           {criterion.reasons.map((reason, index) => (
@@ -457,10 +493,19 @@ function TamperSection({ verdict }: { verdict: VerdictV2 }) {
               <Chip tone={severityTone(finding.severity)} icon="shield">
                 {finding.severity || "unknown"}
               </Chip>
+              {finding.waived ? (
+                <Chip tone="neutral" icon="minus">WAIVED</Chip>
+              ) : null}
               <strong>{finding.rule_id}</strong>
               <code className="vv2-mono">{finding.path}</code>
             </p>
             <p>{finding.reason}</p>
+            {finding.waived && finding.waiver ? (
+              <p className="vv2-small">
+                Waiver {finding.waiver.id || "(no id)"} by {finding.waiver.owner || "unknown owner"},
+                expires {finding.waiver.expires || "unknown"}. Reason: {finding.waiver.reason}
+              </p>
+            ) : null}
             {finding.old_snippet !== null || finding.new_snippet !== null ? (
               <details className="vv2-details">
                 <summary>Before and after</summary>
@@ -482,6 +527,113 @@ function TamperSection({ verdict }: { verdict: VerdictV2 }) {
         ))}
       </ul>
     </section>
+  );
+}
+
+function PolicySection({ verdict }: { verdict: VerdictV2 }) {
+  if (!hasPolicySection(verdict)) return null;
+  const { policy, waivers } = verdict;
+  const waived = waivedFindings(verdict);
+  return (
+    <section aria-label="Policy and waivers" className="vv2-section vv2-policy">
+      <h3>Policy and waivers</h3>
+      <p className="vv2-muted">
+        Read from the base branch of the pull request, never from the PR itself.
+      </p>
+      {policy ? (
+        <details className="vv2-details" open>
+          <summary>Policy (.radius/policy.yml)</summary>
+          <p className="vv2-why">
+            <Chip tone={policy.mode === "blocking" ? "warn" : "info"} icon="shield">
+              {policy.mode ?? "no mode"}
+            </Chip>{" "}
+            {policyModeLabel(policy)}
+          </p>
+          <p className="vv2-small">
+            Source: {policy.sourceRef ? `base ${policy.sourceRef.slice(0, 12)}` : "base branch"};
+            head policy: {policy.headPolicy}.
+          </p>
+          <PolicyList title="Applied settings" items={policy.settings.map(settingLine)} />
+          <PolicyList
+            title="Ignored (head policy may only tighten)"
+            items={policy.ignoredHead.map(settingLine)}
+          />
+          <PolicyList
+            title="Unmet requirements"
+            items={policy.unmet.map(
+              (r) =>
+                `${r.target || "changed code"}: ${r.state} (needs ${r.min_state}) under ${r.paths.join(", ") || "?"}` +
+                (r.line !== null ? ` (policy line ${r.line})` : ""),
+            )}
+          />
+          <PolicyList title="Excluded paths" items={policy.excludePaths} />
+          <PolicyList title="Tamper severity changes recorded" items={policy.acknowledgements} />
+          <PolicyList title="Tamper severity changes refused" items={policy.refused} />
+          <PolicyList title="Policy errors" items={policy.errors} />
+          <PolicyList title="Policy warnings" items={policy.warnings} />
+        </details>
+      ) : null}
+      {waivers || waived.length > 0 ? (
+        <details className="vv2-details" open>
+          <summary>
+            Waivers ({waived.length} finding{waived.length === 1 ? "" : "s"} waived
+            {waivers ? `, ${waivers.ignored.length} ignored` : ""})
+          </summary>
+          {waived.length > 0 ? (
+            <ul className="vv2-list" aria-label="Waived findings">
+              {waived.map((f, index) => (
+                <li key={`${f.finding_id}-${index}`}>
+                  <Chip tone="neutral" icon="minus">WAIVED</Chip> {f.rule_id} on{" "}
+                  <code className="vv2-mono">{f.path}</code>
+                  {f.waiver
+                    ? `: waiver ${f.waiver.id || "?"}, owner ${f.waiver.owner || "?"}, expires ${f.waiver.expires || "?"}. Reason: ${f.waiver.reason}`
+                    : ""}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {waivers ? (
+            <>
+              <PolicyList
+                title="Applied waivers"
+                items={waivers.applied.map(
+                  (w) =>
+                    `${w.id || "?"} (${w.kind || "?"} ${w.target}): owner ${w.owner || "?"}, expires ${w.expires || "?"}. Reason: ${w.reason}`,
+                )}
+              />
+              <PolicyList
+                title="Ignored waivers (never silently dropped)"
+                items={waivers.ignored.map(
+                  (w) =>
+                    `${w.id || "(no id)"}: ${waiverCodeLabel(w.code)}${w.message ? ` - ${w.message}` : ""}${w.line !== null ? ` (line ${w.line})` : ""}`,
+                )}
+              />
+              {waivers.status !== "ok" ? (
+                <p className="vv2-small">Waivers file status: {waivers.status}.</p>
+              ) : null}
+              <p className="vv2-small">
+                Evaluated on {waivers.evaluatedOn || "unknown date"}
+                {waivers.auditDigest ? `, audit digest ${waivers.auditDigest}` : ""}.
+              </p>
+            </>
+          ) : null}
+        </details>
+      ) : null}
+    </section>
+  );
+}
+
+function PolicyList({ title, items }: { title: string; items: string[] }) {
+  if (items.length === 0) return null;
+  return (
+    <>
+      <p className="vv2-small"><strong>{title}</strong></p>
+      <ul className="vv2-list">
+        {items.map((text, index) => (
+          <li key={`${index}-${text.slice(0, 20)}`}>{text}</li>
+        ))}
+      </ul>
+    </>
   );
 }
 

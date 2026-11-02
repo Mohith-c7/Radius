@@ -39,8 +39,21 @@ class SummaryOut(_Out):
     intent_coverage: float = Field(ge=0, le=1)
     tamper: dict[str, int] = Field(default_factory=dict)
     evidence_basis: Literal["static_only"] = "static_only"
+    author_hint_criteria: int = Field(
+        default=0,
+        ge=0,
+        description="Criteria whose counted tests rely on an author-supplied, unconfirmed hint.",
+    )
     tamper_waived: int = Field(
         default=0, description="Tamper findings accepted by a waiver (shown as WAIVED)."
+    )
+
+
+class HintOut(_Out):
+    kind: Literal["paths", "tests"]
+    value: str = Field(description="UNTRUSTED. Render as text only.")
+    provenance: str = Field(
+        description="author_pr_body | author_head_spec | base_spec | human_confirmed | llm_proposed"
     )
 
 
@@ -71,6 +84,12 @@ class CriterionOut(_Out):
     testability: str = ""
     lifecycle: str = ""
     flags: list[str] = Field(default_factory=list)
+    provenance: str = Field(
+        default="author_pr_body",
+        description="Who supplied the criterion: author_pr_body | author_head_spec | base_spec "
+        "| human_confirmed | llm_proposed.",
+    )
+    hints: list[HintOut] = Field(default_factory=list)
     reasons: list[ReasonOut] = Field(default_factory=list)
     best_link: dict[str, Any] | None = None
     items: list[EvidenceItemOut] = Field(default_factory=list)
@@ -155,6 +174,14 @@ class ErrorOut(_Out):
     fallback: str | None = None
 
 
+class PresentationOut(_Out):
+    verdict_label: str
+    state_labels: dict[str, str]
+    legend: str
+    disclaimer: str
+    summary_text: str
+
+
 class VerdictV2Out(_Out):
     verdict_version: Literal[2] = 2
     algo_version: str
@@ -174,6 +201,23 @@ class VerdictV2Out(_Out):
     score_kind: Literal["none"] = "none"
     trust_probability: None = Field(
         default=None, description="Reserved; null until calibration exists."
+    )
+    contract_version: str | None = Field(
+        default=None, description="Version of the verdict v2 data contract."
+    )
+    alpha: Literal[True] = Field(
+        default=True, description="Always true while v2 is an alpha: wording must say so."
+    )
+    calibrated: Literal[False] = Field(
+        default=False, description="Always false: thresholds are uncalibrated."
+    )
+    evidence_basis: Literal["static_only"] = Field(
+        default="static_only",
+        description="What the evidence is: static assertion strength, no mutation testing.",
+    )
+    presentation: PresentationOut | None = Field(
+        default=None,
+        description="User-facing wording (alpha): use it instead of the raw enum values.",
     )
     summary: SummaryOut
     criteria: list[CriterionOut]

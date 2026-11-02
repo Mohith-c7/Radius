@@ -20,6 +20,7 @@ GOLDEN = Path(__file__).resolve().parent / "golden_verdict_v2"
 EXAMPLE = json.loads((DESIGN / "verdict_v2.example.08.json").read_text(encoding="utf-8"))
 EXPECT = json.loads((DESIGN / "verdict_v2.fixture_expectations.json").read_text(encoding="utf-8"))
 CORPUS = ROOT / "tests" / "security" / "prompt_injection" / "corpus" / "corpus_v1.jsonl"
+P = md.CHECK_TITLE_PREFIX
 HEAD = "4f2a9d1c0b7e6a53f8c1d2e3b4a59687c0d1e2f3"
 INVISIBLE = re.compile(
     "[\u0000-\u0008\u000b-\u001f\u007f-\u009f­​-‏ -‮⁠-⁩﻿]"
@@ -151,22 +152,23 @@ def test_worked_example_key_lines_are_exactly_the_design_text() -> None:
     body = md.render_comment(example_view())
     lines = body.split("\n")
     assert lines[0] == "<!-- radius-confidence-report -->"
-    assert lines[2] == "## Radius verdict (v2 alpha): Not verified - insufficient evidence"
+    assert lines[2] == md.DISCLAIMER
+    assert lines[4] == "## Radius verdict (v2 alpha): Not verified - insufficient evidence"
     assert (
-        "**1 of 4 stated criteria proven** | unproven intent mass **0.75** (limit 0.20) | "
+        "**1 of 4 stated criteria supported** | unsupported intent mass **0.75** (limit 0.20) | "
         "intent coverage **100%** | evidence: static assertion strength only (no mutation testing)"
     ) in lines
     assert (
         "**Why:** 3 of 4 criteria are below the support threshold 0.50 (C2, C3, C4), so the "
-        "unproven intent mass 0.75 exceeds 0.20."
+        "unsupported intent mass 0.75 exceeds 0.20."
     ) in body
     assert "| # | Criterion | State | Support | Evidence |" in lines
-    assert "| C1 | `a password needs at least 8 characters` | PROVEN | 0.60 / 0.50 |" in body
+    assert "| C1 | `a password needs at least 8 characters` | SUPPORTED | 0.60 / 0.50 |" in body
     assert "| C2 | `a password needs at least one digit` | WEAK | 0.43 / 0.50 |" in body
-    assert "| UNPROVEN | 0.14 / 0.50 |" in body
+    assert "| UNSUPPORTED | 0.14 / 0.50 |" in body
     assert (
         "| C4 | `a password must not be on the common-password list (case-insensitive)` | "
-        "UNPROVEN | 0.00 / 0.50 | no linked test |"
+        "UNSUPPORTED | 0.00 / 0.50 | no linked test |"
     ) in lines
     assert "### What to do next" in lines
     assert "<summary>Per-criterion evidence</summary>" in body
@@ -236,7 +238,7 @@ FIXTURE_RULES = {
     "R4": {},
 }
 LABELS = {
-    "verified": "Verified",
+    "verified": "Supported by static evidence (alpha)",
     "failed": "Failed",
     "insufficient_evidence": "Not verified - insufficient evidence",
     "needs_review": "Needs human review",
@@ -292,8 +294,12 @@ def test_fixture_comments_are_well_formed(fx: dict[str, Any], mode: str) -> None
     # Deterministic.
     assert md.render_comment(view) == body
     check = md.render_check_run(view)
-    expected = {"verified": "success", "failed": "failure"}.get(fx["expected_verdict"], "neutral")
-    assert check.conclusion == expected
+    # Advisory (default): never success; failure only for R1a/R1b/R1c.
+    assert check.conclusion == ("failure" if fx["expected_verdict"] == "failed" else "neutral")
+    strict = md.render_check_run(view, conclusions="strict")
+    assert strict.conclusion == {"verified": "success", "failed": "failure"}.get(
+        fx["expected_verdict"], "neutral"
+    )
 
 
 # ------------------------------------------------------------------ check run
@@ -301,10 +307,14 @@ def test_fixture_comments_are_well_formed(fx: dict[str, Any], mode: str) -> None
 
 def test_check_run_for_the_worked_example() -> None:
     check = md.render_check_run(example_view())
-    assert check.title == "Radius v2: Not verified - insufficient evidence (1/4 criteria proven)"
+    assert check.title == (
+        "Radius v2 alpha - static evidence only - uncalibrated: "
+        "Not verified - insufficient evidence (1/4 criteria supported)"
+    )
     assert check.conclusion == "neutral"
     assert check.details_url == EXAMPLE["dashboard_url"]
-    assert check.summary.startswith("**1 of 4 stated criteria proven**")
+    assert check.summary.startswith(md.DISCLAIMER)
+    assert "**1 of 4 stated criteria supported**" in check.summary
     assert "**Why:**" in check.summary
     assert check.text == md.render_comment(example_view())
 
@@ -312,8 +322,8 @@ def test_check_run_for_the_worked_example() -> None:
 @pytest.mark.parametrize(
     ("verdict", "pending", "status", "conclusion"),
     [
-        ("verified", False, "ok", "success"),
-        ("failed", False, "ok", "failure"),
+        ("verified", False, "ok", "neutral"),
+        ("failed", False, "ok", "neutral"),
         ("insufficient_evidence", False, "ok", "neutral"),
         ("needs_review", False, "ok", "neutral"),
         ("insufficient_evidence", True, "ok", "neutral"),
@@ -326,6 +336,7 @@ def test_check_run_for_the_worked_example() -> None:
 )
 def test_check_conclusion_mapping(verdict: str | None, pending: bool, status: str, conclusion: str) -> None:
     view = view_of(make_payload(verdict, "R4", [("c1", "proven", 0.6)], pending=pending, status=status))
+    # make_payload decides "R4" here: a `failed` verdict not decided by R1a/R1b/R1c is neutral.
     assert md.check_conclusion(view) == conclusion
     assert md.render_check_run(view).conclusion == conclusion
 
@@ -333,11 +344,11 @@ def test_check_conclusion_mapping(verdict: str | None, pending: bool, status: st
 @pytest.mark.parametrize(
     ("kwargs", "title"),
     [
-        ({"verdict": "verified"}, "Radius v2: Verified (1/1 criteria proven)"),
-        ({"verdict": "failed"}, "Radius v2: Failed (1/1 criteria proven)"),
-        ({"verdict": "needs_review"}, "Radius v2: Needs human review (1/1 criteria proven)"),
-        ({"verdict": "insufficient_evidence", "pending": True}, "Radius v2: awaiting CI test results"),
-        ({"verdict": None, "status": "error"}, "Radius v2: verdict unavailable"),
+        ({"verdict": "verified"}, f"{P}: Supported by static evidence (alpha) (1/1 criteria supported)"),
+        ({"verdict": "failed"}, f"{P}: Failed (1/1 criteria supported)"),
+        ({"verdict": "needs_review"}, f"{P}: Needs human review (1/1 criteria supported)"),
+        ({"verdict": "insufficient_evidence", "pending": True}, f"{P}: awaiting CI test results"),
+        ({"verdict": None, "status": "error"}, f"{P}: verdict unavailable"),
     ],
 )
 def test_check_titles(kwargs: dict[str, Any], title: str) -> None:
@@ -385,7 +396,7 @@ def test_pending_comment_says_awaiting_ci_and_scores_nothing() -> None:
     assert "Awaiting CI test results" in body
     assert "No CI test results have been uploaded" in body
     assert "(awaiting CI)" in body
-    assert md.check_title(view) == "Radius v2: awaiting CI test results"
+    assert md.check_title(view) == f"{P}: awaiting CI test results"
 
 
 @pytest.mark.parametrize(
@@ -428,15 +439,15 @@ def test_error_and_skipped_status_render_unavailable() -> None:
     assert "Verdict unavailable" in err and "could not be computed" in err
     skip = md.render_comment(view_of(make_payload(None, "R4", [], status="skipped")))
     assert "was skipped" in skip
-    assert "stated criteria proven" not in err
+    assert "stated criteria supported" not in err
 
 
 @pytest.mark.parametrize(
     ("state", "label"),
     [
-        ("proven", "PROVEN"),
+        ("proven", "SUPPORTED"),
         ("weak", "WEAK"),
-        ("unevidenced", "UNPROVEN"),
+        ("unevidenced", "UNSUPPORTED"),
         ("contradicted", "CONTRADICTED"),
         ("excluded", "EXCLUDED"),
         ("made_up", "UNKNOWN"),
@@ -460,7 +471,7 @@ def test_flags_become_tags_and_unknown_flags_are_dropped() -> None:
         flags=["tampered", "flaky_evidence", "static_only", "made_up<script>"],
     )
     body = md.render_comment(view_of(payload))
-    assert "PROVEN (flaky, tampered)" in body
+    assert "SUPPORTED (flaky, tampered)" in body
     assert "made_up" not in body
 
 
@@ -485,7 +496,7 @@ def test_explain_criterion_sentences_come_from_fields() -> None:
     assert c2.startswith("C2 is weak: support 0.43 is below the threshold 0.50.")
     assert "strongest assertion strength 1.00 (strong)" in c2
     assert "No test is linked to it." in text["c_d3a2f7"]
-    assert "unproven" in text["c_81b0c4"]
+    assert "unsupported" in text["c_81b0c4"]
 
 
 def test_explain_without_threshold_and_with_flags() -> None:
@@ -494,7 +505,7 @@ def test_explain_without_threshold_and_with_flags() -> None:
                                   "low_link_confidence", "needs_typed_evidence"])
     c = view_of(payload).criteria[0]
     out = md.explain_criterion(c)
-    assert out.startswith("This criterion is proven: support 0.60.")
+    assert out.startswith("This criterion is supported by static evidence: support 0.60.")
     for sentence in ("tamper finding", "flaky", "not bound to this commit", "not confirmed",
                      "link between the criterion and the code is weak", "typed evidence"):
         assert sentence in out

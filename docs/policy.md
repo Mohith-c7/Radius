@@ -170,4 +170,4 @@ waivers:
 - No organization-level defaults or per-org overrides (the file is per repository), no JSON-schema file, and no `audit_log` row when a policy changes; the git history of `.radius/` is the change record.
 - No role check inside Radius for who may create a waiver; it relies on protecting `.radius/` on the base branch.
 - No `mutation` or typed-evidence rules (alpha has no such evidence), and no "agent-authored PRs are stricter" switch beyond `require_non_agent_test`.
-- The dashboard does not render the policy section yet; the API and the PR comment do.
+- Dashboard: the Verdict v2 panel shows a "Policy and waivers" section (mode, applied settings with policy lines, WAIVED findings, ignored waivers with codes) when the API returns `policy` or `waivers`.

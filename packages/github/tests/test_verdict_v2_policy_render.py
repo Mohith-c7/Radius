@@ -127,11 +127,16 @@ def test_hostile_owner_and_reason_cannot_inject_markup() -> None:
         ("insufficient_evidence", "advisory", "neutral"),
         ("failed", "advisory", "neutral"),
         ("failed", None, "failure"),
+        ("verified", "advisory", "neutral"),  # DEC-030: policy advisory does not turn green
+        ("verified", None, "neutral"),
     ],
 )
 def test_check_conclusion(verdict: str, mode: str | None, expected: str) -> None:
     policy = {"present": True, "status": "ok", "mode": mode} if mode else {}
     v = view(verdict=verdict, pending=False, policy=policy)
+    if verdict == "failed":
+        v = view(verdict=verdict, pending=False, policy=policy,
+                 justification={"decided_by": "R1b", "rules": [], "thresholds": {}})
     assert md.check_conclusion(v) == expected
     assert md.render_check_run(v).conclusion == expected
 

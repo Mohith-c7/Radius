@@ -5,6 +5,10 @@
 # PowerShell wrapper: `.\scripts\dev.ps1 help`. Same targets, same behaviour.
 
 COMPOSE ?= docker compose
+# `dev` layers docker-compose.dev.yml (RADIUS_ENV=development, localhost CORS, auto-verify,
+# logged sign-in links, one random dev API key) over the production-like docker-compose.yml.
+COMPOSE_DEV ?= $(COMPOSE) --env-file $(ENV_FILE) -f docker-compose.yml -f docker-compose.dev.yml
+PYTHON ?= $(or $(shell command -v python3 2>/dev/null),python)
 ENV_FILE ?= .env
 PY ?= uv run --frozen python
 
@@ -15,11 +19,8 @@ PY ?= uv run --frozen python
 help: ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
 
-env: ## Create .env from .env.example if missing (never overwrites)
-	@test -f $(ENV_FILE) || (cp .env.example $(ENV_FILE) 	  && printf '
-# Local dev default added by `make env` (compose passes an empty value otherwise, which the API rejects)
-GITHUB_DEFAULT_ORGANIZATION_ID=00000000-0000-4000-8000-000000000001
-' >> $(ENV_FILE) 	  && echo "created $(ENV_FILE) from .env.example")
+env: ## Create .env for LOCAL DEV with random secrets (never overwrites)
+	@$(PYTHON) scripts/gen_dev_env.py --env-file $(ENV_FILE)
 
 setup: env ## Install Python (uv) and JS (pnpm via corepack) dependencies
 	uv sync --frozen --extra dev
@@ -27,21 +28,22 @@ setup: env ## Install Python (uv) and JS (pnpm via corepack) dependencies
 	pnpm install --frozen-lockfile
 
 dev: env ## ONE COMMAND: start postgres, migrations, api, worker, dashboard in Docker
-	$(COMPOSE) --env-file $(ENV_FILE) up --build -d --wait --wait-timeout 300 postgres migrations api worker dashboard
+	$(COMPOSE_DEV) up --build -d --wait --wait-timeout 300 postgres migrations api worker dashboard
 	@echo ""
+	@echo "LOCAL DEV stack (RADIUS_ENV=development). Sign-in links are printed in: make logs"
 	@echo "Dashboard http://localhost:3000   API http://localhost:8000/docs   Health http://localhost:8000/api/v1/health"
 	@echo "Logs: make logs   Stop: make down"
 
 up: dev ## Alias for dev
 
 down: ## Stop the stack (keeps the database volume)
-	$(COMPOSE) --env-file $(ENV_FILE) --profile sandbox --profile observability down
+	$(COMPOSE_DEV) --profile sandbox --profile observability down
 
 logs: ## Follow api, worker and dashboard logs
-	$(COMPOSE) logs -f api worker dashboard
+	$(COMPOSE_DEV) logs -f api worker dashboard
 
 ps: ## Show container status
-	$(COMPOSE) ps
+	$(COMPOSE_DEV) ps
 
 dev-local: env ## Run api + worker + dashboard natively with hot reload (memory storage; run make setup first)
 	PATH="$$PWD/.venv/bin:$$PWD/.venv/Scripts:$$PATH" pnpm dev
@@ -65,4 +67,4 @@ observability: ## Start Jaeger + Prometheus (see docs/OBSERVABILITY.md)
 	$(COMPOSE) --profile observability up jaeger prometheus
 
 clean-volumes: ## DESTRUCTIVE: stop the stack and delete the database volume
-	$(COMPOSE) --profile sandbox --profile observability down -v
+	$(COMPOSE_DEV) --profile sandbox --profile observability down -v

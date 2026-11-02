@@ -22,7 +22,7 @@ How to read it.
   (`RADIUS_LLM_*`) silently fall back to their default on a bad number.
 
 
-Variables documented: **121** (13 secret, 8 feature flags).
+Variables documented: **124** (13 secret, 9 feature flags).
 
 ## Core, API, GitHub and observability
 
@@ -35,7 +35,7 @@ Variables documented: **121** (13 secret, 8 feature flags).
 | `DATABASE_URL` | str | `postgresql+psycopg://radius:radius@localhost:5432/radius` | api, worker | yes | - | PostgreSQL URL for the API, worker and migrations. `postgres://` and `postgresql://` are normalised to `postgresql+psycopg://`. The auth module (sign-in tables) reads the same variable, but its own default is `sqlite:///./radius.db`, so when the variable is unset the auth tables go to a local SQLite file while the main settings default to the local PostgreSQL URL. Always set it explicitly. |
 | `DEV_AUTO_VERIFY` | bool | `true` | api | no | - | Auth module: when `RADIUS_ENV=development` (and DEV_AUTO_VERIFY_EMAIL is unset), accounts are verified without e-mail unless this is `false`. In any other environment accounts are not auto-verified. |
 | `DEV_AUTO_VERIFY_EMAIL` | str | `unset` | api | no | - | Auth module: when set, `true/1/yes` auto-verifies new accounts without e-mail and any other value disables it, in any environment. Development convenience; leave unset in production. |
-| `EMAIL_DELIVERY_MODE` | str | `smtp` | api | no | - | Declared in the auth settings; no other code reads it (verified by grep). Mail is sent over SMTP when `SMTP_USERNAME` and `SMTP_PASSWORD` are set. |
+| `EMAIL_DELIVERY_MODE` | str | `smtp` | api | no | - | ``smtp`` (default) sends mail; ``log`` writes the message and its link to the API log (local dev only). |
 | `FRONTEND_ORIGIN` | str | `http://127.0.0.1:3000` | api | no | - | Auth module: dashboard origin used in e-mail verification/reset links, OAuth redirects and the auth CORS allow-list. |
 | `GITHUB_API_BASE_URL` | str | `https://api.github.com` | api, worker | no | - | GitHub REST base URL (change for GitHub Enterprise Server). |
 | `GITHUB_API_VERSION` | str | `2026-03-10` | api, worker | no | - | Value of the `X-GitHub-Api-Version` header sent to GitHub. |
@@ -58,7 +58,7 @@ Variables documented: **121** (13 secret, 8 feature flags).
 | `RADIUS_ALLOW_INSECURE_DEV` | bool | `false` | api, worker | no | - | Explicit opt-in to accept unsigned GitHub webhooks and API calls without configured API keys. Honoured only in development/test; ignored in every other environment. |
 | `RADIUS_ALLOW_UNSAFE_EXECUTION` | bool | `false` | worker | no | - | Required to use unsafe_in_process when RADIUS_ENV is uat or production. The worker refuses to start otherwise. |
 | `RADIUS_CORS_ALLOW_CREDENTIALS` | bool | `true` | api | no | - | Send `Access-Control-Allow-Credentials`. Never combined with `*`. |
-| `RADIUS_ENV` | RuntimeEnvironment | `development` | api, worker | no | - | Runtime environment: `development`, `test`, `uat` or `production`. Production tightens CORS validation and ignores demo seeding. |
+| `RADIUS_ENV` | RuntimeEnvironment | `development` | api, worker | no | - | Runtime environment: `development`, `test`, `uat` or `production`. Production tightens CORS validation (https origins only, no wildcard, no automatic localhost), ignores demo seeding, refuses the public session secret and `EMAIL_DELIVERY_MODE=log`. `docker-compose.yml` pins `production`; `docker-compose.dev.yml` (used by `make dev`) sets `development` for the api. |
 | `RADIUS_EVAL_ALLOW_REAL_LLM` | str | `unset` | evaluation CLI | no | - | Intent evaluation CLI only: must be `1`, together with `--allow-real-llm`, before a real provider is used. Tests and CI never set it. |
 | `RADIUS_EXTRAS` | str | `empty` | compose build | no | - | Compose build argument: extra Python dependency groups to install in the api and worker images (for example `llm`, `observability`). |
 | `RADIUS_HSTS_ENABLED` | bool | `false` | api | no | - | Send Strict-Transport-Security. Enable only when served over TLS. |
@@ -70,6 +70,7 @@ Variables documented: **121** (13 secret, 8 feature flags).
 | `RADIUS_LOG_LEVEL` | LogLevel | `INFO` | api, worker | no | - | Structured log level: DEBUG, INFO, WARNING, ERROR or CRITICAL. |
 | `RADIUS_MAX_BODY_BYTES` | int | `1048576` | api | no | - | Default request body cap in bytes; over it the API answers 413. |
 | `RADIUS_METRICS_ENABLED` | bool | `false` | api, worker | no | - | Expose Prometheus metrics (`/metrics` on the API, plus the worker port). Off by default. |
+| `RADIUS_MUTATION_ALLOW_LOCAL` | bool | `unset` | library | no | - | Dev/tests only: allows the mutation prototype's local subprocess runner, which executes code on the host and is unsafe for untrusted repositories. Never set in production. |
 | `RADIUS_OTEL_SERVICE_NAME` | str | `radius` | api, worker | no | - | OpenTelemetry service name. |
 | `RADIUS_OTLP_ENDPOINT` | str | `empty` | api, worker | no | - | OTLP/HTTP traces endpoint, e.g. ``http://localhost:4318/v1/traces``. Empty means spans are created but not exported anywhere. |
 | `RADIUS_RATE_LIMIT_AUTH` | str | `10/60` | api | no | - | Token bucket for auth routes, `<requests>/<window seconds>`. In memory, per replica. |
@@ -82,11 +83,12 @@ Variables documented: **121** (13 secret, 8 feature flags).
 | `RADIUS_TRACING_ENABLED` | bool | `false` | api, worker | no | - | Create OpenTelemetry spans (needs the `observability` extra). Off by default. |
 | `RADIUS_TRUSTED_PROXIES` | str | `empty` | api | no | - | Comma separated IPs/CIDRs of reverse proxies whose X-Forwarded-For is trusted. |
 | `RADIUS_UPLOAD_MAX_BODY_BYTES` | int | `20971520` | api | no | - | Body cap in bytes for CI test-report uploads. |
+| `RADIUS_VERDICT_V2_CHECK_CONCLUSIONS` | str | `advisory` | worker | no | - | Check Run conclusion mapping for Verdict v2 (alpha). advisory (default): never success; verified, insufficient_evidence and needs_review are neutral, failed is failure only when decided by R1a/R1b/R1c (failing linked test, failing CI, high-severity tamper). strict: verified is success. |
 | `RADIUS_WEBHOOK_MAX_BODY_BYTES` | int | `26214400` | api | no | - | Body cap in bytes for GitHub webhook deliveries. |
 | `RADIUS_WORKER_METRICS_PORT` | int | `0` | api, worker | no | - | Port for the worker's Prometheus endpoint; ``0`` disables it. |
 | `SERVICE_NAME` | str | `radius-api` | api, worker | no | - | Service name used in logs. Defaults differ per service (`radius-api`, `radius-worker`); normally left alone. |
 | `SESSION_COOKIE_SECURE` | bool | `false` | api | no | - | Auth module: set the Secure flag on the session cookie. Set true behind TLS. |
-| `SESSION_SECRET` | str | `(placeholder in code, change it)` | api | yes | - | Auth module: secret used to sign sessions (minimum 32 characters). The default in code is a public placeholder; always set your own. |
+| `SESSION_SECRET` | str | `(placeholder in code, change it)` | api | yes | - | Auth module: secret used to sign sessions (minimum 32 characters). The default in code and the `.env.example` placeholder are public; with `RADIUS_ENV=production` the API refuses to start with either. `docker-compose.yml` has no default and stops if it is unset; `make env` generates a random one for local dev. |
 | `SMTP_FROM_EMAIL` | str \| None | `unset` | api | no | - | Auth module: From address of verification and reset e-mails. |
 | `SMTP_HOST` | str | `smtp.gmail.com` | api | no | - | Auth module: SMTP server. |
 | `SMTP_PASSWORD` | str \| None | `(secret, no default)` | api | yes | - | Auth module: SMTP password. |
@@ -128,6 +130,7 @@ Variables documented: **121** (13 secret, 8 feature flags).
 | `RADIUS_FEATURE_COVERAGE_CONTEXTS` | bool | `false` | worker | no | feature flag, off by default | LK-03: allow the dynamic coverage-context symbol-to-test linker, which runs the selected tests under coverage.py inside the hardened sandbox (never on the worker host). Off by default; not wired into the pipeline until LK-05, so it only gates the library entry point. |
 | `RADIUS_FEATURE_GEMINI_PRUNER` | bool | `false` | none (legacy) | no | legacy opt-in, not on the live path | Explicit opt-in for the legacy Gemini SemanticPruner. The pruner is not called by the live analysis pipeline (only by `scripts/run_phase2_poc.py` and tests). |
 | `RADIUS_FEATURE_INTENT_INGESTION` | bool | `false` | api, worker | no | feature flag, off until live validation | IN-02: store PR title/body (and refreshed issue text) from webhook payloads. The API makes no GitHub API calls for this (it holds no App credentials); the worker fetches issues, commits and the spec file. OFF by default until the live GitHub validation (F-06) has happened; set true for that run. |
+| `RADIUS_FEATURE_MUTATION` | bool | `false` | library | no | feature flag, off by default | EV-04/05 mutation-evidence prototype library flag (`radius_testing.mutation`). Library only: nothing in the worker calls it yet. |
 | `RADIUS_FEATURE_SYMBOL_CHANGES` | bool | `false` | worker | no | feature flag, off by default | LK-01: extract the changed symbols (function/method/class, with change kinds) for the diff and log their counts. Nothing is persisted yet (LK-05); failures never affect the analysis. |
 | `RADIUS_FEATURE_SYMBOL_IMPACT` | bool | `false` | worker | no | feature flag, off by default | F-08: narrow test selection and blast radius to tests that can reach the changed Python symbols. Falls back to file-level impact whenever symbol information is missing or low-confidence. |
 | `RADIUS_FEATURE_TAMPER_RULES` | bool | `false` | worker | no | feature flag, off by default | EV-02: run the deterministic tamper rules (weakened or disabled tests, CI/config weakening, hallucinated dependencies) on the diff and log finding counts. Nothing is persisted yet (EV-01/LK-05); failures never affect the analysis. |

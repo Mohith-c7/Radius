@@ -73,10 +73,14 @@ class PublishOutcome:
     digest: str | None = None
 
 
-def check_run_fields(view: VerdictV2View) -> tuple[str, str]:
-    """Return ``(title, conclusion)`` from the renderer; pending is completed neutral."""
+def check_run_fields(view: VerdictV2View, conclusions: str = "advisory") -> tuple[str, str]:
+    """Return ``(title, conclusion)`` from the renderer; pending is completed neutral.
 
-    return v2_markdown.check_title(view), v2_markdown.check_conclusion(view)
+    ``conclusions`` is ``RADIUS_VERDICT_V2_CHECK_CONCLUSIONS`` (``advisory`` default,
+    ``strict``); see ``radius_github.verdict_v2.markdown.check_conclusion``.
+    """
+
+    return v2_markdown.check_title(view), v2_markdown.check_conclusion(view, mode=conclusions)
 
 
 def rendered_digest(title: str, conclusion: str, summary: str, body: str) -> str:
@@ -99,15 +103,19 @@ class VerdictV2Publisher:
     """Writes the Check Run and the comment through the existing GitHub client."""
 
     def __init__(
-        self, client: GitHubAppClient, renderer: VerdictRenderer | None = None
+        self,
+        client: GitHubAppClient,
+        renderer: VerdictRenderer | None = None,
+        conclusions: str = "advisory",
     ) -> None:
+        self._conclusions = conclusions
         self._client = client
         self._renderer = renderer if renderer is not None else v2_markdown.MarkdownRenderer()
 
     def render(self, view: VerdictV2View) -> tuple[str, str, str, str, str]:
         """Return ``(title, conclusion, summary, body, digest)``."""
 
-        title, conclusion = check_run_fields(view)
+        title, conclusion = check_run_fields(view, self._conclusions)
         summary = self._renderer.render_check_summary(view)
         body = self._renderer.render_comment(view)
         return title, conclusion, summary, body, rendered_digest(title, conclusion, summary, body)
@@ -294,7 +302,9 @@ def publish_latest(
         stored, v1=v1_block(session, analysis_id), dashboard_url=dashboard_url
     )
     view = VerdictV2View.from_payload(payload)
-    publisher = VerdictV2Publisher(github_client, renderer)
+    publisher = VerdictV2Publisher(
+        github_client, renderer, getattr(settings, "verdict_v2_check_conclusions", "advisory")
+    )
     try:
         token = github_client.create_installation_token(installation_id).token
         live = _live_head(

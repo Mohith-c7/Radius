@@ -153,6 +153,23 @@ class WorkerSettings(DatabaseSettings):
         ),
     )
 
+    verdict_v2_check_conclusions: str = Field(
+        default="advisory",
+        alias="RADIUS_VERDICT_V2_CHECK_CONCLUSIONS",
+        description=(
+            "Check Run conclusion mapping for Verdict v2 (alpha). advisory (default): "
+            "never success; verified, insufficient_evidence and needs_review are neutral, "
+            "failed is failure only when decided by R1a/R1b/R1c (failing linked test, "
+            "failing CI, high-severity tamper). strict: verified is success."
+        ),
+    )
+
+    @field_validator("verdict_v2_check_conclusions", mode="before")
+    @classmethod
+    def _parse_check_conclusions(cls, value: object) -> str:
+        """Only the exact word ``strict`` opts in; anything else stays advisory."""
+        return "strict" if str(value).strip().lower() == "strict" else "advisory"
+
     @field_validator("verdict_v2_mode", mode="before")
     @classmethod
     def _parse_verdict_v2_mode(cls, value: object) -> VerdictV2Mode:

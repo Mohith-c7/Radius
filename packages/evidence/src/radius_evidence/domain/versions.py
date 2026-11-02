@@ -4,8 +4,10 @@
 #: Reason.rule_id, StageAInput.added_test_ids / agent_signal_by_test, 4th freshness reason.
 #: 3: StageAInput.repo_config (policy/waivers captured at the base ref), VerdictV2.policy /
 #: waivers / tamper_waived, justification.policy / waivers, rules P1/P2 (only with a policy).
+#: 4: provenance tags (CriterionInput.provenance / hints_provenance, CriterionTestEdgeInput.provenance),
+#: Flag.AUTHOR_SUPPLIED_HINT, LinkMapping.author_hint_cap, payload honesty fields.
 #: All additions are optional with defaults, so contract-1 and -2 payloads still load.
-CONTRACT_VERSION = "verdict-v2-contract-3"
+CONTRACT_VERSION = "verdict-v2-contract-4"
 
 ALGO_VERSION = "verdict-v2-alpha-1"
 PROFILE_ALPHA_STATIC = "alpha-static"

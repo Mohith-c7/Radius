@@ -10,8 +10,10 @@ no randomness. It produces
 
 Honesty rules: the evidence basis is always labelled "static assertion
 strength only"; thresholds are called uncalibrated; the wording never claims
-more than the verdict and the evidence show; every untrusted string goes
-through ``radius_github.verdict_v2.escape``.
+more than the verdict and the evidence show (the internal ``proven`` state is
+shown as SUPPORTED, ``verified`` as "Supported by static evidence (alpha)");
+the Check Run conclusion is advisory (``neutral``) unless the operator opts into
+``strict``; every untrusted string goes through ``radius_github.verdict_v2.escape``.
 """
 
 from __future__ import annotations
@@ -57,27 +59,48 @@ CHECK_TITLE_MAX = 255
 STATIC_LABEL = "evidence: static assertion strength only (no mutation testing)"
 FOOTER_TEXT = "Computed deterministically from validated evidence; no language model judged correctness."
 
+#: One-line banner at the top of every comment and Check Run summary.
+DISCLAIMER = (
+    "**Alpha - static evidence only - uncalibrated.** Support is static assertion "
+    "strength with thresholds fitted to a few fixtures. It is not a proof of "
+    "correctness; do not treat it as a merge gate on its own."
+)
+LEGEND = "supported = static assertion strength above threshold; not a proof of correctness"
+#: Check Run title prefix; the caveat is part of the title, not only of the body.
+CHECK_TITLE_PREFIX = "Radius v2 alpha - static evidence only - uncalibrated"
+
+#: Presentation mapping: the internal state values stay in the JSON contract.
 STATE_LABELS = {
-    "proven": "PROVEN",
+    "proven": "SUPPORTED",
     "weak": "WEAK",
-    "unevidenced": "UNPROVEN",
+    "unevidenced": "UNSUPPORTED",
     "contradicted": "CONTRADICTED",
     "excluded": "EXCLUDED",
 }
 VERDICT_LABELS = {
-    "verified": "Verified",
+    "verified": "Supported by static evidence (alpha)",
     "failed": "Failed",
     "insufficient_evidence": "Not verified - insufficient evidence",
     "needs_review": "Needs human review",
 }
 PENDING_LABEL = "Awaiting CI test results"
 UNAVAILABLE_LABEL = "Verdict unavailable"
-CHECK_CONCLUSIONS = {
-    "verified": "success",
+#: Check Run conclusion by verdict. ``advisory`` (default): nothing is green; ``failed``
+#: is a failure only when the deciding rule is R1a/R1b/R1c (see ``check_conclusion``).
+#: ``strict`` (operator opt-in, ``RADIUS_VERDICT_V2_CHECK_CONCLUSIONS=strict``): ``verified``
+#: is ``success``.
+CHECK_CONCLUSIONS_ADVISORY = {
+    "verified": "neutral",
     "failed": "failure",
     "insufficient_evidence": "neutral",
     "needs_review": "neutral",
 }
+CHECK_CONCLUSIONS_STRICT = {**CHECK_CONCLUSIONS_ADVISORY, "verified": "success"}
+CHECK_CONCLUSIONS = CHECK_CONCLUSIONS_ADVISORY
+#: Deciding rules for which a ``failed`` verdict may be a red check (hard evidence:
+#: a failing linked test, failing CI cases, a high-severity tamper finding).
+FAILURE_RULES = frozenset({"R1a", "R1b", "R1c"})
+CONCLUSION_MODES = ("advisory", "strict")
 #: Flags shown as short tags beside the state (others are implied by the text).
 FLAG_TAGS = {
     "tampered": "tampered",
@@ -87,6 +110,7 @@ FLAG_TAGS = {
     "pending_results": "awaiting CI",
     "low_link_confidence": "weak link",
     "needs_typed_evidence": "needs typed evidence",
+    "author_supplied_hint": "author-supplied hint",
 }
 _STRONG = 0.8
 _PARTIAL = 0.3
@@ -232,7 +256,7 @@ def explain_criterion(
         sentences.append(f"{label} is contradicted: a linked test failed.")
     elif c.state == "proven":
         meets = f"support {s_txt} meets the threshold {tau_txt}" if tau_txt else f"support {s_txt}"
-        sentences.append(f"{label} is proven: {meets}.")
+        sentences.append(f"{label} is supported by static evidence: {meets}.")
     else:
         below = f"support {s_txt} is below the threshold {tau_txt}" if tau_txt else f"support {s_txt}"
         if c.state == "weak" and "no_strong_assertion" in c.flags:
@@ -276,10 +300,35 @@ def _stats_line(view: VerdictV2View) -> str:
         if s.evidence_basis == "static_only"
         else f"evidence basis: {escape.token(s.evidence_basis, 32)}"
     )
+    min_cov = _num(_thresholds(view).get("min_intent_coverage"))
+    low = (
+        f" (below the minimum {_pct(min_cov)}: the criteria cover too little of the changed behavior)"
+        if min_cov is not None and s.intent_coverage < min_cov
+        else ""
+    )
     return (
-        f"**{s.proven} of {s.criteria_total} stated criteria proven** | "
-        f"unproven intent mass **{_f2(s.uim)}**{limit} | "
-        f"intent coverage **{_pct(s.intent_coverage)}** | {basis}"
+        f"**{s.proven} of {s.criteria_total} stated criteria supported** | "
+        f"unsupported intent mass **{_f2(s.uim)}**{limit} | "
+        f"intent coverage **{_pct(s.intent_coverage)}**{low} | {basis}"
+    )
+
+
+def author_hint_count(view: VerdictV2View) -> int:
+    """Criteria whose counted tests rely on an unconfirmed, author-supplied hint."""
+
+    n = sum(1 for c in view.criteria if "author_supplied_hint" in c.flags)
+    return max(n, view.summary.author_hint_criteria)
+
+
+def _author_hint_line(view: VerdictV2View) -> str:
+    n = author_hint_count(view)
+    if not n:
+        return ""
+    noun = "criterion relies" if n == 1 else "criteria rely"
+    return (
+        f"**{n} {noun} on author-supplied test hints** (from this PR's own `.radius/intent.yml` "
+        "or description): their link strength is capped. Confirm the criteria in the intent "
+        "panel or keep `.radius/intent.yml` on the base branch to lift the cap."
     )
 
 
@@ -333,8 +382,8 @@ def _why(view: VerdictV2View, labels: Mapping[str, str]) -> str:
         uim_max = _num(inputs.get("uim_max")) or 0.0
         return (
             f"{len(crit_refs)} of {total} criteria are below the support threshold {tau_txt} "
-            f"({_label_list(crit_refs, labels)}), so the unproven intent mass {_f2(uim)} exceeds "
-            f"{_f2(uim_max)}. Passing tests alone are not enough: an unproven criterion is checked "
+            f"({_label_list(crit_refs, labels)}), so the unsupported intent mass {_f2(uim)} exceeds "
+            f"{_f2(uim_max)}. Passing tests alone are not enough: an unsupported criterion is checked "
             "weakly or not at all."
         )
     if decided == "R2c":
@@ -366,12 +415,12 @@ def _why(view: VerdictV2View, labels: Mapping[str, str]) -> str:
         return f"Tamper finding(s) at severity medium or above{tail} need a human review."
     if decided == "R3b":
         return (
-            f"Criteria counted as proven ({_label_list(crit_refs, labels)}) depend on a flaky test; "
+            f"Criteria counted as supported ({_label_list(crit_refs, labels)}) depend on a flaky test; "
             "a human should review."
         )
     if decided == "R3c":
         return (
-            f"Criteria counted as proven ({_label_list(crit_refs, labels)}) rest on a weak link "
+            f"Criteria counted as supported ({_label_list(crit_refs, labels)}) rest on a weak link "
             "between the criterion and the code; a human should review."
         )
     if decided == "R4":
@@ -676,12 +725,15 @@ def render_comment(view: VerdictV2View) -> str:
 
     labels = _labels(view)
     heading = f"## Radius verdict (v2 alpha): {verdict_label(view)}"
-    core = [heading]
+    core = [DISCLAIMER, heading]
     if _ok(view):
         core.append(_stats_line(view))
         policy_line = _policy_summary(view)
         if policy_line:
             core.append(policy_line)
+        hint_line = _author_hint_line(view)
+        if hint_line:
+            core.append(hint_line)
     core.append(f"**Why:** {_why(view, labels)}")
     rows_omitted = 0
     if _ok(view) and view.criteria:
@@ -689,6 +741,7 @@ def render_comment(view: VerdictV2View) -> str:
         core.append("\n".join(rows))
         if rows_omitted:
             core.append(f"+{rows_omitted} more criteria, see the dashboard.")
+        core.append(f"_Legend: {LEGEND}._")
     steps = _next_steps(view, labels) if _ok(view) else ""
     optional = [
         steps,
@@ -723,49 +776,72 @@ class CheckRunPayload:
     details_url: str | None
 
 
-def check_conclusion(view: VerdictV2View) -> str:
-    """``success`` only for an ok, non-pending ``verified``; ``failure`` for ``failed``."""
+def check_conclusion(view: VerdictV2View, *, mode: str = "advisory") -> str:
+    """Check Run conclusion (alpha: advisory, never green by default).
+
+    ``advisory`` (default): ``neutral`` for every verdict including ``verified``;
+    ``failure`` only for ``failed`` decided by R1a/R1b/R1c (a failing linked test,
+    failing CI cases, a high-severity tamper finding). ``strict``: ``verified`` is
+    ``success``. Unavailable and pending results are always ``neutral``.
+
+    A policy with ``mode: blocking`` (``view.policy``, from the base branch) overrides
+    both: ``verified`` (not pending) is ``success`` and every other result, pending
+    included, is ``failure``. Policy ``mode: advisory`` never fails (``failed`` is
+    ``neutral``) and does not turn ``verified`` green by itself (DEC-030): that needs the
+    ``strict`` knob or ``blocking``.
+    """
 
     if not _ok(view):
         return "neutral"
-    mode = view.policy.get("mode") if view.policy else None
-    if mode == "blocking":
-        # A required check passes on neutral, so blocking mode fails everything unverified,
-        # including a pending run (the run is republished when CI results arrive).
+    policy_mode = view.policy.get("mode") if view.policy else None
+    if policy_mode == "blocking":
+        # The repository opted into a required check (policy read from the base branch):
+        # a required check passes on neutral, so everything unverified, including a pending
+        # run, fails (the run is republished when CI results arrive).
         return "success" if view.verdict == "verified" and not view.pending else "failure"
     if view.pending:
         return "neutral"
-    if mode == "advisory":
-        return "success" if view.verdict == "verified" else "neutral"
-    return CHECK_CONCLUSIONS.get(str(view.verdict), "neutral")
+    if policy_mode == "advisory":
+        # The repository asked for a never-red check: failed is neutral too.
+        return "success" if mode == "strict" and view.verdict == "verified" else "neutral"
+    table = CHECK_CONCLUSIONS_STRICT if mode == "strict" else CHECK_CONCLUSIONS_ADVISORY
+    conclusion = table.get(str(view.verdict), "neutral")
+    if conclusion == "failure" and _decided_by(view) not in FAILURE_RULES:
+        return "neutral"
+    return conclusion
 
 
 def check_title(view: VerdictV2View) -> str:
     if not _ok(view):
-        title = "Radius v2: verdict unavailable"
+        title = f"{CHECK_TITLE_PREFIX}: verdict unavailable"
     elif view.pending:
-        title = "Radius v2: awaiting CI test results"
+        title = f"{CHECK_TITLE_PREFIX}: awaiting CI test results"
     else:
         s = view.summary
         title = (
-            f"Radius v2: {VERDICT_LABELS[str(view.verdict)]} "
-            f"({s.proven}/{s.criteria_total} criteria proven)"
+            f"{CHECK_TITLE_PREFIX}: {VERDICT_LABELS[str(view.verdict)]} "
+            f"({s.proven}/{s.criteria_total} criteria supported)"
         )
     return title[:CHECK_TITLE_MAX]
 
 
-def render_check_run(view: VerdictV2View) -> CheckRunPayload:
-    """Check Run title, summary (stats + why) and text (the full comment body)."""
+def render_check_run(view: VerdictV2View, *, conclusions: str = "advisory") -> CheckRunPayload:
+    """Check Run title, summary (disclaimer + stats + why) and text (the comment body)."""
 
     labels = _labels(view)
-    summary_lines = [_stats_line(view)] if _ok(view) else []
+    summary_lines = [DISCLAIMER]
+    if _ok(view):
+        summary_lines.append(_stats_line(view))
+        hint_line = _author_hint_line(view)
+        if hint_line:
+            summary_lines.append(hint_line)
     summary_lines.append(f"**Why:** {_why(view, labels)}")
     text = render_comment(view)
     return CheckRunPayload(
         title=check_title(view),
         summary="\n\n".join(summary_lines)[: GITHUB_LIMIT - 1],
         text=text[: GITHUB_LIMIT - 1],
-        conclusion=check_conclusion(view),
+        conclusion=check_conclusion(view, mode=conclusions),
         details_url=escape.safe_url(view.dashboard_url),
     )
 

@@ -18,6 +18,18 @@ export const DEFAULT_TAU_SUPPORT = 0.5;
 
 export const STATIC_ONLY_LABEL = "Static assertion strength only (no mutation testing)";
 export const UNCALIBRATED_LABEL = "Uncalibrated: no probability, no score";
+/** Presentation wording (alpha); the internal enum values (`proven`, `verified`) are unchanged. */
+export const DISCLAIMER =
+  "Alpha: static evidence only (assertion strength, no mutation testing); thresholds are uncalibrated. This is not a proof of correctness.";
+export const LEGEND =
+  "supported = static assertion strength above threshold; not a proof of correctness";
+export const PROVENANCE_LABELS: Record<string, string> = {
+  author_pr_body: "PR author (description)",
+  author_head_spec: "PR author (spec file in this PR)",
+  base_spec: "Base branch spec",
+  human_confirmed: "Human confirmed",
+  llm_proposed: "LLM proposed",
+};
 
 export type SupportState = "proven" | "weak" | "unevidenced" | "contradicted" | "excluded";
 export const SUPPORT_STATES: readonly SupportState[] = [
@@ -74,6 +86,8 @@ export type Criterion = {
   testability: string;
   lifecycle: string;
   flags: string[];
+  provenance: string;
+  hints: Hint[];
   reasons: Reason[];
   best_link: BestLink | null;
   items: EvidenceItem[];
@@ -91,7 +105,12 @@ export type TamperFinding = {
   test_id: string | null;
   old_snippet: string | null;
   new_snippet: string | null;
+  waived: boolean;
+  waiver: WaiverRef | null;
 };
+
+/** The waiver that accepts a tamper finding. `reason` is UNTRUSTED text. */
+export type WaiverRef = { id: string; reason: string; owner: string; expires: string };
 
 export type NextAction = { code: string; text: string; criterion_id: string | null };
 
@@ -106,7 +125,11 @@ export type Summary = {
   intent_coverage: number;
   tamper: Record<string, number>;
   evidence_basis: string;
+  author_hint_criteria: number;
+  tamper_waived: number;
 };
+
+export type Hint = { kind: string; value: string; provenance: string };
 
 export type RuleResult = {
   id: string;
@@ -158,6 +181,60 @@ export type VerdictV2 = {
   tauSupport: number;
   uimMax: number | null;
   minIntentCoverage: number | null;
+  presentation: Presentation | null;
+  policy: PolicyView | null;
+  waivers: WaiversView | null;
+};
+
+/** Contract 4 wording (alpha). All strings are text only. */
+export type Presentation = {
+  verdict_label: string;
+  state_labels: Record<string, string>;
+  legend: string;
+  disclaimer: string;
+  summary_text: string;
+};
+
+export type PolicySetting = { key: string; value: string; origin: string; line: number | null };
+export type PolicyRequirement = {
+  target: string;
+  state: string;
+  min_state: string;
+  paths: string[];
+  line: number | null;
+};
+export type PolicyView = {
+  present: boolean;
+  status: string;
+  mode: string | null;
+  headPolicy: string;
+  sourceRef: string;
+  settings: PolicySetting[];
+  ignoredHead: PolicySetting[];
+  unmet: PolicyRequirement[];
+  excludePaths: string[];
+  acknowledgements: string[];
+  refused: string[];
+  errors: string[];
+  warnings: string[];
+};
+
+export type AppliedWaiver = {
+  id: string;
+  kind: string;
+  target: string;
+  owner: string;
+  reason: string;
+  expires: string;
+};
+export type IgnoredWaiver = { id: string; code: string; message: string; line: number | null };
+export type WaiversView = {
+  status: string;
+  sourceRef: string;
+  applied: AppliedWaiver[];
+  ignored: IgnoredWaiver[];
+  evaluatedOn: string;
+  auditDigest: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -259,6 +336,15 @@ function parseCriterion(raw: unknown): Criterion | null {
     testability: str(raw.testability),
     lifecycle: str(raw.lifecycle),
     flags: strs(raw.flags),
+    provenance: str(raw.provenance, "author_pr_body"),
+    hints: arr(raw.hints)
+      .slice(0, MAX_LIST)
+      .filter(isObject)
+      .map((h) => ({
+        kind: str(h.kind),
+        value: truncateText(str(h.value), 300),
+        provenance: str(h.provenance, "author_pr_body"),
+      })),
     reasons: reasons(raw.reasons),
     best_link: parseBestLink(raw.best_link),
     items: rawItems
@@ -286,6 +372,139 @@ function parseTamper(raw: unknown): TamperFinding | null {
     test_id: optStr(raw.test_id),
     old_snippet: snippet(raw.old_snippet),
     new_snippet: snippet(raw.new_snippet),
+    waived: raw.waived === true,
+    waiver: raw.waived === true ? parseWaiverRef(raw.waiver) : null,
+  };
+}
+
+const MAX_SHORT = 200;
+const short = (value: unknown, max = MAX_SHORT): string => truncateText(str(value), max);
+const lineNo = (value: unknown): number | null => {
+  const n = optNum(value);
+  return n !== null && n >= 0 ? Math.trunc(n) : null;
+};
+
+function parseWaiverRef(raw: unknown): WaiverRef | null {
+  if (!isObject(raw)) return null;
+  return {
+    id: short(raw.id, 64),
+    reason: truncateText(str(raw.reason), 500),
+    owner: short(raw.owner, 100),
+    expires: short(raw.expires, 32),
+  };
+}
+
+function parsePresentation(raw: unknown): Presentation | null {
+  if (!isObject(raw)) return null;
+  const labels: Record<string, string> = {};
+  if (isObject(raw.state_labels)) {
+    for (const key of Object.keys(raw.state_labels).slice(0, 10)) {
+      const v = raw.state_labels[key];
+      if (typeof v === "string") labels[key] = truncateText(v, 40);
+    }
+  }
+  return {
+    verdict_label: short(raw.verdict_label, 200),
+    state_labels: labels,
+    legend: short(raw.legend, 400),
+    disclaimer: short(raw.disclaimer, 600),
+    summary_text: short(raw.summary_text, 400),
+  };
+}
+
+function parseSetting(raw: unknown): PolicySetting | null {
+  if (!isObject(raw)) return null;
+  return {
+    key: short(raw.key, 80),
+    value: compactValue(raw.value, 120),
+    origin: short(raw.origin, 8),
+    line: lineNo(raw.line),
+  };
+}
+
+function parseRequirement(raw: unknown): PolicyRequirement | null {
+  if (!isObject(raw)) return null;
+  return {
+    target: short(raw.criterion_id ?? raw.symbol_id, 120),
+    state: short(raw.state, 40),
+    min_state: short(raw.min_state, 40),
+    paths: strs(raw.paths)
+      .slice(0, 20)
+      .map((p) => truncateText(p, 200)),
+    line: lineNo(raw.line),
+  };
+}
+
+function boundedList<T>(raw: unknown, parse: (x: unknown) => T | null, max = 100): T[] {
+  return arr(raw)
+    .slice(0, max)
+    .map(parse)
+    .filter((x): x is T => x !== null);
+}
+
+function parsePolicy(raw: unknown): PolicyView | null {
+  if (!isObject(raw)) return null;
+  const tamper = isObject(raw.tamper) ? raw.tamper : {};
+  const unmet = isObject(raw.unmet) ? raw.unmet : {};
+  const source = isObject(raw.source) ? raw.source : {};
+  const mode = optStr(raw.mode);
+  const cap = (list: unknown, max: number, len: number) =>
+    strs(list)
+      .slice(0, max)
+      .map((e) => truncateText(e, len));
+  return {
+    present: raw.present !== false,
+    status: short(raw.status, 40) || "ok",
+    mode: mode === null ? null : truncateText(mode, 20),
+    headPolicy: short(raw.head_policy, 20) || "ignore",
+    sourceRef: short(source.ref, 64),
+    settings: boundedList(raw.provenance, parseSetting),
+    ignoredHead: boundedList(raw.ignored_head, parseSetting),
+    unmet: boundedList(unmet.required, parseRequirement),
+    excludePaths: cap(raw.exclude_paths, 50, 200),
+    acknowledgements: boundedList(tamper.acknowledgements, (a) =>
+      isObject(a)
+        ? `${short(a.rule, 60)}: ${short(a.action, 20)} from ${short(a.from_severity, 20)}, reason: ${truncateText(str(a.reason), 300)}`
+        : null,
+    ),
+    refused: boundedList(tamper.refused, (a) =>
+      isObject(a) ? truncateText(str(a.message), 300) : null,
+    ),
+    errors: cap(raw.errors, 50, 300),
+    warnings: cap(raw.warnings, 50, 300),
+  };
+}
+
+function parseWaivers(raw: unknown): WaiversView | null {
+  if (!isObject(raw)) return null;
+  const source = isObject(raw.source) ? raw.source : {};
+  return {
+    status: short(raw.status, 40) || "ok",
+    sourceRef: short(source.ref, 64),
+    applied: boundedList(raw.applied, (a) =>
+      isObject(a)
+        ? {
+            id: short(a.id, 64),
+            kind: short(a.kind, 20),
+            target: short(a.target, 120),
+            owner: short(a.owner, 100),
+            reason: truncateText(str(a.reason), 500),
+            expires: short(a.expires, 32),
+          }
+        : null,
+    ),
+    ignored: boundedList(raw.ignored, (a) =>
+      isObject(a)
+        ? {
+            id: short(a.id, 64),
+            code: short(a.code, 60),
+            message: truncateText(str(a.message), 300),
+            line: lineNo(a.line),
+          }
+        : null,
+    ),
+    evaluatedOn: short(raw.evaluated_on, 32),
+    auditDigest: short(raw.audit_digest, 80),
   };
 }
 
@@ -361,6 +580,9 @@ function parseSummary(raw: unknown, criteria: Criterion[]): Summary {
     intent_coverage: clamp01(num(s.intent_coverage)),
     tamper,
     evidence_basis: str(s.evidence_basis, "static_only"),
+    author_hint_criteria: Math.max(0, Math.trunc(num(s.author_hint_criteria, 0))),
+    tamper_waived: Math.max(0, Math.trunc(num(s.tamper_waived, 0))),
+
   };
 }
 
@@ -430,6 +652,9 @@ export function parseVerdictV2(raw: unknown): ParseResult {
       tauSupport: thresholdNumber(raw.justification, "tau_support") ?? DEFAULT_TAU_SUPPORT,
       uimMax: thresholdNumber(raw.justification, "uim_max"),
       minIntentCoverage: thresholdNumber(raw.justification, "min_intent_coverage"),
+      presentation: parsePresentation(raw.presentation),
+      policy: parsePolicy(raw.policy),
+      waivers: parseWaivers(raw.waivers),
     },
   };
 }
@@ -442,10 +667,11 @@ export type StateMeta = { label: string; tone: Tone; icon: IconName; description
 
 const STATE_META: Record<SupportState | "unknown", StateMeta> = {
   proven: {
-    label: "Proven",
+    label: "Supported",
     tone: "good",
     icon: "check",
-    description: "Enough independent passing evidence, judged by assertion strength only.",
+    description:
+      "Static assertion strength above the threshold. Not a proof of correctness: no mutation testing, uncalibrated thresholds.",
   },
   weak: {
     label: "Weak",
@@ -454,7 +680,7 @@ const STATE_META: Record<SupportState | "unknown", StateMeta> = {
     description: "Some evidence, but below the support threshold or without a strong assertion.",
   },
   unevidenced: {
-    label: "Unproven",
+    label: "Unsupported",
     tone: "warn",
     icon: "help",
     description: "No usable evidence for this criterion.",
@@ -494,7 +720,18 @@ const FLAG_LABELS: Record<string, string> = {
   no_strong_assertion: "No strong assertion",
   needs_typed_evidence: "Needs non-functional evidence",
   no_linked_test: "No test linked",
+  author_supplied_hint: "Relies on author-supplied test hint",
 };
+
+export function provenanceLabel(provenance: string): string {
+  return PROVENANCE_LABELS[provenance] ?? truncateText(provenance.replace(/_/g, " "), 40);
+}
+
+/** Criteria whose counted tests rely on an unconfirmed author-supplied hint. */
+export function authorHintCount(v: Pick<VerdictV2, "criteria" | "summary">): number {
+  const flagged = v.criteria.filter((c) => c.flags.includes("author_supplied_hint")).length;
+  return Math.max(flagged, v.summary.author_hint_criteria);
+}
 
 export function flagLabel(flag: string): string {
   return FLAG_LABELS[flag] ?? truncateText(flag.replace(/_/g, " "), 60);
@@ -520,7 +757,7 @@ export function verdictMeta(
   if (pending) return { label: "Awaiting CI test results", tone: "info", icon: "clock" };
   switch (verdict) {
     case "verified":
-      return { label: "Verified", tone: "good", icon: "check" };
+      return { label: "Supported by static evidence (alpha)", tone: "info", icon: "check" };
     case "failed":
       return { label: "Failed", tone: "bad", icon: "x" };
     case "needs_review":
@@ -751,4 +988,47 @@ export function classifyVerdictError(error: unknown): VerdictErrorInfo {
     return { kind: "other", message: truncateText(message, 300) };
   }
   return { kind: "other", message: "The verdict could not be loaded." };
+}
+
+// ---------------------------------------------------------------------------
+// policy, waivers and presentation helpers
+// ---------------------------------------------------------------------------
+
+/** Alpha disclaimer: the API wording when present, else the built-in constant. */
+export function disclaimerText(v: Pick<VerdictV2, "presentation">): string {
+  return v.presentation?.disclaimer || DISCLAIMER;
+}
+
+export function legendText(v: Pick<VerdictV2, "presentation">): string {
+  return v.presentation?.legend || LEGEND;
+}
+
+/** State wording: the API presentation.state_labels (SUPPORTED, ...) else the local label. */
+export function stateLabel(v: Pick<VerdictV2, "presentation">, state: string): string {
+  return v.presentation?.state_labels[state] || stateMeta(state).label;
+}
+
+export function policyModeLabel(policy: PolicyView): string {
+  if (policy.status !== "ok") return `Policy could not be applied (${policy.status})`;
+  if (policy.mode === "blocking") return "Blocking: every unverified result fails the check";
+  if (policy.mode === "advisory") return "Advisory: the check never fails on its own";
+  return "No mode set (default check mapping)";
+}
+
+export function settingLine(s: PolicySetting): string {
+  const where = s.line !== null ? `policy line ${s.line}` : "policy line unknown";
+  return `${s.key} = ${s.value} (${where}${s.origin ? `, ${s.origin}` : ""})`;
+}
+
+export function waiverCodeLabel(code: string): string {
+  return code ? code.replace(/_/g, " ") : "ignored";
+}
+
+export function waivedFindings(v: Pick<VerdictV2, "tamper_findings">): TamperFinding[] {
+  return v.tamper_findings.filter((t) => t.waived);
+}
+
+/** True when there is a policy or waivers record worth a section. */
+export function hasPolicySection(v: Pick<VerdictV2, "policy" | "waivers">): boolean {
+  return v.policy !== null || v.waivers !== null;
 }

@@ -285,8 +285,10 @@
           {
             "criterion_id": "C1",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "reserve still returns the remaining stock for valid input",
             "weight": 1.0
@@ -294,8 +296,10 @@
           {
             "criterion_id": "C2",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "reserve still raises OutOfStock when qty exceeds stock",
             "weight": 1.0
@@ -303,8 +307,10 @@
           {
             "criterion_id": "C3",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "reserve still raises ValueError for non-positive qty",
             "weight": 1.0
@@ -863,8 +869,10 @@
           {
             "criterion_id": "C1",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "reserve still returns the remaining stock for valid input",
             "weight": 1.0
@@ -872,8 +880,10 @@
           {
             "criterion_id": "C2",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "reserve still raises OutOfStock when qty exceeds stock",
             "weight": 1.0
@@ -881,8 +891,10 @@
           {
             "criterion_id": "C3",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "reserve still raises ValueError for non-positive qty",
             "weight": 1.0
@@ -946,6 +958,7 @@
             "bm25_raw": null,
             "criterion_id": "C1",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_stock.py::test_reserve_exact_stock",
             "weight": 1.0
           },
@@ -953,6 +966,7 @@
             "bm25_raw": null,
             "criterion_id": "C1",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_stock.py::test_reserve_reduces_stock",
             "weight": 1.0
           },
@@ -960,6 +974,7 @@
             "bm25_raw": null,
             "criterion_id": "C2",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_stock.py::test_reserve_more_than_stock_raises",
             "weight": 1.0
           },
@@ -967,6 +982,7 @@
             "bm25_raw": null,
             "criterion_id": "C3",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_stock.py::test_reserve_rejects_non_positive",
             "weight": 1.0
           }
