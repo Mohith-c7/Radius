@@ -417,6 +417,7 @@ Use structured logging.
 - Never store secrets in code.
 - Use environment variables for configuration.
 - Apply least-privilege access.
+- Anything that sends repository or PR text to an LLM must use `radius_shared.llm_guard` and register in the prompt-injection suite: see `docs/security/PROMPT_INJECTION.md` (`python -m pytest tests/security/prompt_injection -q`).
 
 ---
 

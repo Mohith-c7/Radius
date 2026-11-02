@@ -57,7 +57,7 @@ Goal: capture what a change is *supposed* to do as a set of confirmable, testabl
 
 ### IN-04 LLM-assisted extraction (guarded)   [ ]
 - Owner type: pair
-- Depends on: IN-03, F-10, QS-02
+- Depends on: IN-03, F-10, QS-02 (done: use `radius_shared.llm_guard` and register an adapter per `docs/security/PROMPT_INJECTION.md`)
 - Branch: `feature/intent-extract-llm`
 - Size: L
 - Goal: split compound statements, normalize wording, and find implicit criteria, *without* letting the LLM influence verdicts.
