@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 from datetime import datetime
 from uuid import UUID, uuid4
 
@@ -28,6 +29,7 @@ from radius_intent.domain import (
     IntentSource,
     IntentSourceKind,
     SourceRef,
+    Testability,
 )
 from radius_intent.interfaces import (
     CriterionExtractor,
@@ -35,6 +37,7 @@ from radius_intent.interfaces import (
     IntentSourceFetcher,
     SnapshotConflictError,
     SnapshotNotFoundError,
+    TestabilityRater,
 )
 
 #: Actor recorded on audit rows written by the service itself.
@@ -61,6 +64,11 @@ class IntentSnapshotService:
 
     Depends only on the domain and ports. ``now`` is always passed in; ids come
     from ``id_factory`` (default ``uuid4``, as the repository requires UUIDs).
+
+    ``rater`` (optional ``TestabilityRater`` port, IN-05) is applied after
+    extraction and merge and before persistence to every criterion that is
+    still ``unrated``; an existing rating is never overridden. Without a rater
+    criteria stay unrated.
     """
 
     def __init__(
@@ -71,7 +79,9 @@ class IntentSnapshotService:
         *,
         id_factory: Callable[[], str] = lambda: str(uuid4()),
         max_attempts: int = 5,
+        rater: TestabilityRater | None = None,
     ) -> None:
+        self._rater = rater
         self._repo = repository
         self._extractors = tuple(extractors)
         self._fetcher = fetcher
@@ -151,6 +161,7 @@ class IntentSnapshotService:
             candidates += self._extract(source, diagnostics, failed_keys)
         live, dedupe_diags = select_criteria(candidates)
         diagnostics += dedupe_diags
+        live = self._rate(live, diagnostics)
         refs = {s.ref.key: s.ref for s in resolved}
 
         for _ in range(self._max_attempts):
@@ -188,6 +199,38 @@ class IntentSnapshotService:
             return BuildResult(self._replay(org, saved, plan, now), True, report)
         msg = "Could not allocate a snapshot version after repeated conflicts."
         raise SnapshotBuildConflictError(msg)
+
+    def _rate(
+        self, criteria: tuple[Criterion, ...], diagnostics: list[Diagnostic]
+    ) -> tuple[Criterion, ...]:
+        """Rate ``unrated`` criteria (pure, deterministic; ratings are kept)."""
+        if self._rater is None:
+            return criteria
+        out: list[Criterion] = []
+        for criterion in criteria:
+            if criterion.testability is not Testability.UNRATED:
+                out.append(criterion)
+                continue
+            try:
+                assessment = self._rater.rate(criterion)
+            except Exception as exc:  # noqa: BLE001 - a rater failure must not fail the build
+                diagnostics.append(
+                    Diagnostic(
+                        "rater_failed",
+                        f"{type(self._rater).__name__}: {_describe(exc)}",
+                        criterion.origin.source.key,
+                    )
+                )
+                out.append(criterion)
+                continue
+            out.append(
+                replace(
+                    criterion,
+                    testability=assessment.rating,
+                    testability_rationale=assessment.rationale,
+                )
+            )
+        return tuple(out)
 
     def _replay(
         self, org: UUID, saved: IntentSnapshot, plan: MergePlan, now: datetime

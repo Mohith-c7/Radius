@@ -832,3 +832,86 @@ def test_orphan_followed_by_reworded_text_needs_reconfirmation(env: Env) -> None
     assert DELETE not in texts
     json.dumps(result.report.to_dict())
     assert result.report.carry_events[0].to_dict()["action"] == "needs_reconfirmation"
+
+
+# ------------------------------------------------- testability rater (IN-05)
+
+
+class FixedRater:
+    """Rates everything as structural, with a rationale; counts its calls."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def rate(self, criterion):
+        from radius_intent.domain import Testability, TestabilityAssessment
+
+        self.calls += 1
+        return TestabilityAssessment(Testability.STRUCTURAL_CHECKABLE, "fixed rule")
+
+
+def test_rater_rates_unrated_criteria_before_persistence(env: Env) -> None:
+    from radius_intent.domain import Testability
+
+    service = IntentSnapshotService(env.repo, (LineExtractor(),), rater=FixedRater())
+    result = build(env, service, src(lines(LOGIN, DELETE)))
+    stored = env.repo.get_latest_snapshot(env.org_a, env.analysis_a)
+    for snap in (result.snapshot, stored):
+        assert all(
+            c.testability is Testability.STRUCTURAL_CHECKABLE
+            and c.testability_rationale == "fixed rule"
+            for c in snap.criteria
+        )
+
+
+def test_no_rater_leaves_criteria_unrated(env: Env) -> None:
+    from radius_intent.domain import Testability
+
+    snap = build(env, make_service(env), src(LOGIN)).snapshot
+    assert snap.criteria[0].testability is Testability.UNRATED
+
+
+def test_existing_rating_is_never_overridden(env: Env) -> None:
+    from radius_intent.domain import Testability
+
+    class PreRated(LineExtractor):
+        def extract(self, source):
+            return tuple(
+                c.with_testability(Testability.BEHAVIORAL_TESTABLE, "by hand")
+                for c in super().extract(source)
+            )
+
+    rater = FixedRater()
+    service = IntentSnapshotService(env.repo, (PreRated(),), rater=rater)
+    snap = build(env, service, src(LOGIN)).snapshot
+    assert rater.calls == 0
+    assert snap.criteria[0].testability is Testability.BEHAVIORAL_TESTABLE
+    assert snap.criteria[0].testability_rationale == "by hand"
+
+
+def test_rated_build_is_idempotent_and_carry_over_survives(env: Env) -> None:
+    service = IntentSnapshotService(env.repo, (LineExtractor(),), rater=FixedRater())
+    first = build(env, service, src(lines(LOGIN, DELETE)))
+    confirm(env, first.snapshot, LOGIN)
+    again = rebuild(env, service, src(lines(LOGIN, DELETE), fetched=at(30)))
+    assert not again.created
+    assert len(service.history(env.org_a, env.analysis_a)) == 1
+    changed = rebuild(env, service, src(lines(LOGIN, DELETE, EXPIRE)), minutes=2)
+    texts = by_text(changed.snapshot)
+    assert texts[LOGIN].state is S.CONFIRMED
+    assert texts[LOGIN].testability_rationale == "fixed rule"
+    assert texts[EXPIRE].testability_rationale == "fixed rule"
+
+
+def test_rater_failure_is_a_diagnostic_not_a_failed_build(env: Env) -> None:
+    from radius_intent.domain import Testability
+
+    class Broken:
+        def rate(self, criterion):
+            raise RuntimeError("boom")
+
+    service = IntentSnapshotService(env.repo, (LineExtractor(),), rater=Broken())
+    result = build(env, service, src(LOGIN))
+    assert result.created
+    assert result.snapshot.criteria[0].testability is Testability.UNRATED
+    assert [d.code for d in result.report.diagnostics] == ["rater_failed"]
