@@ -1,4 +1,6 @@
 import json
+import os
+from collections.abc import Mapping
 
 from pydantic import BaseModel
 
@@ -12,6 +14,25 @@ except ImportError:
     _USE_GENAI = False
 
 from .prompts import SEMANTIC_PRUNER_PROMPT
+
+#: Explicit opt-in for the legacy Gemini pruner. It sends caller source code and
+#: diffs to a third party, so the mere presence of GEMINI_API_KEY is not enough.
+GEMINI_PRUNER_FLAG = "RADIUS_FEATURE_GEMINI_PRUNER"
+GEMINI_API_KEY_ENV = "GEMINI_API_KEY"
+_TRUE_VALUES = {"1", "true", "yes", "on"}
+
+
+def gemini_api_key_from_env(environ: Mapping[str, str] | None = None) -> str:
+    """Return ``GEMINI_API_KEY`` only when ``RADIUS_FEATURE_GEMINI_PRUNER`` is on.
+
+    Default is off. With the flag off the key is ignored and an empty string is
+    returned, so ``SemanticPruner`` makes no network call.
+    """
+
+    env = os.environ if environ is None else environ
+    if env.get(GEMINI_PRUNER_FLAG, "").strip().lower() not in _TRUE_VALUES:
+        return ""
+    return env.get(GEMINI_API_KEY_ENV, "").strip()
 
 
 class PrunerDecision(BaseModel):
