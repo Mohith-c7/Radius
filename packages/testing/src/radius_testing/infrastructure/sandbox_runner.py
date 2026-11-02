@@ -103,6 +103,7 @@ CONTAINED_EXIT_CODES = {
     153: "killed by SIGXFSZ (file size limit)",
 }
 DEFAULT_MAX_OUTPUT_BYTES = 5 * 1024 * 1024
+DEFAULT_MAX_ARTIFACT_BYTES = 64 * 1024 * 1024
 _WATCHDOG_INTERVAL_SECONDS = 0.2
 _MEMORY_RE = re.compile(r"^[1-9][0-9]*[kmg]?$", re.IGNORECASE)
 _CPUS_RE = re.compile(r"^(?:[0-9]+(?:\.[0-9]+)?)$")
@@ -342,6 +343,40 @@ class ContainerSandboxRunner:
     def run(self, plan: TestRunPlan, repository_path: Path) -> TestRunResult:
         """Execute all commands of ``plan`` against a snapshot of the checkout."""
 
+        return self.run_collecting(plan, repository_path)[0]
+
+    def run_collecting(
+        self,
+        plan: TestRunPlan,
+        repository_path: Path,
+        artifacts: Sequence[str] = (),
+        *,
+        max_artifact_bytes: int = DEFAULT_MAX_ARTIFACT_BYTES,
+    ) -> tuple[TestRunResult, dict[str, bytes]]:
+        """``run`` plus named files the sandboxed commands wrote to ``/results``.
+
+        Used by LK-03 to retrieve a ``.coverage`` database. Artifacts are keyed
+        ``"<command index>/<name>"``. The files are written by untrusted code, so
+        only plain files (never symlinks) up to ``max_artifact_bytes`` are read;
+        anything else is silently absent. ``artifacts`` names must be plain file
+        names (no separators).
+        """
+
+        for name in artifacts:
+            if not name or name != Path(name).name or name in {".", ".."}:
+                raise ValueError(f"invalid artifact name {name!r}")
+        collected: dict[str, bytes] = {}
+        result = self._run_plan(plan, repository_path, artifacts, max_artifact_bytes, collected)
+        return result, collected
+
+    def _run_plan(
+        self,
+        plan: TestRunPlan,
+        repository_path: Path,
+        artifacts: Sequence[str],
+        max_artifact_bytes: int,
+        collected: dict[str, bytes],
+    ) -> TestRunResult:
         started = time.monotonic()
         outputs: list[str] = []
         try:
@@ -366,6 +401,13 @@ class ContainerSandboxRunner:
                 )
                 for index, (command, args) in enumerate(plan.command_plan)
             ]
+            for index in range(len(plan.command_plan)):
+                for name in artifacts:
+                    data = _read_artifact(
+                        root / f"cmd-{index}" / "results" / name, max_artifact_bytes
+                    )
+                    if data is not None:
+                        collected[f"{index}/{name}"] = data
             return build_run_result(plan, outcomes, outputs, started)
         finally:
             shutil.rmtree(root, ignore_errors=True)
@@ -673,6 +715,17 @@ def _snapshot_repository(source: Path, destination: Path) -> None:
             path = Path(dirpath) / name
             if not path.is_symlink():
                 path.chmod(path.stat().st_mode | stat.S_IROTH)
+
+
+def _read_artifact(path: Path, limit: int) -> bytes | None:
+    """Read a file written by the sandboxed command; ``None`` if absent or unsafe."""
+
+    try:
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > limit:
+            return None
+        return path.read_bytes()
+    except OSError:
+        return None
 
 
 def _read_capped(path: Path, limit: int) -> str:

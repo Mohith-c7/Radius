@@ -65,6 +65,16 @@ class WorkerSettings(DatabaseSettings):
             "(LK-05); failures never affect the analysis."
         ),
     )
+    coverage_contexts_enabled: bool = Field(
+        default=False,
+        alias="RADIUS_FEATURE_COVERAGE_CONTEXTS",
+        description=(
+            "LK-03: allow the dynamic coverage-context symbol-to-test linker, which "
+            "runs the selected tests under coverage.py inside the hardened sandbox "
+            "(never on the worker host). Off by default; not wired into the "
+            "pipeline until LK-05, so it only gates the library entry point."
+        ),
+    )
     test_timeout_seconds: int = Field(default=600, alias="WORKER_TEST_TIMEOUT_SECONDS")
     dashboard_base_url: str = Field(default="", alias="DASHBOARD_BASE_URL")
     github_publish_results: bool = Field(

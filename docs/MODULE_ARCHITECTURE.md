@@ -522,6 +522,36 @@ CLI: `python -m radius_analysis.symbol_changes --repo . --base REF --head REF`.
 
 ---
 
+## Symbol-to-test linking (LK-03)
+
+Lives in `packages/testing` as `radius_testing.linking` (a sub-package, not a new
+package: DEC-003/DEC-007 list no `linking` package, and the work reuses test
+discovery, the F-07 sandbox runner and F-11 flaky data of this package). Full
+description: `packages/testing/src/radius_testing/linking/README.md`.
+
+* Input: LK-01 changed symbols (`LinkTarget.from_changed_symbol`) plus repository
+  sources; output: `SymbolTestLink(symbol_id, test_id, linker, score, kind, evidence)`
+  sets with canonical JSON, `algo_version` per linker.
+* `StaticLinker`: import-aware Python resolver (aliases, module attributes, patch
+  strings, fixtures with `conftest.py` scoping, parametrisation, inheritance,
+  unittest hooks, call depth 3 with decay) plus a low-confidence name layer that
+  imports F-08's `PythonSymbolGraph`; partial best-effort jest/vitest support via the
+  F-09 tree-sitter parser.
+* `NamingLinker`: file/function/class conventions with priors, capped at 0.60.
+* `DynamicCoverageLinker`: flag `RADIUS_FEATURE_COVERAGE_CONTEXTS` (default off); runs
+  the selected tests under coverage.py with one dynamic context per test **only**
+  through `ContainerSandboxRunner.run_collecting` (network off, read-only root,
+  limits, timeout; any other runner is refused), parses the `.coverage` SQLite file
+  offline and intersects executed lines with the symbols' LK-01 ranges.
+* `combine_links`: monotone merge (dynamic dominates, static+naming agreement boosts,
+  naming alone capped at 0.50); per-linker scores and evidence are preserved.
+* Evaluation: `scripts/test_link_eval.py` (precision/recall against an independent
+  `sys.settrace` ground truth and the labelled fixture links, with linker ablation;
+  fixture sanity only). Semantic linker, persistence (LK-05) and pipeline wiring are
+  not done.
+
+---
+
 # Confidence Domain
 
 Purpose
