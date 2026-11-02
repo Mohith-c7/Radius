@@ -83,7 +83,7 @@ Goal: capture what a change is *supposed* to do as a set of confirmable, testabl
 - Acceptance: documented rule list; precision measured on gold set; reasons are human-readable.
 - Product hook: authors see "this criterion is too vague to verify; try: ...".
 
-### IN-06 Intent snapshots and versioning   [ ]
+### IN-06 Intent snapshots and versioning   [x]
 - Owner type: agent-ok
 - Depends on: IN-02, IN-03
 - Branch: `feature/intent-snapshots`

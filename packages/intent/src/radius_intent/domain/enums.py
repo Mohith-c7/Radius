@@ -43,3 +43,7 @@ class CriterionState(StrEnum):
     CONFIRMED = "confirmed"
     REJECTED = "rejected"
     EDITED = "edited"
+    #: Set by IN-06 when the source wording of a human-confirmed criterion changed.
+    NEEDS_RECONFIRMATION = "needs_reconfirmation"
+    #: Set by IN-06 when a human-confirmed criterion vanished from its sources.
+    ORPHANED = "orphaned"
