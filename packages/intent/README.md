@@ -1,8 +1,8 @@
 # Radius Intent Package
 
-Owns the intent layer: what a change is supposed to do, as confirmable, testable criteria with provenance (`docs/research/DESIGN.md` 6.1, RQ1). IN-01 delivered the pure domain model and ports; IN-07 added persistence; IN-03 adds deterministic (LLM-free) criterion extraction. No HTTP or LLM calls yet.
+Owns the intent layer: what a change is supposed to do, as confirmable, testable criteria with provenance (`docs/research/DESIGN.md` 6.1, RQ1). IN-01 delivered the pure domain model and ports; IN-07 added persistence; IN-03 adds deterministic (LLM-free) criterion extraction; IN-06 adds the snapshot service (versioning, carry-over of human decisions, diffs). No HTTP or LLM calls yet.
 
-Layout follows DEC-003/DEC-007: `domain/` (pure), `interfaces/` (ports), `application/` (empty until IN-02+) and `infrastructure/` (repositories in IN-07, `extraction/` in IN-03).
+Layout follows DEC-003/DEC-007: `domain/` (pure), `interfaces/` (ports), `application/` (use cases: domain + ports only) and `infrastructure/` (repositories in IN-07, `extraction/` in IN-03).
 
 ## Formal model
 
@@ -17,7 +17,7 @@ A *criterion* is `c = (id, text, norm, origin, span, w, t, r, st, h)` where `h =
 - `norm = normalize(text)`: Unicode NFKC, drop format characters (category Cf, e.g. zero-width and bidi controls), casefold, collapse whitespace; non-empty and idempotent.
 - `id = "crit_" + sha256("crit-id-v1" NUL "<kind>:<source id>" NUL norm)[:32]`. Fixed at creation, stable under edits, re-weighting, rating and state changes; independent of the source hash, so unrelated edits to a source keep ids. Changing the derivation requires bumping `CRITERION_ID_ALGO` (plan 1.6).
 - `w` in (0, 1]; `t` in {unrated, testable, vague, non_functional}; `r` optional non-blank rationale.
-- `st` in {proposed, confirmed, rejected, edited} with allowed transitions: proposed -> {confirmed, rejected, edited}; edited -> {confirmed, rejected, edited}; confirmed -> {edited, rejected}; rejected -> {proposed}.
+- `st` in {proposed, confirmed, rejected, edited, needs_reconfirmation, orphaned} with allowed transitions: proposed -> {confirmed, rejected, edited}; edited -> {confirmed, rejected, edited, needs_reconfirmation, orphaned}; confirmed -> {edited, rejected, needs_reconfirmation, orphaned}; needs_reconfirmation -> {confirmed, rejected, edited, orphaned}; orphaned -> {rejected}; rejected -> {proposed}. `needs_reconfirmation` and `orphaned` are set only by the IN-06 service (below); state is a plain string column, so no migration was needed.
 
 An *intent snapshot* is `(id, analysis_id, version, created_at, [c1..cn], refs, parent)`: ordered criteria with pairwise distinct ids, every criterion citing a source ref present in `refs` at the same hash; `version = 1` iff no parent. `diff(old, new)` matches by id: `added = new \ old`, `removed = old \ new`, `changed = {id : old[id] != new[id]}` (any field).
 
@@ -40,6 +40,63 @@ Port: `radius_intent.interfaces.IntentRepository` (plus `CriterionStateChange` a
 - `record_state_change(org, snapshot_id, criterion_id, new_state, actor=, changed_at=, new_text=, reason=)`: applies the domain transition rules, updates the criterion (state, and wording for `EDITED`, which requires `new_text`) and appends an audit row; `list_state_changes` reads the trail ordered by `(changed_at, criterion_id, sequence)`.
 - `analysis_id`, `snapshot_id` and `parent_snapshot_id` must be canonical lowercase UUID strings (they are UUID foreign keys); IN-06 must mint snapshot ids with `uuid4()`. Datetimes must be timezone-aware and come back in UTC.
 - Test the SQL adapter against PostgreSQL with `INTENT_TEST_POSTGRES_URL=postgresql+psycopg://... pytest packages/intent/tests/test_persistence.py` on a database migrated with `alembic upgrade head` (rolled back after each test).
+
+## Snapshots and versioning (IN-06)
+
+`radius_intent.application.IntentSnapshotService(repository, extractors, fetcher=None)` turns sources plus extracted criteria into immutable, versioned snapshots. It depends only on the domain and ports (import-linter contract `application-uses-domain-and-ports-only`), reads no clock (`now` is an argument) and does no HTTP or LLM calls.
+
+```
+sources (IntentSource | SourceRequest -> IntentSourceFetcher)      absent -> diagnostic, not an error
+        |
+        v   each CriterionExtractor, per source (a failure is isolated + reported)
+   candidates --select_criteria--> live criteria (dedupe, total order)
+        |
+        v   plan_merge(live, latest snapshot)   carry-over table below
+   seeds + planned state changes
+        |
+        +-- same signature as latest? --yes--> return latest (created=False, no new version)
+        |
+        v   save_sources, save_snapshot(version = latest+1, parent = latest)
+   SnapshotConflictError -> re-read latest, re-plan, retry (max_attempts)
+   identical content already stored (racing builder) -> return it (created=False)
+        |
+        v   replay planned changes via record_state_change (actor system:intent-snapshots)
+   BuildResult(snapshot, created, report{diagnostics, carry_events, absent_sources})
+```
+
+API: `build_snapshot(analysis_id, organization_id, sources, now)`, `on_sources_changed(..., trigger="pull_request.edited")` (same pipeline; `trigger` goes into audit reasons), `latest`, `history`, `diff_snapshots(org, older_id, newer_id)`; `diff_snapshot_pair(a, b)` is the pure form. `SnapshotDiffResult.to_dict()` is JSON-serializable and sorted by criterion id (`added`, `removed`, `changed` with field names, `state_changed`, `moved` for span-only shifts, and source changes).
+
+### Versioning rules
+
+- Version 1 has no parent; each new version is `latest + 1` with `parent = latest`. Snapshots are never modified except by human state changes (existing IN-07 behavior), so an older assessment keeps pointing at its original snapshot.
+- Idempotency: a rebuild creates no version when sources (kind, id, hash) and criteria (id, text, origin, span, weight, testability, state; `retrieved_at` ignored) equal the latest. Any source hash change creates a new version even if the criteria are unchanged.
+- Determinism: sources are ordered by (kind in enum order, source id); criteria by (source kind order, source id, span start, span end, id); retained criteria follow live ones. Same inputs give the same `snapshot_content_hash`.
+- Concurrency: two builders racing for the same analysis cannot create duplicates. Identical content hits the repository's idempotent save (the loser returns the winner's snapshot and skips the replay); different content for the same version raises `SnapshotConflictError`, and the loser re-reads and builds the next version. After `max_attempts` (default 5) `SnapshotBuildConflictError` is raised. The SQL adapter flushes without committing, so commit per request: a failure during the replay then rolls the whole version back.
+
+### Merge priority (same normalized text)
+
+Rank: `spec_file` source (0) > `human` (1) > `deterministic` (2) > `llm` (3). Same criterion id from several extractors: lowest `(rank, extractor registration index, extractor_version, span start)` wins. Same normalized text in different sources: lowest `(rank, source kind order, source id, span start, id)` wins and the rest are reported as `deduplicated`.
+
+### State carry-over on edit (previous = latest snapshot)
+
+| Previous criterion | Now | Result in the new version |
+|---|---|---|
+| any state, same id | still extracted | `confirmed`, `rejected`, `edited` (with the human wording) are replayed through `record_state_change` (audit row, reason `carried from vN (trigger)`); `proposed` stays proposed; span, weight, rating come from the fresh extraction |
+| `needs_reconfirmation` | same id still extracted | stays `needs_reconfirmation` |
+| `orphaned` | same id extracted again | `needs_reconfirmation` (event `restored`) |
+| `confirmed` / `edited` / `needs_reconfirmation` / `orphaned` | gone, identical normalized text under a new id (moved between sources) | state carried unchanged (event `moved`) |
+| `confirmed` / `edited` / `needs_reconfirmation` | gone, a new criterion in the same source with text similarity >= 0.6 (difflib ratio, best pair first, one to one) | new criterion is `needs_reconfirmation` (audit row from `confirmed`/`edited`, reason names the old id and text); the old id is `removed` in the diff |
+| `confirmed` / `edited` / `needs_reconfirmation` | gone, no successor | kept as `orphaned` (audit row), citing the source's current ref, or its last known ref when the source itself vanished; stays until a human rejects it, after which it drops out |
+| `orphaned` | still gone | stays `orphaned` |
+| `proposed` / `rejected` | gone | dropped (nothing to protect) |
+| any state | the source fetch or an extractor failed | kept untouched (re-pointed to the new source hash); never orphaned by an outage |
+| `human`-authored (extraction method) | not re-extracted | kept as is; humans' own criteria are not derivable from sources |
+
+Why a changed text is a new criterion: the id hashes the normalized text, so rewording yields a new id by design (plan 1.6). Matching the reworded successor is the service's job, hence the similarity rule above. A pure case or whitespace change normalizes to the same id and is simply carried.
+
+Orphan choice: the domain gained two states instead of a side table so the fact survives in the snapshot, the audit trail and diffs. A confirmed criterion is never silently dropped; the human decides by rejecting the orphan.
+
+Limits: the report (diagnostics, carry events) is returned but not persisted; fetch failures are attributed per source kind, extractor failures per source, and both conservatively retain the previous criteria.
 
 ## Domain purity
 
@@ -111,3 +168,4 @@ IN-09's gold set does not exist yet. `score_extraction(predicted_texts, gold_tex
 ### Limitations
 
 English-only modal rules (other languages extract only via lists, tables, Gherkin and spec files). One criterion per list item or sentence: compound statements are not split (IN-04). Markdown handling follows GitHub loosely, not CommonMark exactly (child lists need only a deeper marker; indented code blocks are not recognised; a `---` rule does not end a section). `Steps to Verify` steps and `Scope` bullets are taken as criteria, which can lower precision. Checkbox state is trace-only. Sources over the ingestion limit are read as given (IN-02 truncates).
+`python -m pytest packages/intent/tests --cov=radius_intent.domain --cov=radius_intent.application --cov-branch`

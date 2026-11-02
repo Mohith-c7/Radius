@@ -41,3 +41,11 @@ forbidden_modules =
     anthropic
     openai
     yaml
+
+[importlinter:contract:application-uses-domain-and-ports-only]
+name = Intent application depends on domain and ports only
+type = forbidden
+source_modules =
+    radius_intent.application
+forbidden_modules =
+    radius_intent.infrastructure
