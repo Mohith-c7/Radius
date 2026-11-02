@@ -26,7 +26,8 @@ Endpoint: `POST /api/v1/webhooks/github` (the older `/api/v1/github/webhooks` in
 | `installation` (`created`), `installation_repositories` (`added`) | Connects the listed repositories. Always delivered to an App; you do not subscribe to them |
 | `push` | Upserts the branch's latest commit. No analysis |
 | `pull_request` `opened`, `reopened`, `synchronize`, `ready_for_review` (non-draft) | Upserts the PR and starts (or reuses) an analysis for the head SHA |
-| `pull_request` other actions (`edited`, `closed`, `labeled`, draft, ...) | Upserts the PR (title, status) and returns `ignored: true`; no analysis |
+| `pull_request` `closed` (merged or not) | Upserts the PR, returns `ignored: true`, and **cancels queued-not-started analyses** for that PR (`cancelledAnalysisIds` in the response). A running analysis is never killed; it finishes and publishes. Reopening starts a fresh analysis |
+| `pull_request` other actions (`edited`, `labeled`, draft, ...) | Upserts the PR (title, status) and returns `ignored: true`; no analysis |
 | `issues`, `issue_comment`, `check_run` | **Accepted and ignored** (202, `ignored: true`) |
 
 **Mismatch to know about:** the F-06 task lists `issues`, `issue_comment`, `check_run` events and `issues: read`. Nothing in the code acts on them or calls an issues-read endpoint (PR comments use the Issues comments API, which `pull_requests: write` covers for PRs). `app-manifest.json` includes them anyway so that real payloads can be captured as fixtures; `--minimal` drops them. Either choice validates the same behaviour.
@@ -36,7 +37,7 @@ Permissions actually exercised: `checks: write` (create/update/list Check Runs),
 Publishing facts that shape the assertions:
 
 - The check run is named `Radius confidence`. There is one per head SHA; republishing the same SHA updates it, a new push creates a new one on the new SHA (GitHub scopes check runs to a commit).
-- `publish_in_progress` exists but is **not called by the worker**, so there is no `in_progress` check run during analysis; the check appears once, already `completed`.
+- The worker opens the `Radius confidence` check run as `in_progress` when it starts a job (best-effort: a publish failure is logged and never fails the analysis; skipped when `GITHUB_PUBLISH_RESULTS=false`), then completes the **same** run: with the verdict on success, or `neutral` ("analysis failed") when the final attempt fails or the result cannot be published. A job that is retried keeps the one run `in_progress` until the last attempt. A job cancelled before it starts never creates a check run.
 - The PR comment contains `<!-- radius-confidence-report -->` and is edited in place (only bot-authored comments are edited).
 - Conclusion is `success` only for a `verified` verdict with low/medium risk; otherwise `neutral` (a sandbox repo with no tests will normally be `neutral`, which is correct, not a failure).
 

@@ -218,12 +218,15 @@ def test_ready_for_review_starts_analysis() -> None:
     assert len(app.state.container.analysis_queue) == 1
 
 
-def test_reopen_after_close_reuses_analysis_for_same_head() -> None:
+def test_reopen_after_close_starts_a_fresh_analysis_because_closing_cancelled_the_queued_one() -> None:
     app, client = _memory_app()
     sync = _post(client, "pull_request", "pull_request_synchronize", "d-s").json()["data"]
-    _post(client, "pull_request", "pull_request_closed", "d-c")
+    closed = _post(client, "pull_request", "pull_request_closed", "d-c").json()["data"]
+    # Closing drops the queued-not-started analysis (see test_github_webhook_defects).
+    assert closed["cancelledAnalysisIds"] == [sync["analysisId"]]
+    assert len(app.state.container.analysis_queue) == 0
     reopened = _post(client, "pull_request", "pull_request_reopened", "d-ro").json()["data"]
-    assert reopened["analysisId"] == sync["analysisId"]
+    assert reopened["analysisId"] != sync["analysisId"]
     assert reopened["pullRequestId"] == sync["pullRequestId"]
     assert len(app.state.container.analysis_queue) == 1
 
@@ -291,11 +294,16 @@ def test_persisted_flow_installation_link_dedup_and_redelivery(tmp_path, monkeyp
 
     assert edited.json()["data"]["ignored"] is True
     assert closed.json()["data"]["ignored"] is True
-    assert reopened.json()["data"]["analysisId"] == sync.json()["data"]["analysisId"]
+    # Closing cancelled the three queued analyses; reopening starts a new one
+    # for the (unchanged) head instead of reusing a cancelled analysis.
+    assert len(closed.json()["data"]["cancelledAnalysisIds"]) == 3
+    assert reopened.json()["data"]["analysisId"] != sync.json()["data"]["analysisId"]
     with Session(engine) as session:
         analyses = session.query(db_models.Analysis).all()
         assert {a.commit_sha for a in analyses} == {HEAD1, HEAD2, HEAD3}
-        assert len(analyses) == 3
+        assert len(analyses) == 4
+        by_status = sorted(str(a.status.value) for a in analyses)
+        assert by_status == ["cancelled", "cancelled", "cancelled", "pending"]
         assert forced.json()["data"]["analysisId"] in {str(a.id) for a in analyses}
         assert session.query(db_models.PullRequest).count() == 1
         pull_request = session.query(db_models.PullRequest).one()

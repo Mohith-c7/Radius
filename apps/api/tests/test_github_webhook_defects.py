@@ -7,7 +7,7 @@ import hashlib
 import hmac
 import json
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 from radius_api.config import get_api_settings
@@ -145,3 +145,76 @@ def test_missing_default_branch_everywhere_keeps_existing_value(
     assert repo_row(engine).default_branch == "develop"
 
 
+
+
+# --- Defect 5: closing a PR cancels queued-not-started analyses ---------------
+
+
+def test_closing_a_pull_request_cancels_queued_analyses_in_memory() -> None:
+    from uuid import uuid4 as _uuid4
+
+    app = create_app()
+    app.state.settings.github_webhook_secret = SECRET
+    app.state.settings.github_default_organization_id = _uuid4()
+    app.state.settings.github_single_tenant = True
+    client = TestClient(app)
+    opened = post_json(client, "pull_request", load("pull_request_opened"), "o").json()["data"]
+    closed = post_json(client, "pull_request", load("pull_request_closed"), "c").json()["data"]
+    assert closed["cancelledAnalysisIds"] == [opened["analysisId"]]
+    assert len(app.state.container.analysis_queue) == 0
+
+
+def test_closing_cancels_pending_job_and_analysis_but_not_a_running_one(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from radius_shared.database import enums as db_enums
+
+    engine, _, client = _sql_client(tmp_path, monkeypatch)
+    try:
+        first = post_json(client, "pull_request", load("pull_request_opened"), "p1").json()["data"]
+        second = post_json(client, "pull_request", load("pull_request_synchronize"), "p2").json()[
+            "data"
+        ]
+        # A worker has claimed the first job and is running it.
+        with Session(engine) as session:
+            job = (
+                session.query(db_models.AnalysisJob)
+                .filter_by(analysis_id=UUID(first["analysisId"]))
+                .one()
+            )
+            job.status = db_enums.AnalysisJobStatus.RUNNING
+            job.attempts = 1
+            session.commit()
+        closed = post_json(client, "pull_request", load("pull_request_closed"), "p3").json()["data"]
+    finally:
+        get_api_settings.cache_clear()
+    assert closed["cancelledAnalysisIds"] == [second["analysisId"]]
+    with Session(engine) as session:
+        running = session.get(db_models.Analysis, UUID(first["analysisId"]))
+        cancelled = session.get(db_models.Analysis, UUID(second["analysisId"]))
+        assert running.status == db_enums.AnalysisStatus.PENDING
+        assert cancelled.status == db_enums.AnalysisStatus.CANCELLED
+        jobs = {str(j.analysis_id): j for j in session.query(db_models.AnalysisJob)}
+        assert jobs[first["analysisId"]].status == db_enums.AnalysisJobStatus.RUNNING
+        done = jobs[second["analysisId"]]
+        assert done.status == db_enums.AnalysisJobStatus.COMPLETED
+        assert done.last_error.startswith("Cancelled:")
+
+
+def test_closing_leaves_retry_pending_job_alone(tmp_path: Path, monkeypatch) -> None:
+    from radius_shared.database import enums as db_enums
+
+    engine, _, client = _sql_client(tmp_path, monkeypatch)
+    try:
+        opened = post_json(client, "pull_request", load("pull_request_opened"), "p1").json()["data"]
+        with Session(engine) as session:
+            job = session.query(db_models.AnalysisJob).one()
+            job.attempts = 1  # failed once, requeued; in-progress check is on GitHub
+            session.commit()
+        closed = post_json(client, "pull_request", load("pull_request_closed"), "p2").json()["data"]
+    finally:
+        get_api_settings.cache_clear()
+    assert closed["cancelledAnalysisIds"] == []
+    with Session(engine) as session:
+        analysis = session.get(db_models.Analysis, UUID(opened["analysisId"]))
+        assert analysis.status == db_enums.AnalysisStatus.PENDING

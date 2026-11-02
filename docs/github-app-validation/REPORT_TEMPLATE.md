@@ -51,7 +51,7 @@ Known from offline review (confirm or close live):
 1. ~~Installation sync hardcoded `default_branch=main`~~ Fixed offline: installation payloads carry no default branch, so a provisional `main` is stored and the first push/PR delivery corrects it; confirm live.
 2. ~~`publish_in_progress` never called~~ Fixed offline: the worker opens the in-progress check at job start; confirm live (Checks tab shows In progress, then completes the same run).
 3. ~~Clone auth used Bearer~~ Fixed offline: Basic `x-access-token:<token>` via the child environment (`runner.py`, `local_git.py`); confirm against real GitHub (private repo clone) and close.
-4. Closing a PR does not complete or cancel an in-flight analysis/check run.
+4. ~~Closing a PR did not cancel analyses~~ Fixed offline for queued-not-started analyses (running ones intentionally finish); confirm live.
 5. `installation` `deleted`/`removed` and `installation_repositories` `removed` are not handled.
 
 ## Notes and follow-ups

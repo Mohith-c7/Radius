@@ -33,6 +33,7 @@ from radius_parser.infrastructure import (
     default_language_parser_registry,
 )
 from radius_repository.infrastructure import LocalGitRepositoryClient
+from radius_shared.database import enums as db_enums
 from radius_shared.database import models as db_models
 from radius_shared.database.session import (
     create_database_engine,
@@ -170,6 +171,22 @@ class SqlAlchemyWorkerRuntime:
 
         try:
             with self.session_factory() as session:
+                skip_reason = _skip_reason(session, job.analysis_id)
+                if skip_reason is not None:
+                    # Cancelled (e.g. PR closed) between enqueue and claim: do
+                    # not clone, run or publish anything for it.
+                    self._queue(session).skip_claimed(job.analysis_id, skip_reason)
+                    session.commit()
+                    LOGGER.info(
+                        "Analysis job skipped",
+                        extra={
+                            "analysis_id": str(job.analysis_id),
+                            "job_id": str(job.id),
+                            "outcome": "cancelled",
+                            "reason": skip_reason,
+                        },
+                    )
+                    return
                 # Best-effort: shows "in progress" on the PR while we work. It
                 # never raises, so it cannot fail the analysis.
                 _publish_github_in_progress(
@@ -634,6 +651,15 @@ def _publish_github_result(
             github_client=github_client,
             error=RuntimeError("Radius could not publish its result to GitHub."),
         )
+
+
+def _skip_reason(session: Session, analysis_id) -> str | None:
+    """Why a freshly claimed job must not run, or ``None`` to run it."""
+
+    analysis = session.get(db_models.Analysis, analysis_id)
+    if analysis is not None and analysis.status == db_enums.AnalysisStatus.CANCELLED:
+        return "Analysis was cancelled before it started."
+    return None
 
 
 def _publish_github_in_progress(

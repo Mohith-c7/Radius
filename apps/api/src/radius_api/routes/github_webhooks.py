@@ -267,8 +267,20 @@ def _handle_pull_request(
             merged_at=pull_request_payload.merged_at,
         )
     )
+    cancelled: list[str] = []
+    if action == "closed":
+        # A closed/merged PR no longer needs verification: drop work that has
+        # not started. Running jobs are left to finish (never killed).
+        cancelled = [
+            str(item)
+            for item in analysis_service.cancel_queued(
+                pull_request_id=UUID(str(pull_request.id)),
+                reason="Pull request was closed before the analysis started.",
+            )
+        ]
     if action not in _ANALYSIS_PR_ACTIONS or pull_request_payload.draft:
         return GitHubWebhookResult(
+            cancelledAnalysisIds=cancelled,
             deliveryId=delivery_id,
             event="pull_request",
             action=action,

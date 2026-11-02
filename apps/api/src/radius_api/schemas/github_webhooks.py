@@ -67,5 +67,9 @@ class GitHubWebhookResult(BaseModel):
     repository_id: str | None = Field(default=None, alias="repositoryId")
     pull_request_id: str | None = Field(default=None, alias="pullRequestId")
     analysis_id: str | None = Field(default=None, alias="analysisId")
+    #: Queued-not-started analyses cancelled by this delivery (PR closed, repo removed).
+    cancelled_analysis_ids: list[str] = Field(
+        default_factory=list, alias="cancelledAnalysisIds"
+    )
 
     model_config = {"populate_by_name": True}
