@@ -61,6 +61,9 @@ ignore = ["E501", "B008"]
 
 [tool.pytest.ini_options]
 addopts = "-q --import-mode=importlib"
+markers = [
+  "sandbox_adversarial: hostile payloads that run ONLY inside the hardened sandbox container (needs docker + the sandbox image; select with -m sandbox_adversarial)",
+]
 filterwarnings = [
   "ignore::FutureWarning:google.generativeai.*",
 ]

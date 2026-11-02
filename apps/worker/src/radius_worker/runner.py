@@ -54,6 +54,7 @@ from radius_worker.config import WorkerSettings
 from radius_worker.execution_mode import (
     TestExecutionMode,
     build_test_runner,
+    require_sandbox_ready,
     resolve_test_execution_mode,
 )
 from radius_worker.orchestrator import (
@@ -263,7 +264,7 @@ def create_sql_worker_runtime(settings: WorkerSettings) -> SqlAlchemyWorkerRunti
     """Create the SQL-backed worker runtime."""
 
     # Fail fast at startup on a forbidden execution mode (e.g. unsafe in prod).
-    resolve_test_execution_mode(settings)
+    require_sandbox_ready(resolve_test_execution_mode(settings), settings)
     engine = create_database_engine(settings)
     return SqlAlchemyWorkerRuntime(
         session_factory=create_session_factory(engine),

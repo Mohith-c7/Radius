@@ -22,9 +22,41 @@ the legacy flag. Invalid values are rejected.
 
 Sandbox settings: `WORKER_SANDBOX_RUNTIME` (`docker`/`podman`), `WORKER_SANDBOX_IMAGE`,
 `WORKER_SANDBOX_MEMORY`, `WORKER_SANDBOX_CPUS`, `WORKER_SANDBOX_PIDS_LIMIT`,
-`WORKER_SANDBOX_TMPFS_SIZE`, and `WORKER_TEST_TIMEOUT_SECONDS`. The image must be pulled
+`WORKER_SANDBOX_TMPFS_SIZE`, `WORKER_SANDBOX_NOFILE_LIMIT` (default 1024),
+`WORKER_SANDBOX_MAX_FILE_SIZE_BYTES` (default 64 MiB, `ulimit fsize`),
+`WORKER_SANDBOX_MAX_OUTPUT_BYTES` (default 5 MiB host-side stream cap),
+`WORKER_SANDBOX_SECCOMP_PROFILE` (optional path; unset keeps the runtime default
+profile, `unconfined` is rejected) and `WORKER_TEST_TIMEOUT_SECONDS`. Defaults and
+placeholders are in `.env.example`. The image must be pulled
 in advance (`--pull never`) and must already contain the test toolchain and the
 project's dependencies, because the container has no network.
+
+### Fail-closed behaviour (F-07)
+
+`WORKER_EXECUTE_TESTS` / `WORKER_TEST_EXECUTION_MODE` stay opt-in (default `disabled`).
+In `sandbox` mode the sandbox must prove itself usable, otherwise nothing executes:
+
+* **At worker startup** (`require_sandbox_ready`): invalid limits, `unconfined` or empty
+  seccomp, a missing runtime binary, an unreachable daemon (`<runtime> version`), a
+  missing local image (`<runtime> image inspect`) or a missing seccomp profile file make
+  the worker refuse to start (`SandboxMisconfiguredError`). It never falls back to
+  another mode.
+* **Before every run** (`ContainerSandboxRunner.check_ready`): the same checks; on
+  failure the run returns `error` with "sandbox unavailable, refusing to execute" and no
+  container is started, so a later outage cannot degrade into execution.
+* Classification of contained attacks: wall-clock timeout, output flood and runtime
+  failures give `error`; a process killed by SIGKILL/SIGXCPU/SIGXFSZ (exit 137/152/153,
+  for example an OOM kill) gives `error`. Nothing a resource attack does can yield
+  `passed`.
+
+Additional hardening in this change: `--ulimit nofile/fsize/core`, optional custom
+seccomp profile (default profile stays on), and a host-side watchdog that kills the
+container when captured stdout/stderr exceed `WORKER_SANDBOX_MAX_OUTPUT_BYTES`.
+
+Tests: `apps/worker/tests/test_execution_mode.py` (startup refusal, invalid limits,
+daemon/image unavailable, runtime vanishing after build, configurability) and
+`packages/testing/tests/test_sandbox_runner.py` (readiness, signal exit codes, output
+flood, ulimit and seccomp flags).
 
 ## Findings: what the in-process path exposes
 
@@ -68,7 +100,7 @@ Investigated on 2026-11-01 (Linux, worker running as uid 0 in the dev container)
 | Repository cache integrity | **Exposed** (cwd is the cache) | Each run copies the checkout to a fresh temp dir (`.git` excluded; symlinks copied as links, never followed), mounts it read-only, and removes it in `finally` | implemented; tested (cache unchanged, `.git` absent, symlink not followed, temp dir removed even if the launcher raises) |
 | Clone credentials in `.git` | Readable | `.git` not copied into the snapshot | implemented; tested |
 | Privilege escalation in the container | n/a | `--user 65534:65534`, `--cap-drop ALL`, `--security-opt no-new-privileges`, `--ipc none`, no `--privileged` | implemented; tested (argv; real docker uid == 65534) |
-| CPU / memory / fork bomb | Timeout only | `--pids-limit`, `--memory` (= `--memory-swap`), `--cpus` | implemented; flags tested. Limits **not** exercised against a real fork bomb or OOM |
+| CPU / memory / fork bomb | Timeout only | `--pids-limit`, `--memory` (= `--memory-swap`), `--cpus` | implemented; flags tested. Exercised against a real fork bomb, OOM, disk fill and output flood (see Adversarial verification) |
 | Runaway / hung tests | Direct child killed; grandchildren may survive | Wall-clock timeout, then `<runtime> kill`, then `rm -f`, which takes the whole container | implemented; tested (fake launcher: kill before rm; real docker: no `radius-sbx-*` container left) |
 | Image supply chain at analysis time | n/a | `--pull never`; image reference validated | implemented; argv tested |
 | Result integrity | Errors give `error`, never `passed` | Same shared helpers (`pytest_outcome`, `exit_code_outcome`, `build_run_result`). Missing runtime and runtime exit codes 125/126/127 give `error`. JUnit must be a regular file (no symlink) of 20 MB or less | implemented; tested |
@@ -76,7 +108,96 @@ Investigated on 2026-11-01 (Linux, worker running as uid 0 in the dev container)
 | Kernel escape from the container | n/a | **Not covered.** A container shares the host kernel | not implemented: use gVisor (`runsc`) or a microVM for hostile multi-tenant workloads |
 | Docker socket = root on the host | n/a | The worker needs runtime access, and the docker socket is root-equivalent: anyone who compromises the worker owns the host | operational: prefer rootless podman or a dedicated runner host/K8s Job; not implemented |
 
-## Verification
+## Adversarial verification (F-07)
+
+`packages/testing/tests/test_sandbox_adversarial.py` (marker `sandbox_adversarial`)
+runs hostile payloads **only inside the sandbox container** with tight limits
+(`pids 64`, `memory 128m` = swap, `cpus 0.5`, tmpfs `16m`, `fsize 1 MiB`, timeouts of
+5-60 s). Payloads are written into a throw-away repository snapshot and are never run in
+the test process or on the host. After each run the test asserts the container and the
+ephemeral workspace are gone and the host checkout is untouched.
+
+Executed on 2026-11-02: Windows 11 host, Docker Desktop engine 29.7.2 (Linux VM, runc
+1.3.6, cgroup v2, builtin default seccomp), image `radius-sandbox-test:latest`
+(`python:3.12-slim` + pytest). Result: **11 passed, 1 skipped.**
+
+| Case | Payload | Observed (contained) | Runner classification |
+| --- | --- | --- | --- |
+| Infinite loop | `while True: pass` | killed at the 5 s timeout, container removed | `error`, "timed out after 5 seconds" |
+| Fork bomb | unbounded `os.fork()` loop | pids cgroup held; killed at the 10 s timeout | `error`, "timed out after 10 seconds" |
+| pids cap | fork up to 256 children with `--pids-limit 64` | `fork` raised `OSError` at or below 64 | payload printed `PIDS: DENIED` |
+| Memory bomb | allocate and touch 8 MiB chunks, limit 128 MiB | OOM-killed (exit 137) | `error`, "killed by SIGKILL" |
+| Disk fill | many 768 KiB files on a 16 MiB tmpfs; one 4 MiB file with `fsize` 1 MiB | `ENOSPC` at or below 16 MiB; single big file refused | `TMPFS: DENIED`, `FSIZE: DENIED` |
+| Output flood | endless stdout, cap 512 KiB | container killed by the host watchdog; retained output bounded | `error`, "output exceeded" |
+| Network egress | TCP to 1.1.1.1, 8.8.8.8, 169.254.169.254, 10.0.0.1; DNS | all failed; only `lo` exists | `NETWORK: DENIED` |
+| Host env / secrets | scan environ, every `/proc/*/environ`, workspace and rootfs for fake secrets set in the host test process | none found | `ENV: DENIED` |
+| Writes outside workspace | write to `/workspace`, `/`, `/etc`, `/usr`, `/root`; mkdir; delete the payload | all refused; only `/tmp` writable | `WRITE: DENIED` |
+| /proc and /sys | write `core_pattern`, `sysrq-trigger`, `drop_caches`, `uevent_helper`; read `kcore`, `kmsg`, `/proc/1/mem` | writes refused; masked files read empty; at most 20 PIDs visible (own namespace) | `PROC: DENIED` |
+| Privileges | `CapEff`/`CapBnd`, `NoNewPrivs`, `Seccomp`; `mount`, `chroot`, `setuid(0)`, `unshare(NEWUSER)` | uid 65534, no capabilities, `NoNewPrivs=1`, `Seccomp=2`, every privileged syscall failed | `PRIV: DENIED` |
+| Symlink escape | symlinks to a host secret file and `../../..` | **skipped here**: creating symlinks needs a privilege this Windows account lacks | n/a |
+
+Negative control (benign commands, default docker flags): `/sys/class/net` shows `eth0`,
+the rootfs is writable and the process is uid 0 with `CapEff=a80425fb`, `NoNewPrivs=0`,
+so the checks above fail without the sandbox flags.
+
+Timings (wall clock including container start on this host): about 4-5 s for the
+confinement probes, 8 s for the memory bomb, 14 s for the 5 s-timeout loop, 19 s for the
+fork bomb; the whole file about 63 s.
+
+Not demonstrated: the symlink case (needs a Linux runner), CPU throttling accuracy,
+podman, rootless docker, gVisor/Firecracker and cgroup v1. Two older tests
+(`test_container_argv_contains_every_isolation_flag`, which compares POSIX paths, and
+`test_snapshot_is_a_fresh_copy...`, which creates a symlink) and
+`test_subprocess_runner_executes_pytest_plan` also fail on this Windows host on the
+unmodified baseline; they are expected to pass on Linux CI.
+
+### CI step to add (`ci.yml` is owned elsewhere)
+
+On a Linux runner with docker, after the existing "Build sandbox test image" step:
+
+```yaml
+      - name: Sandbox adversarial suite
+        env:
+          RADIUS_REQUIRE_SANDBOX_TESTS: "true"
+        run: uv run pytest -m sandbox_adversarial packages/testing/tests/test_sandbox_adversarial.py -v
+```
+
+`RADIUS_REQUIRE_SANDBOX_TESTS=true` turns a missing docker or image into an error
+instead of a silent skip. Locally the suite skips with a reason when docker or the image
+is absent. The symlink-escape test only runs on a host that can create symlinks (Linux).
+
+## Residual risks
+
+* **Shared kernel.** Namespaces, cgroups, capabilities and seccomp all rely on the host
+  kernel. A kernel or runc vulnerability is a full escape. Not mitigated.
+* **Docker socket is root.** The worker that launches containers can effectively become
+  host root; compromising the worker compromises the host.
+* **Output cap granularity.** The host watchdog polls every 0.2 s, so output can briefly
+  exceed the cap; the stream files live on host disk until the run ends.
+* **CPU and IO.** `--cpus` throttles but does not stop contention on memory bandwidth;
+  there is no block-IO limit.
+* **Writable results mount** (`/results`, mode 0777) is host disk; `fsize` bounds each
+  file but not the number of files. Only `junit.xml` (regular file, 20 MB or less) is read.
+* **Image trust.** The image is operator-provisioned (`--pull never`); pin it by digest
+  in production. A compromised image is out of scope.
+* **Side channels and speculative execution** are not addressed by a container.
+* tmpfs `/tmp` is not `noexec` (pytest and wheels may need it), so payloads can run code
+  from `/tmp` as the nobody user within the limits above.
+
+## Recommendation: gVisor / Firecracker for production
+
+Recommendation only; nothing was installed or tested here. For executing code from
+untrusted pull requests in a multi-tenant deployment, run the same container spec under
+**gVisor** (register `runsc` as a runtime on a dedicated host and add `--runtime runsc`)
+so syscalls are served by a user-space kernel instead of the host kernel, or use
+**Firecracker** microVMs (one VM per run, for example a dedicated runner fleet or
+Kubernetes Jobs with a microVM runtime class) when a hardware-virtualisation boundary is
+required. Either way: use dedicated, disposable runner hosts with no worker credentials,
+keep egress off, never mount the docker socket into anything that handles tenant data,
+and re-run this adversarial suite against the chosen runtime before enabling it. Until
+then keep `WORKER_TEST_EXECUTION_MODE=disabled` and run tests in the customer's CI.
+
+## Other verification
 
 * `packages/testing/tests/test_sandbox_runner.py`: pure argv construction (every
   isolation flag, no host secrets, command after image, config validation); the runner

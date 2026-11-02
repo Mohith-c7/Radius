@@ -111,3 +111,20 @@ class WorkerSettings(DatabaseSettings):
     sandbox_cpus: str = Field(default="1.0", alias="WORKER_SANDBOX_CPUS")
     sandbox_pids_limit: int = Field(default=256, alias="WORKER_SANDBOX_PIDS_LIMIT")
     sandbox_tmpfs_size: str = Field(default="256m", alias="WORKER_SANDBOX_TMPFS_SIZE")
+    sandbox_nofile_limit: int = Field(default=1024, alias="WORKER_SANDBOX_NOFILE_LIMIT")
+    sandbox_max_file_size_bytes: int = Field(
+        default=64 * 1024 * 1024, alias="WORKER_SANDBOX_MAX_FILE_SIZE_BYTES"
+    )
+    sandbox_max_output_bytes: int = Field(
+        default=5 * 1024 * 1024,
+        alias="WORKER_SANDBOX_MAX_OUTPUT_BYTES",
+        description="Host-side cap on captured stdout/stderr; the container is killed past it.",
+    )
+    sandbox_seccomp_profile: str | None = Field(
+        default=None,
+        alias="WORKER_SANDBOX_SECCOMP_PROFILE",
+        description=(
+            "Optional path to a custom seccomp profile JSON. Unset keeps the "
+            "runtime's default profile. 'unconfined' is rejected."
+        ),
+    )

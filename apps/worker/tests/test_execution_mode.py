@@ -31,6 +31,10 @@ _ENV_KEYS = (
     "WORKER_SANDBOX_CPUS",
     "WORKER_SANDBOX_PIDS_LIMIT",
     "WORKER_TEST_TIMEOUT_SECONDS",
+    "WORKER_SANDBOX_NOFILE_LIMIT",
+    "WORKER_SANDBOX_MAX_FILE_SIZE_BYTES",
+    "WORKER_SANDBOX_MAX_OUTPUT_BYTES",
+    "WORKER_SANDBOX_SECCOMP_PROFILE",
 )
 
 
@@ -173,3 +177,112 @@ def test_disabled_runner_never_reports_pass(tmp_path) -> None:
     assert result.status == TestRunStatus.ERROR
     assert result.passed == 0
     assert not (tmp_path / "pwned").exists()
+
+
+# --- Fail closed: sandbox mode with an unusable sandbox must not run anything ---
+
+
+def test_sandbox_mode_refuses_to_start_when_runtime_is_missing(monkeypatch) -> None:
+    from radius_worker.execution_mode import (
+        SandboxMisconfiguredError,
+        require_sandbox_ready,
+    )
+
+    monkeypatch.setattr("shutil.which", lambda name: None)
+    settings = _settings(
+        WORKER_TEST_EXECUTION_MODE="sandbox", WORKER_SANDBOX_RUNTIME="docker"
+    )
+
+    with pytest.raises(SandboxMisconfiguredError, match="not found"):
+        require_sandbox_ready(resolve_test_execution_mode(settings), settings)
+    with pytest.raises(SandboxMisconfiguredError):
+        worker_runner.create_sql_worker_runtime(settings)
+
+
+def test_sandbox_mode_refuses_invalid_limits_and_unconfined_seccomp() -> None:
+    from radius_worker.execution_mode import (
+        SandboxMisconfiguredError,
+        require_sandbox_ready,
+    )
+
+    for env in (
+        {"WORKER_SANDBOX_MEMORY": "lots"},
+        {"WORKER_SANDBOX_PIDS_LIMIT": "0"},
+        {"WORKER_SANDBOX_SECCOMP_PROFILE": "unconfined"},
+    ):
+        settings = _settings(WORKER_TEST_EXECUTION_MODE="sandbox", **env)
+        with pytest.raises(SandboxMisconfiguredError):
+            require_sandbox_ready(TestExecutionMode.SANDBOX, settings)
+
+
+def test_sandbox_mode_refuses_when_daemon_or_image_unavailable(monkeypatch) -> None:
+    import subprocess
+
+    from radius_worker.execution_mode import (
+        SandboxMisconfiguredError,
+        require_sandbox_ready,
+    )
+
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/docker")
+    monkeypatch.setattr(
+        subprocess, "run", lambda argv, **kw: subprocess.CompletedProcess(argv, 1)
+    )
+    settings = _settings(WORKER_TEST_EXECUTION_MODE="sandbox")
+
+    with pytest.raises(SandboxMisconfiguredError, match="daemon is not reachable"):
+        require_sandbox_ready(TestExecutionMode.SANDBOX, settings)
+
+
+def test_ready_check_is_a_noop_for_other_modes_and_unavailable_runs_never_execute(
+    tmp_path, monkeypatch
+) -> None:
+    from uuid import uuid4
+
+    from radius_testing.domain import TestRunPlan, TestRunStatus
+    from radius_worker.execution_mode import require_sandbox_ready
+
+    require_sandbox_ready(TestExecutionMode.DISABLED, None)
+    require_sandbox_ready(TestExecutionMode.UNSAFE_IN_PROCESS, None)
+
+    # Runner built while the sandbox was fine; runtime then disappears: run() errors.
+    settings = _settings(WORKER_TEST_EXECUTION_MODE="sandbox")
+    runner = build_test_runner(TestExecutionMode.SANDBOX, settings)
+    launched: list[object] = []
+    monkeypatch.setattr("shutil.which", lambda name: None)
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **k: launched.append(a))
+    plan = TestRunPlan.pending(
+        analysis_id=uuid4(),
+        selected_tests=(),
+        command_plan=(("python", ("-c", "open('pwned','w')")),),
+    )
+
+    result = runner.run(plan, tmp_path)
+
+    assert result.status == TestRunStatus.ERROR
+    assert result.passed == 0
+    assert "refusing to execute" in result.output
+    assert launched == []
+    assert not (tmp_path / "pwned").exists()
+
+
+def test_sandbox_limits_are_configurable_with_safe_defaults() -> None:
+    config = build_test_runner(TestExecutionMode.SANDBOX, _settings()).config
+    assert (config.nofile_limit, config.max_file_size_bytes) == (1024, 64 * 1024 * 1024)
+    assert config.max_output_bytes == 5 * 1024 * 1024
+    assert config.seccomp_profile is None
+
+    custom = build_test_runner(
+        TestExecutionMode.SANDBOX,
+        _settings(
+            WORKER_SANDBOX_NOFILE_LIMIT="64",
+            WORKER_SANDBOX_MAX_FILE_SIZE_BYTES="1048576",
+            WORKER_SANDBOX_MAX_OUTPUT_BYTES="2048",
+            WORKER_SANDBOX_SECCOMP_PROFILE="/etc/radius/seccomp.json",
+        ),
+    ).config
+    assert (custom.nofile_limit, custom.max_file_size_bytes, custom.max_output_bytes) == (
+        64,
+        1048576,
+        2048,
+    )
+    assert custom.seccomp_profile == "/etc/radius/seccomp.json"
