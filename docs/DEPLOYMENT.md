@@ -92,6 +92,11 @@ Check them with `docker compose ps` (the STATUS column shows `healthy`) or
 | **`RADIUS_LLM_INTENT_ANALYSIS_TOKEN_CAP`** / **`RADIUS_LLM_INTENT_ORG_TOKEN_CAP`** | Token caps per analysis and per org (process lifetime); calls that would exceed them are skipped. | `30000` / `1000000` |
 | **`RADIUS_LLM_INTENT_MAX_OUTPUT_TOKENS`**, **`_TIMEOUT_S`**, **`_MAX_ATTEMPTS`**, **`_BREAKER_THRESHOLD`**, **`_BREAKER_COOLDOWN_S`**, **`_MAX_CRITERIA`**, **`_SEED`** | Output cap, request timeout, bounded retries, circuit breaker and proposal cap (same `RADIUS_LLM_INTENT_` prefix). | `2048`, `30`, `3`, `5`, `60`, `20`, `0` |
 | **`API_KEYS`** | Comma-separated API keys accepted by API in format `org_id:key`. | `00000000-0000-4000-8000-000000000001:radius_key_live` |
+
+| **`ANTHROPIC_API_KEY`** | API key for the Anthropic adapter (environment only; never logged). | `sk-ant-...` |
+| **`API_KEYS`** | DEPRECATED. Comma-separated legacy keys in format `org_id:key` (full access, unhashed; logs a startup warning). Migrate to managed keys, see `docs/security/API_KEYS.md`. | `00000000-0000-4000-8000-000000000001:radius_key_live` |
+| **`RADIUS_API_KEY_PEPPER`** | Secret (>= 32 chars) used to fingerprint managed API keys (HMAC-SHA256). Required for `/api/v1/api-keys`; keep it in a secret store; rotating it invalidates all managed keys. | `<random 48+ chars>` |
+| **`RADIUS_API_KEY_LAST_USED_INTERVAL`** | Minimum seconds between `last_used_at` writes per key. | `300` |
 | **`GITHUB_APP_ID`** | GitHub App ID used to generate installation access tokens. | `123456` |
 | **`GITHUB_APP_PRIVATE_KEY`** | RSA Private Key for the GitHub App (PEM format with `\n`). | `-----BEGIN RSA PRIVATE KEY-----\n...` |
 | **`GITHUB_WEBHOOK_SECRET`** | Shared secret configured in the GitHub App webhook settings. | `whsec_live_secret_string` |
