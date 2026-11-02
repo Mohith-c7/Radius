@@ -39,6 +39,10 @@ observability = [
   "opentelemetry-exporter-otlp-proto-http>=1.27.0",
   "prometheus-client>=0.21.0",
 ]
+llm = [
+  # IN-04 optional LLM provider (Anthropic). Not required for tests or the default (off) path.
+  "anthropic>=2.0,<3",
+]
 dev = [
   # Observability libraries are optional at runtime but installed for tests.
   "opentelemetry-api>=1.27.0",

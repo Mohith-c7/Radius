@@ -49,3 +49,25 @@ source_modules =
     radius_intent.application
 forbidden_modules =
     radius_intent.infrastructure
+
+[importlinter:contract:llm-core-has-no-sdk]
+name = LLM extraction core imports no provider SDK or HTTP client (only anthropic_provider may, lazily)
+type = forbidden
+source_modules =
+    radius_intent.infrastructure.llm.config
+    radius_intent.infrastructure.llm.extractor
+    radius_intent.infrastructure.llm.fake
+    radius_intent.infrastructure.llm.merge
+    radius_intent.infrastructure.llm.provider
+    radius_intent.infrastructure.llm.resilience
+forbidden_modules =
+    anthropic
+    openai
+    google
+    httpx
+    requests
+    sqlalchemy
+    fastapi
+    psycopg
+    radius_intent.application
+    radius_intent.interfaces
