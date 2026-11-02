@@ -4,6 +4,7 @@ from pathlib import Path
 
 from pydantic import Field, field_validator
 from radius_shared.database.session import DatabaseSettings
+from radius_shared.verdict_v2_flag import VerdictV2Mode, parse_verdict_v2_mode
 
 
 class WorkerSettings(DatabaseSettings):
@@ -131,6 +132,23 @@ class WorkerSettings(DatabaseSettings):
             "absent source, not an error)."
         ),
     )
+    verdict_v2_mode: VerdictV2Mode = Field(
+        default=VerdictV2Mode.OFF,
+        alias="RADIUS_FEATURE_VERDICT_V2",
+        description=(
+            "Verdict v2 alpha (VD-07-lite): off (default) runs no v2 code; shadow "
+            "computes and stores v2 but still publishes v1; on publishes v2 when "
+            "it succeeded and falls back to v1 otherwise. true/1 mean on; "
+            "unrecognised values mean off. Needs RADIUS_FEATURE_INTENT_INGESTION "
+            "for a useful result."
+        ),
+    )
+
+    @field_validator("verdict_v2_mode", mode="before")
+    @classmethod
+    def _parse_verdict_v2_mode(cls, value: object) -> VerdictV2Mode:
+        return parse_verdict_v2_mode(value)
+
     intent_max_api_calls: int = Field(
         default=15,
         ge=1,
