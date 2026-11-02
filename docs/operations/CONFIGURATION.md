@@ -22,7 +22,7 @@ How to read it.
   (`RADIUS_LLM_*`) silently fall back to their default on a bad number.
 
 
-Variables documented: **121** (13 secret, 8 feature flags).
+Variables documented: **122** (13 secret, 8 feature flags).
 
 ## Core, API, GitHub and observability
 
@@ -82,6 +82,7 @@ Variables documented: **121** (13 secret, 8 feature flags).
 | `RADIUS_TRACING_ENABLED` | bool | `false` | api, worker | no | - | Create OpenTelemetry spans (needs the `observability` extra). Off by default. |
 | `RADIUS_TRUSTED_PROXIES` | str | `empty` | api | no | - | Comma separated IPs/CIDRs of reverse proxies whose X-Forwarded-For is trusted. |
 | `RADIUS_UPLOAD_MAX_BODY_BYTES` | int | `20971520` | api | no | - | Body cap in bytes for CI test-report uploads. |
+| `RADIUS_VERDICT_V2_CHECK_CONCLUSIONS` | str | `advisory` | worker | no | - | Check Run conclusion mapping for Verdict v2 (alpha). advisory (default): never success; verified, insufficient_evidence and needs_review are neutral, failed is failure only when decided by R1a/R1b/R1c (failing linked test, failing CI, high-severity tamper). strict: verified is success. |
 | `RADIUS_WEBHOOK_MAX_BODY_BYTES` | int | `26214400` | api | no | - | Body cap in bytes for GitHub webhook deliveries. |
 | `RADIUS_WORKER_METRICS_PORT` | int | `0` | api, worker | no | - | Port for the worker's Prometheus endpoint; ``0`` disables it. |
 | `SERVICE_NAME` | str | `radius-api` | api, worker | no | - | Service name used in logs. Defaults differ per service (`radius-api`, `radius-worker`); normally left alone. |

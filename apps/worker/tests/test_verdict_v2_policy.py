@@ -383,12 +383,13 @@ def test_invalid_waivers_file_ignores_every_waiver(stage_a, cases) -> None:
 @pytest.mark.parametrize(
     ("mode", "verdict", "pending", "expected"),
     [
-        (None, "verified", False, "success"),
+        # DEC-030: without a blocking policy nothing is green; failure needs hard evidence (R1*).
+        (None, "verified", False, "neutral"),
         (None, "failed", False, "failure"),
         (None, "insufficient_evidence", False, "neutral"),
         (None, "needs_review", False, "neutral"),
         (None, "verified", True, "neutral"),
-        ("advisory", "verified", False, "success"),
+        ("advisory", "verified", False, "neutral"),
         ("advisory", "failed", False, "neutral"),
         ("advisory", "insufficient_evidence", False, "neutral"),
         ("advisory", "needs_review", False, "neutral"),
@@ -402,9 +403,15 @@ def test_invalid_waivers_file_ignores_every_waiver(stage_a, cases) -> None:
 def test_check_run_conclusion_follows_the_policy_mode(stage_a, cases, mode, verdict, pending, expected) -> None:
     payload = score(stage_a[F01], cases[F01]).payload
     payload = {**payload, "verdict": verdict, "pending": pending}
+    if verdict == "failed":
+        payload["justification"] = {**payload["justification"], "decided_by": "R1b"}
     if mode:
         payload["policy"] = {"present": True, "status": "ok", "mode": mode}
-    assert md.check_conclusion(VerdictV2View.from_payload(payload)) == expected
+    view = VerdictV2View.from_payload(payload)
+    assert md.check_conclusion(view) == expected
+    # the operator knob only turns a non-blocking `verified` green; blocking is unaffected
+    strict = md.check_conclusion(view, mode="strict")
+    assert strict == ("success" if verdict == "verified" and not pending else expected)
 
 
 def test_mode_changes_only_the_conclusion_never_the_verdict(stage_a, cases) -> None:

@@ -164,6 +164,11 @@
         "tamper_waived": {
           "type": "integer",
           "description": "Contract 3: findings accepted by a waiver."
+        },
+        "author_hint_criteria": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Contract 4 (optional): criteria relying on an unconfirmed author-supplied hint."
         }
       }
     },
@@ -232,7 +237,8 @@
                 "static_only",
                 "no_strong_assertion",
                 "needs_typed_evidence",
-                "no_linked_test"
+                "no_linked_test",
+                "author_supplied_hint"
               ]
             }
           },
@@ -390,6 +396,49 @@
                 "status": {
                   "type": "string",
                   "description": "counted | gated:<reason>"
+                }
+              }
+            }
+          },
+          "provenance": {
+            "type": "string",
+            "enum": [
+              "author_pr_body",
+              "author_head_spec",
+              "base_spec",
+              "human_confirmed",
+              "llm_proposed"
+            ],
+            "description": "Contract 4 (optional): who supplied the criterion."
+          },
+          "hints": {
+            "type": "array",
+            "description": "Contract 4 (optional): tests/paths hints with provenance.",
+            "items": {
+              "type": "object",
+              "required": [
+                "kind",
+                "value",
+                "provenance"
+              ],
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "paths",
+                    "tests"
+                  ]
+                },
+                "value": {
+                  "type": "string"
+                },
+                "provenance": {
+                  "enum": [
+                    "author_pr_body",
+                    "author_head_spec",
+                    "base_spec",
+                    "human_confirmed",
+                    "llm_proposed"
+                  ]
                 }
               }
             }
@@ -813,6 +862,43 @@
           "type": "string"
         },
         "evaluated_on": {
+          "type": "string"
+        }
+      }
+    },
+    "contract_version": {
+      "type": "string",
+      "description": "Contract 4 (optional): data contract version."
+    },
+    "alpha": {
+      "const": true,
+      "description": "Contract 4 (optional): always true while v2 is an alpha."
+    },
+    "calibrated": {
+      "const": false,
+      "description": "Contract 4 (optional): always false; thresholds are uncalibrated."
+    },
+    "evidence_basis": {
+      "const": "static_only",
+      "description": "Contract 4 (optional): what the evidence is."
+    },
+    "presentation": {
+      "type": "object",
+      "description": "Contract 4 (optional): user-facing wording; internal enum values are unchanged.",
+      "properties": {
+        "verdict_label": {
+          "type": "string"
+        },
+        "state_labels": {
+          "type": "object"
+        },
+        "legend": {
+          "type": "string"
+        },
+        "disclaimer": {
+          "type": "string"
+        },
+        "summary_text": {
           "type": "string"
         }
       }

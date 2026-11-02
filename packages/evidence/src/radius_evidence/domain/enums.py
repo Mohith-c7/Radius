@@ -83,6 +83,26 @@ class Flag(StrEnum):
     NO_STRONG_ASSERTION = "no_strong_assertion"
     NEEDS_TYPED_EVIDENCE = "needs_typed_evidence"
     NO_LINKED_TEST = "no_linked_test"
+    #: Contract 3: a counted test is linked only by a hint the PR author supplied
+    #: (head spec or PR body) that nobody independent confirmed; its link is capped.
+    AUTHOR_SUPPLIED_HINT = "author_supplied_hint"
+
+
+class Provenance(StrEnum):
+    """Who supplied a criterion or a ``tests:``/``paths:`` hint (contract 3)."""
+
+    AUTHOR_PR_BODY = "author_pr_body"
+    AUTHOR_HEAD_SPEC = "author_head_spec"
+    BASE_SPEC = "base_spec"
+    HUMAN_CONFIRMED = "human_confirmed"
+    LLM_PROPOSED = "llm_proposed"
+
+
+#: Provenance values whose hints are NOT capped (the PR author did not control them).
+TRUSTED_HINT_PROVENANCE: frozenset[str] = frozenset(
+    {Provenance.BASE_SPEC.value, Provenance.HUMAN_CONFIRMED.value}
+)
+ALL_PROVENANCE: frozenset[str] = frozenset(p.value for p in Provenance)
 
 
 class NodeKind(StrEnum):

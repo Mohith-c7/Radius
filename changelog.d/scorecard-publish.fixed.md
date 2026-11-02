@@ -1,0 +1,1 @@
+The OpenSSF Scorecard workflow no longer fails at its publish step: it now follows the Scorecard workflow restrictions (no env variables or run steps in the analysis job). The first measured score for the repository was 7.4.

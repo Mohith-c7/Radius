@@ -535,11 +535,12 @@ def test_check_run_matches_the_verdict(results, name) -> None:
     verdict = res.payload["verdict"]
     assert res.check["name"] == "Radius confidence"
     assert res.check["status"] == "completed"
+    # Advisory (default): never success; failure only for R1a/R1b/R1c (all `failed` fixtures).
     assert res.check["conclusion"] == {
-        "verified": "success", "failed": "failure",
+        "verified": "neutral", "failed": "failure",
         "insufficient_evidence": "neutral", "needs_review": "neutral",
     }[verdict]
-    assert res.check["title"].startswith("Radius v2: ")
+    assert res.check["title"].startswith("Radius v2 alpha - static evidence only - uncalibrated: ")
     assert res.check["text"] == res.comment
 
 

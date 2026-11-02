@@ -15,7 +15,12 @@ from dataclasses import dataclass
 from typing import Any
 
 from radius_evidence.domain.assertion_records import features_from_assertion_set
-from radius_evidence.domain.enums import Outcome
+from radius_evidence.domain.enums import (
+    ALL_PROVENANCE,
+    TRUSTED_HINT_PROVENANCE,
+    Outcome,
+    Provenance,
+)
 from radius_evidence.domain.factories import (
     EvidenceInputError,
     finding_input_from_dict,
@@ -89,7 +94,55 @@ def is_test_file(path: str) -> bool:
 # ----------------------------------------------------------------- intent
 
 
-def criterion_inputs(criteria: Iterable[Any], *, limit: int = 50) -> Adapted[CriterionInput]:
+_CONFIRMED_LIFECYCLE = frozenset({"confirmed", "edited"})
+
+
+def criterion_provenance(
+    criterion: Any, lifecycle: str, *, spec_provenance: str = Provenance.AUTHOR_HEAD_SPEC.value
+) -> tuple[str, str]:
+    """``(criterion provenance, hints provenance)`` of one IN-01 criterion (contract 3).
+
+    * an explicit ``provenance`` / ``hints_provenance`` attribute (fixture harness,
+      fakes) wins when it is one of the five known tags;
+    * a criterion a human confirmed or edited (lifecycle ``confirmed`` / ``edited``;
+      reachable only through the authenticated intent API) is ``human_confirmed``, and
+      so are its hints;
+    * an LLM-extracted criterion is ``llm_proposed``;
+    * otherwise the source decides: the spec file is ``spec_provenance`` (``base_spec``
+      only when the same file exists unchanged on the base ref, else
+      ``author_head_spec``); every other source (PR title/body, commits, comments,
+      issues, agent prompt) is ``author_pr_body`` because the PR author may control it.
+    """
+
+    origin = getattr(criterion, "origin", None)
+    source = getattr(origin, "source", None)
+    kind = _enum_value(getattr(source, "kind", "")) if source is not None else ""
+    method = _enum_value(getattr(origin, "extraction_method", "")) if origin is not None else ""
+    if lifecycle in _CONFIRMED_LIFECYCLE:
+        crit = hint = Provenance.HUMAN_CONFIRMED.value
+    else:
+        if method == "llm":
+            crit = Provenance.LLM_PROPOSED.value
+        elif kind == "spec_file":
+            crit = spec_provenance
+        else:
+            crit = Provenance.AUTHOR_PR_BODY.value
+        hint = spec_provenance if kind == "spec_file" else Provenance.AUTHOR_PR_BODY.value
+    explicit = getattr(criterion, "provenance", None)
+    if isinstance(explicit, str) and explicit in ALL_PROVENANCE:
+        crit = explicit
+    explicit_hint = getattr(criterion, "hints_provenance", None)
+    if isinstance(explicit_hint, str) and explicit_hint in ALL_PROVENANCE:
+        hint = explicit_hint
+    return crit, hint
+
+
+def criterion_inputs(
+    criteria: Iterable[Any],
+    *,
+    limit: int = 50,
+    spec_provenance: str = Provenance.AUTHOR_HEAD_SPEC.value,
+) -> Adapted[CriterionInput]:
     """IN-01 ``Criterion`` objects -> :class:`CriterionInput` (duck-typed).
 
     Rejected/orphaned criteria are omitted. Over ``limit`` the remainder is dropped
@@ -128,6 +181,9 @@ def criterion_inputs(criteria: Iterable[Any], *, limit: int = 50) -> Adapted[Cri
             tests = tuple(
                 t for t in (getattr(hints, "tests", ()) or ())[:_MAX_HINTS] if _str(t, 500)
             )
+            prov, hint_prov = criterion_provenance(
+                c, lifecycle, spec_provenance=spec_provenance
+            )
             out.append(
                 CriterionInput(
                     criterion_id=cid,
@@ -137,6 +193,8 @@ def criterion_inputs(criteria: Iterable[Any], *, limit: int = 50) -> Adapted[Cri
                     lifecycle=lifecycle,
                     hints_paths=paths,
                     hints_tests=tests,
+                    provenance=prov,
+                    hints_provenance=hint_prov,
                 )
             )
         except Exception:  # noqa: BLE001 - dirty producer data must not escape
@@ -354,6 +412,7 @@ def hint_test_edges(
                     test_id=t,
                     weight=weight,
                     method="intent_yml_hint",
+                    provenance=c.hints_provenance,
                 )
     return Adapted(tuple(out[k] for k in sorted(out)), dropped)
 
@@ -395,18 +454,34 @@ def relevance_edges(
     return Adapted(tuple(out[k] for k in sorted(out)), dropped)
 
 
+def _effective_weight(e: CriterionTestEdgeInput, author_hint_cap: float) -> float:
+    """Weight used to rank edges: an untrusted hint is ranked at its capped weight."""
+
+    if e.method == "intent_yml_hint" and e.provenance not in TRUSTED_HINT_PROVENANCE:
+        return min(e.weight, author_hint_cap)
+    return e.weight
+
+
 def merge_criterion_test_edges(
     *groups: Iterable[CriterionTestEdgeInput],
+    author_hint_cap: float = 0.7,
 ) -> tuple[CriterionTestEdgeInput, ...]:
-    """Union by (criterion, test); the highest weight wins (hints win ties)."""
+    """Union by (criterion, test); the highest weight wins (hints win ties).
+
+    An author-supplied hint competes at its capped weight, so a stronger relevance
+    edge is not displaced by a hint that Stage B will cap anyway.
+    """
 
     best: dict[tuple[str, str], CriterionTestEdgeInput] = {}
     for group in groups:
         for e in group:
             key = (e.criterion_id, e.test_id)
             cur = best.get(key)
-            if cur is None or (e.weight, e.method == "intent_yml_hint") > (
-                cur.weight,
+            if cur is None or (
+                _effective_weight(e, author_hint_cap),
+                e.method == "intent_yml_hint",
+            ) > (
+                _effective_weight(cur, author_hint_cap),
                 cur.method == "intent_yml_hint",
             ):
                 best[key] = e

@@ -327,8 +327,10 @@
           {
             "criterion_id": "C1",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "slugify lowercases and replaces each run of non-alphanumeric characters with a single '-'",
             "weight": 1.0
@@ -336,8 +338,10 @@
           {
             "criterion_id": "C2",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "leading and trailing '-' are removed",
             "weight": 1.0
@@ -854,8 +858,10 @@
           {
             "criterion_id": "C1",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "slugify lowercases and replaces each run of non-alphanumeric characters with a single '-'",
             "weight": 1.0
@@ -863,8 +869,10 @@
           {
             "criterion_id": "C2",
             "hints_paths": [],
+            "hints_provenance": "author_pr_body",
             "hints_tests": [],
             "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
             "testability": "behavioral_testable",
             "text": "leading and trailing '-' are removed",
             "weight": 1.0
@@ -911,6 +919,7 @@
             "bm25_raw": null,
             "criterion_id": "C1",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_text_utils.py::test_slugify_basic",
             "weight": 1.0
           },
@@ -918,6 +927,7 @@
             "bm25_raw": null,
             "criterion_id": "C1",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_text_utils.py::test_slugify_treats_underscore_as_separator",
             "weight": 1.0
           },
@@ -925,6 +935,7 @@
             "bm25_raw": null,
             "criterion_id": "C2",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_text_utils.py::test_slugify_basic",
             "weight": 1.0
           },
@@ -932,6 +943,7 @@
             "bm25_raw": null,
             "criterion_id": "C2",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_text_utils.py::test_slugify_collapses_whitespace",
             "weight": 1.0
           },
@@ -939,6 +951,7 @@
             "bm25_raw": null,
             "criterion_id": "C2",
             "method": "gold_expected_json",
+            "provenance": "",
             "test_id": "tests/test_text_utils.py::test_slugify_empty",
             "weight": 1.0
           }

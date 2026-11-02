@@ -18,7 +18,9 @@ A useful verdict also needs `RADIUS_FEATURE_INTENT_INGESTION=true` (otherwise th
 
 The verdict is computed by fixed rules from validated evidence (test outcomes uploaded from CI, links between criteria, code and tests, and tamper findings). No language model decides it.
 
-- `Verified` means no rule found a problem, given the evidence Radius has. It does **not** mean the code is correct: tests were rated by the strength of their assertions, not by mutation testing, so a test that cannot fail can still count.
+**Wording.** The JSON contract keeps its internal values (`verified`, `proven`, ...), but everything a person reads says what the alpha actually measures. A comment starts with a one-line disclaimer ("Alpha - static evidence only - uncalibrated ... not a proof of correctness"), the internal state `proven` is shown as **SUPPORTED** (`unevidenced` as UNSUPPORTED), and the verdict `verified` is shown as **Supported by static evidence (alpha)**. Legend: *supported = static assertion strength above threshold; not a proof of correctness*. The API adds `alpha: true`, `calibrated: false`, `evidence_basis` and a `presentation` block with the same strings (`contract_version` `verdict-v2-contract-4`; all fields are optional additions).
+
+- `Supported by static evidence (alpha)` (internal `verified`) means no rule found a problem, given the evidence Radius has. It does **not** mean the code is correct: tests were rated by the strength of their assertions, not by mutation testing, so a test that cannot fail can still count. The thresholds were fitted by eye to 8 hand-written fixtures and are uncalibrated.
 - `Failed`, `Not verified - insufficient evidence` and `Needs human review` say why in one sentence and name the criteria involved.
 - There is no probability and no percentage score in v2. The v1 heuristic score appears only in a collapsed "legacy" section, labelled uncalibrated.
 
@@ -39,41 +41,81 @@ Rules are checked in this order. Every rule is evaluated and recorded; the first
 | 9 | R3a | an unwaived tamper finding at severity medium or above | Needs human review |
 | 10 | R3b | a criterion counted as proven depends on a flaky test | Needs human review |
 | 11 | R3c | a proven criterion rests on a weak criterion-to-code link (below 0.50) | Needs human review |
-| 12 | R4 | none of the above | Verified |
+| 12 | R4 | none of the above | Supported by static evidence (alpha) (`verified`) |
 
 With a repository policy that has `require` or `evidence` entries, two more rules sit between R2d and R3a: **P1** (a criterion or changed code under a required path is below the required state) and **P2** (a criterion has no counted test that is not agent-authored). Both give `Not verified - insufficient evidence`. Without such a policy the list is exactly the twelve rules above. See [Repository policy and waivers](policy.md).
 
 Because failures come first, a tamper finding fails the verdict immediately, without waiting for CI. A pending PR (R2p) is published as a completed, neutral check, never left "in progress"; the comment updates itself when results arrive.
 
-Unproven intent mass (UIM) is the weighted share of non-excluded criteria whose support is below 0.50. Intent coverage is the share of behavioral changes that a stated criterion accounts for.
+Unsupported intent mass (UIM; "unproven" in the design documents) is the weighted share of non-excluded criteria whose support is below 0.50. Intent coverage is the share of behavioral changes that a stated criterion accounts for.
 
 ## Criterion states
 
-| State in the comment | Meaning |
+| State in the comment (internal value) | Meaning |
 | --- | --- |
-| PROVEN | support is at least 0.50 and at least one counted test has a strong assertion |
-| WEAK | some support, but below the threshold, or no strong assertion |
-| UNPROVEN | little or no support, often no linked test |
+| SUPPORTED (`proven`) | static assertion strength reaches 0.50 and at least one counted test has a strong assertion. Not a proof of correctness |
+| WEAK (`weak`) | some support, but below the threshold, or no strong assertion |
+| UNSUPPORTED (`unevidenced`) | little or no support, often no linked test |
 | CONTRADICTED | a linked test failed |
 | EXCLUDED | not scored (for example too vague to test) |
 
-Short tags after the state (`tampered`, `flaky`, `unconfirmed`, `awaiting CI`, `weak link`, `stale evidence`, `needs typed evidence`) are flags that apply to that criterion.
+Short tags after the state (`tampered`, `flaky`, `unconfirmed`, `awaiting CI`, `weak link`, `stale evidence`, `needs typed evidence`, `author-supplied hint`) are flags that apply to that criterion.
 
 ## The comment
 
 One comment per pull request, updated in place. Layout:
 
+0. The alpha disclaimer (first visible line).
 1. Heading with the verdict, for example `Radius verdict (v2 alpha): Not verified - insufficient evidence`.
-2. A summary line: criteria proven, unproven intent mass with its limit, intent coverage, and the evidence basis (`static assertion strength only (no mutation testing)`).
+2. A summary line: criteria supported, unsupported intent mass with its limit, intent coverage (with a note when it is below the minimum) and the evidence basis (`static assertion strength only (no mutation testing)`). If any criterion relies on an unconfirmed test hint the author supplied, a line says `N criteria rely on author-supplied test hints`.
 3. `Why`: one sentence from the deciding rule, naming criteria as C1, C2, ...
-4. A table of criteria: state, support against the threshold, and what evidence backs it.
+4. A table of criteria: state, support against the threshold, and what evidence backs it, followed by the legend.
 5. `What to do next`: concrete actions per criterion.
 6. Collapsible sections: tamper findings, changed code with no stated criterion, per-criterion evidence (every factor that went into the support number), legacy v1 signals.
 7. A footer with the algorithm version, profile, short commit id and a link to the dashboard.
 
 A full example (fixture 08) is in `packages/github/tests/golden_verdict_v2/fixture_08_worked_example.md`.
 
-The Check Run keeps the name `Radius confidence`. Its conclusion is `success` only for a verified, non-pending result; `failure` for failed; `neutral` for everything else, so a missing or weak verdict never shows green.
+The Check Run keeps the name `Radius confidence`. Its title always carries the caveat, for example `Radius v2 alpha - static evidence only - uncalibrated: Supported by static evidence (alpha) (2/2 criteria supported)`, and its summary starts with the disclaimer.
+
+### Check Run conclusion mapping
+
+`RADIUS_VERDICT_V2_CHECK_CONCLUSIONS` (worker setting; `advisory` default, `strict`; any other value means `advisory`):
+
+| Verdict (deciding rule) | `advisory` (default) | `strict` |
+| --- | --- | --- |
+| `verified` (R4) | `neutral` | `success` |
+| `failed` (R1a failing linked test, R1b failing CI cases, R1c high tamper) | `failure` | `failure` |
+| `failed` (any other rule; none exists today) | `neutral` | `neutral` |
+| `insufficient_evidence` (R2*) | `neutral` | `neutral` |
+| `needs_review` (R3*) | `neutral` | `neutral` |
+| pending CI results, or v2 unavailable | `neutral` | `neutral` |
+
+A repository policy (`.radius/policy.yml` on the base branch, DEC-029) can set `mode`. Combined with the knob:
+
+| Policy `mode` | `verified` | `failed` | `insufficient_evidence` / `needs_review` | pending CI |
+| --- | --- | --- | --- | --- |
+| none (default) | `neutral` (`strict` knob: `success`) | `failure` for R1a/R1b/R1c | `neutral` | `neutral` |
+| `advisory` | `neutral` (`strict` knob: `success`) | `neutral` (never red) | `neutral` | `neutral` |
+| `blocking` | `success` | `failure` | `failure` | `failure` (republished when CI results arrive) |
+
+`blocking` is the repository's own opt-in to a required check, so it overrides the knob; an unavailable v2 result is always `neutral`. Policy `advisory` does not turn `verified` green by itself (DEC-030); that needs the `strict` knob.
+
+In the default mode nothing is ever green: the alpha cannot satisfy a required check by itself. Only hard evidence turns the check red. `strict` is for operators who accept the limits below and want `verified` to be a green check.
+
+## Who supplied the evidence (provenance and the author-hint cap)
+
+The pull request author controls the description, a `.radius/intent.yml` in the PR, the tests they add and the `tests:` hints that point at them. So every criterion and every `tests:` / `paths:` hint carries a provenance tag in the payload (`criteria[].provenance`, `criteria[].hints[].provenance`):
+
+| Tag | Meaning | Hint cap |
+| --- | --- | --- |
+| `author_pr_body` | from the PR title, description, commits, comments or linked issues | capped |
+| `author_head_spec` | from `.radius/intent.yml` at the PR head, added or changed by the PR (or no base ref to compare) | capped |
+| `base_spec` | from `.radius/intent.yml` identical on the base ref | not capped |
+| `human_confirmed` | the criterion was confirmed or edited in the intent panel (authenticated API) | not capped |
+| `llm_proposed` | proposed by the optional LLM extractor | capped |
+
+The link strength of a `tests:` hint that is not `base_spec` or `human_confirmed` is capped at `author_hint_cap` (default 0.7; `LinkMapping.author_hint_cap`). A criterion that relies on a capped hint gets the flag and reason code `author_supplied_hint` and the comment says so. Confirm the criterion in the intent panel, or keep `.radius/intent.yml` on the base branch, to lift the cap. In the F-14 fixture harness the expected links are fed as hints on confirmed criteria, so gold results are unchanged (DEC-030); with the same hints marked `author_head_spec`, fixture 01 drops from `verified` to `insufficient_evidence`. The full threat model, what the cap does not stop and a recommended policy are in [docs/security/VERDICT_V2_THREAT_MODEL.md](security/VERDICT_V2_THREAT_MODEL.md).
 
 With `.radius/policy.yml` on the base branch, `mode: blocking` maps every unverified result to `failure` (so a required check actually blocks) and `mode: advisory` never reports `failure`; the verdict is the same either way. The comment then shows a `Policy:` line (mode, source ref, number of settings applied) and a collapsible Policy section with the policy line each setting came from. Tamper findings accepted by a valid waiver are listed as `WAIVED` with the waiver id, owner, expiry and reason, and a Waivers section lists what was applied and what was ignored (expired, invalid). Details: [policy.md](policy.md).
 
@@ -89,7 +131,9 @@ With `.radius/policy.yml` on the base branch, `mode: blocking` maps every unveri
 
 ## Known limits of the alpha
 
-- **Alpha, off by default.** The result is not calibrated and is not a probability; do not use it as a required check yet.
+- **Alpha, off by default.** The result is not calibrated and is not a probability; do not use it as a required check yet. The default Check Run conclusion is `neutral` for this reason.
+- **Thresholds fitted to 8 fixtures.** `cap_static` 0.60 and `tau_support` 0.50 were chosen so the F-14 fixtures behave as designed; there is no held-out set, so no error rate is known.
+- **The author controls much of the evidence.** See the provenance section and the threat model; an author who writes both trivial criteria and strong-looking tests still gets a supported verdict.
 - **Static evidence only.** A test counts by the strength of its assertions, not by whether it would catch a bug (no mutation testing). A weak but passing test can never prove a criterion; a strong one still does not prove correctness.
 - **Python only.** Behavioral changes in other languages give `Not verified` (analysis incomplete).
 - **Dependencies offline.** A new dependency imported behind `try/except ImportError` that cannot be checked against a package registry is reported as a medium finding (`Needs human review`); only a registry that says the package does not exist (or a near-miss of a popular name) fails the PR. No registry adapter ships yet (DEC-028).
