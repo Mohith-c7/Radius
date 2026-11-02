@@ -124,7 +124,7 @@ AI-generated or AI-assisted pull requests are welcome under the same rules as an
 
 ## Licensing and sign-off
 
-## License of contributions (inbound = outbound)
+### License of contributions (inbound = outbound)
 
 Radius is licensed under the Apache License 2.0 (`LICENSE`, `NOTICE`; decision DEC-018 in `docs/decisions.md`). By submitting a contribution you agree that it is licensed to the project and to everyone who receives the project under the same Apache License 2.0 ("inbound = outbound"), as set out in section 5 of that license. You keep your copyright. You also confirm you have the right to submit the work: it is your own, or you have your employer's or institution's permission, or it comes from a source whose license allows inclusion under Apache-2.0.
 
@@ -134,7 +134,7 @@ Practical rules:
 - Do not commit third-party datasets or their rows. Only manifests, hashes and fetch scripts belong in the repo (`docs/research/datasets/DATA_HYGIENE.md`).
 - New dependencies must pass the license gate (`scripts/ci/license_check.py`, run by the `sbom-licenses` job in `.github/workflows/security.yml`): strong copyleft (AGPL, SSPL, GPL) is blocked, weak copyleft (LGPL, MPL) is reported and allowed when used as an unmodified library.
 
-## Sign your commits (DCO)
+### Sign your commits (DCO)
 
 We use the Developer Certificate of Origin (https://developercertificate.org/), not a Contributor License Agreement (CLA). Add a sign-off line to every commit:
 

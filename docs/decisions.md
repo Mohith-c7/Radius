@@ -175,7 +175,7 @@ follow-ups.
 
 Decided by delegation 2026-11-02 (owner: "complete everything by taking the ideal decisions"). Supersedes DEC-012. The owner may veto; see the irreversibility note at the end.
 
-**Status (2026-11-02): decided, but the `LICENSE`/`NOTICE` files are intentionally NOT in the repository yet.** They sit on branch `chore/license-apache-2.0` (draft PR, not merged) until the owner confirms: (1) written consent from the other contributor whose commits are in history, (2) that the university/sponsor has no IP claim on the capstone-era code, and (3) that publishing under Apache-2.0 is final. Until then the repository remains all-rights-reserved even though it is publicly visible.
+**Status (2026-11-02): in effect.** The `LICENSE` and `NOTICE` files were added after the owner explicitly confirmed the decision and took ownership of the open points that had been flagged: written consent from the other contributor whose commits are in history, and any university/sponsor claim on the capstone-era code. Those two items remain recorded risks, not verified facts; the owner is responsible for resolving them.
 
 Decision: the Radius repository (engine, parsers, graph, intent, evidence, mutation, tamper, calibration code, rule packs, schemas, benchmark harness, CLI/Action/MCP clients, self-hostable API and worker, and docs) is released under the **Apache License 2.0**. `LICENSE` and `NOTICE` are added; package metadata (`pyproject.toml`, `package.json` files) declares `Apache-2.0`. Copyright holder: Mohith Kumar, 2026.
 
