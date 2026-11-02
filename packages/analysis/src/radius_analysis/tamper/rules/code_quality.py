@@ -190,6 +190,8 @@ class StubbedImplementationRule(BaseRule):
 _SECRET = re.compile(
     r"(?i)\b\w*(password|passwd|secret|api_?key|token|private_key)\w*\s*=\s*[\"']([^\"'\s]{8,})[\"']"
 )
+# An UPPER_SNAKE literal is the *name* of an environment variable, not a credential.
+_ENV_NAME = re.compile(r"[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+")
 _PLACEHOLDER = re.compile(r"(?i)xxx|example|change.?me|placeholder|dummy|test|<.*>|\$\{|\{\{|env")
 _SECURITY = (
     ("tls_verify_disabled", re.compile(
@@ -234,7 +236,7 @@ class SecurityDowngradeRule(BaseRule):
                             new_range=(n, n), new=t, confidence=conf,
                         ))
                 m = _SECRET.search(t)
-                if m and not _PLACEHOLDER.search(m.group(2)):
+                if m and not _PLACEHOLDER.search(m.group(2)) and not _ENV_NAME.fullmatch(m.group(2)):
                     out.append(context.finding(
                         self, "hardcoded_secret", view.path,
                         "credential-like value assigned from a string literal",

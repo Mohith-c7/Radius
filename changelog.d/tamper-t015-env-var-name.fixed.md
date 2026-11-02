@@ -1,0 +1,1 @@
+Fixed a tamper false positive: T015 `hardcoded_secret` no longer fires when the string literal is an UPPER_SNAKE environment-variable name (for example `GEMINI_API_KEY_ENV = "GEMINI_API_KEY"`), which made a PR read as `failed`.

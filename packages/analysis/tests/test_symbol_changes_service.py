@@ -532,3 +532,41 @@ def test_f14_test_tampering_fixture_exposes_what_ev02_needs() -> None:
     )
     removed = by_name["test_reserve_more_than_stock_raises"]
     assert removed.old_range is not None and removed.new_range is None and removed.hunks
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git not installed")
+def test_git_snapshot_answers_missing_paths_without_spawning_git_show(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def git(*args: str) -> None:
+        subprocess.run(
+            ["git", "-c", "user.email=t@example.com", "-c", "user.name=t", "-c", "commit.gpgsign=false", *args],
+            cwd=tmp_path,
+            check=True,
+            capture_output=True,
+        )
+
+    git("init", "-q", "-b", "main")
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "a.py").write_bytes(b"X = 1\n")
+    git("add", ".")
+    git("commit", "-q", "-m", "base")
+
+    from radius_analysis.symbol_changes import snapshots
+
+    calls: list[list[str]] = []
+    real_run = subprocess.run
+
+    def spy(argv, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003
+        calls.append(list(argv))
+        return real_run(argv, *args, **kwargs)
+
+    monkeypatch.setattr(snapshots.subprocess, "run", spy)
+    snap = GitSnapshot(tmp_path, "HEAD")
+    assert snap.read("pkg/a.py") == b"X = 1\n"
+    shows = lambda: [c for c in calls if c[1] == "show"]  # noqa: E731
+    assert len(shows()) == 1
+    for missing in ("pyproject.toml", "pkg/__init__.py", "nope/x.py", "pkg"):  # a directory is not a file
+        assert snap.read(missing) is None
+    assert len(shows()) == 1  # no further git show for absent paths
+    assert sum(1 for c in calls if c[1] == "ls-tree") == 1  # listed once

@@ -1,0 +1,1 @@
+Added `scripts/verdict_v2_replay.py`: a read-only, resumable replay of Verdict v2 (static evidence, deterministic intent from PR text) over merged PRs of this repository, with per-PR timeout and an idempotent cache. Exploratory only, not a pre-registered evaluation.
