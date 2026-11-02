@@ -107,7 +107,7 @@ M2 = cheap signals (EV-01 to EV-03, EV-06 to EV-08). M4 = mutation-based signals
 - Acceptance: a new commit invalidates old evidence for changed symbols but not for unchanged ones when decay is enabled.
 - Contract: see design/VERDICT_V2_SLICE.md (docs/research/design/; Verdict v2 alpha: f in {0,1} by head SHA, 3.5)
 
-### EV-08 `q(e)` combiner and configuration   [ ]
+### EV-08 `q(e)` combiner and configuration   [x]
 - Owner type: agent-ok
 - Depends on: EV-02, EV-03, EV-05, EV-06, EV-07
 - Branch: `feature/evidence-quality-combiner`
