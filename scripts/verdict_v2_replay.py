@@ -366,7 +366,7 @@ def materialize_python_tree(
 
 
 _BULLET = re.compile(r"^(?P<indent>[ \t]{0,1})(?:[-*+]|\d+[.)])[ \t]+(?P<text>\S.*)$")
-_MD = re.compile(r"[*_`]+")
+_MD = re.compile(r"[*`]+")
 _PREFIX = re.compile(r"^\s*[a-zA-Z]+(?:\([^)]*\))?!?:\s*")
 MAX_BULLET_CRITERIA = 15
 
