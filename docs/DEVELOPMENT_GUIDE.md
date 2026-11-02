@@ -489,12 +489,12 @@ Deploy
 | `make: command not found` | Use `.\scripts\dev.ps1` (Windows) or install make. |
 | `docker compose up --wait` times out | `make logs` and `docker compose ps -a`. The `migrations` job must exit 0 before the API starts; a failing migration shows in `docker compose logs migrations`. |
 | API unhealthy right after start | It waits for Postgres and migrations; give it up to a minute on a cold start. `curl http://localhost:8000/api/v1/ready`. |
-| `The lockfile at uv.lock needs to be updated` / `uv sync` rewrites `uv.lock` | Use the `--frozen` forms shown here. Commit lock changes only in a dedicated dependency PR. |
+| `The lockfile at uv.lock needs to be updated` / `uv sync` rewrites `uv.lock` | `uv.lock` must match `pyproject.toml`: check with `uv lock --check`. Always install with `uv sync --frozen --extra dev` (never plain `uv sync`). If the check fails, run `uv lock` and commit the result in a dedicated dependency PR. CI installs with pip (`pip install -e ".[dev]"`), so `uv.lock` is for local reproducibility only; a stale lock shows up as missing `defusedxml` / `tree_sitter*` imports.
 | `pnpm: command not found` | `corepack enable` (see Windows notes). |
 | `Access is denied` while `uv sync` replaces `.venv` files (Windows) | A Python process (pytest, uvicorn, an IDE) still has the venv loaded. Stop it and rerun. |
 | Dashboard cannot reach the API | `NEXT_PUBLIC_RADIUS_API_BASE_URL` is baked in at build time. Edit `.env`, then `make dev` (it rebuilds). |
 | Fresh start / reset the database | `make clean-volumes` (destructive: deletes the Postgres volume). |
-| `test_secure_defaults.py::test_missing_secrets_are_rejected[development-None]` fails | The test removes `RADIUS_ALLOW_INSECURE_DEV` from the process environment, but settings still read it from `.env` (copied from `.env.example`, which sets it to `true`). Run the suite with `.env` moved aside. |
+| Tests behave differently (or hang on `smtp.gmail.com`) when a `.env` copied from `.env.example` exists | The root `conftest.py` makes all settings classes ignore `.env` during tests, so this should not happen; if you add a new `BaseSettings` class with its own `env_file`, register it in `_ignore_local_dotenv()`. Blank values such as `GITHUB_DEFAULT_ORGANIZATION_ID=` are treated as unset (`env_ignore_empty`). Passing `_env_file=None` to a settings constructor is the per-test equivalent.
 | Other test failures on Windows | Seen on a Windows 11 run of `develop`: `test_sandbox_runner.py` (POSIX path assumptions, symlink privilege `WinError 1314`) and `test_subprocess_runner.py::test_subprocess_runner_executes_pytest_plan`. `benchmarks/test_benchmarks.py::test_confidence_scoring_completeness_and_verification_status` failed when run alone but passed in the full run. Treat these as known issues, not setup problems. |
 
 ---
