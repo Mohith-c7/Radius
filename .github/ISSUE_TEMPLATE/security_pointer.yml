@@ -1,0 +1,27 @@
+name: Security vulnerability (do not use this form)
+description: Pointer only. Vulnerabilities must be reported privately, not here.
+title: "[Security]: DO NOT FILE VULNERABILITIES HERE"
+labels: ["type: security", "status: needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Do not disclose a vulnerability in a public issue
+
+        Report it privately through GitHub: [open a private security advisory](https://github.com/Mohith-c7/Radius/security/advisories/new). Read [SECURITY.md](https://github.com/Mohith-c7/Radius/blob/develop/SECURITY.md) for scope, response targets and safe-harbor terms.
+
+        Use this form only for non-sensitive security questions, such as asking what the security policy covers or suggesting a hardening idea that exposes no exploitable detail.
+  - type: textarea
+    id: question
+    attributes:
+      label: Non-sensitive security question or hardening suggestion
+      description: Do not include exploit details, secrets, tokens or private code.
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Confirmation
+      options:
+        - label: This issue does not describe an exploitable vulnerability, and contains no secrets.
+          required: true
