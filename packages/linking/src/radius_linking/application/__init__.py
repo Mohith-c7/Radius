@@ -1,5 +1,12 @@
 """Linking use cases (depend on the domain only)."""
 
+from radius_linking.application.chain import (
+    ChainConfig,
+    aggregate_support,
+    build_support_links,
+    explain,
+    score_chain,
+)
 from radius_linking.application.combine import (
     COMBINER_VERSION,
     DEFAULT_WEIGHTS,
@@ -22,6 +29,11 @@ from radius_linking.application.service import (
 )
 
 __all__ = [
+    "ChainConfig",
+    "aggregate_support",
+    "build_support_links",
+    "explain",
+    "score_chain",
     "COMBINER_VERSION",
     "DEFAULT_WEIGHTS",
     "CombineConfig",
