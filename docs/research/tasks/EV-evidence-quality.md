@@ -15,6 +15,7 @@ M2 = cheap signals (EV-01 to EV-03, EV-06 to EV-08). M4 = mutation-based signals
 - Steps: `EvidenceItem` (kind, source, head_sha, payload_ref, collected_at, authored_by, flaky flag); normalizers for JUnit XML, JSON test reports (exists in `packages/testing`), coverage (coverage.py XML/JSON, lcov), SARIF (static analysis), mutation results (EV-04), manual attestation; migration `0012` (`evidence_item`).
 - Acceptance: each normalizer has fixtures incl. malformed/oversized input rejected safely; items always bound to repo + head SHA; unbound items rejected (keeps existing SHA-binding guarantee).
 - Tests: parser fuzzing; tenant isolation.
+- Contract: see design/VERDICT_V2_SLICE.md (docs/research/design/; Verdict v2 alpha: alpha scope is the model, factories and JSON; table is Beta (migration 0015))
 
 ### EV-02 Tamper rule engine and catalog (Python first)   [x]
 - Owner type: agent-ok
@@ -45,6 +46,7 @@ M2 = cheap signals (EV-01 to EV-03, EV-06 to EV-08). M4 = mutation-based signals
 - Tests: pass/fail pair per rule; mutation of whitespace must not change findings; large-diff test.
 - Research hook: rule hit rates on agent vs human PRs (RQ2/RQ4).
 - Note: Verik (Apache-2.0) and SlopGate implement overlapping rules; reuse of ideas is fine, but check licenses before copying any code, and prefer independent implementation. AgentProof's license was not visible; do not copy.
+- Contract: see design/VERDICT_V2_SLICE.md (docs/research/design/; Verdict v2 alpha: consumed through TamperFindingInput; severities drive rules R1c/R3a)
 
 ### EV-03 Authorship and independence analysis   [ ]
 - Owner type: agent-ok
@@ -55,6 +57,7 @@ M2 = cheap signals (EV-01 to EV-03, EV-06 to EV-08). M4 = mutation-based signals
 - Steps: classify authorship of each test file/function in the PR (commit author, co-author trailers, bot accounts, trajectory data when available (PR-02)); mark pre-existing (unchanged) tests as independent; mark tests changed in the PR as dependent; produce `authored_by` and `independence_factor` using the defaults in `DESIGN.md` 6.3 (configurable).
 - Acceptance: fixtures verify classification; unknown authorship uses `iota_unknown`; documented limits.
 - Research hook: report how often evidence is non-independent in agent PRs.
+- Contract: see design/VERDICT_V2_SLICE.md (docs/research/design/; Verdict v2 alpha: alpha ships the lite independence factor only (section 3.5))
 
 ### EV-04 Mutation service (Python)   [ ]
 - Owner type: pair
@@ -93,6 +96,7 @@ M2 = cheap signals (EV-01 to EV-03, EV-06 to EV-08). M4 = mutation-based signals
 - Steps: score in [0,1] from `strength_features`: value-equality on computed result (high), exception type + message (medium), type/None/length only (low), no assertion or tautology (0), mock-call-only (low), snapshot-only (low unless snapshot reviewed). Calibrate weights against `d_mut` later (EP-08).
 - Acceptance: rank correlation with `d_mut` on the fixtures reported; capped contribution (`cap_static`).
 - Research hook: correlation between `a_static` and `d_mut` is a paper result (cheap proxy validity).
+- Contract: see design/VERDICT_V2_SLICE.md (docs/research/design/; Verdict v2 alpha: a_static table in 3.6)
 
 ### EV-07 Freshness binding and staleness   [ ]
 - Owner type: agent-ok
@@ -101,6 +105,7 @@ M2 = cheap signals (EV-01 to EV-03, EV-06 to EV-08). M4 = mutation-based signals
 - Size: S
 - Goal: `f(e)` = 1 if bound to current head SHA, else 0; keep history for audit; optional decay for evidence from earlier commits that touch unchanged symbols (policy-gated, default off).
 - Acceptance: a new commit invalidates old evidence for changed symbols but not for unchanged ones when decay is enabled.
+- Contract: see design/VERDICT_V2_SLICE.md (docs/research/design/; Verdict v2 alpha: f in {0,1} by head SHA, 3.5)
 
 ### EV-08 `q(e)` combiner and configuration   [ ]
 - Owner type: agent-ok
@@ -110,6 +115,7 @@ M2 = cheap signals (EV-01 to EV-03, EV-06 to EV-08). M4 = mutation-based signals
 - Goal: implement `q(e,c) = d_eff * i * f * (1 - tamper_penalty)` exactly as in `DESIGN.md` 6.3; store in `evidence_quality` (migration `0014`) with all components and `algo_version`.
 - Acceptance: golden tests with hand-computed values; all parameters in one config object; sensitivity script varies parameters and writes a report; monotonicity properties tested (e.g. increasing `d` never decreases `q`).
 - Research hook: parameter defaults are hypotheses; sensitivity results go into EP-12.
+- Contract: see design/VERDICT_V2_SLICE.md (docs/research/design/; Verdict v2 alpha: q(e,c) and link mapping in 3.5; evidence_quality table is Beta (migration 0016))
 
 ### EV-09 Mutation caching and budgets   [ ]
 - Owner type: agent-ok

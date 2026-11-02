@@ -13,6 +13,7 @@ Goal: compute and publish a deterministic, explainable, per-criterion verdict. S
 - Steps: per-kind weights `lambda_kind` (config); combined link confidence `l(c,e)` through criterion -> symbol -> test -> evidence; cap number of correlated evidence items (diminishing returns for evidence that exercises identical lines).
 - Acceptance: hand-computed golden cases; properties: S in [0,1], monotone in q and l, S=0 with no evidence; deterministic.
 - Research hook: store all intermediate values for ablations.
+- Contract: see design/VERDICT_V2_SLICE.md (docs/research/design/; Verdict v2 alpha: S(c) formula and caps in 3.9)
 
 ### VD-02 UIM and per-criterion states   [ ]
 - Owner type: agent-ok
@@ -22,6 +23,7 @@ Goal: compute and publish a deterministic, explainable, per-criterion verdict. S
 - Goal: states `proven | weak | unevidenced | contradicted | excluded` and UIM per `DESIGN.md` 6.4.
 - Steps: thresholds in config; `contradicted` triggered by failed independent evidence; `excluded` for vague (per policy) or waived (VD-05) with visible reason.
 - Acceptance: state transition table tested; UIM computed with weights; fixtures reproduce expected states.
+- Contract: see design/VERDICT_V2_SLICE.md (docs/research/design/; Verdict v2 alpha: states, flags, UIM and intent coverage in 3.9; criterion_support table is Beta (migration 0018))
 
 ### VD-03 Verdict rules v2 and justification tree   [ ]
 - Owner type: agent-ok
@@ -32,6 +34,7 @@ Goal: compute and publish a deterministic, explainable, per-criterion verdict. S
 - Steps: `needs_review` state defined but only reachable once calibration/abstention exist (CA-04); until then it is produced only by policy triggers (e.g. high-severity process signal) and is feature-flagged.
 - Acceptance: every verdict reproduces from stored inputs (`radius replay`, QS-09); justification references only existing ids; rules ordering tested.
 - Decision needed (DESIGN 11.2): confirm the fourth state.
+- Contract: see design/VERDICT_V2_SLICE.md (docs/research/design/; Verdict v2 alpha: rules R1 to R4 and justification schema in 3.9; verdict_v2 table is migration 0013, not 0015)
 
 ### VD-04 Policy engine (`.radius/policy.yml`)   [ ]
 - Owner type: agent-ok
@@ -60,6 +63,7 @@ Goal: compute and publish a deterministic, explainable, per-criterion verdict. S
 - Steps: Markdown templates with collapsible sections; annotations on tamper findings and surviving mutants (Check Run annotations); concise summary line; link to dashboard; rate-limit handling and retries; honest "pending" states (mutation running).
 - Acceptance: one comment per PR, updated in place; works for forks (permission limits documented); republish within seconds after CI upload; snapshot tests of rendered Markdown.
 - Product hook: the main daily surface for developers.
+- Contract: see design/VERDICT_V2_SLICE.md (docs/research/design/; Verdict v2 alpha: renderer and republish-after-CI in sections 5.5 and 6)
 
 ### VD-07 Feature flags and v1 compatibility   [ ]
 - Owner type: agent-ok
@@ -69,6 +73,7 @@ Goal: compute and publish a deterministic, explainable, per-criterion verdict. S
 - Goal: flag mechanism (`RADIUS_FEATURE_*`, per-org override) so v2 runs in shadow mode (computed, stored, not published) before replacing v1.
 - Acceptance: v1 output unchanged when flags off; shadow mode stores v2 results; comparison report v1 vs v2 on the same PRs.
 - Research hook: shadow-mode data is free evaluation data.
+- Contract: see design/VERDICT_V2_SLICE.md (docs/research/design/; Verdict v2 alpha: alpha flag RADIUS_FEATURE_VERDICT_V2 = off|shadow|on in 1.3 (task VD-07-lite))
 
 ### VD-08 Explainability renderer   [ ]
 - Owner type: agent-ok
