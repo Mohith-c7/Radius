@@ -39,7 +39,7 @@ Not claimed: correctness guarantees, replacing CI, replacing reviewers, generati
 | **SlopGate** (OSS, Apache-2.0 confirmed on PyPI; Python CLI and GitHub Action; test-tamper guard, phantom symbols, reproduction gate, slop-to-logic ratio) | AST checks for test tampering, hallucinated packages | Tamper rules | Same as above |
 | **Mutation tools (Stryker, mutmut, PIT, Mutahunter)** (Mutahunter is AGPL-3.0: do not copy or link; the others were not re-checked) | Measure test strength | Ingredient | Radius scopes mutation to the changed symbols tied to criteria and turns it into a PR verdict |
 
-Defensible differentiators (to be proven by the evaluation): (1) intent-to-evidence traceability, (2) evidence-quality weighting, (3) calibrated trust with abstention, (4) process verification, (5) manager-level aggregate view, (6) self-hostable and deterministic.
+Defensible differentiators (to be proven by the evaluation): (1) evidence-strength-aware criterion support (criterion-to-evidence mapping alone is not unique: AgentProof and ScopeProof do it), (2) evidence-quality weighting as a gold-free, PR-time predictor (benchmark-time test strengthening exists: SWE-ABS, UTBoost, PatchDiff), (3) calibrated trust with abstention, (4) process verification (process-aware evaluation of passing runs exists: AgentLens), (5) manager-level aggregate view, (6) self-hostable and deterministic. Differentiators 1 to 4 are hypotheses; see `literature/novelty-assessment.md`.
 
 ## 5. Product principles
 

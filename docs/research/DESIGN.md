@@ -24,7 +24,7 @@ Where the field is today:
 | Did CI pass / which tests did the change reach? | Radius v1 |
 | Did the PR satisfy its stated criteria with *any* passing test? | AgentProof (rule-based) |
 | Did the agent tamper with tests or leave suspicious code? | Verik, SlopGate |
-| **Is each criterion proven by evidence that could actually have caught a failure, and is the resulting confidence calibrated?** | **Nobody we found (to be confirmed by a proper literature review, task EP-01).** |
+| **Is each criterion proven by evidence that could actually have caught a failure, and is the resulting confidence calibrated?** | **Parts of this exist; the combination was not found in the EP-01 review (not systematic; re-check before submission).** Criterion-to-evidence mapping exists (AgentProof, ScopeProof). Mutation-style test strengthening exists at benchmark time (SWE-ABS, UTBoost, PatchDiff), using the gold patch or generated tests. We did not find a gold-free, PR-time score that combines criterion-linked evidence, fault-detection-weighted strength and calibrated abstention, evaluated against ground-truth labels. See `literature/novelty-assessment.md`. |
 
 Radius already verifies and does not generate code (`docs/AI_CONTEXT.md`). This design keeps that rule: LLMs may *propose* (criteria, links), but the verdict is computed **deterministically from validated evidence**.
 

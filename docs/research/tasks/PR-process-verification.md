@@ -2,7 +2,11 @@
 
 Goal: verify not only the output but *how* the change was produced, to catch "lucky passes". See `../DESIGN.md` section 6.6. Template and rules: `../IMPLEMENTATION_PLAN.md`.
 
-Context: a recent paper (AgentLens) reports that a noticeable share of passing agent runs reach correct patches through weak processes. Verify that claim in the literature review (EP-01) before citing a number.
+Context: AgentLens (Sahoo et al., arXiv 2605.12925, `Sahoo2026` in `../literature/references.bib`) reports "Lucky Passes", passing runs reached through weak processes. EP-01 verified the number; cite it only with these qualifiers:
+- 10.7% of passing trajectories are Lucky Passes, measured on a 1,815-trajectory subset covering 47 tasks (from 2,614 OpenHands trajectories on 60 SWE-bench Verified tasks).
+- OpenHands only; the rate ranges from 0.5% to 23.2% across the 8 backends, so it is not a single universal rate.
+- Code and data were not released as of arXiv v4 (2026-10-05); do not plan on reusing them.
+- It evaluates runs that already pass and needs other passing runs of the same task as the reference, so it cannot be applied to a single new PR. Radius PR-time signals (PR-06, PR-07) have no such reference and are a different, predictive use (RQ4, pre-registered in `../preregistration/PREREGISTRATION.md`).
 
 ---
 
@@ -64,6 +68,7 @@ Context: a recent paper (AgentLens) reports that a noticeable share of passing a
 - Branch: `feature/process-lucky-pass`
 - Size: M
 - Goal: combine signals into a single indicator; start rule-based, replace by a learned model only if RQ4 shows benefit. Must be explainable.
+- Literature note: the indicator is Radius's own PR-time construct and is not AgentLens's "Lucky Pass" tier. AgentLens defines Lucky on runs that already pass (10.7% of 1,815 trajectories / 47 tasks, OpenHands only, 0.5% to 23.2% across backends, code not released as of v4) using other passing runs of the same task as reference. Do not reuse its percentages as expected Radius rates; if its code is released, re-implement the tiers as a baseline (EP-10).
 - Acceptance: documented formula; never used alone to fail a PR; shown as "process risk" with the contributing signals.
 
 ### PR-08 Redaction and retention   [ ]
