@@ -36,7 +36,7 @@ Goal: compute and publish a deterministic, explainable, per-criterion verdict. S
 - Decision needed (DESIGN 11.2): confirm the fourth state.
 - Contract: see design/VERDICT_V2_SLICE.md (docs/research/design/; Verdict v2 alpha: rules R1 to R4 and justification schema in 3.9; verdict_v2 table is migration 0013, not 0015)
 
-### VD-04 Policy engine (`.radius/policy.yml`)   [ ]
+### VD-04 Policy engine (`.radius/policy.yml`)   [x] (repository-level file read from the base branch; org defaults, a JSON schema file, `audit_log` rows, mutation-score and typed-evidence settings are not built: see `docs/policy.md`)
 - Owner type: agent-ok
 - Depends on: VD-03
 - Branch: `feature/policy-engine`
@@ -46,7 +46,7 @@ Goal: compute and publish a deterministic, explainable, per-criterion verdict. S
 - Acceptance: invalid policy rejected with helpful errors; policy changes recorded in `audit_log`; effective policy visible in UI; policy evaluated deterministically and stored with each assessment.
 - Tests: schema tests; precedence tests; path-glob tests.
 
-### VD-05 Waivers with expiry and audit   [ ]
+### VD-05 Waivers with expiry and audit   [x] (file-based on the base branch with owner, reason, 90-day expiry and a per-verdict audit record; no in-product role check: review of `.radius/` is the control)
 - Owner type: agent-ok
 - Depends on: VD-04, MG-06
 - Branch: `feature/policy-waivers`

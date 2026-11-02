@@ -326,3 +326,11 @@ Context: fixture 06 (`pytimeparse-ultra` pinned in `requirements.txt`, imported 
 Decision: the default severity of `T012:unverified_guarded_import` is `medium` (EV-02 `DependencyRule.checks`, overridable through `severity_overrides` as before). `registry_missing` and `typosquat` stay `high`. This refines D12 for this one check only; the fixture facts agree (its README says the `high` severity is "an assumption until EV-02 decides" and records the registry 404 as the proof). The PR verdict for fixture 06 is `needs_review` offline and `failed` with the registry, as in `verdict_v2.fixture_expectations.json`.
 
 Consequence: until a PyPI adapter ships (follow-up of EV-02), a hallucinated dependency is surfaced as `needs_review` with the finding listed, not blocked. Revisit when the registry adapter and the egress policy (DEC-021) allow lookups by default.
+
+## DEC-029: Verdict v2 policy and waivers are repository files read from the base branch (VD-04, VD-05)
+
+Context: a policy engine and waivers let people tune and accept findings. If the PR author could edit the file that judges the PR, the control would be void.
+
+Decision: `.radius/policy.yml` and `.radius/waivers.yml` are read from the base side of the PR only. A head policy is read only when the base policy opts in with `head_policy: tighten_only`, and then each setting is kept only if it is at least as strict. Threshold overrides have narrow hard bounds. Lowering or disabling a `high` or `critical` tamper finding needs a recorded `allow_disable` reason. A base policy that cannot be read or parsed marks the analysis incomplete (R2d) instead of falling back to defaults; a broken waivers file ignores all waivers. A waiver needs a reason, an owner and an expiry at most 90 days from `created`, and can never cover a contradicted criterion or a failed CI case. `mode` (advisory or blocking) only maps the verdict to the Check Run conclusion.
+
+Consequences: no migration (the policy and waiver audit travel in the stored bundle); no in-product role check or `audit_log` row yet, the control is review and CODEOWNERS on `.radius/`; org-level defaults are a follow-up. Details: `docs/policy.md`.
