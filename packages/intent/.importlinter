@@ -91,3 +91,47 @@ forbidden_modules =
     anthropic
     openai
     yaml
+
+[importlinter:contract:evaluation-core-is-pure]
+name = Evaluation metrics core is pure computation (no infrastructure, web, database or LLM SDKs)
+type = forbidden
+source_modules =
+    radius_intent.evaluation.gold
+    radius_intent.evaluation.matching
+    radius_intent.evaluation.stats
+    radius_intent.evaluation.metrics
+    radius_intent.evaluation.config
+    radius_intent.evaluation.compare
+    radius_intent.evaluation.report
+forbidden_modules =
+    radius_intent.infrastructure
+    radius_intent.application
+    radius_intent.interfaces
+    radius_intent.evaluation.loader
+    radius_intent.evaluation.extractors
+    radius_intent.evaluation.runner
+    radius_intent.evaluation.provenance
+    radius_intent.evaluation.cli
+    sqlalchemy
+    fastapi
+    pydantic
+    httpx
+    requests
+    psycopg
+    alembic
+    google
+    anthropic
+    openai
+    yaml
+    subprocess
+
+[importlinter:contract:nothing-depends-on-evaluation]
+name = Product code never imports the research evaluation harness
+type = forbidden
+source_modules =
+    radius_intent.domain
+    radius_intent.application
+    radius_intent.interfaces
+    radius_intent.infrastructure
+forbidden_modules =
+    radius_intent.evaluation

@@ -1,0 +1,13 @@
+{
+  "name": "f14-fixtures-smoke",
+  "seed": 20261102,
+  "gold": {"path": "benchmarks/fixtures/intent", "adapter": "f14-fixtures"},
+  "matching": {"iou_threshold": 0.5, "text_threshold": 0.8},
+  "bootstrap": {"resamples": 1000, "confidence": 0.95},
+  "rate_testability": true,
+  "extractors": [
+    {"id": "deterministic", "kind": "deterministic"},
+    {"id": "combined-fake", "kind": "combined", "provider": {"type": "fake-lines"}},
+    {"id": "sanity-oracle", "kind": "oracle"}
+  ]
+}
