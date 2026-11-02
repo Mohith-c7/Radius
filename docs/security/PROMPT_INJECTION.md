@@ -71,3 +71,22 @@ Add a row to the corpus (keep ids stable, bump `corpus_version` in the `_meta` l
 - It does not cover semantic poisoning of verdict inputs outside the LLM path, multi-turn or tool-using agents, image/PDF inputs, or provider-side data retention. Features that add tools or multi-step agents need new invariants before registering.
 - Secret detection is limited to known values (planted or from sensitive-named env vars) plus the patterns in `redaction.py`.
 - The suite runs inside the normal CI test step; no separate required check or results tracking dashboard exists yet.
+
+## Legacy Gemini pruner: third-party code egress (not covered by this suite)
+
+`SemanticPruner` (`packages/analysis/src/radius_analysis/ai/pruner.py`) predates the LLM policy. When it runs, it sends
+the **source code of caller symbols and the diff** to Google Gemini. It does not use `radius_shared.llm_guard`, is
+not part of the prompt-injection corpus, and is **not governed by the DEC-021 egress policy** (per-org gate, redaction,
+code-egress switch). What the code does today (checked by grep):
+
+- The live analysis pipeline never calls it. Its only callers are `Phase1AnalysisOrchestrator._run_semantic_cpg_poc` (invoked from tests
+  only), `scripts/run_phase2_poc.py` and its own tests.
+- It is active only when `RADIUS_FEATURE_GEMINI_PRUNER=true` **and** `GEMINI_API_KEY` is set (`gemini_api_key_from_env`).
+  Before this flag existed the key alone enabled it. With the flag off the key is ignored and no network call is made.
+- Its output cannot remove tests from a selection or influence a verdict.
+- The `google-genai` and `google-generativeai` packages remain core dependencies of the project; they are imported by
+  this module. Moving them to an optional extra, or deleting the module, is an open follow-up (DEC-021 "known gap").
+
+Operator guidance: leave `GEMINI_API_KEY` and `RADIUS_FEATURE_GEMINI_PRUNER` unset in every shared or customer
+deployment. Treat code sent to Gemini as disclosed to Google; check Google's terms for the key you use before enabling it
+on private code (not verified here).

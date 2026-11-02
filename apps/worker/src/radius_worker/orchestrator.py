@@ -504,7 +504,7 @@ class Phase1AnalysisOrchestrator:
     ) -> set[str]:
         import os
 
-        from radius_analysis.ai.pruner import SemanticPruner
+        from radius_analysis.ai.pruner import SemanticPruner, gemini_api_key_from_env
         from radius_analysis.diff_hunks import parse_diff_modified_lines
         from radius_graph.cpg import CodePropertyGraph
         from radius_graph.slicer import GraphSlicer
@@ -589,7 +589,8 @@ class Phase1AnalysisOrchestrator:
         self._last_cpg = cpg
 
         slicer = GraphSlicer(cpg)
-        api_key = os.environ.get("GEMINI_API_KEY", "")
+        # Opt-in only: needs RADIUS_FEATURE_GEMINI_PRUNER as well as the key.
+        api_key = gemini_api_key_from_env()
         pruner = SemanticPruner(api_key=api_key)
 
         pruned_files = set()

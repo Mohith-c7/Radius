@@ -20,7 +20,7 @@ Goal: make the existing prototype trustworthy enough to build on. Fixes the gaps
 - Research hook: the decision log is cited in the paper's design section.
 - Product hook: one consistent story for the README and website.
 
-### F-02 Fix README claims that do not match the code   [ ]
+### F-02 Fix README claims that do not match the code   [x]  (b4773dc; README re-aligned again in the docs truth pass, flaky wording and maturity table)
 - Owner type: agent-ok
 - Depends on: none
 - Branch: `docs/readme-truth`
@@ -31,7 +31,7 @@ Goal: make the existing prototype trustworthy enough to build on. Fixes the gaps
 - Tests: add a simple docs check script (optional) that fails if README mentions `Redis` while no Redis dependency exists.
 - Research hook: none. Product hook: honest marketing builds trust.
 
-### F-03 Repository hygiene   [ ]
+### F-03 Repository hygiene   [~]  (3b343e5 untracked generated artifacts and removed the stale audit script; step 3, where the capstone diary lives, is an open owner decision, see PRD-09)
 - Owner type: agent-ok
 - Depends on: none
 - Branch: `fix/repo-hygiene`
@@ -61,7 +61,7 @@ Goal: make the existing prototype trustworthy enough to build on. Fixes the gaps
 - Status: docs, script and PR template are done. The applied protection differs from step 3's "linear promotion only": it uses merge-commit promotion and no signed-commit or linear-history rule (see `docs/github-branch-protection.md`). Applying the settings through the GitHub API is a separate owner step after this merges.
 - Product hook: Radius dogfoods its own required check on this repo (see IT-03).
 
-### F-05 Remove the public API key from the dashboard   [ ]
+### F-05 Remove the public API key from the dashboard   [x]  (824697b)
 - Owner type: agent-ok
 - Depends on: none
 - Branch: `fix/dashboard-api-key`
@@ -71,7 +71,7 @@ Goal: make the existing prototype trustworthy enough to build on. Fixes the gaps
 - Acceptance: grep of the built client bundle finds no API key; dashboard still works; tenancy enforced server-side.
 - Tests: a test that builds and scans `.next` output for the key name/value; API tests with a missing/wrong key.
 
-### F-06 Validate the GitHub App against a live installation   [ ]
+### F-06 Validate the GitHub App against a live installation   [~]  (e2c99f8 runbook, manifest helper and scenario driver merged; no recorded live run or validation report exists in the repo, so the acceptance is not met)
 - Owner type: human-required
 - Depends on: none
 - Branch: `docs/github-app-validation` (docs/evidence) plus fixes via `fix/*`
@@ -82,7 +82,7 @@ Goal: make the existing prototype trustworthy enough to build on. Fixes the gaps
 - Tests: add recorded-fixture tests for each webhook payload seen live.
 - Research hook: this live repo becomes the first end-to-end data source.
 
-### F-07 Sandbox proof and hardening   [ ]
+### F-07 Sandbox proof and hardening   [x]  (f35006e; the external penetration test is QS-03, not done)
 - Owner type: pair
 - Depends on: none
 - Branch: `feature/sandbox-hardening`
@@ -118,7 +118,7 @@ Goal: make the existing prototype trustworthy enough to build on. Fixes the gaps
 - Acceptance: TS fixtures resolve cross-file imports incl. path aliases; regex parser removed from the default path.
 - Tests: fixtures per language feature; parity tests Python.
 
-### F-10 Observability baseline   [ ]
+### F-10 Observability baseline   [x]  (83b9832)
 - Owner type: agent-ok
 - Depends on: none
 - Branch: `feature/ops-observability`
@@ -147,7 +147,7 @@ Goal: make the existing prototype trustworthy enough to build on. Fixes the gaps
 - Goal: keep the v1 0-100 score working but label it "uncalibrated heuristic" everywhere until CA-* ships.
 - Acceptance: API field `score_kind="heuristic_uncalibrated"`; dashboard and PR comment show the label; docs updated.
 
-### F-13 CI hardening   [ ]
+### F-13 CI hardening   [x]  (13863fd, 02ef078)
 - Owner type: agent-ok
 - Depends on: none
 - Branch: `ci/hardening`
@@ -157,7 +157,7 @@ Goal: make the existing prototype trustworthy enough to build on. Fixes the gaps
 - Acceptance: CI fails on a seeded secret, a vulnerable dependency (test branch), or coverage drop.
 - Tests: demonstration PRs documented.
 
-### F-14 Golden fixtures corpus   [ ]
+### F-14 Golden fixtures corpus   [x]  (2039b04)
 - Owner type: agent-ok
 - Depends on: none
 - Branch: `feature/bench-golden-fixtures`
@@ -167,7 +167,7 @@ Goal: make the existing prototype trustworthy enough to build on. Fixes the gaps
 - Acceptance: documented README per fixture; script to load them into the harness.
 - Research hook: first labelled data; later extended into the gold set (IN-09, EP-04).
 
-### F-15 One-command dev environment   [ ]
+### F-15 One-command dev environment   [x]  (a08b31b; clean-machine run unverified)
 - Owner type: agent-ok
 - Depends on: none
 - Branch: `feature/dev-onboarding`

@@ -172,3 +172,23 @@ def test_legacy_semantic_pruner_fallback_on_invalid_json():
         result = pruner.evaluate_impact("def caller(): pass", "diff")
 
         assert result is True
+
+
+def test_gemini_key_ignored_without_explicit_flag() -> None:
+    from radius_analysis.ai.pruner import gemini_api_key_from_env
+
+    assert gemini_api_key_from_env({"GEMINI_API_KEY": "k"}) == ""
+    assert (
+        gemini_api_key_from_env(
+            {"GEMINI_API_KEY": "k", "RADIUS_FEATURE_GEMINI_PRUNER": "false"}
+        )
+        == ""
+    )
+
+
+def test_gemini_key_used_when_flag_is_on() -> None:
+    from radius_analysis.ai.pruner import gemini_api_key_from_env
+
+    env = {"GEMINI_API_KEY": " k ", "RADIUS_FEATURE_GEMINI_PRUNER": "TRUE"}
+    assert gemini_api_key_from_env(env) == "k"
+    assert gemini_api_key_from_env({"RADIUS_FEATURE_GEMINI_PRUNER": "1"}) == ""
