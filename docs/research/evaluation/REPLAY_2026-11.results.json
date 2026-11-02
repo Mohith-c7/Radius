@@ -1,0 +1,5779 @@
+{
+ "bullets_sensitivity": [
+  {
+   "additions": 1518,
+   "agent_signal": false,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 27,
+   "content": {
+    "extensions": {
+     "(none)": 1,
+     ".css": 1,
+     ".json": 2,
+     ".md": 1,
+     ".ps1": 1,
+     ".ts": 1,
+     ".tsx": 19,
+     ".yaml": 1
+    },
+    "kinds": {
+     "ci_infra": 1,
+     "docs": 1,
+     "js_ts_src": 20,
+     "other": 5
+    },
+    "profile": "mixed"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R2a",
+   "degraded": [
+    "unsupported_language:typescript"
+   ],
+   "deletions": 353,
+   "explanation": "insufficient_evidence by R2a; no criteria extracted from the PR text; degraded: unsupported_language:typescript",
+   "intent_coverage": 0.0,
+   "intent_mode": "bullets",
+   "n_criteria": 0,
+   "n_symbols": 37,
+   "n_tests_linked": 0,
+   "number": 3,
+   "peak_rss_mb": 97.8,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.469,
+    "prep": 0.969,
+    "stage_a": 14.297,
+    "stage_b": 0.015
+   },
+   "runtime_total_s": 17.313,
+   "status": "ok",
+   "stratum": "other",
+   "tamper": [],
+   "title": "Codex/dashboard phase1",
+   "uim": 0.0,
+   "unlinked_symbols": 31,
+   "url": "https://github.com/Mohith-c7/Radius/pull/3",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 3604,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 49,
+   "content": {
+    "extensions": {
+     ".lock": 1,
+     ".py": 47,
+     ".toml": 1
+    },
+    "kinds": {
+     "ci_infra": 4,
+     "other": 2,
+     "python_src": 38,
+     "tests": 5
+    },
+    "profile": "mixed"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R2a",
+   "degraded": [],
+   "deletions": 44,
+   "explanation": "insufficient_evidence by R2a; no criteria extracted from the PR text; 9 tamper finding(s): T013",
+   "intent_coverage": 0.0,
+   "intent_mode": "bullets",
+   "n_criteria": 0,
+   "n_symbols": 169,
+   "n_tests_linked": 208,
+   "number": 9,
+   "peak_rss_mb": 143.4,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.516,
+    "prep": 1.078,
+    "stage_a": 39.141,
+    "stage_b": 0.406
+   },
+   "runtime_total_s": 42.515,
+   "status": "ok",
+   "stratum": "other",
+   "tamper": [
+    {
+     "check": "type_ignore",
+     "path": "packages/confidence/tests/test_coverage.py",
+     "reason": "`# type: ignore[arg-type]` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "type_ignore",
+     "path": "packages/confidence/tests/test_coverage.py",
+     "reason": "`# type: ignore[arg-type]` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "type_ignore",
+     "path": "packages/confidence/tests/test_coverage.py",
+     "reason": "`# type: ignore[arg-type]` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "type_ignore",
+     "path": "packages/confidence/tests/test_coverage.py",
+     "reason": "`# type: ignore[arg-type]` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "type_ignore",
+     "path": "packages/testing/src/radius_testing/infrastructure/sqlalchemy_store.py",
+     "reason": "`# type: ignore` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "type_ignore",
+     "path": "packages/confidence/tests/test_coverage_application_service.py",
+     "reason": "`# type: ignore[arg-type]` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "type_ignore",
+     "path": "packages/confidence/tests/test_coverage.py",
+     "reason": "`# type: ignore[arg-type]` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "type_ignore",
+     "path": "packages/confidence/tests/test_coverage.py",
+     "reason": "`# type: ignore[arg-type]` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "type_ignore",
+     "path": "packages/confidence/tests/test_coverage_application_service.py",
+     "reason": "`# type: ignore[arg-type]` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    }
+   ],
+   "title": "Codex/dashboard phase1",
+   "uim": 0.0,
+   "unlinked_symbols": 145,
+   "url": "https://github.com/Mohith-c7/Radius/pull/9",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 2872,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R1c",
+    "verdict": "failed"
+   },
+   "changed_files": 98,
+   "content": {
+    "extensions": {
+     "(none)": 1,
+     ".ini": 16,
+     ".json": 9,
+     ".md": 16,
+     ".patch": 8,
+     ".py": 45,
+     ".toml": 1,
+     ".txt": 2
+    },
+    "kinds": {
+     "docs": 18,
+     "other": 35,
+     "python_src": 22,
+     "tests": 23
+    },
+    "profile": "mixed"
+   },
+   "criteria": [
+    {
+     "S": 0.0,
+     "id": "crit_754447818ad55e7e825ab7dcbc2ef06f",
+     "reasons": [
+      "not_testable"
+     ],
+     "state": "excluded",
+     "testability": "subjective_or_vague",
+     "text": "T001-T016 severities are assumptions pending EV-02"
+    },
+    {
+     "S": 0.071765,
+     "id": "crit_9d6fca326e6ccaddd88fcc4f74f55438",
+     "reasons": [
+      "not_testable"
+     ],
+     "state": "excluded",
+     "testability": "subjective_or_vague",
+     "text": "add 8 golden intent-to-evidence fixtures (F-14)"
+    },
+    {
+     "S": 0.041661,
+     "id": "crit_a6efac2df2a60688cae5daad650f9a46",
+     "reasons": [
+      "insufficient_support"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "8 labeled scenarios with expected.json, loader/verify tooling and 45 tests"
+    }
+   ],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 2,
+    "proven": 0,
+    "unevidenced": 1,
+    "weak": 0
+   },
+   "decided_by": "R1c",
+   "degraded": [],
+   "deletions": 0,
+   "explanation": "failed by R1c; 3 criteria (2 excluded, 1 unevidenced), UIM 1.00, coverage 0.04; 9 tamper finding(s): T012, T016, T017",
+   "intent_coverage": 0.037975,
+   "intent_mode": "bullets",
+   "n_criteria": 3,
+   "n_symbols": 208,
+   "n_tests_linked": 68,
+   "number": 22,
+   "peak_rss_mb": 148.9,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.484,
+    "prep": 1.156,
+    "stage_a": 61.734,
+    "stage_b": 0.094
+   },
+   "runtime_total_s": 64.734,
+   "status": "ok",
+   "stratum": "other",
+   "tamper": [
+    {
+     "check": "debug_call",
+     "path": "benchmarks/fixtures/intent/loader.py",
+     "reason": "`print(...)` left in library code",
+     "rule_id": "T016",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "collection_hook",
+     "path": "benchmarks/fixtures/intent/conftest.py",
+     "reason": "conftest `collect_ignore` change excludes files from test collection",
+     "rule_id": "T017",
+     "severity": "high",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "unverified_guarded_import",
+     "path": "benchmarks/fixtures/intent/06_hallucinated_dependency/head/requirements.txt",
+     "reason": "new dependency `pytimeparse-ultra` is not in a lockfile or the known-package list and its import in `benchmarks/fixtures/intent/06_hallucinated_dependency/head/",
+     "rule_id": "T012",
+     "severity": "medium",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "debug_call",
+     "path": "benchmarks/fixtures/intent/loader.py",
+     "reason": "`print(...)` left in library code",
+     "rule_id": "T016",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "debug_call",
+     "path": "benchmarks/fixtures/intent/loader.py",
+     "reason": "`print(...)` left in library code",
+     "rule_id": "T016",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "debug_call",
+     "path": "benchmarks/fixtures/intent/loader.py",
+     "reason": "`print(...)` left in library code",
+     "rule_id": "T016",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "debug_call",
+     "path": "benchmarks/fixtures/intent/loader.py",
+     "reason": "`print(...)` left in library code",
+     "rule_id": "T016",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "debug_call",
+     "path": "benchmarks/fixtures/intent/loader.py",
+     "reason": "`print(...)` left in library code",
+     "rule_id": "T016",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "debug_call",
+     "path": "benchmarks/fixtures/intent/loader.py",
+     "reason": "`print(...)` left in library code",
+     "rule_id": "T016",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    }
+   ],
+   "title": "test(bench): add 8 golden intent-to-evidence fixtures (F-14)",
+   "uim": 1.0,
+   "unlinked_symbols": 76,
+   "url": "https://github.com/Mohith-c7/Radius/pull/22",
+   "verdict": "failed",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 4458,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 32,
+   "content": {
+    "extensions": {
+     "(none)": 1,
+     ".example": 1,
+     ".json": 19,
+     ".md": 3,
+     ".py": 6,
+     ".toml": 1,
+     ".yml": 1
+    },
+    "kinds": {
+     "docs": 5,
+     "other": 3,
+     "python_src": 2,
+     "tests": 22
+    },
+    "profile": "mixed"
+   },
+   "criteria": [
+    {
+     "S": 0.0,
+     "id": "crit_7eae42f760080443e7e27014192b67df",
+     "reasons": [
+      "insufficient_support",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "Runbook, app manifest, manifest-flow helper and a dry-run-by-default scenario driver so the live GitHub App validation is mechanical"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_857d98d0bd9c3837aac71c1f77c35e64",
+     "reasons": [
+      "insufficient_support",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "18 signed webhook fixtures plus offline tests: signature verification, event routing, idempotent redelivery, force-push, publisher behavior against a stateful f"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_b469336fb4884672413c5cc3e6b4bc3d",
+     "reasons": [
+      "insufficient_support",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "docs+test: GitHub App live-validation kit and signed webhook fixtures (F-06)"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_e0f25d87d7f5a89bf212b33607e90807",
+     "reasons": [
+      "insufficient_support",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "Fixes two small defects: GITHUB_SINGLE_TENANT was never passed to the API in compose; DEPLOYMENT.md had the wrong webhook path (/api/v1/webhooks/github)"
+    }
+   ],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 4,
+    "weak": 0
+   },
+   "decided_by": "R2b",
+   "degraded": [],
+   "deletions": 1,
+   "explanation": "insufficient_evidence by R2b; 4 criteria (4 unevidenced), UIM 1.00, coverage 0.00; 6 tamper finding(s): T009, T013, T014",
+   "intent_coverage": 0.0,
+   "intent_mode": "bullets",
+   "n_criteria": 4,
+   "n_symbols": 167,
+   "n_tests_linked": 22,
+   "number": 28,
+   "peak_rss_mb": 153.2,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.469,
+    "prep": 1.219,
+    "stage_a": 39.437,
+    "stage_b": 0.094
+   },
+   "runtime_total_s": 42.469,
+   "status": "ok",
+   "stratum": "other",
+   "tamper": [
+    {
+     "check": "noqa",
+     "path": "scripts/github_app_manifest.py",
+     "reason": "`# noqa: N802` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "new_stub",
+     "path": "scripts/github_app_manifest.py",
+     "reason": "new function `make_handler.Handler.log_message` is a stub",
+     "rule_id": "T014",
+     "severity": "low",
+     "symbol": "make_handler.Handler.log_message",
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "tests/test_github_app_scenarios.py",
+     "reason": "`# noqa: E731` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "tests/test_github_app_scenarios.py",
+     "reason": "`# noqa: E731` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "pragma_no_cover",
+     "path": "scripts/github_app_manifest.py",
+     "reason": "`# pragma: no cover` hides this code from coverage",
+     "rule_id": "T009",
+     "severity": "medium",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "pragma_no_cover",
+     "path": "scripts/github_app_manifest.py",
+     "reason": "`# pragma: no cover` hides this code from coverage",
+     "rule_id": "T009",
+     "severity": "medium",
+     "symbol": null,
+     "waived": false
+    }
+   ],
+   "title": "docs+test: GitHub App live-validation kit and signed webhook fixtures (F-06)",
+   "uim": 1.0,
+   "unlinked_symbols": 58,
+   "url": "https://github.com/Mohith-c7/Radius/pull/28",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 1092,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R1c",
+    "verdict": "failed"
+   },
+   "changed_files": 11,
+   "content": {
+    "extensions": {
+     ".lock": 1,
+     ".md": 2,
+     ".py": 8
+    },
+    "kinds": {
+     "docs": 2,
+     "other": 1,
+     "python_src": 5,
+     "tests": 3
+    },
+    "profile": "mixed"
+   },
+   "criteria": [
+    {
+     "S": 0.0,
+     "id": "crit_14cd4bb51a448d2dadcbcd71ed30c6f3",
+     "reasons": [
+      "insufficient_support",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "Full suite on an env built from the lockfile, with a copied .env present: only the two known Windows test_sandbox_runner failures. ruff check . clean."
+    },
+    {
+     "S": 0.260406,
+     "id": "crit_1a578c9394fd3080e46757cd67a9646e",
+     "reasons": [
+      "partial_support",
+      "correlated_discount"
+     ],
+     "state": "weak",
+     "testability": "behavioral_testable",
+     "text": "Root conftest.py clears env_file on the settings classes so tests no longer depend on a developer's .env (a placeholder SMTP login made a signup test hang); no "
+    },
+    {
+     "S": 0.398181,
+     "id": "crit_5643d1cb4cee968e59533372d0afda83",
+     "reasons": [
+      "partial_support",
+      "correlated_discount"
+     ],
+     "state": "weak",
+     "testability": "behavioral_testable",
+     "text": "uv.lock re-locked against pyproject.toml (uv lock --check passes; adds defusedxml, tree-sitter grammars, import-linter and friends; pytest 9.2.0 to match CI); d"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_6c46020168afaba685fc0af79eb64c23",
+     "reasons": [
+      "insufficient_support",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "structural_checkable",
+     "text": "Removes the unused TraceCarrierStore / TRACE_CARRIERS (the traceparent now lives in analysis_jobs)"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_74e232c13888ef9c2b9c368acd0374d5",
+     "reasons": [
+      "insufficient_support",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "structural_checkable",
+     "text": "refresh uv.lock, make settings/tests independent of a local .env, drop unused trace carrier"
+    },
+    {
+     "S": 0.071107,
+     "id": "crit_7840d9b74a290d7d0da3fc58d6f4c5db",
+     "reasons": [
+      "insufficient_support",
+      "correlated_discount"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "The earlier local-only failures (ingestion_attribution, cpg_multilang, ...) did not reproduce on a clean env; the stale lockfile was the likely cause (not re-co"
+    },
+    {
+     "S": 0.234701,
+     "id": "crit_cff5dea016b02187c5fad961e66da5fd",
+     "reasons": [
+      "not_testable"
+     ],
+     "state": "excluded",
+     "testability": "subjective_or_vague",
+     "text": "Real bug: blank values in a copied .env.example (e.g. GITHUB_DEFAULT_ORGANIZATION_ID=) crashed settings validation: env_ignore_empty=True on the base/observabil"
+    }
+   ],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 1,
+    "proven": 0,
+    "unevidenced": 4,
+    "weak": 2
+   },
+   "decided_by": "R1c",
+   "degraded": [],
+   "deletions": 80,
+   "explanation": "failed by R1c; 7 criteria (1 excluded, 4 unevidenced, 2 weak), UIM 1.00, coverage 0.70; 2 tamper finding(s): T001, T017",
+   "intent_coverage": 0.7,
+   "intent_mode": "bullets",
+   "n_criteria": 7,
+   "n_symbols": 16,
+   "n_tests_linked": 185,
+   "number": 40,
+   "peak_rss_mb": 181.7,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.516,
+    "prep": 1.156,
+    "stage_a": 19.75,
+    "stage_b": 0.312
+   },
+   "runtime_total_s": 22.985,
+   "status": "ok",
+   "stratum": "fix",
+   "tamper": [
+    {
+     "check": "test_deleted",
+     "path": "packages/shared/tests/test_observability.py",
+     "reason": "test `test_trace_context_round_trips_through_carrier_store` was deleted while `InMemorySpanExporter`, `configure_tracing`, `continue_trace`, `current_traceparen",
+     "rule_id": "T001",
+     "severity": "high",
+     "symbol": "test_trace_context_round_trips_through_carrier_store",
+     "waived": false
+    },
+    {
+     "check": "conftest_changed_with_source",
+     "path": "conftest.py",
+     "reason": "`conftest.py` changed (21 code line(s)) in the same PR as 6 source behavior change(s); shared test setup may have been adapted to the new behavior",
+     "rule_id": "T017",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    }
+   ],
+   "title": "fix: refresh uv.lock, make settings/tests independent of a local .env, drop unused trace carrier",
+   "uim": 1.0,
+   "unlinked_symbols": 3,
+   "url": "https://github.com/Mohith-c7/Radius/pull/40",
+   "verdict": "failed",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 298,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 20,
+   "content": {
+    "extensions": {
+     "(none)": 2,
+     ".json": 13,
+     ".md": 4,
+     ".toml": 1
+    },
+    "kinds": {
+     "docs": 4,
+     "other": 16
+    },
+    "profile": "mixed"
+   },
+   "criteria": [
+    {
+     "S": 0.0,
+     "id": "crit_4059e311c4bc6f9cf76375520f348185",
+     "reasons": [
+      "not_testable"
+     ],
+     "state": "excluded",
+     "testability": "subjective_or_vague",
+     "text": "Apache-2.0 LICENSE, NOTICE and DCO contribution terms (DEC-018)"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_66e35254b059e99469e8f2c8f5295448",
+     "reasons": [
+      "insufficient_support",
+      "no_linked_test",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "LICENSE (Apache-2.0, unmodified text) and NOTICE; license fields in pyproject.toml and the 13 package.json files; THIRD_PARTY_NOTICES.md"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_a086eb3d921e2b5926b626e1f51e5f30",
+     "reasons": [
+      "insufficient_support",
+      "no_linked_test",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "README license section; DEC-018 status updated to 'in effect'"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_cb02a76ec1e108102fd55f604ea7d3d1",
+     "reasons": [
+      "not_testable"
+     ],
+     "state": "excluded",
+     "testability": "untestable_external",
+     "text": "CONTRIBUTING: inbound = outbound, DCO sign-off, no CLA (DEC-022)"
+    }
+   ],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 2,
+    "proven": 0,
+    "unevidenced": 2,
+    "weak": 0
+   },
+   "decided_by": "R2b",
+   "degraded": [],
+   "deletions": 6,
+   "explanation": "insufficient_evidence by R2b; 4 criteria (2 excluded, 2 unevidenced), UIM 1.00, coverage 1.00",
+   "intent_coverage": 1.0,
+   "intent_mode": "bullets",
+   "n_criteria": 4,
+   "n_symbols": 20,
+   "n_tests_linked": 0,
+   "number": 45,
+   "peak_rss_mb": 106.3,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.532,
+    "prep": 1.406,
+    "stage_a": 14.704,
+    "stage_b": 0.0
+   },
+   "runtime_total_s": 18.078,
+   "status": "ok",
+   "stratum": "ci",
+   "tamper": [],
+   "title": "chore(license): Apache-2.0 LICENSE, NOTICE and DCO contribution terms (DEC-018)",
+   "uim": 1.0,
+   "unlinked_symbols": 0,
+   "url": "https://github.com/Mohith-c7/Radius/pull/45",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 862,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 20,
+   "content": {
+    "extensions": {
+     ".md": 9,
+     ".yml": 11
+    },
+    "kinds": {
+     "ci_infra": 12,
+     "docs": 8
+    },
+    "profile": "mixed"
+   },
+   "criteria": [
+    {
+     "S": 0.0,
+     "id": "crit_28e5dc6b77925ff40f710963d4e17526",
+     "reasons": [
+      "not_testable"
+     ],
+     "state": "excluded",
+     "testability": "subjective_or_vague",
+     "text": "SECURITY, CODE_OF_CONDUCT, SUPPORT, CONTRIBUTING, GOVERNANCE, MAINTAINERS, issue forms, labels (PRD-03/04)"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_d4580e26a907fa06fd73331f6097c1b0",
+     "reasons": [
+      "insufficient_support",
+      "no_linked_test",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "docs/production-readiness/OWNER_ACTIONS.md lists what only the owner can do (enable private reporting, mailboxes, Discussions, apply labels)"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_d6de4eb3d5a36669b71052496d41646f",
+     "reasons": [
+      "insufficient_support",
+      "no_linked_test",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "Issue forms (bug, feature, docs, verdict false-positive/negative report, rule/extractor proposal, security pointer; blank issues disabled), discussion templates"
+    }
+   ],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 1,
+    "proven": 0,
+    "unevidenced": 2,
+    "weak": 0
+   },
+   "decided_by": "R2b",
+   "degraded": [],
+   "deletions": 0,
+   "explanation": "insufficient_evidence by R2b; 3 criteria (1 excluded, 2 unevidenced), UIM 1.00, coverage 1.00",
+   "intent_coverage": 1.0,
+   "intent_mode": "bullets",
+   "n_criteria": 3,
+   "n_symbols": 20,
+   "n_tests_linked": 0,
+   "number": 50,
+   "peak_rss_mb": 99.9,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.469,
+    "prep": 1.344,
+    "stage_a": 8.938,
+    "stage_b": 0.0
+   },
+   "runtime_total_s": 12.0,
+   "status": "ok",
+   "stratum": "docs",
+   "tamper": [],
+   "title": "docs(community): SECURITY, CODE_OF_CONDUCT, SUPPORT, CONTRIBUTING, GOVERNANCE, MAINTAINERS, issue forms, labels (PRD-03/04)",
+   "uim": 1.0,
+   "unlinked_symbols": 0,
+   "url": "https://github.com/Mohith-c7/Radius/pull/50",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 383,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 7,
+   "content": {
+    "extensions": {
+     ".md": 1,
+     ".py": 2,
+     ".yml": 4
+    },
+    "kinds": {
+     "ci_infra": 4,
+     "docs": 1,
+     "python_src": 1,
+     "tests": 1
+    },
+    "profile": "mixed"
+   },
+   "criteria": [
+    {
+     "S": 0.0,
+     "id": "crit_0eda5e8307402da2e73c70ad204fd74a",
+     "reasons": [
+      "needs_typed_evidence",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "non_functional_measurable",
+     "text": "New workflows: CodeQL (python, javascript-typescript, security-extended, test/fixture payload paths ignored), OpenSSF Scorecard (degrades gracefully without SCO"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_44692ec155d10e8e91c57c591c1124ef",
+     "reasons": [
+      "not_testable"
+     ],
+     "state": "excluded",
+     "testability": "subjective_or_vague",
+     "text": "actionlint (pinned image digest) clean"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_4fb6bec414f27131e34712be0f1cccdd",
+     "reasons": [
+      "insufficient_support",
+      "no_linked_test",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "structural_checkable",
+     "text": "Every action pinned to a full SHA verified against upstream tags; regression test + script fail on any unpinned or uncommented uses:"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_63b9485b16a47f90f4c564995ace6a5f",
+     "reasons": [
+      "needs_typed_evidence",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "non_functional_measurable",
+     "text": "CodeQL, OpenSSF Scorecard, dependency review and Dependabot overhaul (PRD-07)"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_e97899c657bac1366948a919e9b12c07",
+     "reasons": [
+      "needs_typed_evidence",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "non_functional_measurable",
+     "text": "Dependabot rewritten: github-actions, pip, npm, docker, docker-compose; grouped minor/patch, Conventional-Commits prefixes"
+    }
+   ],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 1,
+    "proven": 0,
+    "unevidenced": 4,
+    "weak": 0
+   },
+   "decided_by": "R2a",
+   "degraded": [],
+   "deletions": 1,
+   "explanation": "insufficient_evidence by R2a; 5 criteria (1 excluded, 4 unevidenced), UIM 1.00, coverage 0.00",
+   "intent_coverage": 0.0,
+   "intent_mode": "bullets",
+   "n_criteria": 5,
+   "n_symbols": 11,
+   "n_tests_linked": 0,
+   "number": 51,
+   "peak_rss_mb": 209.5,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.5,
+    "prep": 1.343,
+    "stage_a": 12.422,
+    "stage_b": 0.0
+   },
+   "runtime_total_s": 15.531,
+   "status": "ok",
+   "stratum": "ci",
+   "tamper": [],
+   "title": "ci: CodeQL, OpenSSF Scorecard, dependency review and Dependabot overhaul (PRD-07)",
+   "uim": 1.0,
+   "unlinked_symbols": 3,
+   "url": "https://github.com/Mohith-c7/Radius/pull/51",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 597,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 7,
+   "content": {
+    "extensions": {
+     ".md": 4,
+     ".py": 2,
+     ".yml": 1
+    },
+    "kinds": {
+     "ci_infra": 1,
+     "docs": 4,
+     "python_src": 1,
+     "tests": 1
+    },
+    "profile": "mixed"
+   },
+   "criteria": [
+    {
+     "S": 0.0,
+     "id": "crit_717800245391bf24443dd93233b90b59",
+     "reasons": [
+      "not_testable"
+     ],
+     "state": "excluded",
+     "testability": "subjective_or_vague",
+     "text": "README rewrite, CHANGELOG, changelog fragments and Conventional Commits check (PRD-05/06)"
+    },
+    {
+     "S": 0.441212,
+     "id": "crit_947fcc94a831a03f0d50ad4ce36a60bd",
+     "reasons": [
+      "partial_support",
+      "correlated_discount"
+     ],
+     "state": "weak",
+     "testability": "structural_checkable",
+     "text": "scripts/ci/commit_lint.py + commit-lint.yml (PR title and commit subjects; bots and promotions exempt; fragment required for feat/fix/perf/breaking unless label"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_a51d98e94e62ad0a2a291220a7bdba18",
+     "reasons": [
+      "insufficient_support",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "CHANGELOG.md (Keep a Changelog, [Unreleased] only, reconstructed from merged PRs), changelog.d fragments, docs/RELEASING.md"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_fb10154f2e9cf6ca37e2cab39cb05ffe",
+     "reasons": [
+      "not_testable"
+     ],
+     "state": "excluded",
+     "testability": "subjective_or_vague",
+     "text": "README rewritten: problem/promise, honest status box, mermaid architecture diagram, maturity-labelled feature table, claims limited to what the docs/novelty ass"
+    }
+   ],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 2,
+    "proven": 0,
+    "unevidenced": 1,
+    "weak": 1
+   },
+   "decided_by": "R2b",
+   "degraded": [],
+   "deletions": 92,
+   "explanation": "insufficient_evidence by R2b; 4 criteria (2 excluded, 1 unevidenced, 1 weak), UIM 1.00, coverage 1.00",
+   "intent_coverage": 1.0,
+   "intent_mode": "bullets",
+   "n_criteria": 4,
+   "n_symbols": 28,
+   "n_tests_linked": 13,
+   "number": 53,
+   "peak_rss_mb": 218.2,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.485,
+    "prep": 1.312,
+    "stage_a": 16.125,
+    "stage_b": 0.047
+   },
+   "runtime_total_s": 19.36,
+   "status": "ok",
+   "stratum": "docs",
+   "tamper": [],
+   "title": "docs: README rewrite, CHANGELOG, changelog fragments and Conventional Commits check (PRD-05/06)",
+   "uim": 1.0,
+   "unlinked_symbols": 0,
+   "url": "https://github.com/Mohith-c7/Radius/pull/53",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 20,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 5,
+   "content": {
+    "extensions": {
+     ".yml": 5
+    },
+    "kinds": {
+     "ci_infra": 5
+    },
+    "profile": "ci_infra"
+   },
+   "criteria": [
+    {
+     "S": 0.0,
+     "id": "crit_ebdf2565b3cdcb63d578e5c69d3fe60e",
+     "reasons": [
+      "insufficient_support",
+      "no_linked_test",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "structural_checkable",
+     "text": "bump checkout, setup-python, upload-artifact and pnpm/action-setup to current majors"
+    }
+   ],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 1,
+    "weak": 0
+   },
+   "decided_by": "R2b",
+   "degraded": [],
+   "deletions": 20,
+   "explanation": "insufficient_evidence by R2b; 1 criteria (1 unevidenced), UIM 1.00, coverage 1.00",
+   "intent_coverage": 1.0,
+   "intent_mode": "bullets",
+   "n_criteria": 1,
+   "n_symbols": 5,
+   "n_tests_linked": 0,
+   "number": 80,
+   "peak_rss_mb": 101.1,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.469,
+    "prep": 1.281,
+    "stage_a": 7.094,
+    "stage_b": 0.0
+   },
+   "runtime_total_s": 10.125,
+   "status": "ok",
+   "stratum": "ci",
+   "tamper": [],
+   "title": "ci(deps): bump checkout, setup-python, upload-artifact and pnpm/action-setup to current majors",
+   "uim": 1.0,
+   "unlinked_symbols": 0,
+   "url": "https://github.com/Mohith-c7/Radius/pull/80",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 307,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 7,
+   "content": {
+    "extensions": {
+     ".json": 3,
+     ".md": 2,
+     ".yaml": 1,
+     ".yml": 1
+    },
+    "kinds": {
+     "ci_infra": 2,
+     "docs": 2,
+     "other": 3
+    },
+    "profile": "mixed"
+   },
+   "criteria": [
+    {
+     "S": 0.0,
+     "id": "crit_2b857734542c39b96d151241b32c5ebd",
+     "reasons": [
+      "needs_typed_evidence",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "non_functional_measurable",
+     "text": "Dependabot: pip increase-if-necessary; semver-major updates of next/react/typescript/eslint ignored (handled in planned upgrade tasks); security updates and gro"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_31e72d2c6d70d125e5dedb9b94ddeaa6",
+     "reasons": [
+      "insufficient_support",
+      "no_linked_test",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "structural_checkable",
+     "text": "Next.js 15.5.22 -> 15.5.28 (fixes 3 critical + highs, minimal patch-line upgrade; Next 16 deliberately deferred) and pnpm overrides for postcss, nanoid, source-"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_4f61d2035b363b29b524445850e1bca7",
+     "reasons": [
+      "not_testable"
+     ],
+     "state": "excluded",
+     "testability": "subjective_or_vague",
+     "text": "pnpm audit: 0 critical / 0 high; the baseline is cut to one moderate (minimatch 3.1.5 via ESLint tooling; forcing 11.x breaks eslint .), with justification and "
+    },
+    {
+     "S": 0.0,
+     "id": "crit_b48381dd73a8a026291601d247010b23",
+     "reasons": [
+      "not_testable"
+     ],
+     "state": "excluded",
+     "testability": "subjective_or_vague",
+     "text": "Advisory -> fix table in docs/security/CI_CHECKS.md; changelog fragment added"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_e23c280bae8585b6c64145f25bdd059f",
+     "reasons": [
+      "needs_typed_evidence",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "non_functional_measurable",
+     "text": "patch Next.js and transitive JS advisories (0 critical/high), tune Dependabot"
+    }
+   ],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 2,
+    "proven": 0,
+    "unevidenced": 3,
+    "weak": 0
+   },
+   "decided_by": "R2b",
+   "degraded": [],
+   "deletions": 378,
+   "explanation": "insufficient_evidence by R2b; 5 criteria (2 excluded, 3 unevidenced), UIM 1.00, coverage 1.00",
+   "intent_coverage": 1.0,
+   "intent_mode": "bullets",
+   "n_criteria": 5,
+   "n_symbols": 6,
+   "n_tests_linked": 0,
+   "number": 82,
+   "peak_rss_mb": 102.2,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.516,
+    "prep": 1.313,
+    "stage_a": 7.937,
+    "stage_b": 0.016
+   },
+   "runtime_total_s": 11.109,
+   "status": "ok",
+   "stratum": "fix",
+   "tamper": [],
+   "title": "fix(deps): patch Next.js and transitive JS advisories (0 critical/high), tune Dependabot",
+   "uim": 1.0,
+   "unlinked_symbols": 0,
+   "url": "https://github.com/Mohith-c7/Radius/pull/82",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 5,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 3,
+   "content": {
+    "extensions": {
+     ".md": 1,
+     ".py": 2
+    },
+    "kinds": {
+     "docs": 1,
+     "python_src": 1,
+     "tests": 1
+    },
+    "profile": "mixed"
+   },
+   "criteria": [
+    {
+     "S": 0.0,
+     "id": "crit_50f9c7e6d20a9d8125434b8d8abd946a",
+     "reasons": [
+      "insufficient_support",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "accept comma-separated scopes in the commit check"
+    }
+   ],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 1,
+    "weak": 0
+   },
+   "decided_by": "R2b",
+   "degraded": [],
+   "deletions": 1,
+   "explanation": "insufficient_evidence by R2b; 1 criteria (1 unevidenced), UIM 1.00, coverage 0.00",
+   "intent_coverage": 0.0,
+   "intent_mode": "bullets",
+   "n_criteria": 1,
+   "n_symbols": 4,
+   "n_tests_linked": 12,
+   "number": 84,
+   "peak_rss_mb": 227.3,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.5,
+    "prep": 1.25,
+    "stage_a": 13.406,
+    "stage_b": 0.0
+   },
+   "runtime_total_s": 16.453,
+   "status": "ok",
+   "stratum": "fix",
+   "tamper": [],
+   "title": "fix(ci): accept comma-separated scopes in the commit check",
+   "uim": 1.0,
+   "unlinked_symbols": 1,
+   "url": "https://github.com/Mohith-c7/Radius/pull/84",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 5,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 3,
+   "content": {
+    "extensions": {
+     ".md": 1,
+     ".toml": 1,
+     ".yml": 1
+    },
+    "kinds": {
+     "ci_infra": 1,
+     "docs": 1,
+     "other": 1
+    },
+    "profile": "mixed"
+   },
+   "criteria": [
+    {
+     "S": 0.0,
+     "id": "crit_7020bc4d2357f9531bf89755bd87b7b9",
+     "reasons": [
+      "insufficient_support",
+      "no_linked_test",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "structural_checkable",
+     "text": "drop pnpm cache from the audit-only job"
+    }
+   ],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 1,
+    "weak": 0
+   },
+   "decided_by": "R2b",
+   "degraded": [],
+   "deletions": 1,
+   "explanation": "insufficient_evidence by R2b; 1 criteria (1 unevidenced), UIM 1.00, coverage 1.00",
+   "intent_coverage": 1.0,
+   "intent_mode": "bullets",
+   "n_criteria": 1,
+   "n_symbols": 3,
+   "n_tests_linked": 0,
+   "number": 86,
+   "peak_rss_mb": 102.1,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.469,
+    "prep": 1.313,
+    "stage_a": 6.594,
+    "stage_b": 0.0
+   },
+   "runtime_total_s": 9.688,
+   "status": "ok",
+   "stratum": "ci",
+   "tamper": [],
+   "title": "ci(security): drop pnpm cache from the audit-only job",
+   "uim": 1.0,
+   "unlinked_symbols": 0,
+   "url": "https://github.com/Mohith-c7/Radius/pull/86",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 505,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R1c",
+    "verdict": "failed"
+   },
+   "changed_files": 9,
+   "content": {
+    "extensions": {
+     "(none)": 5,
+     ".md": 3,
+     ".yml": 1
+    },
+    "kinds": {
+     "ci_infra": 4,
+     "docs": 3,
+     "other": 2
+    },
+    "profile": "mixed"
+   },
+   "criteria": [
+    {
+     "S": 0.0,
+     "id": "crit_116a42049f0d5c1be6e88d1fbf3f352e",
+     "reasons": [
+      "needs_typed_evidence",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "non_functional_measurable",
+     "text": "Measured: api 718 -> 644 MB, dashboard 1.32 GB -> 435 MB; all run non-root and work with --read-only --cap-drop ALL --security-opt no-new-privileges (worker nee"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_18b8ceff0bc220e65ee9e0b20be8d85f",
+     "reasons": [
+      "insufficient_support",
+      "no_linked_test",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "Bug fix: the API/worker images on develop failed to start (ModuleNotFoundError: radius_intent): packages/intent/src was missing from PYTHONPATH"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_d2408fbcce9b731f60768559b1703440",
+     "reasons": [
+      "needs_typed_evidence",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "non_functional_measurable",
+     "text": "container-scan.yml: builds images (no push) and runs Trivy (pinned) on Dockerfile/dependency PRs and weekly; fails on fixable HIGH/CRITICAL; .trivyignore holds "
+    },
+    {
+     "S": 0.0,
+     "id": "crit_e2a57813425f411579771e8ee9a65cb3",
+     "reasons": [
+      "needs_typed_evidence",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "non_functional_measurable",
+     "text": "non-root, digest-pinned images; fix API import path; Trivy scan (PRD-08)"
+    }
+   ],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 4,
+    "weak": 0
+   },
+   "decided_by": "R1c",
+   "degraded": [],
+   "deletions": 29,
+   "explanation": "failed by R1c; 4 criteria (4 unevidenced), UIM 1.00, coverage 1.00; 1 tamper finding(s): T010",
+   "intent_coverage": 1.0,
+   "intent_mode": "bullets",
+   "n_criteria": 4,
+   "n_symbols": 9,
+   "n_tests_linked": 0,
+   "number": 87,
+   "peak_rss_mb": 109.4,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.485,
+    "prep": 1.578,
+    "stage_a": 10.109,
+    "stage_b": 0.016
+   },
+   "runtime_total_s": 13.484,
+   "status": "ok",
+   "stratum": "fix",
+   "tamper": [
+    {
+     "check": "continue_on_error",
+     "path": ".github/workflows/container-scan.yml",
+     "reason": "`continue-on-error: true` lets this step fail without failing the workflow",
+     "rule_id": "T010",
+     "severity": "high",
+     "symbol": null,
+     "waived": false
+    }
+   ],
+   "title": "fix(docker): non-root, digest-pinned images; fix API import path; Trivy scan (PRD-08)",
+   "uim": 1.0,
+   "unlinked_symbols": 0,
+   "url": "https://github.com/Mohith-c7/Radius/pull/87",
+   "verdict": "failed",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 236,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 1,
+   "content": {
+    "extensions": {
+     ".md": 1
+    },
+    "kinds": {
+     "docs": 1
+    },
+    "profile": "docs"
+   },
+   "criteria": [
+    {
+     "S": 0.0,
+     "id": "crit_016981d3d87a7925ec4b18d2e44ba759",
+     "reasons": [
+      "insufficient_support",
+      "no_linked_test",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "add alignment log with first independent review"
+    }
+   ],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 1,
+    "weak": 0
+   },
+   "decided_by": "R2b",
+   "degraded": [],
+   "deletions": 0,
+   "explanation": "insufficient_evidence by R2b; 1 criteria (1 unevidenced), UIM 1.00, coverage 1.00",
+   "intent_coverage": 1.0,
+   "intent_mode": "bullets",
+   "n_criteria": 1,
+   "n_symbols": 1,
+   "n_tests_linked": 0,
+   "number": 90,
+   "peak_rss_mb": 105.2,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.469,
+    "prep": 1.359,
+    "stage_a": 6.735,
+    "stage_b": 0.0
+   },
+   "runtime_total_s": 9.875,
+   "status": "ok",
+   "stratum": "docs",
+   "tamper": [],
+   "title": "docs(research): add alignment log with first independent review",
+   "uim": 1.0,
+   "unlinked_symbols": 0,
+   "url": "https://github.com/Mohith-c7/Radius/pull/90",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 1943,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R1c",
+    "verdict": "failed"
+   },
+   "changed_files": 22,
+   "content": {
+    "extensions": {
+     ".example": 1,
+     ".md": 4,
+     ".mjs": 3,
+     ".mts": 1,
+     ".py": 11,
+     ".ts": 1,
+     ".tsx": 1
+    },
+    "kinds": {
+     "docs": 4,
+     "js_ts_src": 2,
+     "other": 4,
+     "python_src": 10,
+     "tests": 2
+    },
+    "profile": "mixed"
+   },
+   "criteria": [
+    {
+     "S": 0.0,
+     "id": "crit_05bf461f66431f5d2cf9aa7011234371",
+     "reasons": [
+      "not_testable"
+     ],
+     "state": "excluded",
+     "testability": "subjective_or_vague",
+     "text": "Dashboard: per-request nonce CSP (strict-dynamic, frame-ancestors none) and static security headers; pages now render per request"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_22fd51d3b7b76c4574eceae2617465fb",
+     "reasons": [
+      "insufficient_support",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "Verified with curl against a running API and a built dashboard; real-browser CSP check pending; limiter is per process (multi-replica needs a shared store or ed"
+    },
+    {
+     "S": 0.030822,
+     "id": "crit_ed3b8adbbdba9bd60b117f846b71e7cd",
+     "reasons": [
+      "not_testable"
+     ],
+     "state": "excluded",
+     "testability": "subjective_or_vague",
+     "text": "HTTP hardening - security headers, CORS, limits, rate limiting, CSP (PRD-11)"
+    }
+   ],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 2,
+    "proven": 0,
+    "unevidenced": 1,
+    "weak": 0
+   },
+   "decided_by": "R1c",
+   "degraded": [
+    "unsupported_language:javascript",
+    "unsupported_language:typescript"
+   ],
+   "deletions": 24,
+   "explanation": "failed by R1c; 3 criteria (2 excluded, 1 unevidenced), UIM 1.00, coverage 0.00; 4 tamper finding(s): T002, T009, T011; degraded: unsupported_language:javascript, unsupported_language:typescript",
+   "intent_coverage": 0.0,
+   "intent_mode": "bullets",
+   "n_criteria": 3,
+   "n_symbols": 141,
+   "n_tests_linked": 279,
+   "number": 91,
+   "peak_rss_mb": 301.8,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.625,
+    "prep": 1.547,
+    "stage_a": 55.969,
+    "stage_b": 0.922
+   },
+   "runtime_total_s": 60.422,
+   "status": "ok",
+   "stratum": "feat",
+   "tamper": [
+    {
+     "check": "test_retry_marker",
+     "path": "apps/api/tests/test_http_hardening.py",
+     "reason": "retry/flaky marker added to a test",
+     "rule_id": "T011",
+     "severity": "medium",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "runtime_skip",
+     "path": "apps/api/tests/test_http_hardening.py",
+     "reason": "`pytest.skip('prometheus_client not installed')` was added to the body of `test_throttle_increments_metric`; the test can skip or never run its checks",
+     "rule_id": "T002",
+     "severity": "high",
+     "symbol": "test_throttle_increments_metric",
+     "waived": false
+    },
+    {
+     "check": "pragma_no_cover",
+     "path": "apps/api/tests/test_http_hardening.py",
+     "reason": "`# pragma: no cover` hides this code from coverage",
+     "rule_id": "T009",
+     "severity": "medium",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "test_retry_marker",
+     "path": "apps/api/tests/test_http_hardening.py",
+     "reason": "retry/flaky marker added to a test",
+     "rule_id": "T011",
+     "severity": "medium",
+     "symbol": null,
+     "waived": false
+    }
+   ],
+   "title": "feat(api): HTTP hardening - security headers, CORS, limits, rate limiting, CSP (PRD-11)",
+   "uim": 1.0,
+   "unlinked_symbols": 73,
+   "url": "https://github.com/Mohith-c7/Radius/pull/91",
+   "verdict": "failed",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 2,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 1,
+   "content": {
+    "extensions": {
+     ".toml": 1
+    },
+    "kinds": {
+     "other": 1
+    },
+    "profile": "other"
+   },
+   "criteria": [
+    {
+     "S": 0.0,
+     "id": "crit_e8b6f5defd31a9c8103d8c0b41208373",
+     "reasons": [
+      "not_testable"
+     ],
+     "state": "excluded",
+     "testability": "subjective_or_vague",
+     "text": "allowlist the fake key in the EV-02 tamper test cases"
+    }
+   ],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 1,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R4",
+   "degraded": [],
+   "deletions": 0,
+   "explanation": "verified by R4; 1 criteria (1 excluded), UIM 0.00, coverage 1.00",
+   "intent_coverage": 1.0,
+   "intent_mode": "bullets",
+   "n_criteria": 1,
+   "n_symbols": 1,
+   "n_tests_linked": 0,
+   "number": 94,
+   "peak_rss_mb": 106.3,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.469,
+    "prep": 1.469,
+    "stage_a": 7.016,
+    "stage_b": 0.0
+   },
+   "runtime_total_s": 10.313,
+   "status": "ok",
+   "stratum": "ci",
+   "tamper": [],
+   "title": "ci(gitleaks): allowlist the fake key in the EV-02 tamper test cases",
+   "uim": 0.0,
+   "unlinked_symbols": 0,
+   "url": "https://github.com/Mohith-c7/Radius/pull/94",
+   "verdict": "verified",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 2343,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 7,
+   "content": {
+    "extensions": {
+     ".json": 3,
+     ".md": 4
+    },
+    "kinds": {
+     "docs": 7
+    },
+    "profile": "docs"
+   },
+   "criteria": [
+    {
+     "S": 0.0,
+     "id": "crit_d250799d15c5aa43297f86c64cbf9326",
+     "reasons": [
+      "not_testable"
+     ],
+     "state": "excluded",
+     "testability": "subjective_or_vague",
+     "text": "Verdict v2 alpha slice - contracts, formula, decision table, task plan"
+    }
+   ],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 1,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R4",
+   "degraded": [],
+   "deletions": 0,
+   "explanation": "verified by R4; 1 criteria (1 excluded), UIM 0.00, coverage 1.00",
+   "intent_coverage": 1.0,
+   "intent_mode": "bullets",
+   "n_criteria": 1,
+   "n_symbols": 7,
+   "n_tests_linked": 0,
+   "number": 95,
+   "peak_rss_mb": 109.7,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.5,
+    "prep": 1.437,
+    "stage_a": 9.203,
+    "stage_b": 0.0
+   },
+   "runtime_total_s": 12.469,
+   "status": "ok",
+   "stratum": "docs",
+   "tamper": [],
+   "title": "docs(design): Verdict v2 alpha slice - contracts, formula, decision table, task plan",
+   "uim": 0.0,
+   "unlinked_symbols": 0,
+   "url": "https://github.com/Mohith-c7/Radius/pull/95",
+   "verdict": "verified",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 30321,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 120,
+   "content": {
+    "extensions": {
+     ".css": 1,
+     ".json": 9,
+     ".md": 31,
+     ".mjs": 2,
+     ".py": 72,
+     ".ts": 4,
+     ".tsx": 1
+    },
+    "kinds": {
+     "ci_infra": 2,
+     "docs": 32,
+     "js_ts_src": 5,
+     "other": 9,
+     "python_src": 40,
+     "tests": 32
+    },
+    "profile": "mixed"
+   },
+   "criteria": [
+    {
+     "S": 0.0,
+     "id": "crit_0c89693916998988050cf8c467b2a887",
+     "reasons": [
+      "insufficient_support",
+      "no_linked_test",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "Verdict v2 alpha - per-criterion verdict, store, API, panel, renderer (flag, default off)"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_1e72cf085edf4ddb2c9aaef6f8ac30d7",
+     "reasons": [
+      "insufficient_support",
+      "no_linked_test",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "Contract changes (backward compatible): assertion flags, added_test_ids, per-test agent signal, Reason.rule_id, 4th freshness reason"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_5ab95daa5f824b114b1a272b8fa9b494",
+     "reasons": [
+      "insufficient_support",
+      "no_linked_test",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "API: GET /api/v1/analyses/{id}/verdict-v2 (ETag, tenant isolation, hidden from OpenAPI when off); Dashboard panel (React text only, narrow proxy allowlist)"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_835b4ab934baea6d482a5192e7a19166",
+     "reasons": [
+      "insufficient_support",
+      "no_linked_test",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "Linking: criterion-to-test relevance r_ct (VS-04); fixture input bundles for the 8 F-14 fixtures (VS-01) with a drift check"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_8f14654e0861ddb4a4567b253051856e",
+     "reasons": [
+      "insufficient_support",
+      "no_linked_test",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "Verdict + rendering: rules R1-R4 with a full justification tree (radius_confidence.verdict_v2); PR comment and Check Run renderer with escaping, deterministic t"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_c3f31b5340bec2e361ec223d7562ca26",
+     "reasons": [
+      "insufficient_support",
+      "no_linked_test",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "Worker: Stage A collection with isolated producers, Stage B pipeline and recomputer, publish via the real renderer, republish-after-CI outbox (verdict_v2 / verd"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_fa22b8f2678a001f7cf0d595e3f55e89",
+     "reasons": [
+      "insufficient_support",
+      "no_linked_test",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "Contracts + evidence domain (packages/evidence): typed contracts (JSON-schema validated), IEG builder, a_static assertion strength, freshness, independence, evi"
+    }
+   ],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 7,
+    "weak": 0
+   },
+   "decided_by": "R2b",
+   "degraded": [
+    "unsupported_language:javascript",
+    "unsupported_language:typescript",
+    "truncated",
+    "producer_timeout:criterion_symbol_links",
+    "producer_timeout:symbol_test_links",
+    "producer_timeout:assertions",
+    "producer_timeout:relevance"
+   ],
+   "deletions": 120,
+   "explanation": "insufficient_evidence by R2b; 7 criteria (7 unevidenced), UIM 1.00, coverage 0.00; degraded: unsupported_language:javascript, unsupported_language:typescript, truncated",
+   "intent_coverage": 0.0,
+   "intent_mode": "bullets",
+   "n_criteria": 7,
+   "n_symbols": 1355,
+   "n_tests_linked": 0,
+   "number": 100,
+   "peak_rss_mb": 120.3,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.516,
+    "prep": 1.765,
+    "stage_a": 120.031,
+    "stage_b": 0.391
+   },
+   "runtime_total_s": 124.078,
+   "status": "ok",
+   "stratum": "feat",
+   "tamper": [],
+   "title": "feat: Verdict v2 alpha - per-criterion verdict, store, API, panel, renderer (flag, default off)",
+   "uim": 1.0,
+   "unlinked_symbols": 565,
+   "url": "https://github.com/Mohith-c7/Radius/pull/100",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 9574,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R1c",
+    "verdict": "failed"
+   },
+   "changed_files": 23,
+   "content": {
+    "extensions": {
+     "(none)": 1,
+     ".json": 1,
+     ".md": 5,
+     ".py": 12,
+     ".toml": 2,
+     ".txt": 1,
+     ".typed": 1
+    },
+    "kinds": {
+     "docs": 7,
+     "other": 4,
+     "python_src": 9,
+     "tests": 3
+    },
+    "profile": "mixed"
+   },
+   "criteria": [
+    {
+     "S": 0.0,
+     "id": "crit_0326b5c1d5e848ceca829d25684fb327",
+     "reasons": [
+      "not_testable"
+     ],
+     "state": "excluded",
+     "testability": "subjective_or_vague",
+     "text": "scripts/openapi_diff.py: lightweight structural guard for removals/renames/new required inputs/removed response fields (documented stand-in for oasdiff)"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_c8041775c79dfc4ac5a169e156ef61bd",
+     "reasons": [
+      "not_testable"
+     ],
+     "state": "excluded",
+     "testability": "subjective_or_vague",
+     "text": "OpenAPI 3.1 contract, stability policy, diff guard, Python client (PRD-15)"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_cb29985a68983559d2340094fc909e01",
+     "reasons": [
+      "not_testable"
+     ],
+     "state": "excluded",
+     "testability": "subjective_or_vague",
+     "text": "docs/api/STABILITY.md: stable / beta / alpha / internal map via x-stability, deprecation policy (Deprecation/Sunset headers, notice), breaking-change definition"
+    },
+    {
+     "S": 0.289397,
+     "id": "crit_fad16c80de998a86067d1d3df6625aab",
+     "reasons": [
+      "partial_support",
+      "correlated_discount"
+     ],
+     "state": "weak",
+     "testability": "behavioral_testable",
+     "text": "clients/python/radius_client: typed, dependency-free client for the stable routes (retries on 429 honoring Retry-After, ETag helpers, typed errors) with fake-tr"
+    }
+   ],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 3,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 1
+   },
+   "decided_by": "R1c",
+   "degraded": [],
+   "deletions": 0,
+   "explanation": "failed by R1c; 4 criteria (3 excluded, 1 weak), UIM 1.00, coverage 0.38; 9 tamper finding(s): T002, T013, T014",
+   "intent_coverage": 0.377551,
+   "intent_mode": "bullets",
+   "n_criteria": 4,
+   "n_symbols": 165,
+   "n_tests_linked": 352,
+   "number": 101,
+   "peak_rss_mb": 353.1,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.484,
+    "prep": 1.75,
+    "stage_a": 60.11,
+    "stage_b": 0.578
+   },
+   "runtime_total_s": 64.265,
+   "status": "ok",
+   "stratum": "feat",
+   "tamper": [
+    {
+     "check": "noqa",
+     "path": "clients/python/radius_client/transport.py",
+     "reason": "`# noqa: S310` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "runtime_skip",
+     "path": "apps/api/tests/test_openapi_contract.py",
+     "reason": "`pytest.skip('no previous docs/api/openapi.json reachable in git')` was added to the body of `test_no_breaking_change_against_previous_committed_version`; the t",
+     "rule_id": "T002",
+     "severity": "high",
+     "symbol": "test_no_breaking_change_against_previous_committed_version",
+     "waived": false
+    },
+    {
+     "check": "type_ignore",
+     "path": "apps/api/src/radius_api/openapi_contract.py",
+     "reason": "`# type: ignore[method-assign]` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "new_stub",
+     "path": "clients/python/radius_client/transport.py",
+     "reason": "new function `_NoRedirect.redirect_request` is a stub",
+     "rule_id": "T014",
+     "severity": "low",
+     "symbol": "_NoRedirect.redirect_request",
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "scripts/openapi_diff.py",
+     "reason": "`# noqa: S607` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "scripts/openapi_diff.py",
+     "reason": "`# noqa: PLR0913` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "apps/api/tests/test_openapi_contract.py",
+     "reason": "`# noqa: S603` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "scripts/openapi_diff.py",
+     "reason": "`# noqa: S603` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "type_ignore",
+     "path": "clients/python/radius_client/transport.py",
+     "reason": "`# type: ignore[override]` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    }
+   ],
+   "title": "feat(api,docs): OpenAPI 3.1 contract, stability policy, diff guard, Python client (PRD-15)",
+   "uim": 1.0,
+   "unlinked_symbols": 61,
+   "url": "https://github.com/Mohith-c7/Radius/pull/101",
+   "verdict": "failed",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 1542,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 20,
+   "content": {
+    "extensions": {
+     ".example": 1,
+     ".md": 6,
+     ".py": 13
+    },
+    "kinds": {
+     "ci_infra": 1,
+     "docs": 6,
+     "other": 1,
+     "python_src": 10,
+     "tests": 2
+    },
+    "profile": "mixed"
+   },
+   "criteria": [
+    {
+     "S": 0.0,
+     "id": "crit_3ed49e6c8180ca30ff7bfbd34fad76d7",
+     "reasons": [
+      "insufficient_support",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "structural_checkable",
+     "text": "Scopes enforced centrally via a path/method mapping inside the principal dependency (no route edits); legacy API_KEYS env keys still work with full scopes and a"
+    },
+    {
+     "S": 0.468638,
+     "id": "crit_63b388ae36d165bb037f8f4e997ef14c",
+     "reasons": [
+      "partial_support",
+      "correlated_discount"
+     ],
+     "state": "weak",
+     "testability": "behavioral_testable",
+     "text": "Storage: HMAC-SHA256 fingerprint with a server-side pepper (RADIUS_API_KEY_PEPPER, >= 32 chars), constant-time compare, all hashing in one small module; plainte"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_843ad7aa3c2ac86ea94b846428911619",
+     "reasons": [
+      "not_testable"
+     ],
+     "state": "excluded",
+     "testability": "subjective_or_vague",
+     "text": "managed API keys with scopes, rotation, revocation and audit (PRD-12)"
+    },
+    {
+     "S": 0.356589,
+     "id": "crit_c9d329a85a00ed24d963fa9d2aa8b3fa",
+     "reasons": [
+      "needs_typed_evidence",
+      "correlated_discount"
+     ],
+     "state": "unevidenced",
+     "testability": "non_functional_measurable",
+     "text": "Tests: lifecycle, scopes, legacy keys, audit, cross-org isolation, hashed storage; 100% coverage on new modules"
+    }
+   ],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 1,
+    "proven": 0,
+    "unevidenced": 2,
+    "weak": 1
+   },
+   "decided_by": "R2b",
+   "degraded": [],
+   "deletions": 15,
+   "explanation": "insufficient_evidence by R2b; 4 criteria (1 excluded, 2 unevidenced, 1 weak), UIM 1.00, coverage 0.60; 2 tamper finding(s): T009, T014",
+   "intent_coverage": 0.595238,
+   "intent_mode": "bullets",
+   "n_criteria": 4,
+   "n_symbols": 133,
+   "n_tests_linked": 332,
+   "number": 102,
+   "peak_rss_mb": 349.2,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.657,
+    "prep": 1.656,
+    "stage_a": 53.875,
+    "stage_b": 0.813
+   },
+   "runtime_total_s": 58.328,
+   "status": "ok",
+   "stratum": "feat",
+   "tamper": [
+    {
+     "check": "pragma_no_cover",
+     "path": "apps/api/src/radius_api/api_keys.py",
+     "reason": "`# pragma: no cover` hides this code from coverage",
+     "rule_id": "T009",
+     "severity": "medium",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "new_stub",
+     "path": "apps/api/src/radius_api/api_keys.py",
+     "reason": "new function `InMemoryApiKeyStore.flush` is a stub",
+     "rule_id": "T014",
+     "severity": "low",
+     "symbol": "InMemoryApiKeyStore.flush",
+     "waived": false
+    }
+   ],
+   "title": "feat(api): managed API keys with scopes, rotation, revocation and audit (PRD-12)",
+   "uim": 1.0,
+   "unlinked_symbols": 34,
+   "url": "https://github.com/Mohith-c7/Radius/pull/102",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 1539,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 31,
+   "content": {
+    "extensions": {
+     "(none)": 3,
+     ".md": 20,
+     ".py": 7,
+     ".yml": 1
+    },
+    "kinds": {
+     "ci_infra": 3,
+     "docs": 20,
+     "other": 1,
+     "python_src": 4,
+     "tests": 3
+    },
+    "profile": "mixed"
+   },
+   "criteria": [
+    {
+     "S": 0.0,
+     "id": "crit_8a97b89a1052ab6b1a91387462b1a204",
+     "reasons": [
+      "not_testable"
+     ],
+     "state": "excluded",
+     "testability": "subjective_or_vague",
+     "text": "align docs with code, operator docs set, generated config reference, opt-in Gemini pruner"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_e2bc8c13d61a83323d2b4f23bc86a5d3",
+     "reasons": [
+      "insufficient_support",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "docker-compose.yml now forwards the HTTP-hardening, flag and sign-in/SMTP variables (before, SESSION_SECRET fell back to the public placeholder and CORS could n"
+    }
+   ],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 1,
+    "proven": 0,
+    "unevidenced": 1,
+    "weak": 0
+   },
+   "decided_by": "R2b",
+   "degraded": [],
+   "deletions": 48,
+   "explanation": "insufficient_evidence by R2b; 2 criteria (1 excluded, 1 unevidenced), UIM 1.00, coverage 0.81; 1 tamper finding(s): T013",
+   "intent_coverage": 0.809524,
+   "intent_mode": "bullets",
+   "n_criteria": 2,
+   "n_symbols": 55,
+   "n_tests_linked": 87,
+   "number": 103,
+   "peak_rss_mb": 347.9,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.516,
+    "prep": 1.671,
+    "stage_a": 39.282,
+    "stage_b": 0.25
+   },
+   "runtime_total_s": 43.125,
+   "status": "ok",
+   "stratum": "docs",
+   "tamper": [
+    {
+     "check": "type_ignore",
+     "path": "scripts/gen_config_reference.py",
+     "reason": "`# type: ignore[attr-defined]` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    }
+   ],
+   "title": "docs: align docs with code, operator docs set, generated config reference, opt-in Gemini pruner",
+   "uim": 1.0,
+   "unlinked_symbols": 4,
+   "url": "https://github.com/Mohith-c7/Radius/pull/103",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 257,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 1,
+   "content": {
+    "extensions": {
+     ".md": 1
+    },
+    "kinds": {
+     "docs": 1
+    },
+    "profile": "docs"
+   },
+   "criteria": [
+    {
+     "S": 0.0,
+     "id": "crit_a3fa716f744d38c7bc6cfb9f6f7df492",
+     "reasons": [
+      "not_testable"
+     ],
+     "state": "excluded",
+     "testability": "subjective_or_vague",
+     "text": "add second independent alignment review (2026-11-03)"
+    }
+   ],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 1,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R4",
+   "degraded": [],
+   "deletions": 0,
+   "explanation": "verified by R4; 1 criteria (1 excluded), UIM 0.00, coverage 1.00",
+   "intent_coverage": 1.0,
+   "intent_mode": "bullets",
+   "n_criteria": 1,
+   "n_symbols": 1,
+   "n_tests_linked": 0,
+   "number": 104,
+   "peak_rss_mb": 118.2,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.516,
+    "prep": 1.594,
+    "stage_a": 9.547,
+    "stage_b": 0.0
+   },
+   "runtime_total_s": 13.0,
+   "status": "ok",
+   "stratum": "docs",
+   "tamper": [],
+   "title": "docs(research): add second independent alignment review (2026-11-03)",
+   "uim": 0.0,
+   "unlinked_symbols": 0,
+   "url": "https://github.com/Mohith-c7/Radius/pull/104",
+   "verdict": "verified",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 1282,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 7,
+   "content": {
+    "extensions": {
+     ".md": 2,
+     ".py": 4,
+     ".yml": 1
+    },
+    "kinds": {
+     "docs": 2,
+     "other": 1,
+     "python_src": 2,
+     "tests": 2
+    },
+    "profile": "mixed"
+   },
+   "criteria": [
+    {
+     "S": 0.0,
+     "id": "crit_30dcee47bbec0ab8b2537a200c32936e",
+     "reasons": [
+      "insufficient_support",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "upload-results composite action for CI evidence (IT-03)"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_c3c33e3af69ea423d3c87d31c09db4c9",
+     "reasons": [
+      "insufficient_support",
+      "no_linked_test",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "structural_checkable",
+     "text": "docs/integrations/github-action.md with recommended permissions, pytest/jest/maven examples and a shadow-first rollout; no example workflow added to this repo's"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_c57245400e9de4fe608bc22eb5d65533",
+     "reasons": [
+      "insufficient_support",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "Outputs: status, analysis id/url, uploaded/skipped counts, verification status, job summary"
+    }
+   ],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 3,
+    "weak": 0
+   },
+   "decided_by": "R2b",
+   "degraded": [],
+   "deletions": 5,
+   "explanation": "insufficient_evidence by R2b; 3 criteria (3 unevidenced), UIM 1.00, coverage 1.00; 17 tamper finding(s): T009, T013, T016",
+   "intent_coverage": 1.0,
+   "intent_mode": "bullets",
+   "n_criteria": 3,
+   "n_symbols": 84,
+   "n_tests_linked": 72,
+   "number": 105,
+   "peak_rss_mb": 349.1,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.5,
+    "prep": 1.719,
+    "stage_a": 38.938,
+    "stage_b": 0.375
+   },
+   "runtime_total_s": 42.875,
+   "status": "ok",
+   "stratum": "feat",
+   "tamper": [
+    {
+     "check": "noqa",
+     "path": "tests/test_upload_results_action.py",
+     "reason": "`# noqa: ANN002` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`# noqa: ANN001` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "debug_call",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`print(...)` left in library code",
+     "rule_id": "T016",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "debug_call",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`print(...)` left in library code",
+     "rule_id": "T016",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`# noqa: ANN001` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "debug_call",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`print(...)` left in library code",
+     "rule_id": "T016",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`# noqa: ANN001` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "debug_call",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`print(...)` left in library code",
+     "rule_id": "T016",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`# noqa: ANN001` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "tests/test_upload_results_action.py",
+     "reason": "`# noqa: ANN002, ANN003` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`# noqa: S314` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`# noqa: ANN001` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`# noqa: S314 ` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`# noqa: ANN001` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`# noqa: BLE001 ` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "pragma_no_cover",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`# pragma: no cover` hides this code from coverage",
+     "rule_id": "T009",
+     "severity": "medium",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`# noqa: ANN001` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    }
+   ],
+   "title": "feat(ci,actions): upload-results composite action for CI evidence (IT-03)",
+   "uim": 1.0,
+   "unlinked_symbols": 0,
+   "url": "https://github.com/Mohith-c7/Radius/pull/105",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 3,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 1,
+   "content": {
+    "extensions": {
+     ".py": 1
+    },
+    "kinds": {
+     "tests": 1
+    },
+    "profile": "tests"
+   },
+   "criteria": [
+    {
+     "S": 0.0,
+     "id": "crit_214ab4cf99479572f7fdc9834a62fa1f",
+     "reasons": [
+      "not_testable"
+     ],
+     "state": "excluded",
+     "testability": "subjective_or_vague",
+     "text": "loosen the tamper performance bound for shared CI runners"
+    }
+   ],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 1,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R4",
+   "degraded": [],
+   "deletions": 1,
+   "explanation": "verified by R4; 1 criteria (1 excluded), UIM 0.00, coverage 1.00",
+   "intent_coverage": 1.0,
+   "intent_mode": "bullets",
+   "n_criteria": 1,
+   "n_symbols": 1,
+   "n_tests_linked": 0,
+   "number": 106,
+   "peak_rss_mb": 118.1,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.454,
+    "prep": 1.671,
+    "stage_a": 11.657,
+    "stage_b": 0.015
+   },
+   "runtime_total_s": 15.141,
+   "status": "ok",
+   "stratum": "other",
+   "tamper": [],
+   "title": "test(analysis): loosen the tamper performance bound for shared CI runners",
+   "uim": 0.0,
+   "unlinked_symbols": 0,
+   "url": "https://github.com/Mohith-c7/Radius/pull/106",
+   "verdict": "verified",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 5399,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 53,
+   "content": {
+    "extensions": {
+     "(none)": 1,
+     ".json": 9,
+     ".md": 8,
+     ".py": 33,
+     ".yml": 2
+    },
+    "kinds": {
+     "docs": 9,
+     "other": 11,
+     "python_src": 21,
+     "tests": 12
+    },
+    "profile": "mixed"
+   },
+   "criteria": [
+    {
+     "S": 0.0,
+     "id": "crit_123399532e7d83b168b50174b8133fe4",
+     "reasons": [
+      "insufficient_support",
+      "no_linked_test",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "An unresolvable base is \"unreadable\", not \"absent\": a broken base policy marks the analysis incomplete (R2d) instead of silently using defaults"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_189d7cc9eae2805ecda635e3eae1a835",
+     "reasons": [
+      "not_testable"
+     ],
+     "state": "excluded",
+     "testability": "subjective_or_vague",
+     "text": "policy engine and waivers read from the base branch (VD-04/05)"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_210d0e495be33a5ae54087d029cac30c",
+     "reasons": [
+      "insufficient_support",
+      "no_linked_test",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "Random policies/waivers (40 seeds) can never turn a failed CI case or contradicted criterion into a pass; hostile waiver text is escaped in the comment"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_9a0bdecc77b271879dcfa8f0cb5e553e",
+     "reasons": [
+      "insufficient_support",
+      "no_linked_test",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "Both files are read from the base ref: in a real-git test, a PR that weakens its own policy or adds a waiver for itself has no effect; a head policy is honored "
+    },
+    {
+     "S": 0.0,
+     "id": "crit_bba02055783bce418132443c3510ad10",
+     "reasons": [
+      "insufficient_support",
+      "no_linked_test",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "Strict subset parser (no PyYAML), line-numbered errors, unknown keys as warnings, every applied setting records its policy line in the justification tree"
+    }
+   ],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 1,
+    "proven": 0,
+    "unevidenced": 4,
+    "weak": 0
+   },
+   "decided_by": "R2b",
+   "degraded": [
+    "producer_timeout:criterion_symbol_links",
+    "truncated"
+   ],
+   "deletions": 35,
+   "explanation": "insufficient_evidence by R2b; 5 criteria (1 excluded, 4 unevidenced), UIM 1.00, coverage 0.00; 7 tamper finding(s): T013; degraded: producer_timeout:criterion_symbol_links, truncated",
+   "intent_coverage": 0.0,
+   "intent_mode": "bullets",
+   "n_criteria": 5,
+   "n_symbols": 374,
+   "n_tests_linked": 834,
+   "number": 107,
+   "peak_rss_mb": 366.7,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.469,
+    "prep": 1.687,
+    "stage_a": 115.781,
+    "stage_b": 2.25
+   },
+   "runtime_total_s": 121.61,
+   "status": "ok",
+   "stratum": "feat",
+   "tamper": [
+    {
+     "check": "type_ignore",
+     "path": "packages/evidence/src/radius_evidence/policy/waivers.py",
+     "reason": "`# type: ignore[arg-type]` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "packages/evidence/src/radius_evidence/policy/repo_config.py",
+     "reason": "`# noqa: BLE001 ` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "apps/worker/src/radius_worker/verdict_v2/collect.py",
+     "reason": "`# noqa: BLE001 ` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "apps/worker/src/radius_worker/verdict_v2/collect.py",
+     "reason": "`# noqa: S603 ` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "type_ignore",
+     "path": "packages/evidence/tests/test_policy_miniyaml.py",
+     "reason": "`# type: ignore[arg-type]` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "apps/worker/src/radius_worker/verdict_v2/collect.py",
+     "reason": "`# noqa: S607` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "apps/worker/tests/test_verdict_v2_policy.py",
+     "reason": "`# noqa: S603, S607` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    }
+   ],
+   "title": "feat(verdict-v2): policy engine and waivers read from the base branch (VD-04/05)",
+   "uim": 1.0,
+   "unlinked_symbols": 156,
+   "url": "https://github.com/Mohith-c7/Radius/pull/107",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 5,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 2,
+   "content": {
+    "extensions": {
+     ".md": 1,
+     ".yml": 1
+    },
+    "kinds": {
+     "ci_infra": 1,
+     "docs": 1
+    },
+    "profile": "mixed"
+   },
+   "criteria": [
+    {
+     "S": 0.0,
+     "id": "crit_bd42f4aad80c9852c15501b6a22e23a0",
+     "reasons": [
+      "insufficient_support",
+      "no_linked_test",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "follow the publish workflow restrictions (no env vars or run steps)"
+    }
+   ],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 1,
+    "weak": 0
+   },
+   "decided_by": "R2b",
+   "degraded": [],
+   "deletions": 12,
+   "explanation": "insufficient_evidence by R2b; 1 criteria (1 unevidenced), UIM 1.00, coverage 1.00",
+   "intent_coverage": 1.0,
+   "intent_mode": "bullets",
+   "n_criteria": 1,
+   "n_symbols": 2,
+   "n_tests_linked": 0,
+   "number": 108,
+   "peak_rss_mb": 120.6,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.547,
+    "prep": 1.719,
+    "stage_a": 10.5,
+    "stage_b": 0.0
+   },
+   "runtime_total_s": 14.141,
+   "status": "ok",
+   "stratum": "ci",
+   "tamper": [],
+   "title": "ci(scorecard): follow the publish workflow restrictions (no env vars or run steps)",
+   "uim": 1.0,
+   "unlinked_symbols": 0,
+   "url": "https://github.com/Mohith-c7/Radius/pull/108",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 1957,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R1c",
+    "verdict": "failed"
+   },
+   "changed_files": 61,
+   "content": {
+    "extensions": {
+     ".css": 1,
+     ".example": 1,
+     ".json": 10,
+     ".md": 17,
+     ".mjs": 1,
+     ".py": 29,
+     ".ts": 1,
+     ".tsx": 1
+    },
+    "kinds": {
+     "docs": 19,
+     "js_ts_src": 2,
+     "other": 10,
+     "python_src": 18,
+     "tests": 12
+    },
+    "profile": "mixed"
+   },
+   "criteria": [
+    {
+     "S": 0.0,
+     "id": "crit_d2f815cb31e74d5a40ecfabb4813f1ab",
+     "reasons": [
+      "not_testable"
+     ],
+     "state": "excluded",
+     "testability": "subjective_or_vague",
+     "text": "honest alpha wording, advisory Check Run, author-hint provenance and cap"
+    }
+   ],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 1,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R1c",
+   "degraded": [
+    "unsupported_language:javascript",
+    "unsupported_language:typescript"
+   ],
+   "deletions": 155,
+   "explanation": "failed by R1c; 1 criteria (1 excluded), UIM 0.00, coverage 0.00; 4 tamper finding(s): T004, T013; degraded: unsupported_language:javascript, unsupported_language:typescript",
+   "intent_coverage": 0.0,
+   "intent_mode": "bullets",
+   "n_criteria": 1,
+   "n_symbols": 191,
+   "n_tests_linked": 999,
+   "number": 109,
+   "peak_rss_mb": 374.4,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.484,
+    "prep": 1.687,
+    "stage_a": 87.844,
+    "stage_b": 1.609
+   },
+   "runtime_total_s": 92.969,
+   "status": "ok",
+   "stratum": "fix",
+   "tamper": [
+    {
+     "check": "noqa",
+     "path": "apps/worker/tests/test_verdict_v2_author_trust.py",
+     "reason": "`# noqa: S607` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "apps/worker/src/radius_worker/verdict_v2/collect.py",
+     "reason": "`# noqa: BLE001 ` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "conjunct_dropped",
+     "path": "apps/worker/tests/test_verdict_v2_publish.py",
+     "reason": "in `test_publish_creates_one_check_run_and_one_comment_with_the_v2_marker`: `run['title'].startswith('Radius v2: ') and 'criteria proven' in run['title']` -> `r",
+     "rule_id": "T004",
+     "severity": "high",
+     "symbol": "test_publish_creates_one_check_run_and_one_comment_with_the_v2_marker",
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "apps/worker/tests/test_verdict_v2_author_trust.py",
+     "reason": "`# noqa: S603` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    }
+   ],
+   "title": "fix(verdict-v2): honest alpha wording, advisory Check Run, author-hint provenance and cap",
+   "uim": 0.0,
+   "unlinked_symbols": 78,
+   "url": "https://github.com/Mohith-c7/Radius/pull/109",
+   "verdict": "failed",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 849,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 23,
+   "content": {
+    "extensions": {
+     "(none)": 2,
+     ".example": 1,
+     ".json": 1,
+     ".md": 7,
+     ".ps1": 1,
+     ".py": 9,
+     ".yml": 2
+    },
+    "kinds": {
+     "ci_infra": 1,
+     "docs": 7,
+     "other": 6,
+     "python_src": 6,
+     "tests": 3
+    },
+    "profile": "mixed"
+   },
+   "criteria": [
+    {
+     "S": 0.0,
+     "id": "crit_2963a7064d0553bb7bc559dca62289cc",
+     "reasons": [
+      "insufficient_support",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "docker-compose.dev.yml override used by make dev / scripts/dev.ps1 dev: RADIUS_ENV=development, localhost CORS origins, auto-verify email, EMAIL_DELIVERY_MODE=l"
+    },
+    {
+     "S": 0.210371,
+     "id": "crit_3f002370242b77881b71e09f1ac337b6",
+     "reasons": [
+      "not_testable"
+     ],
+     "state": "excluded",
+     "testability": "untestable_external",
+     "text": "EMAIL_DELIVERY_MODE is now read (smtp default, log for dev; refused in production)"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_8938795a2ef2d213e057f470d19220c4",
+     "reasons": [
+      "insufficient_support",
+      "no_counted_evidence"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "scripts/check_compose.py static checker + config validation matrix tests; docs and generated config reference updated"
+    },
+    {
+     "S": 0.0,
+     "id": "crit_ea8caa44a77d4ed2d4b7282c9a07cb2e",
+     "reasons": [
+      "not_testable"
+     ],
+     "state": "excluded",
+     "testability": "subjective_or_vague",
+     "text": "Dashboard Dockerfile now receives the build-time org id / API URL"
+    },
+    {
+     "S": 0.368629,
+     "id": "crit_f7c06c4803f2a644fb460016d396daf0",
+     "reasons": [
+      "not_testable"
+     ],
+     "state": "excluded",
+     "testability": "untestable_external",
+     "text": "Production-like default stays fail-closed: SESSION_SECRET has no default; production API also refuses the published placeholder secrets; Postgres port bound to "
+    },
+    {
+     "S": 0.034892,
+     "id": "crit_fe638c1eba81dd15b730e4a4d52fe581",
+     "reasons": [
+      "insufficient_support",
+      "correlated_discount",
+      "no_strong_assertion"
+     ],
+     "state": "unevidenced",
+     "testability": "behavioral_testable",
+     "text": "coherent local dev compose profile, sign-in and email log mode"
+    }
+   ],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 3,
+    "proven": 0,
+    "unevidenced": 3,
+    "weak": 0
+   },
+   "decided_by": "R2b",
+   "degraded": [],
+   "deletions": 70,
+   "explanation": "insufficient_evidence by R2b; 6 criteria (3 excluded, 3 unevidenced), UIM 1.00, coverage 0.91",
+   "intent_coverage": 0.909091,
+   "intent_mode": "bullets",
+   "n_criteria": 6,
+   "n_symbols": 79,
+   "n_tests_linked": 97,
+   "number": 110,
+   "peak_rss_mb": 368.5,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.516,
+    "prep": 1.765,
+    "stage_a": 43.234,
+    "stage_b": 0.234
+   },
+   "runtime_total_s": 47.11,
+   "status": "ok",
+   "stratum": "fix",
+   "tamper": [],
+   "title": "fix(dev): coherent local dev compose profile, sign-in and email log mode",
+   "uim": 1.0,
+   "unlinked_symbols": 2,
+   "url": "https://github.com/Mohith-c7/Radius/pull/110",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  }
+ ],
+ "deterministic": [
+  {
+   "additions": 1518,
+   "agent_signal": false,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 27,
+   "content": {
+    "extensions": {
+     "(none)": 1,
+     ".css": 1,
+     ".json": 2,
+     ".md": 1,
+     ".ps1": 1,
+     ".ts": 1,
+     ".tsx": 19,
+     ".yaml": 1
+    },
+    "kinds": {
+     "ci_infra": 1,
+     "docs": 1,
+     "js_ts_src": 20,
+     "other": 5
+    },
+    "profile": "mixed"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R2a",
+   "degraded": [
+    "unsupported_language:typescript"
+   ],
+   "deletions": 353,
+   "explanation": "insufficient_evidence by R2a; no criteria extracted from the PR text; degraded: unsupported_language:typescript",
+   "intent_coverage": 0.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 37,
+   "n_tests_linked": 0,
+   "number": 3,
+   "peak_rss_mb": 98.1,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.578,
+    "prep": 1.109,
+    "stage_a": 20.875,
+    "stage_b": 0.0
+   },
+   "runtime_total_s": 24.25,
+   "status": "ok",
+   "stratum": "other",
+   "tamper": [],
+   "title": "Codex/dashboard phase1",
+   "uim": 0.0,
+   "unlinked_symbols": 31,
+   "url": "https://github.com/Mohith-c7/Radius/pull/3",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 3604,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 49,
+   "content": {
+    "extensions": {
+     ".lock": 1,
+     ".py": 47,
+     ".toml": 1
+    },
+    "kinds": {
+     "ci_infra": 4,
+     "other": 2,
+     "python_src": 38,
+     "tests": 5
+    },
+    "profile": "mixed"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R2a",
+   "degraded": [],
+   "deletions": 44,
+   "explanation": "insufficient_evidence by R2a; no criteria extracted from the PR text; 9 tamper finding(s): T013",
+   "intent_coverage": 0.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 169,
+   "n_tests_linked": 208,
+   "number": 9,
+   "peak_rss_mb": 144.9,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.562,
+    "prep": 1.188,
+    "stage_a": 46.75,
+    "stage_b": 0.453
+   },
+   "runtime_total_s": 50.562,
+   "status": "ok",
+   "stratum": "other",
+   "tamper": [
+    {
+     "check": "type_ignore",
+     "path": "packages/confidence/tests/test_coverage.py",
+     "reason": "`# type: ignore[arg-type]` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "type_ignore",
+     "path": "packages/confidence/tests/test_coverage.py",
+     "reason": "`# type: ignore[arg-type]` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "type_ignore",
+     "path": "packages/confidence/tests/test_coverage.py",
+     "reason": "`# type: ignore[arg-type]` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "type_ignore",
+     "path": "packages/confidence/tests/test_coverage.py",
+     "reason": "`# type: ignore[arg-type]` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "type_ignore",
+     "path": "packages/testing/src/radius_testing/infrastructure/sqlalchemy_store.py",
+     "reason": "`# type: ignore` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "type_ignore",
+     "path": "packages/confidence/tests/test_coverage_application_service.py",
+     "reason": "`# type: ignore[arg-type]` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "type_ignore",
+     "path": "packages/confidence/tests/test_coverage.py",
+     "reason": "`# type: ignore[arg-type]` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "type_ignore",
+     "path": "packages/confidence/tests/test_coverage.py",
+     "reason": "`# type: ignore[arg-type]` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "type_ignore",
+     "path": "packages/confidence/tests/test_coverage_application_service.py",
+     "reason": "`# type: ignore[arg-type]` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    }
+   ],
+   "title": "Codex/dashboard phase1",
+   "uim": 0.0,
+   "unlinked_symbols": 145,
+   "url": "https://github.com/Mohith-c7/Radius/pull/9",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 2872,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R1c",
+    "verdict": "failed"
+   },
+   "changed_files": 98,
+   "content": {
+    "extensions": {
+     "(none)": 1,
+     ".ini": 16,
+     ".json": 9,
+     ".md": 16,
+     ".patch": 8,
+     ".py": 45,
+     ".toml": 1,
+     ".txt": 2
+    },
+    "kinds": {
+     "docs": 18,
+     "other": 35,
+     "python_src": 22,
+     "tests": 23
+    },
+    "profile": "mixed"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R1c",
+   "degraded": [],
+   "deletions": 0,
+   "explanation": "failed by R1c; no criteria extracted from the PR text; 9 tamper finding(s): T012, T016, T017",
+   "intent_coverage": 0.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 208,
+   "n_tests_linked": 68,
+   "number": 22,
+   "peak_rss_mb": 148.0,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.797,
+    "prep": 1.438,
+    "stage_a": 36.375,
+    "stage_b": 0.078
+   },
+   "runtime_total_s": 40.515,
+   "status": "ok",
+   "stratum": "other",
+   "tamper": [
+    {
+     "check": "debug_call",
+     "path": "benchmarks/fixtures/intent/loader.py",
+     "reason": "`print(...)` left in library code",
+     "rule_id": "T016",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "collection_hook",
+     "path": "benchmarks/fixtures/intent/conftest.py",
+     "reason": "conftest `collect_ignore` change excludes files from test collection",
+     "rule_id": "T017",
+     "severity": "high",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "unverified_guarded_import",
+     "path": "benchmarks/fixtures/intent/06_hallucinated_dependency/head/requirements.txt",
+     "reason": "new dependency `pytimeparse-ultra` is not in a lockfile or the known-package list and its import in `benchmarks/fixtures/intent/06_hallucinated_dependency/head/",
+     "rule_id": "T012",
+     "severity": "medium",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "debug_call",
+     "path": "benchmarks/fixtures/intent/loader.py",
+     "reason": "`print(...)` left in library code",
+     "rule_id": "T016",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "debug_call",
+     "path": "benchmarks/fixtures/intent/loader.py",
+     "reason": "`print(...)` left in library code",
+     "rule_id": "T016",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "debug_call",
+     "path": "benchmarks/fixtures/intent/loader.py",
+     "reason": "`print(...)` left in library code",
+     "rule_id": "T016",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "debug_call",
+     "path": "benchmarks/fixtures/intent/loader.py",
+     "reason": "`print(...)` left in library code",
+     "rule_id": "T016",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "debug_call",
+     "path": "benchmarks/fixtures/intent/loader.py",
+     "reason": "`print(...)` left in library code",
+     "rule_id": "T016",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "debug_call",
+     "path": "benchmarks/fixtures/intent/loader.py",
+     "reason": "`print(...)` left in library code",
+     "rule_id": "T016",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    }
+   ],
+   "title": "test(bench): add 8 golden intent-to-evidence fixtures (F-14)",
+   "uim": 0.0,
+   "unlinked_symbols": 79,
+   "url": "https://github.com/Mohith-c7/Radius/pull/22",
+   "verdict": "failed",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 4458,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 32,
+   "content": {
+    "extensions": {
+     "(none)": 1,
+     ".example": 1,
+     ".json": 19,
+     ".md": 3,
+     ".py": 6,
+     ".toml": 1,
+     ".yml": 1
+    },
+    "kinds": {
+     "docs": 5,
+     "other": 3,
+     "python_src": 2,
+     "tests": 22
+    },
+    "profile": "mixed"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R2a",
+   "degraded": [],
+   "deletions": 1,
+   "explanation": "insufficient_evidence by R2a; no criteria extracted from the PR text; 6 tamper finding(s): T009, T013, T014",
+   "intent_coverage": 0.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 167,
+   "n_tests_linked": 22,
+   "number": 28,
+   "peak_rss_mb": 152.0,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.609,
+    "prep": 1.297,
+    "stage_a": 17.656,
+    "stage_b": 0.141
+   },
+   "runtime_total_s": 21.203,
+   "status": "ok",
+   "stratum": "other",
+   "tamper": [
+    {
+     "check": "noqa",
+     "path": "scripts/github_app_manifest.py",
+     "reason": "`# noqa: N802` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "new_stub",
+     "path": "scripts/github_app_manifest.py",
+     "reason": "new function `make_handler.Handler.log_message` is a stub",
+     "rule_id": "T014",
+     "severity": "low",
+     "symbol": "make_handler.Handler.log_message",
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "tests/test_github_app_scenarios.py",
+     "reason": "`# noqa: E731` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "tests/test_github_app_scenarios.py",
+     "reason": "`# noqa: E731` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "pragma_no_cover",
+     "path": "scripts/github_app_manifest.py",
+     "reason": "`# pragma: no cover` hides this code from coverage",
+     "rule_id": "T009",
+     "severity": "medium",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "pragma_no_cover",
+     "path": "scripts/github_app_manifest.py",
+     "reason": "`# pragma: no cover` hides this code from coverage",
+     "rule_id": "T009",
+     "severity": "medium",
+     "symbol": null,
+     "waived": false
+    }
+   ],
+   "title": "docs+test: GitHub App live-validation kit and signed webhook fixtures (F-06)",
+   "uim": 0.0,
+   "unlinked_symbols": 58,
+   "url": "https://github.com/Mohith-c7/Radius/pull/28",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 1092,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R1c",
+    "verdict": "failed"
+   },
+   "changed_files": 11,
+   "content": {
+    "extensions": {
+     ".lock": 1,
+     ".md": 2,
+     ".py": 8
+    },
+    "kinds": {
+     "docs": 2,
+     "other": 1,
+     "python_src": 5,
+     "tests": 3
+    },
+    "profile": "mixed"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R1c",
+   "degraded": [],
+   "deletions": 80,
+   "explanation": "failed by R1c; no criteria extracted from the PR text; 2 tamper finding(s): T001, T017",
+   "intent_coverage": 0.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 16,
+   "n_tests_linked": 185,
+   "number": 40,
+   "peak_rss_mb": 181.6,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.531,
+    "prep": 1.516,
+    "stage_a": 18.031,
+    "stage_b": 0.203
+   },
+   "runtime_total_s": 21.781,
+   "status": "ok",
+   "stratum": "fix",
+   "tamper": [
+    {
+     "check": "test_deleted",
+     "path": "packages/shared/tests/test_observability.py",
+     "reason": "test `test_trace_context_round_trips_through_carrier_store` was deleted while `InMemorySpanExporter`, `configure_tracing`, `continue_trace`, `current_traceparen",
+     "rule_id": "T001",
+     "severity": "high",
+     "symbol": "test_trace_context_round_trips_through_carrier_store",
+     "waived": false
+    },
+    {
+     "check": "conftest_changed_with_source",
+     "path": "conftest.py",
+     "reason": "`conftest.py` changed (21 code line(s)) in the same PR as 6 source behavior change(s); shared test setup may have been adapted to the new behavior",
+     "rule_id": "T017",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    }
+   ],
+   "title": "fix: refresh uv.lock, make settings/tests independent of a local .env, drop unused trace carrier",
+   "uim": 0.0,
+   "unlinked_symbols": 10,
+   "url": "https://github.com/Mohith-c7/Radius/pull/40",
+   "verdict": "failed",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 298,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 20,
+   "content": {
+    "extensions": {
+     "(none)": 2,
+     ".json": 13,
+     ".md": 4,
+     ".toml": 1
+    },
+    "kinds": {
+     "docs": 4,
+     "other": 16
+    },
+    "profile": "mixed"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R4",
+   "degraded": [],
+   "deletions": 6,
+   "explanation": "verified by R4; no criteria extracted from the PR text",
+   "intent_coverage": 1.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 20,
+   "n_tests_linked": 0,
+   "number": 45,
+   "peak_rss_mb": 85.5,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.469,
+    "prep": 1.516,
+    "stage_a": 12.765,
+    "stage_b": 0.0
+   },
+   "runtime_total_s": 16.078,
+   "status": "ok",
+   "stratum": "ci",
+   "tamper": [],
+   "title": "chore(license): Apache-2.0 LICENSE, NOTICE and DCO contribution terms (DEC-018)",
+   "uim": 0.0,
+   "unlinked_symbols": 0,
+   "url": "https://github.com/Mohith-c7/Radius/pull/45",
+   "verdict": "verified",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 862,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 20,
+   "content": {
+    "extensions": {
+     ".md": 9,
+     ".yml": 11
+    },
+    "kinds": {
+     "ci_infra": 12,
+     "docs": 8
+    },
+    "profile": "mixed"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R4",
+   "degraded": [],
+   "deletions": 0,
+   "explanation": "verified by R4; no criteria extracted from the PR text",
+   "intent_coverage": 1.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 20,
+   "n_tests_linked": 0,
+   "number": 50,
+   "peak_rss_mb": 83.3,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.453,
+    "prep": 1.328,
+    "stage_a": 8.562,
+    "stage_b": 0.0
+   },
+   "runtime_total_s": 11.907,
+   "status": "ok",
+   "stratum": "docs",
+   "tamper": [],
+   "title": "docs(community): SECURITY, CODE_OF_CONDUCT, SUPPORT, CONTRIBUTING, GOVERNANCE, MAINTAINERS, issue forms, labels (PRD-03/04)",
+   "uim": 0.0,
+   "unlinked_symbols": 0,
+   "url": "https://github.com/Mohith-c7/Radius/pull/50",
+   "verdict": "verified",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 383,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 7,
+   "content": {
+    "extensions": {
+     ".md": 1,
+     ".py": 2,
+     ".yml": 4
+    },
+    "kinds": {
+     "ci_infra": 4,
+     "docs": 1,
+     "python_src": 1,
+     "tests": 1
+    },
+    "profile": "mixed"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R2a",
+   "degraded": [],
+   "deletions": 1,
+   "explanation": "insufficient_evidence by R2a; no criteria extracted from the PR text",
+   "intent_coverage": 0.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 11,
+   "n_tests_linked": 0,
+   "number": 51,
+   "peak_rss_mb": 207.2,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.672,
+    "prep": 1.343,
+    "stage_a": 15.984,
+    "stage_b": 0.031
+   },
+   "runtime_total_s": 20.094,
+   "status": "ok",
+   "stratum": "ci",
+   "tamper": [],
+   "title": "ci: CodeQL, OpenSSF Scorecard, dependency review and Dependabot overhaul (PRD-07)",
+   "uim": 0.0,
+   "unlinked_symbols": 3,
+   "url": "https://github.com/Mohith-c7/Radius/pull/51",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 597,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 7,
+   "content": {
+    "extensions": {
+     ".md": 4,
+     ".py": 2,
+     ".yml": 1
+    },
+    "kinds": {
+     "ci_infra": 1,
+     "docs": 4,
+     "python_src": 1,
+     "tests": 1
+    },
+    "profile": "mixed"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R2a",
+   "degraded": [],
+   "deletions": 92,
+   "explanation": "insufficient_evidence by R2a; no criteria extracted from the PR text",
+   "intent_coverage": 0.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 28,
+   "n_tests_linked": 13,
+   "number": 53,
+   "peak_rss_mb": 216.8,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.484,
+    "prep": 1.344,
+    "stage_a": 11.719,
+    "stage_b": 0.031
+   },
+   "runtime_total_s": 14.922,
+   "status": "ok",
+   "stratum": "docs",
+   "tamper": [],
+   "title": "docs: README rewrite, CHANGELOG, changelog fragments and Conventional Commits check (PRD-05/06)",
+   "uim": 0.0,
+   "unlinked_symbols": 9,
+   "url": "https://github.com/Mohith-c7/Radius/pull/53",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 20,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 5,
+   "content": {
+    "extensions": {
+     ".yml": 5
+    },
+    "kinds": {
+     "ci_infra": 5
+    },
+    "profile": "ci_infra"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R4",
+   "degraded": [],
+   "deletions": 20,
+   "explanation": "verified by R4; no criteria extracted from the PR text",
+   "intent_coverage": 1.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 5,
+   "n_tests_linked": 0,
+   "number": 80,
+   "peak_rss_mb": 83.3,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.484,
+    "prep": 1.344,
+    "stage_a": 6.437,
+    "stage_b": 0.0
+   },
+   "runtime_total_s": 9.61,
+   "status": "ok",
+   "stratum": "ci",
+   "tamper": [],
+   "title": "ci(deps): bump checkout, setup-python, upload-artifact and pnpm/action-setup to current majors",
+   "uim": 0.0,
+   "unlinked_symbols": 0,
+   "url": "https://github.com/Mohith-c7/Radius/pull/80",
+   "verdict": "verified",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 307,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 7,
+   "content": {
+    "extensions": {
+     ".json": 3,
+     ".md": 2,
+     ".yaml": 1,
+     ".yml": 1
+    },
+    "kinds": {
+     "ci_infra": 2,
+     "docs": 2,
+     "other": 3
+    },
+    "profile": "mixed"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R4",
+   "degraded": [],
+   "deletions": 378,
+   "explanation": "verified by R4; no criteria extracted from the PR text",
+   "intent_coverage": 1.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 6,
+   "n_tests_linked": 0,
+   "number": 82,
+   "peak_rss_mb": 83.7,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.469,
+    "prep": 1.406,
+    "stage_a": 7.172,
+    "stage_b": 0.0
+   },
+   "runtime_total_s": 10.36,
+   "status": "ok",
+   "stratum": "fix",
+   "tamper": [],
+   "title": "fix(deps): patch Next.js and transitive JS advisories (0 critical/high), tune Dependabot",
+   "uim": 0.0,
+   "unlinked_symbols": 0,
+   "url": "https://github.com/Mohith-c7/Radius/pull/82",
+   "verdict": "verified",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 5,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 3,
+   "content": {
+    "extensions": {
+     ".md": 1,
+     ".py": 2
+    },
+    "kinds": {
+     "docs": 1,
+     "python_src": 1,
+     "tests": 1
+    },
+    "profile": "mixed"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R2a",
+   "degraded": [],
+   "deletions": 1,
+   "explanation": "insufficient_evidence by R2a; no criteria extracted from the PR text",
+   "intent_coverage": 0.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 4,
+   "n_tests_linked": 12,
+   "number": 84,
+   "peak_rss_mb": 226.3,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.484,
+    "prep": 1.453,
+    "stage_a": 11.922,
+    "stage_b": 0.0
+   },
+   "runtime_total_s": 15.188,
+   "status": "ok",
+   "stratum": "fix",
+   "tamper": [],
+   "title": "fix(ci): accept comma-separated scopes in the commit check",
+   "uim": 0.0,
+   "unlinked_symbols": 1,
+   "url": "https://github.com/Mohith-c7/Radius/pull/84",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 5,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 3,
+   "content": {
+    "extensions": {
+     ".md": 1,
+     ".toml": 1,
+     ".yml": 1
+    },
+    "kinds": {
+     "ci_infra": 1,
+     "docs": 1,
+     "other": 1
+    },
+    "profile": "mixed"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R4",
+   "degraded": [],
+   "deletions": 1,
+   "explanation": "verified by R4; no criteria extracted from the PR text",
+   "intent_coverage": 1.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 3,
+   "n_tests_linked": 0,
+   "number": 86,
+   "peak_rss_mb": 84.0,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.531,
+    "prep": 1.36,
+    "stage_a": 5.5,
+    "stage_b": 0.0
+   },
+   "runtime_total_s": 8.656,
+   "status": "ok",
+   "stratum": "ci",
+   "tamper": [],
+   "title": "ci(security): drop pnpm cache from the audit-only job",
+   "uim": 0.0,
+   "unlinked_symbols": 0,
+   "url": "https://github.com/Mohith-c7/Radius/pull/86",
+   "verdict": "verified",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 505,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R1c",
+    "verdict": "failed"
+   },
+   "changed_files": 9,
+   "content": {
+    "extensions": {
+     "(none)": 5,
+     ".md": 3,
+     ".yml": 1
+    },
+    "kinds": {
+     "ci_infra": 4,
+     "docs": 3,
+     "other": 2
+    },
+    "profile": "mixed"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R1c",
+   "degraded": [],
+   "deletions": 29,
+   "explanation": "failed by R1c; no criteria extracted from the PR text; 1 tamper finding(s): T010",
+   "intent_coverage": 1.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 9,
+   "n_tests_linked": 0,
+   "number": 87,
+   "peak_rss_mb": 84.8,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.469,
+    "prep": 1.609,
+    "stage_a": 9.375,
+    "stage_b": 0.0
+   },
+   "runtime_total_s": 12.796,
+   "status": "ok",
+   "stratum": "fix",
+   "tamper": [
+    {
+     "check": "continue_on_error",
+     "path": ".github/workflows/container-scan.yml",
+     "reason": "`continue-on-error: true` lets this step fail without failing the workflow",
+     "rule_id": "T010",
+     "severity": "high",
+     "symbol": null,
+     "waived": false
+    }
+   ],
+   "title": "fix(docker): non-root, digest-pinned images; fix API import path; Trivy scan (PRD-08)",
+   "uim": 0.0,
+   "unlinked_symbols": 0,
+   "url": "https://github.com/Mohith-c7/Radius/pull/87",
+   "verdict": "failed",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 236,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 1,
+   "content": {
+    "extensions": {
+     ".md": 1
+    },
+    "kinds": {
+     "docs": 1
+    },
+    "profile": "docs"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R4",
+   "degraded": [],
+   "deletions": 0,
+   "explanation": "verified by R4; no criteria extracted from the PR text",
+   "intent_coverage": 1.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 1,
+   "n_tests_linked": 0,
+   "number": 90,
+   "peak_rss_mb": 84.6,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.547,
+    "prep": 1.484,
+    "stage_a": 5.36,
+    "stage_b": 0.0
+   },
+   "runtime_total_s": 8.672,
+   "status": "ok",
+   "stratum": "docs",
+   "tamper": [],
+   "title": "docs(research): add alignment log with first independent review",
+   "uim": 0.0,
+   "unlinked_symbols": 0,
+   "url": "https://github.com/Mohith-c7/Radius/pull/90",
+   "verdict": "verified",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 1943,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R1c",
+    "verdict": "failed"
+   },
+   "changed_files": 22,
+   "content": {
+    "extensions": {
+     ".example": 1,
+     ".md": 4,
+     ".mjs": 3,
+     ".mts": 1,
+     ".py": 11,
+     ".ts": 1,
+     ".tsx": 1
+    },
+    "kinds": {
+     "docs": 4,
+     "js_ts_src": 2,
+     "other": 4,
+     "python_src": 10,
+     "tests": 2
+    },
+    "profile": "mixed"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R1c",
+   "degraded": [
+    "unsupported_language:javascript",
+    "unsupported_language:typescript"
+   ],
+   "deletions": 24,
+   "explanation": "failed by R1c; no criteria extracted from the PR text; 4 tamper finding(s): T002, T009, T011; degraded: unsupported_language:javascript, unsupported_language:typescript",
+   "intent_coverage": 0.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 141,
+   "n_tests_linked": 279,
+   "number": 91,
+   "peak_rss_mb": 300.3,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.453,
+    "prep": 1.64,
+    "stage_a": 29.516,
+    "stage_b": 0.969
+   },
+   "runtime_total_s": 33.937,
+   "status": "ok",
+   "stratum": "feat",
+   "tamper": [
+    {
+     "check": "test_retry_marker",
+     "path": "apps/api/tests/test_http_hardening.py",
+     "reason": "retry/flaky marker added to a test",
+     "rule_id": "T011",
+     "severity": "medium",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "runtime_skip",
+     "path": "apps/api/tests/test_http_hardening.py",
+     "reason": "`pytest.skip('prometheus_client not installed')` was added to the body of `test_throttle_increments_metric`; the test can skip or never run its checks",
+     "rule_id": "T002",
+     "severity": "high",
+     "symbol": "test_throttle_increments_metric",
+     "waived": false
+    },
+    {
+     "check": "pragma_no_cover",
+     "path": "apps/api/tests/test_http_hardening.py",
+     "reason": "`# pragma: no cover` hides this code from coverage",
+     "rule_id": "T009",
+     "severity": "medium",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "test_retry_marker",
+     "path": "apps/api/tests/test_http_hardening.py",
+     "reason": "retry/flaky marker added to a test",
+     "rule_id": "T011",
+     "severity": "medium",
+     "symbol": null,
+     "waived": false
+    }
+   ],
+   "title": "feat(api): HTTP hardening - security headers, CORS, limits, rate limiting, CSP (PRD-11)",
+   "uim": 0.0,
+   "unlinked_symbols": 73,
+   "url": "https://github.com/Mohith-c7/Radius/pull/91",
+   "verdict": "failed",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 2,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 1,
+   "content": {
+    "extensions": {
+     ".toml": 1
+    },
+    "kinds": {
+     "other": 1
+    },
+    "profile": "other"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R4",
+   "degraded": [],
+   "deletions": 0,
+   "explanation": "verified by R4; no criteria extracted from the PR text",
+   "intent_coverage": 1.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 1,
+   "n_tests_linked": 0,
+   "number": 94,
+   "peak_rss_mb": 84.7,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.469,
+    "prep": 1.406,
+    "stage_a": 5.968,
+    "stage_b": 0.0
+   },
+   "runtime_total_s": 9.172,
+   "status": "ok",
+   "stratum": "ci",
+   "tamper": [],
+   "title": "ci(gitleaks): allowlist the fake key in the EV-02 tamper test cases",
+   "uim": 0.0,
+   "unlinked_symbols": 0,
+   "url": "https://github.com/Mohith-c7/Radius/pull/94",
+   "verdict": "verified",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 2343,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 7,
+   "content": {
+    "extensions": {
+     ".json": 3,
+     ".md": 4
+    },
+    "kinds": {
+     "docs": 7
+    },
+    "profile": "docs"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R4",
+   "degraded": [],
+   "deletions": 0,
+   "explanation": "verified by R4; no criteria extracted from the PR text",
+   "intent_coverage": 1.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 7,
+   "n_tests_linked": 0,
+   "number": 95,
+   "peak_rss_mb": 85.1,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.469,
+    "prep": 1.469,
+    "stage_a": 7.656,
+    "stage_b": 0.0
+   },
+   "runtime_total_s": 11.031,
+   "status": "ok",
+   "stratum": "docs",
+   "tamper": [],
+   "title": "docs(design): Verdict v2 alpha slice - contracts, formula, decision table, task plan",
+   "uim": 0.0,
+   "unlinked_symbols": 0,
+   "url": "https://github.com/Mohith-c7/Radius/pull/95",
+   "verdict": "verified",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 30321,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 120,
+   "content": {
+    "extensions": {
+     ".css": 1,
+     ".json": 9,
+     ".md": 31,
+     ".mjs": 2,
+     ".py": 72,
+     ".ts": 4,
+     ".tsx": 1
+    },
+    "kinds": {
+     "ci_infra": 2,
+     "docs": 32,
+     "js_ts_src": 5,
+     "other": 9,
+     "python_src": 40,
+     "tests": 32
+    },
+    "profile": "mixed"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R2a",
+   "degraded": [
+    "unsupported_language:javascript",
+    "unsupported_language:typescript",
+    "truncated"
+   ],
+   "deletions": 120,
+   "explanation": "insufficient_evidence by R2a; no criteria extracted from the PR text; degraded: unsupported_language:javascript, unsupported_language:typescript, truncated",
+   "intent_coverage": 0.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 1355,
+   "n_tests_linked": 1009,
+   "number": 100,
+   "peak_rss_mb": 360.0,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.469,
+    "prep": 1.719,
+    "stage_a": 95.11,
+    "stage_b": 4.328
+   },
+   "runtime_total_s": 103.062,
+   "status": "ok",
+   "stratum": "feat",
+   "tamper": [],
+   "title": "feat: Verdict v2 alpha - per-criterion verdict, store, API, panel, renderer (flag, default off)",
+   "uim": 0.0,
+   "unlinked_symbols": 565,
+   "url": "https://github.com/Mohith-c7/Radius/pull/100",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 9574,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R1c",
+    "verdict": "failed"
+   },
+   "changed_files": 23,
+   "content": {
+    "extensions": {
+     "(none)": 1,
+     ".json": 1,
+     ".md": 5,
+     ".py": 12,
+     ".toml": 2,
+     ".txt": 1,
+     ".typed": 1
+    },
+    "kinds": {
+     "docs": 7,
+     "other": 4,
+     "python_src": 9,
+     "tests": 3
+    },
+    "profile": "mixed"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R1c",
+   "degraded": [],
+   "deletions": 0,
+   "explanation": "failed by R1c; no criteria extracted from the PR text; 9 tamper finding(s): T002, T013, T014",
+   "intent_coverage": 0.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 165,
+   "n_tests_linked": 352,
+   "number": 101,
+   "peak_rss_mb": 351.8,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.531,
+    "prep": 1.844,
+    "stage_a": 42.907,
+    "stage_b": 0.531
+   },
+   "runtime_total_s": 47.375,
+   "status": "ok",
+   "stratum": "feat",
+   "tamper": [
+    {
+     "check": "noqa",
+     "path": "clients/python/radius_client/transport.py",
+     "reason": "`# noqa: S310` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "runtime_skip",
+     "path": "apps/api/tests/test_openapi_contract.py",
+     "reason": "`pytest.skip('no previous docs/api/openapi.json reachable in git')` was added to the body of `test_no_breaking_change_against_previous_committed_version`; the t",
+     "rule_id": "T002",
+     "severity": "high",
+     "symbol": "test_no_breaking_change_against_previous_committed_version",
+     "waived": false
+    },
+    {
+     "check": "type_ignore",
+     "path": "apps/api/src/radius_api/openapi_contract.py",
+     "reason": "`# type: ignore[method-assign]` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "new_stub",
+     "path": "clients/python/radius_client/transport.py",
+     "reason": "new function `_NoRedirect.redirect_request` is a stub",
+     "rule_id": "T014",
+     "severity": "low",
+     "symbol": "_NoRedirect.redirect_request",
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "scripts/openapi_diff.py",
+     "reason": "`# noqa: S607` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "scripts/openapi_diff.py",
+     "reason": "`# noqa: PLR0913` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "apps/api/tests/test_openapi_contract.py",
+     "reason": "`# noqa: S603` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "scripts/openapi_diff.py",
+     "reason": "`# noqa: S603` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "type_ignore",
+     "path": "clients/python/radius_client/transport.py",
+     "reason": "`# type: ignore[override]` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    }
+   ],
+   "title": "feat(api,docs): OpenAPI 3.1 contract, stability policy, diff guard, Python client (PRD-15)",
+   "uim": 0.0,
+   "unlinked_symbols": 98,
+   "url": "https://github.com/Mohith-c7/Radius/pull/101",
+   "verdict": "failed",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 1542,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 20,
+   "content": {
+    "extensions": {
+     ".example": 1,
+     ".md": 6,
+     ".py": 13
+    },
+    "kinds": {
+     "ci_infra": 1,
+     "docs": 6,
+     "other": 1,
+     "python_src": 10,
+     "tests": 2
+    },
+    "profile": "mixed"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R2a",
+   "degraded": [],
+   "deletions": 15,
+   "explanation": "insufficient_evidence by R2a; no criteria extracted from the PR text; 2 tamper finding(s): T009, T014",
+   "intent_coverage": 0.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 133,
+   "n_tests_linked": 332,
+   "number": 102,
+   "peak_rss_mb": 347.8,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.703,
+    "prep": 1.688,
+    "stage_a": 31.985,
+    "stage_b": 0.609
+   },
+   "runtime_total_s": 37.187,
+   "status": "ok",
+   "stratum": "feat",
+   "tamper": [
+    {
+     "check": "pragma_no_cover",
+     "path": "apps/api/src/radius_api/api_keys.py",
+     "reason": "`# pragma: no cover` hides this code from coverage",
+     "rule_id": "T009",
+     "severity": "medium",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "new_stub",
+     "path": "apps/api/src/radius_api/api_keys.py",
+     "reason": "new function `InMemoryApiKeyStore.flush` is a stub",
+     "rule_id": "T014",
+     "severity": "low",
+     "symbol": "InMemoryApiKeyStore.flush",
+     "waived": false
+    }
+   ],
+   "title": "feat(api): managed API keys with scopes, rotation, revocation and audit (PRD-12)",
+   "uim": 0.0,
+   "unlinked_symbols": 84,
+   "url": "https://github.com/Mohith-c7/Radius/pull/102",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 1539,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R1c",
+    "verdict": "failed"
+   },
+   "changed_files": 31,
+   "content": {
+    "extensions": {
+     "(none)": 3,
+     ".md": 20,
+     ".py": 7,
+     ".yml": 1
+    },
+    "kinds": {
+     "ci_infra": 3,
+     "docs": 20,
+     "other": 1,
+     "python_src": 4,
+     "tests": 3
+    },
+    "profile": "mixed"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R1c",
+   "degraded": [],
+   "deletions": 48,
+   "explanation": "failed by R1c; no criteria extracted from the PR text; 2 tamper finding(s): T013, T015",
+   "intent_coverage": 0.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 55,
+   "n_tests_linked": 87,
+   "number": 103,
+   "peak_rss_mb": 346.8,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.468,
+    "prep": 1.688,
+    "stage_a": 32.188,
+    "stage_b": 0.25
+   },
+   "runtime_total_s": 36.031,
+   "status": "ok",
+   "stratum": "docs",
+   "tamper": [
+    {
+     "check": "type_ignore",
+     "path": "scripts/gen_config_reference.py",
+     "reason": "`# type: ignore[attr-defined]` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "hardcoded_secret",
+     "path": "packages/analysis/src/radius_analysis/ai/pruner.py",
+     "reason": "credential-like value assigned from a string literal",
+     "rule_id": "T015",
+     "severity": "high",
+     "symbol": null,
+     "waived": false
+    }
+   ],
+   "title": "docs: align docs with code, operator docs set, generated config reference, opt-in Gemini pruner",
+   "uim": 0.0,
+   "unlinked_symbols": 21,
+   "url": "https://github.com/Mohith-c7/Radius/pull/103",
+   "verdict": "failed",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 257,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 1,
+   "content": {
+    "extensions": {
+     ".md": 1
+    },
+    "kinds": {
+     "docs": 1
+    },
+    "profile": "docs"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R4",
+   "degraded": [],
+   "deletions": 0,
+   "explanation": "verified by R4; no criteria extracted from the PR text",
+   "intent_coverage": 1.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 1,
+   "n_tests_linked": 0,
+   "number": 104,
+   "peak_rss_mb": 86.5,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.438,
+    "prep": 1.718,
+    "stage_a": 7.0,
+    "stage_b": 0.0
+   },
+   "runtime_total_s": 10.64,
+   "status": "ok",
+   "stratum": "docs",
+   "tamper": [],
+   "title": "docs(research): add second independent alignment review (2026-11-03)",
+   "uim": 0.0,
+   "unlinked_symbols": 0,
+   "url": "https://github.com/Mohith-c7/Radius/pull/104",
+   "verdict": "verified",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 1282,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 7,
+   "content": {
+    "extensions": {
+     ".md": 2,
+     ".py": 4,
+     ".yml": 1
+    },
+    "kinds": {
+     "docs": 2,
+     "other": 1,
+     "python_src": 2,
+     "tests": 2
+    },
+    "profile": "mixed"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R2a",
+   "degraded": [],
+   "deletions": 5,
+   "explanation": "insufficient_evidence by R2a; no criteria extracted from the PR text; 17 tamper finding(s): T009, T013, T016",
+   "intent_coverage": 0.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 84,
+   "n_tests_linked": 72,
+   "number": 105,
+   "peak_rss_mb": 347.7,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.485,
+    "prep": 1.625,
+    "stage_a": 22.39,
+    "stage_b": 0.36
+   },
+   "runtime_total_s": 26.172,
+   "status": "ok",
+   "stratum": "feat",
+   "tamper": [
+    {
+     "check": "noqa",
+     "path": "tests/test_upload_results_action.py",
+     "reason": "`# noqa: ANN002` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`# noqa: ANN001` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "debug_call",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`print(...)` left in library code",
+     "rule_id": "T016",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "debug_call",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`print(...)` left in library code",
+     "rule_id": "T016",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`# noqa: ANN001` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "debug_call",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`print(...)` left in library code",
+     "rule_id": "T016",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`# noqa: ANN001` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "debug_call",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`print(...)` left in library code",
+     "rule_id": "T016",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`# noqa: ANN001` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "tests/test_upload_results_action.py",
+     "reason": "`# noqa: ANN002, ANN003` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`# noqa: S314` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`# noqa: ANN001` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`# noqa: S314 ` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`# noqa: ANN001` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`# noqa: BLE001 ` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "pragma_no_cover",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`# pragma: no cover` hides this code from coverage",
+     "rule_id": "T009",
+     "severity": "medium",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "actions/upload-results/upload.py",
+     "reason": "`# noqa: ANN001` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    }
+   ],
+   "title": "feat(ci,actions): upload-results composite action for CI evidence (IT-03)",
+   "uim": 0.0,
+   "unlinked_symbols": 41,
+   "url": "https://github.com/Mohith-c7/Radius/pull/105",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 3,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 1,
+   "content": {
+    "extensions": {
+     ".py": 1
+    },
+    "kinds": {
+     "tests": 1
+    },
+    "profile": "tests"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R4",
+   "degraded": [],
+   "deletions": 1,
+   "explanation": "verified by R4; no criteria extracted from the PR text",
+   "intent_coverage": 1.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 1,
+   "n_tests_linked": 0,
+   "number": 106,
+   "peak_rss_mb": 88.6,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.453,
+    "prep": 1.625,
+    "stage_a": 8.422,
+    "stage_b": 0.047
+   },
+   "runtime_total_s": 12.0,
+   "status": "ok",
+   "stratum": "other",
+   "tamper": [],
+   "title": "test(analysis): loosen the tamper performance bound for shared CI runners",
+   "uim": 0.0,
+   "unlinked_symbols": 0,
+   "url": "https://github.com/Mohith-c7/Radius/pull/106",
+   "verdict": "verified",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 5399,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 53,
+   "content": {
+    "extensions": {
+     "(none)": 1,
+     ".json": 9,
+     ".md": 8,
+     ".py": 33,
+     ".yml": 2
+    },
+    "kinds": {
+     "docs": 9,
+     "other": 11,
+     "python_src": 21,
+     "tests": 12
+    },
+    "profile": "mixed"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R2a",
+   "degraded": [],
+   "deletions": 35,
+   "explanation": "insufficient_evidence by R2a; no criteria extracted from the PR text; 7 tamper finding(s): T013",
+   "intent_coverage": 0.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 374,
+   "n_tests_linked": 834,
+   "number": 107,
+   "peak_rss_mb": 365.7,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.485,
+    "prep": 1.734,
+    "stage_a": 55.75,
+    "stage_b": 2.235
+   },
+   "runtime_total_s": 61.594,
+   "status": "ok",
+   "stratum": "feat",
+   "tamper": [
+    {
+     "check": "type_ignore",
+     "path": "packages/evidence/src/radius_evidence/policy/waivers.py",
+     "reason": "`# type: ignore[arg-type]` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "packages/evidence/src/radius_evidence/policy/repo_config.py",
+     "reason": "`# noqa: BLE001 ` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "apps/worker/src/radius_worker/verdict_v2/collect.py",
+     "reason": "`# noqa: BLE001 ` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "apps/worker/src/radius_worker/verdict_v2/collect.py",
+     "reason": "`# noqa: S603 ` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "type_ignore",
+     "path": "packages/evidence/tests/test_policy_miniyaml.py",
+     "reason": "`# type: ignore[arg-type]` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "apps/worker/src/radius_worker/verdict_v2/collect.py",
+     "reason": "`# noqa: S607` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "apps/worker/tests/test_verdict_v2_policy.py",
+     "reason": "`# noqa: S603, S607` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    }
+   ],
+   "title": "feat(verdict-v2): policy engine and waivers read from the base branch (VD-04/05)",
+   "uim": 0.0,
+   "unlinked_symbols": 156,
+   "url": "https://github.com/Mohith-c7/Radius/pull/107",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 5,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 2,
+   "content": {
+    "extensions": {
+     ".md": 1,
+     ".yml": 1
+    },
+    "kinds": {
+     "ci_infra": 1,
+     "docs": 1
+    },
+    "profile": "mixed"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R4",
+   "degraded": [],
+   "deletions": 12,
+   "explanation": "verified by R4; no criteria extracted from the PR text",
+   "intent_coverage": 1.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 2,
+   "n_tests_linked": 0,
+   "number": 108,
+   "peak_rss_mb": 86.7,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.516,
+    "prep": 1.703,
+    "stage_a": 7.765,
+    "stage_b": 0.0
+   },
+   "runtime_total_s": 11.36,
+   "status": "ok",
+   "stratum": "ci",
+   "tamper": [],
+   "title": "ci(scorecard): follow the publish workflow restrictions (no env vars or run steps)",
+   "uim": 0.0,
+   "unlinked_symbols": 0,
+   "url": "https://github.com/Mohith-c7/Radius/pull/108",
+   "verdict": "verified",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 1957,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R1c",
+    "verdict": "failed"
+   },
+   "changed_files": 61,
+   "content": {
+    "extensions": {
+     ".css": 1,
+     ".example": 1,
+     ".json": 10,
+     ".md": 17,
+     ".mjs": 1,
+     ".py": 29,
+     ".ts": 1,
+     ".tsx": 1
+    },
+    "kinds": {
+     "docs": 19,
+     "js_ts_src": 2,
+     "other": 10,
+     "python_src": 18,
+     "tests": 12
+    },
+    "profile": "mixed"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R1c",
+   "degraded": [
+    "unsupported_language:javascript",
+    "unsupported_language:typescript"
+   ],
+   "deletions": 155,
+   "explanation": "failed by R1c; no criteria extracted from the PR text; 4 tamper finding(s): T004, T013; degraded: unsupported_language:javascript, unsupported_language:typescript",
+   "intent_coverage": 0.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 191,
+   "n_tests_linked": 999,
+   "number": 109,
+   "peak_rss_mb": 372.4,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.516,
+    "prep": 1.781,
+    "stage_a": 62.61,
+    "stage_b": 1.593
+   },
+   "runtime_total_s": 67.844,
+   "status": "ok",
+   "stratum": "fix",
+   "tamper": [
+    {
+     "check": "noqa",
+     "path": "apps/worker/tests/test_verdict_v2_author_trust.py",
+     "reason": "`# noqa: S607` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "apps/worker/src/radius_worker/verdict_v2/collect.py",
+     "reason": "`# noqa: BLE001 ` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    },
+    {
+     "check": "conjunct_dropped",
+     "path": "apps/worker/tests/test_verdict_v2_publish.py",
+     "reason": "in `test_publish_creates_one_check_run_and_one_comment_with_the_v2_marker`: `run['title'].startswith('Radius v2: ') and 'criteria proven' in run['title']` -> `r",
+     "rule_id": "T004",
+     "severity": "high",
+     "symbol": "test_publish_creates_one_check_run_and_one_comment_with_the_v2_marker",
+     "waived": false
+    },
+    {
+     "check": "noqa",
+     "path": "apps/worker/tests/test_verdict_v2_author_trust.py",
+     "reason": "`# noqa: S603` suppresses a checker on a changed line",
+     "rule_id": "T013",
+     "severity": "low",
+     "symbol": null,
+     "waived": false
+    }
+   ],
+   "title": "fix(verdict-v2): honest alpha wording, advisory Check Run, author-hint provenance and cap",
+   "uim": 0.0,
+   "unlinked_symbols": 78,
+   "url": "https://github.com/Mohith-c7/Radius/pull/109",
+   "verdict": "failed",
+   "view": "assume_green_counterfactual"
+  },
+  {
+   "additions": 849,
+   "agent_signal": true,
+   "as_shipped_no_ci": {
+    "decided_by": "R2p",
+    "verdict": "insufficient_evidence"
+   },
+   "changed_files": 23,
+   "content": {
+    "extensions": {
+     "(none)": 2,
+     ".example": 1,
+     ".json": 1,
+     ".md": 7,
+     ".ps1": 1,
+     ".py": 9,
+     ".yml": 2
+    },
+    "kinds": {
+     "ci_infra": 1,
+     "docs": 7,
+     "other": 6,
+     "python_src": 6,
+     "tests": 3
+    },
+    "profile": "mixed"
+   },
+   "criteria": [],
+   "criteria_counts": {
+    "contradicted": 0,
+    "excluded": 0,
+    "proven": 0,
+    "unevidenced": 0,
+    "weak": 0
+   },
+   "decided_by": "R2a",
+   "degraded": [],
+   "deletions": 70,
+   "explanation": "insufficient_evidence by R2a; no criteria extracted from the PR text",
+   "intent_coverage": 0.0,
+   "intent_mode": "deterministic",
+   "n_criteria": 0,
+   "n_symbols": 79,
+   "n_tests_linked": 97,
+   "number": 110,
+   "peak_rss_mb": 367.1,
+   "range_kind": "merge_commit",
+   "reason": null,
+   "runtime_s": {
+    "intent": 0.484,
+    "prep": 2.36,
+    "stage_a": 33.171,
+    "stage_b": 0.235
+   },
+   "runtime_total_s": 37.953,
+   "status": "ok",
+   "stratum": "fix",
+   "tamper": [],
+   "title": "fix(dev): coherent local dev compose profile, sign-in and email log mode",
+   "uim": 0.0,
+   "unlinked_symbols": 22,
+   "url": "https://github.com/Mohith-c7/Radius/pull/110",
+   "verdict": "insufficient_evidence",
+   "view": "assume_green_counterfactual"
+  }
+ ],
+ "evidence_basis": "static only; CI results assumed green (counterfactual); NOT a pre-registered evaluation",
+ "generated": "2026-11-03",
+ "repo": "Mohith-c7/Radius",
+ "schema": "verdict-v2-replay-results-1",
+ "selection": "stratified, 6 most recent eligible per stratum feat/fix/docs/ci/other at 2026-11-03"
+}

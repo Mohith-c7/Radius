@@ -69,10 +69,40 @@ class GitSnapshot:
         self._repo = Path(repository_path)
         self._ref = ref
         self._timeout = timeout
+        self._paths: frozenset[str] | None = None
+        self._paths_tried = False
+
+    def _tracked_paths(self) -> frozenset[str] | None:
+        """Blob paths of ``ref`` from one ``git ls-tree`` (``None`` if it cannot be listed).
+
+        Probing for files that do not exist (manifests, ``__init__.py`` candidates) is
+        the common case; answering those from this set avoids one ``git show`` process
+        each (about 0.1 s per spawn on Windows, which made tamper analysis time out).
+        """
+
+        if not self._paths_tried:
+            self._paths_tried = True
+            try:
+                result = subprocess.run(  # noqa: S603 - fixed argv, ref validated above
+                    ["git", "ls-tree", "-r", "-z", "--name-only", self._ref],  # noqa: S607
+                    cwd=self._repo,
+                    capture_output=True,
+                    check=False,
+                    timeout=self._timeout,
+                )
+            except (OSError, subprocess.SubprocessError):
+                return None
+            if result.returncode == 0:
+                names = result.stdout.decode("utf-8", errors="surrogateescape").split("\0")
+                self._paths = frozenset(n for n in names if n)
+        return self._paths
 
     def read(self, path: str) -> bytes | None:
         pure = PurePosixPath(path)
         if pure.is_absolute() or ".." in pure.parts:
+            return None
+        tracked = self._tracked_paths()
+        if tracked is not None and path not in tracked:
             return None
         try:
             result = subprocess.run(  # noqa: S603 - fixed argv, ref validated above

@@ -1,0 +1,1 @@
+Fixed tamper analysis time-outs on large PRs: `GitSnapshot` lists the ref's files once and answers probes for absent paths without spawning `git show` (a 53-file PR went from 85 s to 16 s on Windows).
