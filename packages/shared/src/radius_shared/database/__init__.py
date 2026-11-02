@@ -8,6 +8,7 @@ from radius_shared.database import (
     intent,
     models,
     session,
+    verdict_v2,
 )
 from radius_shared.database.session import (
     DatabaseSettings,
@@ -24,6 +25,7 @@ __all__ = [
     "intent",
     "models",
     "session",
+    "verdict_v2",
     "DatabaseSettings",
     "create_database_engine",
     "create_session_factory",
