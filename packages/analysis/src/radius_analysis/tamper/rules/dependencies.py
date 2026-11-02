@@ -140,8 +140,10 @@ class DependencyRule(BaseRule):
     checks = {
         "registry_missing": CheckSpec(Severity.HIGH, "registry port reports the package does not exist"),
         "typosquat": CheckSpec(Severity.HIGH, "new dependency one edit away from a popular package"),
+        # DEC-028: medium offline (cannot be verified); a registry that says the package
+        # does not exist reports ``registry_missing`` (high) instead.
         "unverified_guarded_import": CheckSpec(
-            Severity.HIGH,
+            Severity.MEDIUM,
             "new unlocked dependency whose import is wrapped in try/except ImportError",
         ),
         "lockfile_drift": CheckSpec(Severity.MEDIUM, "new dependency missing from the lockfile"),

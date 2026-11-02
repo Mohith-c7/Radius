@@ -267,3 +267,53 @@ def test_config_digest_is_deterministic_and_sensitive() -> None:
 def test_component_versions_cover_the_justification_keys() -> None:
     assert DEFAULT_COMPONENT_VERSIONS["verdict"] == ALGO_VERSION == "verdict-v2-alpha-1"
     assert len(DEFAULT_COMPONENT_VERSIONS) == 12
+
+
+# ----------------------------------------------------------------- contract 2
+
+
+def test_contract_two_fields_default_to_the_old_behaviour() -> None:
+    from radius_evidence.domain.versions import CONTRACT_VERSION
+
+    assert CONTRACT_VERSION == "verdict-v2-contract-2"
+    fact = AssertionFact(AssertKind.VALUE_EQUALITY, 3)
+    assert not any(
+        (fact.mock_only, fact.circular, fact.dead, fact.swallowed, fact.in_loop, fact.property_based)
+    )
+    assert Reason("c", "d").rule_id is None
+    sa = _stage_a()
+    assert sa.added_test_ids == frozenset() and sa.agent_signal_by_test == {}
+
+
+def test_contract_one_payloads_still_load() -> None:
+    old_fact = {"kind": "value_equality", "line": 4, "note": "mock_only in_loop"}
+    fact = AssertionFact.from_dict(old_fact)
+    assert fact.note == "mock_only in_loop" and fact.mock_only is False
+    data = _stage_a().to_dict()
+    for key in ("added_test_ids", "agent_signal_by_test"):
+        data.pop(key, None)
+    assert StageAInput.from_dict(data).added_test_ids == frozenset()
+    assert Reason.from_dict({"code": "c", "detail": "d", "ref": "R2b"}).rule_id is None
+
+
+def test_contract_two_fields_round_trip() -> None:
+    fact = AssertionFact(
+        AssertKind.TAUTOLOGY, 9, circular=True, dead=True, swallowed=True,
+        mock_only=True, in_loop=True, property_based=True,
+    )
+    assert AssertionFact.from_json(fact.to_json()) == fact
+    reason = Reason("tamper_high", "d", ref="tf_1", rule_id="R1c")
+    assert Reason.from_dict(reason.to_dict()) == reason
+    sa = StageAInput.from_dict(
+        {**_stage_a().to_dict(), "added_test_ids": ["b"], "agent_signal_by_test": {"a": True}}
+    )
+    assert sa.added_test_ids == frozenset({"b"}) and sa.agent_signal_by_test == {"a": True}
+    assert StageAInput.from_json(sa.to_json()) == sa
+
+
+def test_freshness_reasons_allow_the_decay_value() -> None:
+    from radius_evidence.domain import freshness
+    from radius_evidence.domain.model import FRESHNESS_REASONS
+
+    assert freshness.REASON_STALE_UNCHANGED in FRESHNESS_REASONS
+    assert {freshness.REASON_CURRENT, freshness.REASON_STALE} <= set(FRESHNESS_REASONS)

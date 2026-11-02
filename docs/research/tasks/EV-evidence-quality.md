@@ -6,7 +6,7 @@ M2 = cheap signals (EV-01 to EV-03, EV-06 to EV-08). M4 = mutation-based signals
 
 ---
 
-### EV-01 Evidence item model and normalizers   [ ]
+### EV-01 Evidence item model and normalizers   [x]  (alpha scope: model, factories, normalizers; table is Beta)
 - Owner type: agent-ok
 - Depends on: LK-05
 - Branch: `feature/evidence-model`
@@ -48,7 +48,7 @@ M2 = cheap signals (EV-01 to EV-03, EV-06 to EV-08). M4 = mutation-based signals
 - Note: Verik (Apache-2.0) and SlopGate implement overlapping rules; reuse of ideas is fine, but check licenses before copying any code, and prefer independent implementation. AgentProof's license was not visible; do not copy.
 - Contract: see design/VERDICT_V2_SLICE.md (docs/research/design/; Verdict v2 alpha: consumed through TamperFindingInput; severities drive rules R1c/R3a)
 
-### EV-03 Authorship and independence analysis   [ ]
+### EV-03 Authorship and independence analysis   [x] lite (`indep-lite-1`; full authorship analysis still open)
 - Owner type: agent-ok
 - Depends on: EV-02
 - Branch: `feature/evidence-independence`
@@ -87,7 +87,7 @@ M2 = cheap signals (EV-01 to EV-03, EV-06 to EV-08). M4 = mutation-based signals
 - Steps: attribution of kills to tests; handle shared kills (credit split or multi-credit, configurable); handle zero-mutant symbols (e.g. comments-only) -> `d` undefined -> use static fallback.
 - Acceptance: unit tests on small hand-calculated cases; edge cases documented.
 
-### EV-06 Static assertion strength `a_static`   [ ]
+### EV-06 Static assertion strength `a_static`   [x]
 - Owner type: agent-ok
 - Depends on: LK-04
 - Branch: `feature/evidence-assertion-strength`
@@ -98,7 +98,7 @@ M2 = cheap signals (EV-01 to EV-03, EV-06 to EV-08). M4 = mutation-based signals
 - Research hook: correlation between `a_static` and `d_mut` is a paper result (cheap proxy validity).
 - Contract: see design/VERDICT_V2_SLICE.md (docs/research/design/; Verdict v2 alpha: a_static table in 3.6)
 
-### EV-07 Freshness binding and staleness   [ ]
+### EV-07 Freshness binding and staleness   [x]
 - Owner type: agent-ok
 - Depends on: EV-01
 - Branch: `feature/evidence-freshness`
@@ -107,7 +107,7 @@ M2 = cheap signals (EV-01 to EV-03, EV-06 to EV-08). M4 = mutation-based signals
 - Acceptance: a new commit invalidates old evidence for changed symbols but not for unchanged ones when decay is enabled.
 - Contract: see design/VERDICT_V2_SLICE.md (docs/research/design/; Verdict v2 alpha: f in {0,1} by head SHA, 3.5)
 
-### EV-08 `q(e)` combiner and configuration   [ ]
+### EV-08 `q(e)` combiner and configuration   [x]
 - Owner type: agent-ok
 - Depends on: EV-02, EV-03, EV-05, EV-06, EV-07
 - Branch: `feature/evidence-quality-combiner`

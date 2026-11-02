@@ -61,8 +61,18 @@ def test_verdict_v2_worker_modules_import(module: str) -> None:
     importlib.import_module(f"radius_worker.verdict_v2.{module}")
 
 
-def test_runner_does_not_reference_verdict_v2_yet() -> None:
+def test_runner_references_verdict_v2_only_through_the_publish_and_outbox_hooks() -> None:
     import radius_worker.runner as runner
 
     with open(runner.__file__, encoding="utf-8") as handle:
-        assert "verdict_v2" not in handle.read()
+        source = handle.read()
+    imported = {
+        line.split()[1]
+        for line in source.splitlines()
+        if line.startswith("from radius_worker.verdict_v2")
+    }
+    # VS-07/VS-08 hooks only; the Stage A/B hook (VS-05) is a flag-guarded local import.
+    assert imported <= {
+        "radius_worker.verdict_v2.publish",
+        "radius_worker.verdict_v2.requests",
+    }

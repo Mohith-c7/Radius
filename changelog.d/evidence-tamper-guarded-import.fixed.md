@@ -1,0 +1,1 @@
+A new dependency imported behind `try/except ImportError` that cannot be verified offline is now reported at `medium` severity (`unverified_guarded_import`) instead of `high`, so it leads to `needs_review` rather than `failed`; `registry_missing` and `typosquat` stay `high` (DEC-028).

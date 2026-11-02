@@ -1,0 +1,1 @@
+Added the Verdict v2 rules (R1 to R4 with a justification tree) and the PR comment and Check Run renderer, with escaping of untrusted text and a distinct hidden marker for in-place updates. Nothing publishes them yet: the feature stays off until the worker wiring ships behind `RADIUS_FEATURE_VERDICT_V2`.

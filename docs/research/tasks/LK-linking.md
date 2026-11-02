@@ -71,6 +71,8 @@ Goal: connect criteria to the code that implements them, and code to the tests/e
 - Contract: see design/VERDICT_V2_SLICE.md (docs/research/design/; Verdict v2 alpha: alpha scope is the in-memory IEG and JSON (3.4); ieg tables are Beta (migration 0017), not 0011)
 - Done (alpha scope): `radius_evidence.domain.ieg` (types, `validate_ieg`, `IegIndex.paths`) and `radius_evidence.application.ieg_builder` (pure, deterministic builder with a build report); JSON round-trip via `Ieg.to_json`. Tables `ieg_nodes`/`ieg_edges` remain Beta (VS-B0). See `packages/evidence/README.md`.
 
+
+
 ### LK-06 Link combination and confidence   [x]
 - Owner type: agent-ok
 - Depends on: LK-02, LK-03

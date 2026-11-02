@@ -234,3 +234,14 @@ Researcher / reviewer:
 - Whether the opt-in LLM text shown to users discloses file-path egress.
 - The exact effort split (the 47/173 keyword count is a rough heuristic, not a hand classification).
 - Hand-checked task `Depends on` lines for the ordering in 4.2.
+
+---
+
+## Entry 2026-11-02 (later): status after the Verdict v2 alpha integration
+
+Evidence: branch `feature/verdict-v2-integration` (not yet merged to `develop`); acceptance test `apps/worker/tests/test_verdict_v2_acceptance.py`; DEC-027 and DEC-028.
+
+- **What changed against the 2026-11-02 review above.** The "intent does not reach the verdict" gap is closed behind a flag: with `RADIUS_FEATURE_VERDICT_V2=on` the PR comment and Check Run show per-criterion states, the unproven intent mass and tamper findings, and are updated in place after CI uploads (shadow mode only stores). The default stays `off`; with it off v1 output is unchanged (tests compare it).
+- **Measured, not claimed.** On the 8 F-14 fixtures the real pipeline (LK-01..04, VS-04 relevance, EV-02 tamper, EV-06/07/08, VD-01..03) reproduces the design expectations in gold mode (hand-fed links) to 0.001 and reproduces every PR verdict in auto mode except fixture 01, where conservative criterion-to-test relevance gives `insufficient_evidence` instead of `verified` (never the unsafe direction). Six fixtures differ in at least one auto-mode criterion state; each is listed with its reason in `KNOWN_AUTO_DEVIATIONS`. Eight fixtures is a sanity check, not an evaluation: no precision or recall claim follows.
+- **Decision recorded (DEC-028).** A guarded import that cannot be verified offline is `medium` (`needs_review`); only a registry miss is `high` (`failed`).
+- **Still unverified.** Live GitHub (a fake client was used), a browser (the dashboard panel has unit tests only), PostgreSQL (SQLite in tests; Postgres tests are opt-in), calibration of every threshold, and any non-Python language.
