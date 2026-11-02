@@ -105,7 +105,12 @@ export type TamperFinding = {
   test_id: string | null;
   old_snippet: string | null;
   new_snippet: string | null;
+  waived: boolean;
+  waiver: WaiverRef | null;
 };
+
+/** The waiver that accepts a tamper finding. `reason` is UNTRUSTED text. */
+export type WaiverRef = { id: string; reason: string; owner: string; expires: string };
 
 export type NextAction = { code: string; text: string; criterion_id: string | null };
 
@@ -121,6 +126,7 @@ export type Summary = {
   tamper: Record<string, number>;
   evidence_basis: string;
   author_hint_criteria: number;
+  tamper_waived: number;
 };
 
 export type Hint = { kind: string; value: string; provenance: string };
@@ -175,6 +181,60 @@ export type VerdictV2 = {
   tauSupport: number;
   uimMax: number | null;
   minIntentCoverage: number | null;
+  presentation: Presentation | null;
+  policy: PolicyView | null;
+  waivers: WaiversView | null;
+};
+
+/** Contract 4 wording (alpha). All strings are text only. */
+export type Presentation = {
+  verdict_label: string;
+  state_labels: Record<string, string>;
+  legend: string;
+  disclaimer: string;
+  summary_text: string;
+};
+
+export type PolicySetting = { key: string; value: string; origin: string; line: number | null };
+export type PolicyRequirement = {
+  target: string;
+  state: string;
+  min_state: string;
+  paths: string[];
+  line: number | null;
+};
+export type PolicyView = {
+  present: boolean;
+  status: string;
+  mode: string | null;
+  headPolicy: string;
+  sourceRef: string;
+  settings: PolicySetting[];
+  ignoredHead: PolicySetting[];
+  unmet: PolicyRequirement[];
+  excludePaths: string[];
+  acknowledgements: string[];
+  refused: string[];
+  errors: string[];
+  warnings: string[];
+};
+
+export type AppliedWaiver = {
+  id: string;
+  kind: string;
+  target: string;
+  owner: string;
+  reason: string;
+  expires: string;
+};
+export type IgnoredWaiver = { id: string; code: string; message: string; line: number | null };
+export type WaiversView = {
+  status: string;
+  sourceRef: string;
+  applied: AppliedWaiver[];
+  ignored: IgnoredWaiver[];
+  evaluatedOn: string;
+  auditDigest: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -312,6 +372,139 @@ function parseTamper(raw: unknown): TamperFinding | null {
     test_id: optStr(raw.test_id),
     old_snippet: snippet(raw.old_snippet),
     new_snippet: snippet(raw.new_snippet),
+    waived: raw.waived === true,
+    waiver: raw.waived === true ? parseWaiverRef(raw.waiver) : null,
+  };
+}
+
+const MAX_SHORT = 200;
+const short = (value: unknown, max = MAX_SHORT): string => truncateText(str(value), max);
+const lineNo = (value: unknown): number | null => {
+  const n = optNum(value);
+  return n !== null && n >= 0 ? Math.trunc(n) : null;
+};
+
+function parseWaiverRef(raw: unknown): WaiverRef | null {
+  if (!isObject(raw)) return null;
+  return {
+    id: short(raw.id, 64),
+    reason: truncateText(str(raw.reason), 500),
+    owner: short(raw.owner, 100),
+    expires: short(raw.expires, 32),
+  };
+}
+
+function parsePresentation(raw: unknown): Presentation | null {
+  if (!isObject(raw)) return null;
+  const labels: Record<string, string> = {};
+  if (isObject(raw.state_labels)) {
+    for (const key of Object.keys(raw.state_labels).slice(0, 10)) {
+      const v = raw.state_labels[key];
+      if (typeof v === "string") labels[key] = truncateText(v, 40);
+    }
+  }
+  return {
+    verdict_label: short(raw.verdict_label, 200),
+    state_labels: labels,
+    legend: short(raw.legend, 400),
+    disclaimer: short(raw.disclaimer, 600),
+    summary_text: short(raw.summary_text, 400),
+  };
+}
+
+function parseSetting(raw: unknown): PolicySetting | null {
+  if (!isObject(raw)) return null;
+  return {
+    key: short(raw.key, 80),
+    value: compactValue(raw.value, 120),
+    origin: short(raw.origin, 8),
+    line: lineNo(raw.line),
+  };
+}
+
+function parseRequirement(raw: unknown): PolicyRequirement | null {
+  if (!isObject(raw)) return null;
+  return {
+    target: short(raw.criterion_id ?? raw.symbol_id, 120),
+    state: short(raw.state, 40),
+    min_state: short(raw.min_state, 40),
+    paths: strs(raw.paths)
+      .slice(0, 20)
+      .map((p) => truncateText(p, 200)),
+    line: lineNo(raw.line),
+  };
+}
+
+function boundedList<T>(raw: unknown, parse: (x: unknown) => T | null, max = 100): T[] {
+  return arr(raw)
+    .slice(0, max)
+    .map(parse)
+    .filter((x): x is T => x !== null);
+}
+
+function parsePolicy(raw: unknown): PolicyView | null {
+  if (!isObject(raw)) return null;
+  const tamper = isObject(raw.tamper) ? raw.tamper : {};
+  const unmet = isObject(raw.unmet) ? raw.unmet : {};
+  const source = isObject(raw.source) ? raw.source : {};
+  const mode = optStr(raw.mode);
+  const cap = (list: unknown, max: number, len: number) =>
+    strs(list)
+      .slice(0, max)
+      .map((e) => truncateText(e, len));
+  return {
+    present: raw.present !== false,
+    status: short(raw.status, 40) || "ok",
+    mode: mode === null ? null : truncateText(mode, 20),
+    headPolicy: short(raw.head_policy, 20) || "ignore",
+    sourceRef: short(source.ref, 64),
+    settings: boundedList(raw.provenance, parseSetting),
+    ignoredHead: boundedList(raw.ignored_head, parseSetting),
+    unmet: boundedList(unmet.required, parseRequirement),
+    excludePaths: cap(raw.exclude_paths, 50, 200),
+    acknowledgements: boundedList(tamper.acknowledgements, (a) =>
+      isObject(a)
+        ? `${short(a.rule, 60)}: ${short(a.action, 20)} from ${short(a.from_severity, 20)}, reason: ${truncateText(str(a.reason), 300)}`
+        : null,
+    ),
+    refused: boundedList(tamper.refused, (a) =>
+      isObject(a) ? truncateText(str(a.message), 300) : null,
+    ),
+    errors: cap(raw.errors, 50, 300),
+    warnings: cap(raw.warnings, 50, 300),
+  };
+}
+
+function parseWaivers(raw: unknown): WaiversView | null {
+  if (!isObject(raw)) return null;
+  const source = isObject(raw.source) ? raw.source : {};
+  return {
+    status: short(raw.status, 40) || "ok",
+    sourceRef: short(source.ref, 64),
+    applied: boundedList(raw.applied, (a) =>
+      isObject(a)
+        ? {
+            id: short(a.id, 64),
+            kind: short(a.kind, 20),
+            target: short(a.target, 120),
+            owner: short(a.owner, 100),
+            reason: truncateText(str(a.reason), 500),
+            expires: short(a.expires, 32),
+          }
+        : null,
+    ),
+    ignored: boundedList(raw.ignored, (a) =>
+      isObject(a)
+        ? {
+            id: short(a.id, 64),
+            code: short(a.code, 60),
+            message: truncateText(str(a.message), 300),
+            line: lineNo(a.line),
+          }
+        : null,
+    ),
+    evaluatedOn: short(raw.evaluated_on, 32),
+    auditDigest: short(raw.audit_digest, 80),
   };
 }
 
@@ -388,6 +581,7 @@ function parseSummary(raw: unknown, criteria: Criterion[]): Summary {
     tamper,
     evidence_basis: str(s.evidence_basis, "static_only"),
     author_hint_criteria: Math.max(0, Math.trunc(num(s.author_hint_criteria, 0))),
+    tamper_waived: Math.max(0, Math.trunc(num(s.tamper_waived, 0))),
 
   };
 }
@@ -458,6 +652,9 @@ export function parseVerdictV2(raw: unknown): ParseResult {
       tauSupport: thresholdNumber(raw.justification, "tau_support") ?? DEFAULT_TAU_SUPPORT,
       uimMax: thresholdNumber(raw.justification, "uim_max"),
       minIntentCoverage: thresholdNumber(raw.justification, "min_intent_coverage"),
+      presentation: parsePresentation(raw.presentation),
+      policy: parsePolicy(raw.policy),
+      waivers: parseWaivers(raw.waivers),
     },
   };
 }
@@ -791,4 +988,47 @@ export function classifyVerdictError(error: unknown): VerdictErrorInfo {
     return { kind: "other", message: truncateText(message, 300) };
   }
   return { kind: "other", message: "The verdict could not be loaded." };
+}
+
+// ---------------------------------------------------------------------------
+// policy, waivers and presentation helpers
+// ---------------------------------------------------------------------------
+
+/** Alpha disclaimer: the API wording when present, else the built-in constant. */
+export function disclaimerText(v: Pick<VerdictV2, "presentation">): string {
+  return v.presentation?.disclaimer || DISCLAIMER;
+}
+
+export function legendText(v: Pick<VerdictV2, "presentation">): string {
+  return v.presentation?.legend || LEGEND;
+}
+
+/** State wording: the API presentation.state_labels (SUPPORTED, ...) else the local label. */
+export function stateLabel(v: Pick<VerdictV2, "presentation">, state: string): string {
+  return v.presentation?.state_labels[state] || stateMeta(state).label;
+}
+
+export function policyModeLabel(policy: PolicyView): string {
+  if (policy.status !== "ok") return `Policy could not be applied (${policy.status})`;
+  if (policy.mode === "blocking") return "Blocking: every unverified result fails the check";
+  if (policy.mode === "advisory") return "Advisory: the check never fails on its own";
+  return "No mode set (default check mapping)";
+}
+
+export function settingLine(s: PolicySetting): string {
+  const where = s.line !== null ? `policy line ${s.line}` : "policy line unknown";
+  return `${s.key} = ${s.value} (${where}${s.origin ? `, ${s.origin}` : ""})`;
+}
+
+export function waiverCodeLabel(code: string): string {
+  return code ? code.replace(/_/g, " ") : "ignored";
+}
+
+export function waivedFindings(v: Pick<VerdictV2, "tamper_findings">): TamperFinding[] {
+  return v.tamper_findings.filter((t) => t.waived);
+}
+
+/** True when there is a policy or waivers record worth a section. */
+export function hasPolicySection(v: Pick<VerdictV2, "policy" | "waivers">): boolean {
+  return v.policy !== null || v.waivers !== null;
 }

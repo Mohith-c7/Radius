@@ -73,3 +73,5 @@
   .vv2-table th:nth-child(n+4), .vv2-table td:nth-child(n+4) { display: table-cell; }
 }
 @media (prefers-reduced-motion: reduce) { .vv2-panel .spin { animation: none; } }
+.vv2-policy { display: grid; gap: 8px; }
+.vv2-policy .vv2-details[open] > summary { margin-bottom: 6px; }
