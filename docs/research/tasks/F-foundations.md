@@ -96,7 +96,7 @@ Goal: make the existing prototype trustworthy enough to build on. Fixes the gaps
 - Tests: the adversarial suite runs in CI (Linux runner).
 - Risks: Windows dev machines cannot run all isolation features; CI must be the authority.
 
-### F-08 Symbol-level impact in test selection   [ ]
+### F-08 Symbol-level impact in test selection   [x]
 - Owner type: agent-ok
 - Depends on: none
 - Branch: `feature/analysis-symbol-impact`
