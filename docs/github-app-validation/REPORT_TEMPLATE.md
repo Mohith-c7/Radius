@@ -1,0 +1,57 @@
+# F-06 GitHub App live validation report
+
+Copy this file to `REPORT.md` and fill it in. Link the generated `evidence/scenarios-*.md` log.
+
+| Field | Value |
+| --- | --- |
+| Date (UTC) | |
+| Validator | |
+| Radius commit (`git rev-parse HEAD`) | |
+| Sandbox repo / PR | |
+| App id / installation id | |
+| Tunnel (cloudflared / smee) | |
+| Evidence log | `evidence/scenarios-....md` |
+
+## Scenario results
+
+Expected results come from the code as verified offline (see `RUNBOOK.md` section 0). Status: PASS / FAIL / BLOCKED.
+
+| # | Scenario | Expected | Observed | Status | Screenshot | Defect |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0 | App install + `installation` webhook | 202; repo connected; installation id stored on the organization | | | | |
+| 0b | `ping` / redeliver ping | 202, no tenant lookup | | | | |
+| 1 | Open PR | One completed `Radius confidence` check run on head SHA; one bot comment with marker | | | | |
+| 2 | Push another commit | Completed check run on the new SHA; the same comment id edited in place | | | | |
+| 3 | Edit title/description | `ignored`; no new check run or comment | | | | |
+| 4 | Close PR | `ignored`; PR status closed; no new check run or comment | | | | |
+| 5 | Reopen PR | Analysis reused for same head SHA; still one check run per SHA, one comment | | | | |
+| 6 | Force-push | New SHA gets a completed check run; one comment; old SHA's check run left as is | | | | |
+| 7 | Redeliver a webhook (same `X-GitHub-Delivery`) | 202 with stored response; no new analysis, check run or comment | | | | |
+| 8 | Draft PR / `ready_for_review` | Draft ignored; ready_for_review analysed | | | | |
+| 9 | Subscribed-but-ignored events (`issues`, `issue_comment`, `check_run`) | 202 `ignored`; the App's own check run and comment events do not loop | | | | |
+| 10 | Private-repo clone with installation token | Worker clones, analysis completes | | | | |
+| 11 | Check conclusion mapping | `neutral` without test evidence, `success` only for verified low/medium risk | | | | |
+
+## Acceptance criteria (F-06)
+
+- [ ] Written report with screenshots (this file)
+- [ ] Check Run updates on each push
+- [ ] No duplicate comments
+- [ ] Webhooks idempotent on redelivery
+- [ ] Fixtures added for every payload shape seen live
+
+## Defects
+
+| ID | Description | Severity | Link | Fixed in |
+| --- | --- | --- | --- | --- |
+| | | | | |
+
+Known from offline review (confirm or close live):
+
+1. `installation`/`installation_repositories` sync records `default_branch` as `main` regardless of the real default (`github_webhooks.py`, `_handle_installation_sync`); later PR deliveries do not correct it because an existing repository is returned unchanged.
+2. `publish_in_progress` is never called by the worker, so there is no in-progress check while analysis runs.
+3. Clone auth header is `Authorization: Bearer <token>` (`runner.py`, `_github_clone_headers`); unverified against GitHub git over HTTPS.
+4. Closing a PR does not complete or cancel an in-flight analysis/check run.
+5. `installation` `deleted`/`removed` and `installation_repositories` `removed` are not handled.
+
+## Notes and follow-ups
