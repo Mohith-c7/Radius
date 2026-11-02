@@ -147,3 +147,34 @@ def test_human_comment_with_marker_is_left_alone_and_bot_comment_created() -> No
     GitHubAnalysisPublisher(gh).publish(installation_id=1, report=_report("c" * 40))
     assert gh.comments[1]["body"].endswith("quoted")
     assert len(gh.comments) == 2
+
+
+def test_rerun_on_same_sha_reopens_the_completed_check_run_instead_of_adding_one() -> None:
+    gh = StatefulGitHub()
+    publisher = GitHubAnalysisPublisher(gh)
+    sha = "d" * 40
+    publisher.publish(installation_id=1, report=_report(sha))
+    publisher.publish_in_progress(installation_id=1, owner="o", repository_name="r", head_sha=sha)
+    assert [r["status"] for r in gh.check_runs.values()] == ["in_progress"]
+    publisher.publish(installation_id=1, report=_report(sha, score=90))
+    assert len(gh.check_runs) == 1
+    assert next(iter(gh.check_runs.values()))["status"] == "completed"
+
+
+def test_comment_failure_is_reported_separately_and_leaves_check_completed() -> None:
+    import pytest
+    from radius_github.publisher import CommentPublishError
+
+    class BrokenComments(StatefulGitHub):
+        def list_issue_comments(self, **_: Any):
+            raise RuntimeError("comments API down")
+
+    gh = BrokenComments()
+    publisher = GitHubAnalysisPublisher(gh)
+    sha = "e" * 40
+    publisher.publish_in_progress(installation_id=1, owner="o", repository_name="r", head_sha=sha)
+    with pytest.raises(CommentPublishError):
+        publisher.publish(installation_id=1, report=_report(sha, status="verified"))
+    run = next(iter(gh.check_runs.values()))
+    assert run["status"] == "completed"
+    assert len(gh.check_runs) == 1

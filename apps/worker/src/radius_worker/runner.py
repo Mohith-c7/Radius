@@ -23,7 +23,7 @@ from radius_confidence.infrastructure import (
     SqlAlchemyConfidenceStore,
 )
 from radius_github import GitHubAnalysisPublisher, GitHubAppClient, GitHubAppSettings
-from radius_github.publisher import GitHubAnalysisReport
+from radius_github.publisher import CommentPublishError, GitHubAnalysisReport
 from radius_graph.application import GraphApplicationService
 from radius_graph.infrastructure import InMemoryGraphStore, SqlAlchemyGraphStore
 from radius_parser.application import ParserApplicationService
@@ -169,6 +169,14 @@ class SqlAlchemyWorkerRuntime:
 
         try:
             with self.session_factory() as session:
+                # Best-effort: shows "in progress" on the PR while we work. It
+                # never raises, so it cannot fail the analysis.
+                _publish_github_in_progress(
+                    session=session,
+                    analysis_id=job.analysis_id,
+                    settings=self.settings,
+                    github_client=self.github_client,
+                )
                 orchestrator = _create_sql_orchestrator(session, self.settings)
                 clone_headers = _github_clone_headers(
                     session=session,
@@ -588,9 +596,75 @@ def _publish_github_result(
             "Successfully published GitHub Check Run and PR comment",
             extra={"analysis_id": str(analysis_id), "pr_number": report.pull_request_number},
         )
+    except CommentPublishError as exc:
+        # The check run is already completed; only the PR comment failed.
+        LOGGER.warning(
+            "Could not publish GitHub PR comment: %s",
+            redact_secrets(exc),
+            extra={"analysis_id": str(analysis_id), "outcome": "publish_error"},
+        )
     except Exception as exc:
         LOGGER.warning(
             "Could not publish GitHub Check Run or PR comment: %s",
+            redact_secrets(exc),
+            extra={"analysis_id": str(analysis_id), "outcome": "publish_error"},
+        )
+        # The in-progress run opened at job start must not stay stuck: complete
+        # it as "not verified" rather than leaving it spinning forever.
+        _publish_github_failure(
+            session=session,
+            analysis_id=analysis_id,
+            settings=settings,
+            github_client=github_client,
+            error=RuntimeError("Radius could not publish its result to GitHub."),
+        )
+
+
+def _publish_github_in_progress(
+    *,
+    session: Session,
+    analysis_id,
+    settings: WorkerSettings,
+    github_client: GitHubAppClient,
+) -> None:
+    """Open (or re-open) the single in-progress Check Run for this head SHA.
+
+    Best-effort: any failure is logged and swallowed. The later completion
+    (``publish`` / ``publish_failure``) finds this run by head SHA and updates
+    it, so there is one check run per commit.
+    """
+
+    github_settings = _github_settings(settings)
+    if not settings.github_publish_results or not github_settings.enabled:
+        return
+    try:
+        analysis = session.get(db_models.Analysis, analysis_id)
+        repository = (
+            session.get(db_models.Repository, analysis.repository_id)
+            if analysis is not None
+            else None
+        )
+        if analysis is None or repository is None:
+            return
+        with stage("publish"):
+            GitHubAnalysisPublisher(github_client).publish_in_progress(
+                installation_id=_github_installation_id(
+                    session=session,
+                    analysis_id=analysis_id,
+                    settings=settings,
+                ),
+                owner=repository.owner,
+                repository_name=repository.name,
+                head_sha=analysis.commit_sha,
+                dashboard_url=(
+                    f"{settings.dashboard_base_url.rstrip('/')}/analyses/{analysis_id}"
+                    if settings.dashboard_base_url
+                    else None
+                ),
+            )
+    except Exception as exc:
+        LOGGER.warning(
+            "Could not publish in-progress GitHub Check Run: %s",
             redact_secrets(exc),
             extra={"analysis_id": str(analysis_id), "outcome": "publish_error"},
         )
