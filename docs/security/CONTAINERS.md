@@ -13,7 +13,7 @@ amd64, Trivy from `aquasec/trivy@sha256:790fd66d...`).
 | User | Fixed `radius` user, **uid/gid 10001:10001**, `USER 10001:10001`, nologin shell. Application code is root-owned and read-only to it. |
 | Health | api: `HEALTHCHECK` on `GET /api/v1/ready` (database + queue, honours `PORT`). Worker: opens a DB connection and runs `select 1` (see limits below). Dashboard: `GET /login` (public page; exercises middleware and rendering). |
 | Dashboard | Next.js standalone output (`NEXT_PRIVATE_STANDALONE=true` in the build stage, so `next.config.mjs` is untouched). Runtime runs `node apps/dashboard/server.js`; npm/corepack/yarn are removed from the runtime stage. The F-05 proxy route (`/api/radius/*`) was verified in the standalone server. |
-| Labels | `org.opencontainers.image.{title,description,source,version,revision,licenses,base.name}`. `licenses` is `NOASSERTION` because the licence decision is pending. Pass `--build-arg VCS_REF=$(git rev-parse HEAD)` and `--build-arg RADIUS_VERSION=...`. |
+| Labels | `org.opencontainers.image.{title,description,source,version,revision,licenses,base.name}`. `licenses` is `Apache-2.0` (DEC-018, `LICENSE`). Pass `--build-arg VCS_REF=$(git rev-parse HEAD)` and `--build-arg RADIUS_VERSION=...`. |
 | Secrets | None in layers: no `ENV`/`ARG` secrets; `.dockerignore` excludes `.env*`, `.git`, tests, docs, benchmarks. |
 | Fix found on the way | The old API image could not start: `PYTHONPATH` lacked `packages/intent/src` (`ModuleNotFoundError: radius_intent`). Added for api and worker. |
 

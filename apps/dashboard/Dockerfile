@@ -45,7 +45,7 @@ LABEL org.opencontainers.image.title="radius-dashboard" \
       org.opencontainers.image.source="https://github.com/Mohith-c7/Radius" \
       org.opencontainers.image.version="${RADIUS_VERSION}" \
       org.opencontainers.image.revision="${VCS_REF}" \
-      org.opencontainers.image.licenses="NOASSERTION" \
+      org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.base.name="docker.io/library/node:22-slim"
 
 ENV NODE_ENV=production \
