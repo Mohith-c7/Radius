@@ -19,6 +19,7 @@ the Check Run conclusion is advisory (``neutral``) unless the operator opts into
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 import re
 from collections.abc import Mapping, Sequence
@@ -396,6 +397,17 @@ def _why(view: VerdictV2View, labels: Mapping[str, str]) -> str:
         marks = inputs.get("blocking") if isinstance(inputs.get("blocking"), list) else []
         listed = ", ".join(escape.code(m, 40) for m in marks[:5])
         return f"The analysis was incomplete ({listed}), so no verdict can be given."
+    if decided == "P1":
+        n = len(inputs.get("unmet", [])) if isinstance(inputs.get("unmet"), list) else 0
+        return (
+            f"The repository policy requires more for the changed paths: {n} requirement(s) unmet "
+            f"({_label_list(crit_refs, labels)}). See the policy section below."
+        )
+    if decided == "P2":
+        return (
+            f"The repository policy requires a test that is not agent-authored; criteria "
+            f"{_label_list(crit_refs, labels)} only have agent-authored tests."
+        )
     if decided == "R3a":
         ids = refs.get("finding_ids") if isinstance(refs.get("finding_ids"), list) else []
         rules = _tamper_rule_ids(view, ids)
@@ -458,7 +470,17 @@ def _tamper_line(t: TamperView) -> str:
     where = escape.code(t.path, 100)
     if t.symbol:
         where += f" ({escape.code(t.symbol, 80)})"
-    line = f"- {escape.code(t.rule_id, 16)} **{escape.token(t.severity, 16)}** in {where}: {escape.plain(t.reason, 200)}"
+    tag = "**WAIVED** " if t.waived else ""
+    line = (
+        f"- {tag}{escape.code(t.rule_id, 16)} **{escape.token(t.severity, 16)}** in {where}: "
+        f"{escape.plain(t.reason, 200)}"
+    )
+    if t.waived and t.waiver:
+        w = t.waiver
+        line += (
+            f" (waiver {escape.code(w.get('id'), 64)} by {escape.plain(w.get('owner'), 80)}, "
+            f"expires {escape.token(w.get('expires'), 10)}: {escape.plain(w.get('reason'), 200)})"
+        )
     if t.old_snippet or t.new_snippet:
         before = escape.code(t.old_snippet, 100) if t.old_snippet else "(none)"
         after = escape.code(t.new_snippet, 100) if t.new_snippet else "(none)"
@@ -478,6 +500,99 @@ def _tamper_section(view: VerdictV2View) -> str:
     if len(findings) > MAX_LIST_ITEMS:
         lines.append(f"- +{len(findings) - MAX_LIST_ITEMS} more, see the dashboard.")
     return _details(f"Tamper findings ({len(findings)})", lines)
+
+
+def _as_list(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def _text(value: Any) -> str:
+    return json.dumps(value, sort_keys=True) if isinstance(value, (dict, list, bool)) else str(value)
+
+
+def _line(value: Any) -> str:
+    return str(value) if isinstance(value, int) and not isinstance(value, bool) else "?"
+
+
+def _policy_summary(view: VerdictV2View) -> str:
+    """One line under the stats: the policy mode and where it came from (empty: no policy)."""
+
+    p = view.policy
+    if not p:
+        return ""
+    mode = p.get("mode")
+    status = str(p.get("status") or "")
+    src = p.get("source") if isinstance(p.get("source"), Mapping) else {}
+    ref = escape.short_sha(src.get("ref")) if src.get("ref") else "base"
+    if status not in ("ok",):
+        return f"**Policy:** `.radius/policy.yml` could not be applied ({escape.token(status, 24)})."
+    label = escape.token(mode, 16) if mode else "default mode"
+    n = len(_as_list(p.get("provenance")))
+    return f"**Policy:** {label}, from the base branch (`{ref}`), {n} setting(s) applied."
+
+
+def _policy_section(view: VerdictV2View) -> str:
+    p = view.policy
+    if not p:
+        return ""
+    lines: list[str] = []
+    for item in _as_list(p.get("provenance"))[:MAX_LIST_ITEMS]:
+        if isinstance(item, Mapping):
+            lines.append(
+                f"- {escape.code(item.get('key'), 60)} = {escape.code(_text(item.get('value')), 60)} "
+                f"(policy line {_line(item.get('line'))}, {escape.token(item.get('origin'), 8)})"
+            )
+    tamper = p.get("tamper") if isinstance(p.get("tamper"), Mapping) else {}
+    for ack in _as_list(tamper.get("acknowledgements"))[:MAX_LIST_ITEMS]:
+        if isinstance(ack, Mapping):
+            lines.append(
+                f"- Acknowledged {escape.token(ack.get('action'), 10)} of {escape.code(ack.get('rule'), 24)} "
+                f"({escape.token(ack.get('from_severity'), 10)}): {escape.plain(ack.get('reason'), 200)}"
+            )
+    for ref in _as_list(tamper.get("refused"))[:MAX_LIST_ITEMS]:
+        if isinstance(ref, Mapping):
+            lines.append(f"- Ignored: {escape.plain(ref.get('message'), 200)}")
+    unmet = p.get("unmet") if isinstance(p.get("unmet"), Mapping) else {}
+    for item in _as_list(unmet.get("required"))[:MAX_LIST_ITEMS]:
+        if isinstance(item, Mapping):
+            what = item.get("criterion_id") or item.get("symbol_id")
+            lines.append(
+                f"- Required {escape.code(item.get('min_state'), 12)} for paths "
+                f"{escape.plain(', '.join(str(x) for x in _as_list(item.get('paths'))), 120)}: "
+                f"{escape.code(what, 60)} is {escape.token(item.get('state'), 16)}"
+            )
+    for item in _as_list(p.get("ignored_head"))[:MAX_LIST_ITEMS]:
+        if isinstance(item, Mapping):
+            lines.append(
+                f"- Ignored (head policy may only tighten): {escape.code(item.get('key'), 60)} "
+                f"(line {_line(item.get('line'))})"
+            )
+    for err in _as_list(p.get("errors"))[:MAX_LIST_ITEMS]:
+        lines.append(f"- Error: {escape.plain(err, 200)}")
+    for warn in _as_list(p.get("warnings"))[:5]:
+        lines.append(f"- Warning: {escape.plain(warn, 200)}")
+    return _details("Policy (.radius/policy.yml, base branch)", lines) if lines else ""
+
+
+def _waivers_section(view: VerdictV2View) -> str:
+    w = view.waivers
+    if not w:
+        return ""
+    lines: list[str] = []
+    for item in _as_list(w.get("applied"))[:MAX_LIST_ITEMS]:
+        if isinstance(item, Mapping):
+            lines.append(
+                f"- Applied {escape.code(item.get('id'), 64)} ({escape.token(item.get('kind'), 10)} "
+                f"{escape.code(item.get('target'), 60)}) by {escape.plain(item.get('owner'), 80)}, "
+                f"expires {escape.token(item.get('expires'), 10)}: {escape.plain(item.get('reason'), 200)}"
+            )
+    for item in _as_list(w.get("ignored"))[:MAX_LIST_ITEMS]:
+        if isinstance(item, Mapping) and item.get("code") != "unused":
+            lines.append(
+                f"- Not applied {escape.code(item.get('id') or '?', 64)}: "
+                f"{escape.token(item.get('code'), 32)} - {escape.plain(item.get('message'), 200)}"
+            )
+    return _details(f"Waivers ({len(_as_list(w.get('applied')))} applied)", lines) if lines else ""
 
 
 def _unlinked_section(view: VerdictV2View) -> str:
@@ -613,6 +728,9 @@ def render_comment(view: VerdictV2View) -> str:
     core = [DISCLAIMER, heading]
     if _ok(view):
         core.append(_stats_line(view))
+        policy_line = _policy_summary(view)
+        if policy_line:
+            core.append(policy_line)
         hint_line = _author_hint_line(view)
         if hint_line:
             core.append(hint_line)
@@ -628,6 +746,8 @@ def render_comment(view: VerdictV2View) -> str:
     optional = [
         steps,
         _tamper_section(view) if _ok(view) else "",
+        _waivers_section(view) if _ok(view) else "",
+        _policy_section(view) if _ok(view) else "",
         _unlinked_section(view) if _ok(view) else "",
         _evidence_section(view) if _ok(view) else "",
         _v1_section(view),
@@ -663,10 +783,27 @@ def check_conclusion(view: VerdictV2View, *, mode: str = "advisory") -> str:
     ``failure`` only for ``failed`` decided by R1a/R1b/R1c (a failing linked test,
     failing CI cases, a high-severity tamper finding). ``strict``: ``verified`` is
     ``success``. Unavailable and pending results are always ``neutral``.
+
+    A policy with ``mode: blocking`` (``view.policy``, from the base branch) overrides
+    both: ``verified`` (not pending) is ``success`` and every other result, pending
+    included, is ``failure``. Policy ``mode: advisory`` never fails (``failed`` is
+    ``neutral``) and does not turn ``verified`` green by itself (DEC-030): that needs the
+    ``strict`` knob or ``blocking``.
     """
 
-    if not _ok(view) or view.pending:
+    if not _ok(view):
         return "neutral"
+    policy_mode = view.policy.get("mode") if view.policy else None
+    if policy_mode == "blocking":
+        # The repository opted into a required check (policy read from the base branch):
+        # a required check passes on neutral, so everything unverified, including a pending
+        # run, fails (the run is republished when CI results arrive).
+        return "success" if view.verdict == "verified" and not view.pending else "failure"
+    if view.pending:
+        return "neutral"
+    if policy_mode == "advisory":
+        # The repository asked for a never-red check: failed is neutral too.
+        return "success" if mode == "strict" and view.verdict == "verified" else "neutral"
     table = CHECK_CONCLUSIONS_STRICT if mode == "strict" else CHECK_CONCLUSIONS_ADVISORY
     conclusion = table.get(str(view.verdict), "neutral")
     if conclusion == "failure" and _decided_by(view) not in FAILURE_RULES:

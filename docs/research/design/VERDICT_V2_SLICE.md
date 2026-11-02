@@ -605,9 +605,23 @@ Found while integrating the first implementations; every change is an optional f
 | `Reason.rule_id` (default `None`) | `model.py`; VD-03 sets it (and keeps `ref` = rule id for contract-1 readers) | The served payload and the renderer read `reasons[].rule_id`; it no longer travels in `ref`. |
 | `FreshnessInfo.reason` allows a 4th value `stale_sha_unchanged_covered` | `model.FRESHNESS_REASONS` | The optional decay hook (EV-07) already produced it. |
 
-### 3.12 Contract 3 (honesty and author trust, 2026-11-03, DEC-029)
+### 3.12 Contract 3 (policy and waivers, VD-04/VD-05, 2026-11-02)
 
-Optional fields only (`CONTRACT_VERSION = "verdict-v2-contract-3"`); contract-1 and contract-2 bundles still load. See `docs/security/VERDICT_V2_THREAT_MODEL.md`.
+Optional fields with defaults only (`CONTRACT_VERSION = "verdict-v2-contract-3"`); contract-1 and -2 payloads and bundles still load. `ALGO_VERSION` and the bundle schema are unchanged: without `.radius/policy.yml` and `.radius/waivers.yml` the computation and the stored shape are what they were.
+
+| Change | Where | Why |
+|---|---|---|
+| `StageAInput.repo_config` (dict, default empty) | `inputs.py`; Stage A captures both files at the BASE ref | Stage B can re-run after CI without the repository and the audit trail keeps the exact text and SHA-256 that applied |
+| `VerdictV2.policy`, `VerdictV2.waivers`, `VerdictV2.tamper_waived` | `verdict_v2/domain/model.py`; copied into `justification.policy` / `justification.waivers` | provenance of each setting, the waiver audit record, and WAIVED findings that stay visible |
+| rules `P1`, `P2` (`POLICY_RULE_ORDER`) | `rules.py`; present in the rule list only when the policy has `require` or `evidence` entries | required criterion state per path, minimum non-agent evidence; evaluated after R2d, before R3a |
+| blocking degraded markers `policy_invalid`, `policy_unreadable` | `rules.py` (`BLOCKING_DEGRADED_EXACT`) | an unreadable or broken base policy must not read as "no policy" |
+| payload: `policy`, `waivers`, `summary.tamper_waived`, `tamper_findings[].waived/.waiver` | `verdict_v2.schema.json`, API `PolicyOut`/`WaiversOut` | additive; absent without a policy or waivers |
+
+Source rule: both files are read from the base side only (`radius_evidence.policy.repo_config`); the head policy is read only after `head_policy: tighten_only` in the base policy and then can only tighten (`effective.at_least_as_strict` is the order the property tests check). A policy or waiver never touches the CI failed-case count (R1b) or a contradicted criterion (R1a). User guide: `docs/policy.md`.
+
+### 3.13 Contract 4 (honesty and author trust, 2026-11-03, DEC-030)
+
+Optional fields only (`CONTRACT_VERSION = "verdict-v2-contract-4"`); contract-1 to -3 bundles still load. See `docs/security/VERDICT_V2_THREAT_MODEL.md`.
 
 | Change | Where | Why |
 |---|---|---|

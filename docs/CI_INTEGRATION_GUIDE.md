@@ -157,3 +157,14 @@ The helper validates the analysis id (UUID) and commit SHA (hex), uses 30-second
 ```
 
 Top-level counts are the aggregate over every upload that the verdict is computed from. `upload` describes only this request. `GET …/tests/results` returns the same aggregate counts.
+
+## Making the Verdict v2 check required (advisory first, then blocking)
+
+Applies when `RADIUS_FEATURE_VERDICT_V2=on`. The Check Run is named `Radius confidence`.
+
+1. **Start advisory.** Add `.radius/policy.yml` to the default branch with `mode: advisory` (see `docs/policy.md` and `.radius/policy.example.yml`). The check never reports `failure`; read the comments for a few weeks and tune thresholds, waivers and exclusions through reviewed changes to `.radius/`.
+2. **Upload per-case CI results.** Until results arrive the verdict is "awaiting CI" and the comment updates itself.
+3. **Switch to `mode: blocking`** in a reviewed PR. Every unverified result (failed, insufficient evidence, needs review, still pending) then reports `failure`. GitHub counts `neutral` as passing for a required check, which is why advisory and blocking differ only in this mapping; the verdict itself is identical.
+4. **Mark `Radius confidence` as a required status check** in branch protection (`docs/github-branch-protection.md`) and protect `.radius/` with CODEOWNERS, because the policy and waivers are read from the base branch and are the control surface.
+
+Not yet validated on a live sandbox repository (VD-09 stays open for that).

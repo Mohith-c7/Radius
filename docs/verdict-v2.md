@@ -18,7 +18,7 @@ A useful verdict also needs `RADIUS_FEATURE_INTENT_INGESTION=true` (otherwise th
 
 The verdict is computed by fixed rules from validated evidence (test outcomes uploaded from CI, links between criteria, code and tests, and tamper findings). No language model decides it.
 
-**Wording.** The JSON contract keeps its internal values (`verified`, `proven`, ...), but everything a person reads says what the alpha actually measures. A comment starts with a one-line disclaimer ("Alpha - static evidence only - uncalibrated ... not a proof of correctness"), the internal state `proven` is shown as **SUPPORTED** (`unevidenced` as UNSUPPORTED), and the verdict `verified` is shown as **Supported by static evidence (alpha)**. Legend: *supported = static assertion strength above threshold; not a proof of correctness*. The API adds `alpha: true`, `calibrated: false`, `evidence_basis` and a `presentation` block with the same strings (`contract_version` `verdict-v2-contract-3`; all fields are optional additions).
+**Wording.** The JSON contract keeps its internal values (`verified`, `proven`, ...), but everything a person reads says what the alpha actually measures. A comment starts with a one-line disclaimer ("Alpha - static evidence only - uncalibrated ... not a proof of correctness"), the internal state `proven` is shown as **SUPPORTED** (`unevidenced` as UNSUPPORTED), and the verdict `verified` is shown as **Supported by static evidence (alpha)**. Legend: *supported = static assertion strength above threshold; not a proof of correctness*. The API adds `alpha: true`, `calibrated: false`, `evidence_basis` and a `presentation` block with the same strings (`contract_version` `verdict-v2-contract-4`; all fields are optional additions).
 
 - `Supported by static evidence (alpha)` (internal `verified`) means no rule found a problem, given the evidence Radius has. It does **not** mean the code is correct: tests were rated by the strength of their assertions, not by mutation testing, so a test that cannot fail can still count. The thresholds were fitted by eye to 8 hand-written fixtures and are uncalibrated.
 - `Failed`, `Not verified - insufficient evidence` and `Needs human review` say why in one sentence and name the criteria involved.
@@ -42,6 +42,8 @@ Rules are checked in this order. Every rule is evaluated and recorded; the first
 | 10 | R3b | a criterion counted as proven depends on a flaky test | Needs human review |
 | 11 | R3c | a proven criterion rests on a weak criterion-to-code link (below 0.50) | Needs human review |
 | 12 | R4 | none of the above | Supported by static evidence (alpha) (`verified`) |
+
+With a repository policy that has `require` or `evidence` entries, two more rules sit between R2d and R3a: **P1** (a criterion or changed code under a required path is below the required state) and **P2** (a criterion has no counted test that is not agent-authored). Both give `Not verified - insufficient evidence`. Without such a policy the list is exactly the twelve rules above. See [Repository policy and waivers](policy.md).
 
 Because failures come first, a tamper finding fails the verdict immediately, without waiting for CI. A pending PR (R2p) is published as a completed, neutral check, never left "in progress"; the comment updates itself when results arrive.
 
@@ -89,6 +91,16 @@ The Check Run keeps the name `Radius confidence`. Its title always carries the c
 | `needs_review` (R3*) | `neutral` | `neutral` |
 | pending CI results, or v2 unavailable | `neutral` | `neutral` |
 
+A repository policy (`.radius/policy.yml` on the base branch, DEC-029) can set `mode`. Combined with the knob:
+
+| Policy `mode` | `verified` | `failed` | `insufficient_evidence` / `needs_review` | pending CI |
+| --- | --- | --- | --- | --- |
+| none (default) | `neutral` (`strict` knob: `success`) | `failure` for R1a/R1b/R1c | `neutral` | `neutral` |
+| `advisory` | `neutral` (`strict` knob: `success`) | `neutral` (never red) | `neutral` | `neutral` |
+| `blocking` | `success` | `failure` | `failure` | `failure` (republished when CI results arrive) |
+
+`blocking` is the repository's own opt-in to a required check, so it overrides the knob; an unavailable v2 result is always `neutral`. Policy `advisory` does not turn `verified` green by itself (DEC-030); that needs the `strict` knob.
+
 In the default mode nothing is ever green: the alpha cannot satisfy a required check by itself. Only hard evidence turns the check red. `strict` is for operators who accept the limits below and want `verified` to be a green check.
 
 ## Who supplied the evidence (provenance and the author-hint cap)
@@ -103,7 +115,13 @@ The pull request author controls the description, a `.radius/intent.yml` in the 
 | `human_confirmed` | the criterion was confirmed or edited in the intent panel (authenticated API) | not capped |
 | `llm_proposed` | proposed by the optional LLM extractor | capped |
 
-The link strength of a `tests:` hint that is not `base_spec` or `human_confirmed` is capped at `author_hint_cap` (default 0.7; `LinkMapping.author_hint_cap`). A criterion that relies on a capped hint gets the flag and reason code `author_supplied_hint` and the comment says so. Confirm the criterion in the intent panel, or keep `.radius/intent.yml` on the base branch, to lift the cap. In the F-14 fixture harness the expected links are fed as hints on confirmed criteria, so gold results are unchanged (DEC-029); with the same hints marked `author_head_spec`, fixture 01 drops from `verified` to `insufficient_evidence`. The full threat model, what the cap does not stop and a recommended policy are in [docs/security/VERDICT_V2_THREAT_MODEL.md](security/VERDICT_V2_THREAT_MODEL.md).
+The link strength of a `tests:` hint that is not `base_spec` or `human_confirmed` is capped at `author_hint_cap` (default 0.7; `LinkMapping.author_hint_cap`). A criterion that relies on a capped hint gets the flag and reason code `author_supplied_hint` and the comment says so. Confirm the criterion in the intent panel, or keep `.radius/intent.yml` on the base branch, to lift the cap. In the F-14 fixture harness the expected links are fed as hints on confirmed criteria, so gold results are unchanged (DEC-030); with the same hints marked `author_head_spec`, fixture 01 drops from `verified` to `insufficient_evidence`. The full threat model, what the cap does not stop and a recommended policy are in [docs/security/VERDICT_V2_THREAT_MODEL.md](security/VERDICT_V2_THREAT_MODEL.md).
+
+With `.radius/policy.yml` on the base branch, `mode: blocking` maps every unverified result to `failure` (so a required check actually blocks) and `mode: advisory` never reports `failure`; the verdict is the same either way. The comment then shows a `Policy:` line (mode, source ref, number of settings applied) and a collapsible Policy section with the policy line each setting came from. Tamper findings accepted by a valid waiver are listed as `WAIVED` with the waiver id, owner, expiry and reason, and a Waivers section lists what was applied and what was ignored (expired, invalid). Details: [policy.md](policy.md).
+
+## Policy and waivers (VD-04, VD-05)
+
+`.radius/policy.yml` and `.radius/waivers.yml` are read from the **base branch**, never from the pull request, so a PR cannot weaken its own rules or waive its own findings. They change thresholds within safe bounds, require criterion states per path, set tamper severities (lowering or disabling a `high` finding needs a recorded `allow_disable` reason), require a non-agent-authored test, exclude paths from coverage, and set advisory or blocking mode. A waiver is owned, expires (90 days at most), is shown as WAIVED, is stored in the verdict's audit record, and can never cover a contradicted criterion or a failed CI case. The API payload gains optional `policy`, `waivers`, `summary.tamper_waived` and `tamper_findings[].waived/.waiver` fields (contract 3). Full guide: [policy.md](policy.md); samples: `.radius/policy.example.yml`, `.radius/waivers.example.yml`.
 
 ## Limits and safety
 

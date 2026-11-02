@@ -270,7 +270,7 @@ def test_payload_is_honest_about_alpha_provenance_and_wording(env: Env) -> None:
 
     assert validate(data, SCHEMA) == []
     assert (data["alpha"], data["calibrated"], data["evidence_basis"]) == (True, False, "static_only")
-    assert data["contract_version"] == "verdict-v2-contract-3"
+    assert data["contract_version"] == "verdict-v2-contract-4"
     first, second = data["criteria"]
     assert first["provenance"] == "author_head_spec"
     assert first["hints"][0]["provenance"] == "author_head_spec"

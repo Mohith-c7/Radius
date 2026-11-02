@@ -5,7 +5,7 @@ The PR author writes the description, may add ``.radius/intent.yml`` with ``test
 only the author vouches for are capped at ``LinkMapping.author_hint_cap``; hints from the
 base branch or from a human-confirmed criterion are not.
 
-Gold-mode semantics (DEC-029): the fixture harness feeds the expected links as hints on
+Gold-mode semantics (DEC-030): the fixture harness feeds the expected links as hints on
 ``confirmed`` criteria, i.e. ``human_confirmed``, so the 8 gold results stay as designed.
 The ``author_head_spec`` variant below shows the cap in action.
 """
@@ -140,7 +140,7 @@ def test_provenance_survives_the_stage_a_json_round_trip() -> None:
     )
     back = StageAInput.from_dict(sa.to_dict())
     assert back == sa
-    # a pre-contract-3 stored bundle (no tags) still loads, as author-controlled
+    # a pre-contract-4 stored bundle (no tags) still loads, as author-controlled
     legacy = sa.to_dict()
     for c in legacy["criteria"]:
         c.pop("provenance"), c.pop("hints_provenance")
@@ -152,7 +152,7 @@ def test_provenance_survives_the_stage_a_json_round_trip() -> None:
 
 
 def test_contract_version_is_three_and_shared_agrees() -> None:
-    assert CONTRACT_VERSION == SHARED_CONTRACT_VERSION == "verdict-v2-contract-3"
+    assert CONTRACT_VERSION == SHARED_CONTRACT_VERSION == "verdict-v2-contract-4"
 
 
 # ----------------------------------------------------------------------- the cap

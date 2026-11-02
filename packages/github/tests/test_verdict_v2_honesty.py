@@ -258,3 +258,37 @@ def test_untrusted_hint_text_never_reaches_the_comment() -> None:
     body = md.render_comment(view_of(payload))
     assert "@everyone" not in body
     assert "<script>" not in body
+
+
+# ------------------------------------------- combined table: policy mode x knob (DEC-030)
+
+#: (policy mode, verdict, rule, pending, knob) -> conclusion
+COMBINED = [
+    (None, "verified", "R4", False, "advisory", "neutral"),
+    (None, "verified", "R4", False, "strict", "success"),
+    ("advisory", "verified", "R4", False, "advisory", "neutral"),
+    ("advisory", "verified", "R4", False, "strict", "success"),
+    ("blocking", "verified", "R4", False, "advisory", "success"),
+    ("blocking", "verified", "R4", True, "advisory", "failure"),
+    ("blocking", "insufficient_evidence", "R2b", False, "strict", "failure"),
+    ("blocking", "needs_review", "R3a", False, "advisory", "failure"),
+    ("blocking", "failed", "R1c", False, "advisory", "failure"),
+    ("advisory", "failed", "R1c", False, "advisory", "neutral"),
+    ("advisory", "needs_review", "R3a", False, "strict", "neutral"),
+]
+
+
+@pytest.mark.parametrize(("pmode", "verdict", "rule", "pending", "knob", "expected"), COMBINED)
+def test_combined_conclusion_table(pmode, verdict, rule, pending, knob, expected) -> None:
+    payload = make_payload(verdict, rule, [("c1", "proven", 0.6)], pending=pending)
+    if pmode:
+        payload["policy"] = {"present": True, "status": "ok", "mode": pmode}
+    view = view_of(payload)
+    assert md.check_conclusion(view, mode=knob) == expected
+    assert md.render_check_run(view, conclusions=knob).conclusion == expected
+
+
+def test_blocking_policy_never_makes_an_unavailable_verdict_fail() -> None:
+    payload = make_payload(None, "R4", [], status="error")
+    payload["policy"] = {"mode": "blocking"}
+    assert md.check_conclusion(view_of(payload)) == "neutral"

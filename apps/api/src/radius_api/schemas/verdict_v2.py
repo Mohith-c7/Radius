@@ -44,6 +44,9 @@ class SummaryOut(_Out):
         ge=0,
         description="Criteria whose counted tests rely on an author-supplied, unconfirmed hint.",
     )
+    tamper_waived: int = Field(
+        default=0, description="Tamper findings accepted by a waiver (shown as WAIVED)."
+    )
 
 
 class HintOut(_Out):
@@ -104,6 +107,51 @@ class TamperFindingOut(_Out):
     test_id: str | None = None
     old_snippet: str | None = Field(default=None, description="UNTRUSTED.")
     new_snippet: str | None = Field(default=None, description="UNTRUSTED.")
+    waived: bool = Field(
+        default=False,
+        description="True when a valid waiver accepts this finding. It is still listed.",
+    )
+    waiver: dict[str, Any] | None = Field(
+        default=None,
+        description="id, reason (UNTRUSTED), owner, expires of the waiver that applies.",
+    )
+
+
+class PolicyOut(_Out):
+    """Resolved ``.radius/policy.yml`` (read from the base branch). Contract 3."""
+
+    present: bool
+    status: str = Field(description="ok | invalid | unreadable | too_large")
+    mode: Literal["advisory", "blocking"] | None = Field(
+        default=None,
+        description="Only changes the Check Run conclusion mapping, never the verdict.",
+    )
+    source: dict[str, Any] = Field(default_factory=dict)
+    head_policy: str = "ignore"
+    thresholds: dict[str, float] = Field(default_factory=dict)
+    provenance: list[dict[str, Any]] = Field(
+        default_factory=list, description="Which setting came from which policy line."
+    )
+    ignored_head: list[dict[str, Any]] = Field(default_factory=list)
+    requirements: list[dict[str, Any]] = Field(default_factory=list)
+    exclude_paths: list[str] = Field(default_factory=list)
+    tamper: dict[str, Any] = Field(default_factory=dict)
+    unmet: dict[str, Any] = Field(default_factory=dict)
+    errors: list[str] = Field(default_factory=list, description="UNTRUSTED text.")
+    warnings: list[str] = Field(default_factory=list, description="UNTRUSTED text.")
+
+
+class WaiversOut(_Out):
+    """Waiver audit record of this verdict. Contract 3."""
+
+    status: str
+    source: dict[str, Any] = Field(default_factory=dict)
+    applied: list[dict[str, Any]] = Field(default_factory=list)
+    ignored: list[dict[str, Any]] = Field(
+        default_factory=list, description="Expired, invalid or non-waivable waivers, with the code."
+    )
+    audit_digest: str | None = None
+    evaluated_on: str | None = None
 
 
 class NextActionOut(_Out):
@@ -185,4 +233,10 @@ class VerdictV2Out(_Out):
     dashboard_url: str | None = None
     error: ErrorOut | None = Field(
         default=None, description="Present when status is error or skipped."
+    )
+    policy: PolicyOut | None = Field(
+        default=None, description="Present when the base branch has a .radius/policy.yml."
+    )
+    waivers: WaiversOut | None = Field(
+        default=None, description="Present when the base branch has a .radius/waivers.yml."
     )

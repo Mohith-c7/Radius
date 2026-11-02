@@ -8,7 +8,8 @@ supplies the per-criterion ``CriterionVerdict`` rows (assembled with
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 from radius_evidence.domain.config import VerdictV2Config
 from radius_evidence.domain.inputs import CriterionInput
@@ -127,6 +128,14 @@ def _detail(rule: RuleResult) -> str:
         return f"intent coverage {_fmt(i['intent_coverage'])} is below {_fmt(i['min'])}"
     if rid == "R2d":
         return "analysis degraded: " + ", ".join(i["blocking"])
+    if rid == "P1":
+        n = len(i["unmet"])
+        return f"{n} policy requirement(s) unmet (criterion below the required state or code not covered)"
+    if rid == "P2":
+        return (
+            f"{len(i['unmet'])} criterion(s) have no counted test that is not agent-authored "
+            "(required by .radius/policy.yml)"
+        )
     if rid == "R3a":
         return (
             f"{len(i['finding_ids'])} tamper finding(s) at severity {i['threshold']} or above "
@@ -163,6 +172,9 @@ def compute_verdict_v2(
     unlinked_symbols: Sequence[str] = (),
     inputs_digest: str | None = None,
     versions: dict[str, str] | None = None,
+    policy: Mapping[str, Any] | None = None,
+    waivers: Mapping[str, Any] | None = None,
+    tamper_waived: Sequence[Mapping[str, Any]] = (),
 ) -> VerdictV2:
     """Apply rules R1 to R4 in priority order and return the verdict + tree."""
 
@@ -176,6 +188,10 @@ def compute_verdict_v2(
     )
     node = build_justification(rules, cfg, inputs_digest=digest, versions=versions)
     justification = node.to_dict()
+    if policy:
+        justification["policy"] = dict(policy)
+    if waivers:
+        justification["waivers"] = dict(waivers)
     problems = check_justification(
         justification,
         criterion_ids={c.criterion_id for c in criteria},
@@ -204,4 +220,7 @@ def compute_verdict_v2(
         inputs_digest=digest,
         algo_version=(versions or {}).get("verdict", ALGO_VERSION),
         profile=cfg.profile,
+        policy=dict(policy or {}),
+        waivers=dict(waivers or {}),
+        tamper_waived=tuple(dict(w) for w in tamper_waived),
     )

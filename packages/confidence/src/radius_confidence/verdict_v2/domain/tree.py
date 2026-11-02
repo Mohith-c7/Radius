@@ -19,6 +19,7 @@ from radius_evidence.domain.versions import (
 )
 
 from radius_confidence.verdict_v2.domain.model import (
+    POLICY_RULE_ORDER,
     RULE_ORDER,
     JustificationNode,
     RuleResult,
@@ -74,7 +75,7 @@ def check_justification(
     if not isinstance(rules, list):
         return [*errors, "rules: missing"]
     ids = [r.get("id") for r in rules]
-    if ids != list(RULE_ORDER):
+    if ids not in (list(RULE_ORDER), list(POLICY_RULE_ORDER)):
         errors.append(f"rules: ids {ids} are not exactly RULE_ORDER")
     first = next((r.get("id") for r in rules if r.get("fired") is True), None)
     if first is None:

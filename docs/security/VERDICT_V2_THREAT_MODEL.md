@@ -1,6 +1,6 @@
 # Verdict v2 (alpha): threat model for author-controlled evidence
 
-Status: alpha. Applies to `RADIUS_FEATURE_VERDICT_V2` (`shadow` and `on`). Decision: DEC-029. Related: DEC-008, DEC-027, `docs/verdict-v2.md`, `docs/security/PROMPT_INJECTION.md` (text injection is a separate topic and is covered there).
+Status: alpha. Applies to `RADIUS_FEATURE_VERDICT_V2` (`shadow` and `on`). Decision: DEC-030. Related: DEC-008, DEC-027, `docs/verdict-v2.md`, `docs/security/PROMPT_INJECTION.md` (text injection is a separate topic and is covered there).
 
 ## The adversary
 
@@ -17,7 +17,7 @@ Verdict v2 exists to check work that someone else produced, often a coding agent
 | Which tests CI runs and uploads | `POST /analyses/{id}/tests/results` | outcomes (bound to the head SHA; the uploader must be authorised for the repository) |
 | Issues they write and link | `issue` source | criteria, if the PR links an issue they authored |
 
-Before the DEC-029 hardening, a `tests:` hint gave link strength 0.95 to 1.0, so an author could state easy criteria, point them at tests they wrote, and receive `PROVEN` and a green Check Run.
+Before the DEC-030 hardening, a `tests:` hint gave link strength 0.95 to 1.0, so an author could state easy criteria, point them at tests they wrote, and receive `PROVEN` and a green Check Run.
 
 ## Mitigations in the alpha
 

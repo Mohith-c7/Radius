@@ -20,7 +20,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID
 
@@ -42,7 +42,9 @@ from radius_evidence.domain.enums import (
     Flag,
     NodeKind,
     Outcome,
+    SupportState,
 )
+from radius_evidence.domain.factories import normalize_test_id
 from radius_evidence.domain.ieg import Ieg, IegIndex, node_id
 from radius_evidence.domain.inputs import (
     CaseOutcomeInput,
@@ -74,6 +76,19 @@ from radius_evidence.domain.versions import (
     CONTRACT_VERSION,
     DEFAULT_COMPONENT_VERSIONS,
 )
+from radius_evidence.policy.apply import (
+    CriterionFacts,
+    CriterionWaiverFacts,
+    SymbolFacts,
+    apply_criterion_waivers,
+    apply_finding_waivers,
+    apply_tamper_policy,
+    evaluate_requirements,
+    is_excluded_path,
+    unused_waivers,
+)
+from radius_evidence.policy.repo_config import resolve_repo_config
+from radius_evidence.policy.report import policy_block, waiver_block
 from radius_shared.logging import get_logger
 from radius_shared.verdict_v2_flag import VerdictV2Mode
 from radius_shared.verdict_v2_wording import presentation
@@ -247,11 +262,24 @@ def compute_pipeline(
     config: VerdictV2Config | None = None,
     revision: int = 1,
     collected_at: str = "1970-01-01T00:00:00Z",
+    today: date | None = None,
 ) -> PipelineResult:
-    """Pure Stage B: deterministic for equal inputs (``collected_at`` is not scored)."""
+    """Pure Stage B: deterministic for equal inputs (``collected_at`` is not scored).
 
-    cfg = config or VerdictV2Config()
-    sa = stage_b.stage_a
+    ``today`` (default: the date of ``collected_at``) is the only clock input: it decides
+    whether a waiver in ``.radius/waivers.yml`` has expired.
+    """
+
+    base_cfg = config or VerdictV2Config()
+    original_stage_b = stage_b
+    original_sa = stage_b.stage_a
+    when = today or _date_of(collected_at)
+    repo = resolve_repo_config(original_sa.repo_config, base_cfg, when)
+    cfg = repo.config
+    tamper_policy = apply_tamper_policy(original_sa.tamper, repo.policy.tamper_rules)
+    finding_waivers = apply_finding_waivers(tamper_policy.findings, repo.waivers.waivers)
+    sa = replace(original_sa, tamper=finding_waivers.remaining)
+    stage_b = replace(stage_b, stage_a=sa)
     norm = normalize_evidence(stage_b, collected_at=collected_at, config=cfg.quality)
     criterion_test, author_pairs = apply_author_hint_cap(sa, cfg.link.author_hint_cap)
     ieg, _report = build_ieg_with_report(
@@ -288,13 +316,53 @@ def compute_pipeline(
             results_received=stage_b.results_received,
             n_addressed_tests=len(index.addressed_tests(c.criterion_id)),
         )
+    symbol_path = {s.symbol_id: s.path for s in sa.symbols}
+    crit_paths = {
+        c.criterion_id: tuple(
+            sorted(
+                {
+                    symbol_path[e.symbol_id]
+                    for e in sa.criterion_symbol
+                    if e.criterion_id == c.criterion_id
+                    and e.score >= cfg.link.link_min_cs - 1e-12
+                    and e.symbol_id in symbol_path
+                }
+                | set(c.hints_paths)
+            )
+        )
+        for c in sa.criteria
+    }
+    criterion_waivers = apply_criterion_waivers(
+        {
+            cid: CriterionWaiverFacts(st.state.value, crit_paths[cid])
+            for cid, st in states.items()
+        },
+        repo.waivers.waivers,
+    )
+    for cid, waiver in criterion_waivers.waived.items():
+        states[cid] = CriterionStateResult(
+            cid,
+            SupportState.EXCLUDED,
+            (
+                Reason(
+                    "waived",
+                    f"waived by {waiver.owner} until {waiver.expires.isoformat()} "
+                    f"(waiver {waiver.id})",
+                    waiver.id,
+                ),
+            ),
+            (),
+        )
     active = {
         c.criterion_id
         for c in sa.criteria
         if states[c.criterion_id].state.value != "excluded"
     }
-    b_symbols = behavioral_symbols(sa.symbols)
-    covered = _covered_symbols(sa, active, cfg.link.link_min_cs)
+    b_symbols = tuple(
+        s for s in behavioral_symbols(sa.symbols) if not is_excluded_path(repo.policy, s.path)
+    )
+    b_ids = {s.symbol_id for s in b_symbols}
+    covered = _covered_symbols(sa, active, cfg.link.link_min_cs) & b_ids
     coverage = len(covered) / len(b_symbols) if b_symbols else 1.0
     uim = compute_uim(sa.criteria, states, coverage, cfg)
 
@@ -335,23 +403,68 @@ def compute_pipeline(
         )
     unlinked = tuple(sorted(s.symbol_id for s in b_symbols if s.symbol_id not in covered))
     failed = max(stage_b.ci_failed_cases, failed_case_count(stage_b.cases))
+    changed = {normalize_test_id(t) for t in sa.changed_test_ids}
+    agent_by_test = {normalize_test_id(t): v for t, v in sa.agent_signal_by_test.items()}
+
+    def agent_authored(test_id: str) -> bool:
+        tid = normalize_test_id(test_id)
+        return tid in changed and bool(agent_by_test.get(tid, sa.agent_signal))
+
+    criterion_facts: list[CriterionFacts] = []
+    if repo.policy.has_rules:
+        for v in verdicts:
+            counted = {i.path.test_id for i in v.items if i.status == "counted" and i.path}
+            criterion_facts.append(
+                CriterionFacts(
+                    v.criterion_id,
+                    v.state.value,
+                    crit_paths[v.criterion_id],
+                    counted_tests=len(counted),
+                    non_agent_tests=sum(1 for t in counted if not agent_authored(t)),
+                )
+            )
+    unmet = evaluate_requirements(
+        repo.policy,
+        criterion_facts,
+        [SymbolFacts(s.symbol_id, s.path, s.symbol_id in covered) for s in b_symbols],
+    )
+    unused = unused_waivers(
+        repo.waivers.waivers,
+        {a["id"] for a in (*finding_waivers.applied, *criterion_waivers.applied)}
+        | {i["id"] for i in criterion_waivers.ignored},
+    )
+    policy_info = policy_block(repo, tamper_policy, unmet)
+    waiver_info = waiver_block(
+        repo,
+        repo.waivers,
+        finding_waivers,
+        criterion_waivers,
+        unused,
+        today=when,
+        repo_config=original_sa.repo_config or None,
+    )
     facts = AnalysisFacts(
         results_received=stage_b.results_received,
         ci_failed_cases=failed,
         tamper=sa.tamper,
-        degraded=sa.degraded,
+        degraded=tuple(dict.fromkeys((*sa.degraded, *repo.degraded))),
         behavioral_symbols=len(b_symbols),
         flaky_test_ids=stage_b.flaky_test_ids,
+        policy_rules=repo.policy.has_rules,
+        policy_unmet_required=unmet.required,
+        policy_unmet_evidence=unmet.evidence,
     )
-    digest = "sha256:" + sha256_hex(
-        canonical_json(
-            {
-                "stage_b": stage_b,
-                "config": cfg.digest(),
-                "versions": DEFAULT_COMPONENT_VERSIONS,
-            }
-        )
-    )
+    digest_inputs: dict[str, Any] = {
+        "stage_b": original_stage_b,
+        "config": cfg.digest(),
+        "versions": DEFAULT_COMPONENT_VERSIONS,
+    }
+    if policy_info or waiver_info:
+        digest_inputs["repo_config"] = {
+            "policy": policy_info,
+            "waivers": waiver_info.get("audit_digest"),
+        }
+    digest = "sha256:" + sha256_hex(canonical_json(digest_inputs))
     verdict = compute_verdict_v2(
         analysis_id=sa.analysis_id,
         head_sha=sa.head_sha,
@@ -363,6 +476,9 @@ def compute_pipeline(
         unlinked_symbols=unlinked,
         inputs_digest=digest,
         versions=_versions(sa),
+        policy=policy_info,
+        waivers=waiver_info,
+        tamper_waived=finding_waivers.waived,
     )
     return PipelineResult(
         verdict=verdict,
@@ -371,6 +487,13 @@ def compute_pipeline(
         rejected=tuple(f"{r.code}:{r.ref or ''}" for r in norm.rejected),
         unlinked_symbols=unlinked,
     )
+
+
+def _date_of(stamp: str) -> date:
+    try:
+        return date.fromisoformat(stamp[:10])
+    except ValueError:
+        return date(1970, 1, 1)
 
 
 def _versions(sa: StageAInput) -> dict[str, str]:
@@ -526,7 +649,7 @@ def build_payload(
         }
         for r in v.reasons
     ]
-    return {
+    payload: dict[str, Any] = {
         "verdict_version": 2,
         "algo_version": v.algo_version,
         "profile": v.profile,
@@ -566,7 +689,7 @@ def build_payload(
             "evidence_basis": v.evidence_basis,
         },
         "criteria": criteria,
-        "tamper_findings": [t.to_dict() for t in v.tamper],
+        "tamper_findings": [t.to_dict() for t in v.tamper] + [dict(w) for w in v.tamper_waived],
         "unlinked_symbols": list(v.unlinked_symbols),
         "next_actions": next_actions(criteria),
         "justification": v.justification,
@@ -575,6 +698,13 @@ def build_payload(
         "error": None,
         "degraded": list(stage_b.stage_a.degraded),
     }
+    if v.tamper_waived:
+        payload["summary"]["tamper_waived"] = len(v.tamper_waived)
+    if v.policy:
+        payload["policy"] = dict(v.policy)
+    if v.waivers:
+        payload["waivers"] = dict(v.waivers)
+    return payload
 
 
 def build_bundle(

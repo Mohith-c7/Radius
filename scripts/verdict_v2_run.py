@@ -93,7 +93,7 @@ def criteria_for(
 ) -> tuple[SimpleNamespace, ...]:
     """Fixture criteria as IN-01 look-alikes.
 
-    Gold-mode semantics (decision DEC-029): the criteria are ``confirmed`` and the
+    Gold-mode semantics (decision DEC-030): the criteria are ``confirmed`` and the
     expected links are fed as hints that count as ``human_confirmed`` (the author's
     design intent, not a PR author's self-attestation), so the 8 gold results stay as
     designed. Pass ``hint_provenance="author_head_spec"`` to see the author-hint cap.

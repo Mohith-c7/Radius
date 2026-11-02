@@ -429,7 +429,7 @@ Verdict v2 alpha (DEC-027), behind `RADIUS_FEATURE_VERDICT_V2` (`off` default,
 Design: `docs/research/design/VERDICT_V2_SLICE.md`; payload schema:
 `docs/research/design/verdict_v2.schema.json`.
 
-Contract 3 (`contract_version` `verdict-v2-contract-3`, all additions optional): top-level `alpha` (always `true`), `calibrated` (always `false`), `evidence_basis` (`static_only`) and `presentation` (`verdict_label`, `state_labels`, `legend`, `disclaimer`, `summary_text`: the user-facing wording, where internal `proven` reads SUPPORTED and `verified` reads "Supported by static evidence (alpha)"; clients should show these instead of the raw enum values); `summary.author_hint_criteria`; per criterion `provenance` and `hints[]` (`kind`, `value`, `provenance`, one of `author_pr_body | author_head_spec | base_spec | human_confirmed | llm_proposed`), and the flag and reason code `author_supplied_hint`. Enum values and existing fields are unchanged. See `docs/security/VERDICT_V2_THREAT_MODEL.md`.
+Contract 4 (`contract_version` `verdict-v2-contract-4`, all additions optional): top-level `alpha` (always `true`), `calibrated` (always `false`), `evidence_basis` (`static_only`) and `presentation` (`verdict_label`, `state_labels`, `legend`, `disclaimer`, `summary_text`: the user-facing wording, where internal `proven` reads SUPPORTED and `verified` reads "Supported by static evidence (alpha)"; clients should show these instead of the raw enum values); `summary.author_hint_criteria`; per criterion `provenance` and `hints[]` (`kind`, `value`, `provenance`, one of `author_pr_body | author_head_spec | base_spec | human_confirmed | llm_proposed`), and the flag and reason code `author_supplied_hint`. Enum values and existing fields are unchanged. See `docs/security/VERDICT_V2_THREAT_MODEL.md`.
 
 ### Responses
 
@@ -808,6 +808,11 @@ Swagger documentation should be generated automatically from the implementation.
 These contracts define the public interface of Radius.
 
 The frontend, CLI, GitHub integration, and future SDKs should all rely on these contracts rather than implementation details.
+
+## Machine-readable contract and stability
+
+The generated OpenAPI 3.1 document is [`api/openapi.json`](api/openapi.json); regenerate it with `python scripts/export_openapi.py`. Stability levels, the breaking-change definition and the deprecation policy are in [`api/STABILITY.md`](api/STABILITY.md). A typed Python client for the stable routes lives in [`clients/python`](../clients/python/README.md).
+
 ## API keys (`/api/v1/api-keys`)
 
 Managed API key administration. Every route needs the `admin` scope and only ever sees the caller's organization (`X-Radius-Organization-Id`). Keys look like `rdk_<8 hex>_<secret>`; the secret is returned once and cannot be retrieved later. See `docs/security/API_KEYS.md`.

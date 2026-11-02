@@ -321,7 +321,9 @@ def test_large_synthetic_diff_is_fast() -> None:
     started = time.perf_counter()
     report = analyze_tampering(cs, DictSnapshot(base), DictSnapshot(head), diff_text=diff)
     elapsed = time.perf_counter() - started
-    assert elapsed < 1.5, f"tamper analysis took {elapsed:.2f}s"
+    # Generous bound: shared CI runners vary a lot; this still catches an accidental quadratic blow-up
+    # (the analysis takes ~0.3-1.6 s here, a quadratic regression would take far longer).
+    assert elapsed < 6.0, f"tamper analysis took {elapsed:.2f}s"
     assert len(report.findings) >= n  # one per tampered test, at least
 
 

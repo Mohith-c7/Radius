@@ -44,6 +44,16 @@ RULE_ORDER: tuple[str, ...] = (
 )
 
 
+#: With a repository policy that adds requirements, P1 and P2 are evaluated after R2d
+#: (contract 3). Without one the list above is used unchanged.
+POLICY_RULE_ORDER: tuple[str, ...] = (
+    *RULE_ORDER[: RULE_ORDER.index("R2d") + 1],
+    "P1",
+    "P2",
+    *RULE_ORDER[RULE_ORDER.index("R2d") + 1 :],
+)
+
+
 @dataclass(frozen=True, slots=True)
 class RuleResult(Serializable):
     """One evaluated rule. ``refs`` keys: criterion_ids, evidence_ids, finding_ids."""
@@ -110,3 +120,9 @@ class VerdictV2(Serializable):
     algo_version: str = ALGO_VERSION
     profile: str = PROFILE_ALPHA_STATIC
     evidence_basis: str = "static_only"
+    #: Contract 3: resolved repository policy (mode, provenance, tamper changes, unmet
+    #: requirements) and waiver audit; empty without a policy or waivers file.
+    policy: dict[str, Any] = field(default_factory=dict)
+    waivers: dict[str, Any] = field(default_factory=dict)
+    #: Contract 3: tamper findings accepted by a waiver, shown as WAIVED (never hidden).
+    tamper_waived: tuple[dict[str, Any], ...] = ()

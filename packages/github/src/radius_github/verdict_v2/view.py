@@ -249,9 +249,12 @@ class TamperView:
     test_id: str | None = None
     old_snippet: str | None = None  # UNTRUSTED
     new_snippet: str | None = None  # UNTRUSTED
+    waived: bool = False
+    waiver: dict[str, Any] | None = None  # id, reason (UNTRUSTED), owner, expires
 
     @classmethod
     def from_payload(cls, data: Mapping[str, Any]) -> TamperView:
+        waiver = data.get("waiver")
         return cls(
             _str(data.get("finding_id")),
             _str(data.get("rule_id")),
@@ -263,10 +266,12 @@ class TamperView:
             _opt_str(data.get("test_id")),
             _opt_str(data.get("old_snippet")),
             _opt_str(data.get("new_snippet")),
+            data.get("waived") is True,
+            dict(waiver) if isinstance(waiver, Mapping) else None,
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out: dict[str, Any] = {
             "finding_id": self.finding_id,
             "rule_id": self.rule_id,
             "severity": self.severity,
@@ -278,6 +283,10 @@ class TamperView:
             "old_snippet": self.old_snippet,
             "new_snippet": self.new_snippet,
         }
+        if self.waived:
+            out["waived"] = True
+            out["waiver"] = None if self.waiver is None else dict(self.waiver)
+        return out
 
 
 @dataclass(frozen=True, slots=True)
@@ -326,6 +335,9 @@ class VerdictV2View:
     dashboard_url: str | None = None
     error: dict[str, Any] | None = None
     computed_at: str | None = None
+    #: Contract 3: resolved repository policy and waiver audit (empty when none).
+    policy: dict[str, Any] = field(default_factory=dict)
+    waivers: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_payload(cls, payload: Mapping[str, Any]) -> VerdictV2View:
@@ -360,9 +372,19 @@ class VerdictV2View:
             dashboard_url=_opt_str(payload.get("dashboard_url")),
             error=dict(error) if isinstance(error, Mapping) else None,
             computed_at=_opt_str(payload.get("computed_at")),
+            policy=_dict(payload.get("policy")),
+            waivers=_dict(payload.get("waivers")),
         )
 
     def to_dict(self) -> dict[str, Any]:
+        out = self._base_dict()
+        if self.policy:
+            out["policy"] = dict(self.policy)
+        if self.waivers:
+            out["waivers"] = dict(self.waivers)
+        return out
+
+    def _base_dict(self) -> dict[str, Any]:
         return {
             "analysis_id": self.analysis_id,
             "head_sha": self.head_sha,

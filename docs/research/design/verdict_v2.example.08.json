@@ -21,7 +21,7 @@
   "score": null,
   "score_kind": "none",
   "trust_probability": null,
-  "contract_version": "verdict-v2-contract-3",
+  "contract_version": "verdict-v2-contract-4",
   "alpha": true,
   "calibrated": false,
   "evidence_basis": "static_only",
