@@ -176,3 +176,17 @@ def test_identical_ast_and_bytecode_detection() -> None:
     b = "def f(a):\n    return a + 2\n"
     mb = dataclasses.replace(m, mutated_source=b)
     assert detect_equivalent(a, mb).suspect
+
+
+def test_reach_restricts_the_per_test_denominator() -> None:
+    # t1 reaches m1..m4 (kills m1, m2, m3 -> 3/4); t2 reaches m1, m5 only (kills both -> 2/2)
+    reach = {"t1": {"m1", "m2", "m3", "m4"}, "t2": {"m1", "m5"}}
+    got = {d.test: d for d in d_mut_per_test(_matrix(), ["f"], min_mutants=2, reach=reach)}
+    assert (got["t1"].n, got["t1"].killed, got["t1"].d_mut) == (4, 3, 0.75)
+    assert (got["t2"].n, got["t2"].killed, got["t2"].d_mut) == (2, 2, 1.0)
+    assert got["t3"].n == 0 and got["t3"].d_mut is None  # reaches nothing
+    assert got["t1"].lcb == pytest.approx(0.3006, abs=2e-3)  # Wilson 3/4
+
+
+def test_cache_key_includes_context_hash() -> None:
+    assert cache_key("h", ["a"], "img", "c1") != cache_key("h", ["a"], "img", "c2")

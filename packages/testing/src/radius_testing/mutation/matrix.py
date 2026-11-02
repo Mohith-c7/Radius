@@ -20,7 +20,7 @@ linked to the criterion):
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 
 KILLED = "killed"
@@ -120,14 +120,24 @@ def d_mut_per_test(
     credit: str = "multi",
     exclude_suspects: bool = True,
     z: float = 1.96,
+    reach: Mapping[str, Collection[str]] | None = None,
 ) -> tuple[TestDetection, ...]:
+    """Per-test ``d_mut``.
+
+    ``reach`` (optional) maps a test id to the mutant ids whose line the test
+    executes. When given, the denominator for test ``t`` is only the mutants ``t``
+    reaches ("conditional detection": would ``t`` have noticed, given it ran the
+    mutated code?). A test absent from ``reach`` reaches nothing.
+    """
+
     if credit not in {"multi", "split"}:
         raise ValueError("credit must be 'multi' or 'split'")
-    pool = matrix.selected(symbols, exclude_suspects=exclude_suspects)
-    n = len(pool)
+    full_pool = matrix.selected(symbols, exclude_suspects=exclude_suspects)
     wanted = tuple(tests) if tests is not None else matrix.tests
     out: list[TestDetection] = []
     for t in wanted:
+        pool = full_pool if reach is None else [r for r in full_pool if r.id in reach.get(t, ())]
+        n = len(pool)
         killed = 0.0
         for r in pool:
             if r.status == KILLED and t in r.killed_by:

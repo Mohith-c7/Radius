@@ -172,7 +172,11 @@ class SubprocessLocalRunner:
     def _child_env() -> dict[str, str]:
         keep = ("PATH", "SYSTEMROOT", "TEMP", "TMP")
         env = {k: os.environ[k] for k in keep if k in os.environ}
-        env.update(PYTHONDONTWRITEBYTECODE="1", PYTHONHASHSEED="0", CI="true", NO_COLOR="1")
+        env.update(
+            PYTHONDONTWRITEBYTECODE="1", PYTHONHASHSEED="0", CI="true", NO_COLOR="1",
+            # third-party pytest plugins are not loaded implicitly (faster, and no ambient plugin code)
+            PYTEST_DISABLE_PLUGIN_AUTOLOAD="1",
+        )
         return env
 
     def run(
@@ -314,6 +318,7 @@ def run_mutants(
     original_sources: Mapping[str, str] | None = None,
     cache: MutableMapping[str, MutantOutcome] | None = None,
     image_digest: str = "local",
+    context_hash: str = "",
     baseline_runs: int = 2,
     survivor_reruns: int = 1,
     clock: Callable[[], float] = time.monotonic,
@@ -348,7 +353,7 @@ def run_mutants(
     skipped: list[str] = []
     hits = 0
     for mutant in mutants:
-        key = cache_key(mutant.mutant_hash, sorted(stable), image_digest)
+        key = cache_key(mutant.mutant_hash, sorted(stable), image_digest, context_hash)
         if cache is not None and key in cache:
             outcomes.append(dataclasses.replace(cache[key], mutant_id=mutant.id, cached=True))
             hits += 1

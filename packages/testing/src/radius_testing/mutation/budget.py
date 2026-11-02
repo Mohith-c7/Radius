@@ -66,9 +66,16 @@ def set_hash_of_tests(test_ids: Iterable[str]) -> str:
     return hashlib.sha256("\n".join(sorted(set(test_ids))).encode()).hexdigest()
 
 
-def cache_key(mutant_hash: str, test_ids: Iterable[str], image_digest: str) -> str:
-    """EV-09 cache key: (mutant hash, test set hash, base image digest)."""
+def cache_key(
+    mutant_hash: str, test_ids: Iterable[str], image_digest: str, context_hash: str = ""
+) -> str:
+    """EV-09 cache key: (mutant hash, test set hash, base image digest, context hash).
+
+    ``context_hash`` must cover the *contents* of the selected tests and of the
+    non-mutated sources they import; ids alone miss edited test bodies. The
+    prototype leaves it empty unless the caller supplies it (see the design doc).
+    """
 
     return hashlib.sha256(
-        f"{mutant_hash}|{set_hash_of_tests(test_ids)}|{image_digest}".encode()
+        f"{mutant_hash}|{set_hash_of_tests(test_ids)}|{image_digest}|{context_hash}".encode()
     ).hexdigest()
