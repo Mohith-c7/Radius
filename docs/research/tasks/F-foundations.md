@@ -4,7 +4,7 @@ Goal: make the existing prototype trustworthy enough to build on. Fixes the gaps
 
 ---
 
-### F-01 Ratify research direction and record decisions   [ ]
+### F-01 Ratify research direction and record decisions   [x]
 - Owner type: human-required
 - Depends on: none
 - Branch: `docs/research-ratify`
@@ -12,7 +12,7 @@ Goal: make the existing prototype trustworthy enough to build on. Fixes the gaps
 - Goal: turn this proposal into recorded project decisions.
 - Steps:
   1. Review `DESIGN.md` section 11 (open decisions) and answer each.
-  2. Add `DEC-005...` entries to `docs/decisions.md` (research core = intent-to-evidence; new packages justified under DEC-003; verdict v2 states; LLM-governance rule "LLM proposes, evidence disposes").
+  2. Add `DEC-005...` entries (done as DEC-006 to DEC-015 because DEC-005 was already the branching model) to `docs/decisions.md` (research core = intent-to-evidence; new packages justified under DEC-003; verdict v2 states; LLM-governance rule "LLM proposes, evidence disposes").
   3. Update `docs/PRODUCT_VISION.md` and `docs/roadmap.md` to point to `docs/research/`.
   4. Update `docs/AI_CONTEXT.md` with: new glossary terms, the LLM-governance rule, branch rule (no direct commits to `dev`/`main`).
 - Acceptance: DEC entries merged; vision and roadmap docs link to the plan; `AI_CONTEXT.md` mentions the new rules.

@@ -403,3 +403,53 @@ Radius is not a demo project.
 It is intended to evolve into a production-grade software verification platform.
 
 Every line of code should reflect that goal.
+
+---
+
+# Research Direction (ratified 2026-11-02)
+
+The next phase is specified in `docs/research/` (start with `docs/research/README.md`). Decisions are DEC-006 to DEC-015 in `docs/decisions.md`. Read `docs/research/IMPLEMENTATION_PLAN.md` section 1 before any task and do only the task you were given.
+
+## LLM governance rule
+
+**The LLM proposes, evidence disposes.** LLMs may help extract criteria and verify links (flag-gated, schema- and span-validated, logged), but never compute or influence a verdict or score. Verdicts are deterministic from validated evidence. PR, issue, trace and test text is untrusted data. See DEC-009.
+
+## Glossary
+
+Use these exact terms in code, DB, API and UI (full table in `docs/research/DESIGN.md` section 2).
+
+Intent
+
+Intent source
+
+Criterion
+
+Symbol
+
+Evidence item
+
+Link
+
+IEG (Intent-Evidence Graph)
+
+Evidence quality `q(e)`
+
+Support `S(c)`
+
+UIM (Unevidenced Intent Mass)
+
+Tamper finding
+
+Process trace
+
+Trust probability `P`
+
+Abstention / `needs_review`
+
+algo_version
+
+Verdict v2 states: `verified`, `failed`, `insufficient_evidence`, `needs_review`.
+
+## Branch rule
+
+Flow: `feature/*`, `fix/*`, `docs/*` -> `develop` -> `dev` (UAT) -> `main`. Never commit directly to `dev` or `main`, and never push test or throwaway commits there. Every change goes through a pull request into `develop`; only an owner promotes `develop` -> `dev` -> `main`. See DEC-005 and DEC-010.

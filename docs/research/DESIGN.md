@@ -1,6 +1,6 @@
 # Radius Research Design: Intent-to-Evidence Verification
 
-**Status:** Proposed (not yet ratified). Date: 2026-11-02.
+**Status:** Ratified by the owner on 2026-11-02 (see `docs/decisions.md` DEC-006 to DEC-015). Date: 2026-11-02.
 **Audience:** every human or AI agent implementing any task in `docs/research/tasks/`.
 **Read first:** `docs/AI_CONTEXT.md`, `docs/DEVELOPMENT_GUIDE.md`, `docs/audit/RADIUS_AUDIT.md`.
 
@@ -99,7 +99,7 @@ Re-computation triggers: new commit (new head SHA), PR/issue description edit, n
 | `packages/triage` | Hunk risk model, review budget allocation, agent re-prompt generation. |
 | `packages/policy` | Per-repo/org policy (`.radius.yml`), waivers, enforcement rules. |
 
-Note: `docs/decisions.md` DEC-003 removed placeholder packages "until a documented phase requires them". This document is that documented phase. Task F-01 records the decision (DEC-005+).
+Note: `docs/decisions.md` DEC-003 removed placeholder packages "until a documented phase requires them". This document is that documented phase. Task F-01 recorded the decision as DEC-007 (DEC-005 was already taken by the branching model).
 
 ### 4.2 Worker job types (new, in `apps/worker`)
 
@@ -296,7 +296,7 @@ All LLM calls: provider abstraction, caching by prompt hash, cost cap per org, l
 
 ---
 
-## 11. Open decisions (must be resolved by the owner; track in `README.md` decision log)
+## 11. Open decisions (resolved 2026-11-02; see `README.md` decision log and DEC-010 to DEC-015)
 
 1. Default branch of the GitHub repo (`origin/HEAD` currently points to `dev`; flow is develop -> dev -> main).
 2. Whether verdict v2 adds `needs_review` as a fourth state (recommended) or maps it into `insufficient_evidence`.
