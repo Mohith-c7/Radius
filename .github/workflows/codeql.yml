@@ -1,0 +1,59 @@
+name: CodeQL
+
+on:
+  pull_request:
+    branches: [develop, dev, main]
+  push:
+    branches: [develop, dev, main]
+  schedule:
+    - cron: "17 4 * * 2"
+  workflow_dispatch:
+
+permissions: read-all
+
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+      security-events: write # upload SARIF to code scanning
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript-typescript]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none # supported for python and javascript-typescript
+          # security-extended: default security queries plus lower-precision
+          # security ones. security-and-quality adds maintainability noise that
+          # ruff/eslint already cover, so alerts stay actionable.
+          queries: security-extended
+          # Intentionally hostile inputs (prompt-injection corpus, sandbox
+          # adversarial tests) and benchmark fixtures would raise alerts that
+          # are not product defects.
+          config: |
+            paths-ignore:
+              - benchmarks/**
+              - tests/security/**
+              - packages/testing/tests/test_sandbox_adversarial.py
+              - "**/node_modules/**"
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          category: /language:${{ matrix.language }}

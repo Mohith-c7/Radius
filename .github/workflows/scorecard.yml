@@ -1,0 +1,65 @@
+name: Scorecard
+
+on:
+  branch_protection_rule:
+  push:
+    branches: [develop, main]
+  schedule:
+    - cron: "23 5 * * 3"
+  workflow_dispatch:
+
+permissions: read-all
+
+concurrency:
+  group: scorecard-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event.repository.fork == false
+    permissions:
+      contents: read
+      actions: read
+      security-events: write # upload SARIF
+      id-token: write # publish results (OIDC) for the badge and API
+    env:
+      SCORECARD_TOKEN: ${{ secrets.SCORECARD_TOKEN }}
+      IS_PUBLIC: ${{ github.event.repository.private == false }}
+    steps:
+      - name: Report token and visibility status
+        run: |
+          if [ -z "$SCORECARD_TOKEN" ]; then
+            echo "::notice title=Scorecard::Secret SCORECARD_TOKEN is not set. Running with the default token: the Branch-Protection check will be incomplete. See docs/security/CI_CHECKS.md."
+          fi
+          if [ "$IS_PUBLIC" != "true" ]; then
+            echo "::notice title=Scorecard::Repository is not public: results are NOT published (badge/API unavailable); SARIF upload still runs."
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Run Scorecard
+        uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a # v2.4.3
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          repo_token: ${{ secrets.SCORECARD_TOKEN || github.token }}
+          publish_results: ${{ github.event.repository.private == false }}
+
+      - name: Upload results artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: scorecard-sarif
+          path: results.sarif
+          retention-days: 30
+
+      - name: Upload SARIF to code scanning
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: results.sarif
+          category: scorecard

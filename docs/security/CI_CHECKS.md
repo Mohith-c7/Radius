@@ -33,6 +33,74 @@ v4.4.0, `pnpm/action-setup` v4.4.0 (peeled commit of the annotated tag),
 `actions/upload-artifact` v4.6.2. gitleaks runs from the container image
 `ghcr.io/gitleaks/gitleaks` v8.24.3 pinned by digest.
 
+## Supply-chain checks (PRD-07)
+
+| Workflow | Check name | Triggers | Recommendation |
+| --- | --- | --- | --- |
+| `codeql.yml` | `Analyze (python)`, `Analyze (javascript-typescript)` | PR, push (develop/dev/main), weekly Tue, manual | Require both after the first green run on develop |
+| `dependency-review.yml` | `Dependency review` | PR only | Require after first green run (it only appears on PRs) |
+| `scorecard.yml` | `Scorecard analysis` | push (develop/main), `branch_protection_rule`, weekly Wed, manual | Advisory, never required (it scores the repo, not the PR) |
+
+All three use `permissions: read-all` at top level with per-job elevation
+(`security-events: write` for CodeQL/Scorecard SARIF, `id-token: write` for
+Scorecard publishing, `pull-requests: write` only for the dependency-review
+summary comment). Every `uses:` is pinned to a full SHA; versions: 
+`github/codeql-action` v4.39.1, `ossf/scorecard-action` v2.4.3,
+`actions/dependency-review-action` v4.9.0 (peeled commit SHAs from
+`git ls-remote` on the upstream repos, 2026-11-02).
+`scripts/ci/check_action_pins.py` (run by `tests/test_workflow_action_pins.py`)
+fails if any workflow `uses:` is not SHA-pinned or lacks a version comment.
+
+### CodeQL
+
+- Languages: `python`, `javascript-typescript` with `build-mode: none` (supported for both).
+- Query suite: `security-extended`. `security-and-quality` adds maintainability findings that ruff/eslint already cover; the extended security suite keeps alerts actionable.
+- `paths-ignore`: `benchmarks/**`, `tests/security/**` (prompt-injection corpus), `packages/testing/tests/test_sandbox_adversarial.py`. These contain intentionally hostile payloads. Ordinary unit tests are still scanned.
+- Triage: Security tab > Code scanning. Fix, or dismiss with a reason ("false positive", "used in tests", "won't fix") and a comment; never dismiss without one. New alerts on a PR show as annotations.
+- Requires "Code scanning" to be available (free on public repos; GitHub Code Security on private repos). Until enabled, SARIF upload fails with a clear error.
+
+### Dependency review
+
+- Fails a PR that adds or bumps a dependency with a known vulnerability of severity high or above, or with a denied license. Needs the Dependency graph (always on for public repos).
+- Denied (mirrors `scripts/ci/license_check.py`): AGPL, SSPL, GPL (all SPDX variants). Allowed and not listed: LGPL (`psycopg`, the transitive `sharp` libvips dependency) and MPL-2.0.
+- Fork PRs cannot comment (read-only token); the report is in the job summary. Same-repo PRs get a comment only on failure.
+- Complements `security.yml` (`pip-audit`, `pnpm audit`, which cover the whole tree rather than the diff).
+
+### Scorecard
+
+- Runs OpenSSF Scorecard, uploads SARIF to code scanning (category `scorecard`) and as an artifact; findings appear as code scanning alerts.
+- Publishing (badge, api.securityscorecards.dev) requires a public repository; the job sets `publish_results` from `repository.private == false`, and prints a notice when not public.
+- The Branch-Protection check needs a token that can read branch protection. The default `GITHUB_TOKEN` cannot, so that check is incomplete (lower or "?") until the owner adds a repository secret named `SCORECARD_TOKEN` (fine-grained PAT with read-only "Administration" on this repo, or classic `repo` scope; see the scorecard-action docs). The workflow does not require the secret: it falls back to the default token and logs a notice.
+- Triage: low scores on Branch-Protection, Code-Review, Maintained and Fuzzing are expected for a young repo and tracked in `docs/production-readiness`. Pinned-Dependencies is guarded by the pin test above. Dockerfile pinning is PRD-08.
+- Baseline score: not recorded. It can only be measured after the first run on GitHub; record it in `docs/production-readiness/SCORECARD_BASELINE.md` afterwards. Local run (optional): `docker run --rm -e GITHUB_AUTH_TOKEN=$TOKEN gcr.io/openssf/scorecard:stable --repo=github.com/OWNER/REPO`.
+
+### Dependabot
+
+`.github/dependabot.yml`: weekly (Monday 05:00 UTC) updates for GitHub Actions, pip, npm (pnpm workspace), docker (`apps/api`, `apps/worker`, `apps/dashboard`) and docker-compose. Minor/patch updates are grouped per ecosystem; majors arrive as individual PRs. PR limits 5 (3 for compose). Commit prefixes: `ci(deps)` for Actions, `build(deps)` / `build(deps-dev)` otherwise. No `labels:` are set because the label set is created by PRD-04. Dependabot alerts and security updates must be enabled in repository settings (separate from this file).
+
+### Run locally
+
+```bash
+python -m pytest tests/test_workflow_action_pins.py -q      # SHA-pin guard
+python scripts/ci/check_action_pins.py
+docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint@sha256:887a259a5a534f3c4f36cb02dca341673c6089431057242cdc931e9f133147e9   # actionlint 1.7.7
+# CodeQL CLI (optional): codeql database create --language=python db && codeql database analyze db codeql/python-queries:codeql-suites/python-security-extended.qls
+```
+
+### Branch protection recommendation (not applied here)
+
+After one green run on develop: require `Analyze (python)`, `Analyze (javascript-typescript)` and `Dependency review` alongside `Validate`. Keep Scorecard advisory. Owner applies via `docs/github-branch-protection.md`.
+
+### Owner actions
+
+1. Enable Code scanning, Dependency graph, Dependabot alerts and security updates (Settings > Code security).
+2. Optionally add secret `SCORECARD_TOKEN` (see above).
+3. After merge, check first runs of all three workflows and record the Scorecard baseline.
+
+### Verification status
+
+Verified locally: actionlint 1.7.7 clean on all workflows, YAML parse of `dependabot.yml`, pin guard test, ruff. Not verifiable until GitHub runs them: CodeQL extraction results and run time, `config:` `paths-ignore` taking effect, `deny-licenses` handling of compound SPDX expressions, Scorecard publish and SARIF upload, Dependabot schema acceptance (Dependabot reports config errors in Insights > Dependency graph > Dependabot).
+
 ## Coverage
 
 - Command: `python -m pytest apps/api/tests apps/worker/tests packages/*/tests tests --cov` (config in `pyproject.toml` `[tool.coverage]`: sources `apps`, `packages`; tests, conftest and the dashboard are omitted; line coverage).
