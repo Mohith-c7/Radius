@@ -59,6 +59,7 @@ import {
 import { scoreKindLabel } from "../lib/score-kind";
 import { ConfidenceRing, OpenLink, PageHeading, Status } from "./ui";
 import { InteractiveGraphViewer } from "./interactive-graph";
+import { IntentPanel } from "./intent-panel";
 
 type LoadState<T> =
   | { status: "loading" }
@@ -1385,6 +1386,7 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
       <VerdictGapsCard confidence={confidence} />
       <nav className="analysis-tabs">
         <a href="#summary">Summary</a>
+        <a href="#intent">Intent</a>
         <a href="#impact">Blast radius</a>
         <a href="#tests">Tests & CI</a>
       </nav>
@@ -1398,6 +1400,8 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
           </p>
         </aside>
       </div>
+
+      <IntentPanel analysisId={analysisId} />
 
       <div id="impact" style={{ marginTop: "24px", display: "grid", gap: "20px" }}>
         <BlastRadiusVisualizerCard blast={blast} graph={graph} analysisId={analysisId} />
