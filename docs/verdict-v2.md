@@ -2,6 +2,18 @@
 
 Verdict v2 is an opt-in, per-criterion verdict. It is switched on with `RADIUS_FEATURE_VERDICT_V2` (`off` by default, `shadow` computes and stores it while v1 is still published, `on` publishes it instead of v1). This page explains what the verdict means and how the comment is laid out. It describes the **alpha**: the evidence is static assertion strength only, and every threshold is an uncalibrated default (profile `alpha-static`).
 
+## How to enable
+
+Set `RADIUS_FEATURE_VERDICT_V2` on **both** the API and the worker (same variable, same value):
+
+| Value | What happens |
+| --- | --- |
+| `off` (default; unset, `false`, `0` or anything unrecognised) | Nothing changes. No v2 code runs, the v2 endpoint answers 404 `disabled`, and the v1 comment and Check Run are byte-for-byte what they were. |
+| `shadow` | After each analysis the worker computes and stores v2, and the API serves it (`GET /api/v1/analyses/{id}/verdict-v2`, dashboard panel marked "shadow"). **v1 is still the only thing published to GitHub.** Use it to compare before you switch. |
+| `on` (also `true`, `1`) | v2 is computed, stored and published **instead of** v1 for that analysis: one PR comment (the existing Radius comment, updated in place) and the `Radius confidence` Check Run. If v2 fails for any reason, or its head commit is stale, v1 is published as before. v1 is always computed and stored. |
+
+A useful verdict also needs `RADIUS_FEATURE_INTENT_INGESTION=true` (otherwise there is no intent snapshot and the verdict is `Not verified - insufficient evidence`), and CI must upload per-case results (`POST /api/v1/analyses/{id}/tests/results`). When results arrive, the API leaves a small request for the worker, which re-scores (no new clone) and updates the same comment and Check Run within one poll interval. Replaying the same upload writes nothing new, and a result for a commit that is no longer the PR head is never published.
+
 ## What the verdict says, and what it does not
 
 The verdict is computed by fixed rules from validated evidence (test outcomes uploaded from CI, links between criteria, code and tests, and tamper findings). No language model decides it.
@@ -68,6 +80,13 @@ The Check Run keeps the name `Radius confidence`. Its conclusion is `success` on
 - The comment carries two hidden markers: the v1 marker, so v1 and v2 update the same comment, and `radius-verdict-v2 rev=N digest=...`, so republishing identical content is skipped.
 
 ## Known limits of the alpha
+
+- **Alpha, off by default.** The result is not calibrated and is not a probability; do not use it as a required check yet.
+- **Static evidence only.** A test counts by the strength of its assertions, not by whether it would catch a bug (no mutation testing). A weak but passing test can never prove a criterion; a strong one still does not prove correctness.
+- **Python only.** Behavioral changes in other languages give `Not verified` (analysis incomplete).
+- **Dependencies offline.** A new dependency imported behind `try/except ImportError` that cannot be checked against a package registry is reported as a medium finding (`Needs human review`); only a registry that says the package does not exist (or a near-miss of a popular name) fails the PR. No registry adapter ships yet (DEC-028).
+- **Linking without hints is conservative.** On the F-14 fixtures, auto-linking alone leaves a correct PR as `Not verified` because the matched tests get low relevance; adding `tests:` hints to `.radius/intent.yml` fixes it. The verified differences are listed in `apps/worker/tests/test_verdict_v2_acceptance.py` (`KNOWN_AUTO_DEVIATIONS`).
+- **Not browser- or live-GitHub-validated** yet: the tests use a fake GitHub client and SQLite.
 
 Per-case test results must be uploaded from CI. Linking a criterion to its tests is lexical unless you add `tests:` hints in `.radius/intent.yml`; a criterion with no linked test is reported as such, never credited. Thresholds are hypotheses that have not been calibrated, and `needs_review` is reached only through the rules above, not through a calibrated abstention band.
 

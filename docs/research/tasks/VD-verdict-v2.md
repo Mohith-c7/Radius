@@ -65,7 +65,7 @@ Goal: compute and publish a deterministic, explainable, per-criterion verdict. S
 - Product hook: the main daily surface for developers.
 - Contract: see design/VERDICT_V2_SLICE.md (docs/research/design/; Verdict v2 alpha: renderer and republish-after-CI in sections 5.5 and 6)
 
-### VD-07 Feature flags and v1 compatibility   [ ]
+### VD-07 Feature flags and v1 compatibility   [~] (alpha lite done: `RADIUS_FEATURE_VERDICT_V2` off|shadow|on, v1 unchanged when off, shadow stores v2; per-org override and the v1-vs-v2 comparison report are not built)
 - Owner type: agent-ok
 - Depends on: none (can start early)
 - Branch: `feature/flags-v2`

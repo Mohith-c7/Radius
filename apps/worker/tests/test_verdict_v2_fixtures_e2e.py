@@ -101,15 +101,18 @@ def test_no_wrong_pr_is_verified_in_any_mode(gold, auto) -> None:
                 assert name == "01_correct_strong_tests"
 
 
-def test_fixture_06_offline_registry_is_still_failed_by_the_guarded_import() -> None:
-    """Design 7.3 expects needs_review offline (T012 medium). EV-02 as merged reports the
-    guarded import (``unverified_guarded_import``) at high severity even without a registry,
-    so the verdict is failed via R1c in both registry modes (documented difference)."""
+def test_fixture_06_offline_is_needs_review_and_with_a_registry_failed() -> None:
+    """DEC-028: an unverifiable guarded import is medium (R3a needs_review offline);
+    a registry that says the package does not exist makes it ``registry_missing`` (R1c)."""
 
-    payload = RUN.run_collect(DIRS["06_hallucinated_dependency"], "gold", "none")
-    assert payload["verdict"] == "failed"
-    assert payload["justification"]["decided_by"] == "R1c"
-    assert {t["check"] for t in payload["tamper_findings"]} == {"unverified_guarded_import"}
+    offline = RUN.run_collect(DIRS["06_hallucinated_dependency"], "gold", "none")
+    assert offline["verdict"] == "needs_review"
+    assert offline["justification"]["decided_by"] == "R3a"
+    assert {(t["check"], t["severity"]) for t in offline["tamper_findings"]} == {
+        ("unverified_guarded_import", "medium")
+    }
+    online = RUN.run_collect(DIRS["06_hallucinated_dependency"], "gold", "static")
+    assert online["verdict"] == "failed" and online["justification"]["decided_by"] == "R1c"
 
 
 def test_stage_a_is_deterministic_on_a_fixture() -> None:
@@ -192,6 +195,19 @@ def _job_status(factory, analysis_id) -> str:
         return session.scalar(
             select(AnalysisJob.status).where(AnalysisJob.analysis_id == analysis_id)
         ).value
+
+
+@pytest.mark.parametrize(("mode", "expect"), [("off", False), ("shadow", True), ("on", True)])
+def test_runtime_factory_wires_the_stage_b_recomputer(monkeypatch, mode, expect) -> None:
+    from radius_worker.verdict_v2.scoring import StageBRecomputer
+
+    factory = _factory()
+    monkeypatch.setattr(worker_runner, "require_sandbox_ready", lambda *a, **k: None)
+    monkeypatch.setattr(worker_runner, "create_database_engine", lambda s: object())
+    monkeypatch.setattr(worker_runner, "create_session_factory", lambda e: factory)
+    settings = worker_runner.WorkerSettings(RADIUS_FEATURE_VERDICT_V2=mode)
+    runtime = worker_runner.create_sql_worker_runtime(settings)
+    assert isinstance(runtime.verdict_v2_recomputer, StageBRecomputer) is expect
 
 
 def test_runner_flag_off_never_calls_verdict_v2(monkeypatch) -> None:

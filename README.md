@@ -63,6 +63,7 @@ Maturity: **stable** = covered by tests and CI, used end to end; **beta** = work
 | Diff-hunk and symbol-level impact | beta | Python only, conservative; behind `RADIUS_FEATURE_SYMBOL_IMPACT` ([docs](docs/MODULE_ARCHITECTURE.md)). |
 | Graph-driven test selection | beta | Falls back to the full suite when the graph cannot map the change. Measured on a small self-evaluation corpus only: [benchmark](docs/benchmarks/REAL_REPO_BENCHMARK.md). |
 | Evidence-gated verdict | beta | Uploads are bound to the analysed head commit and must cover the selected tests; the verdict is recomputed from all uploads. |
+| Verdict v2: per-criterion verdict (`RADIUS_FEATURE_VERDICT_V2`) | alpha, off by default | Per-criterion support from static assertion strength, unproven-intent mass, tamper rules; one PR comment and Check Run updated after CI uploads; modes `off`, `shadow`, `on`. Uncalibrated and Python-only: [how to read it](docs/verdict-v2.md). |
 | Confidence score (0-100) | experimental | Uncalibrated heuristic, labelled `heuristic_uncalibrated` everywhere it is shown. |
 | GitHub App: check run, PR comment | beta | Check run is published at completion and is not re-published after later CI uploads; the CI job exit code is the gate for uploaded evidence. Live validation: [runbook](docs/github-app-validation/RUNBOOK.md). |
 | PostgreSQL job queue and worker | beta | Durable jobs, leases and retries; no Redis. |

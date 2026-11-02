@@ -867,6 +867,8 @@ Size: S under 1 day, M 1 to 3, L 3 to 5 (IMPLEMENTATION_PLAN 2). "Fakes" = the c
 
 EV-02 (tamper) is an existing task on branch `feature/evidence-tamper-rules`; it must be merged before VS-05/VS-02 auto mode. Everything else works against fakes before it merges.
 
+**Status after integration (2026-11-02, branch `feature/verdict-v2-integration`):** VS-00 [x], VS-01 [x], VS-03 [x], VS-04 [x] (rule differs from 3.6, see its row), VS-05 [x], VS-06 [x], VS-07 [x], VS-08 [x], VS-09 [x], VS-10 [x] (browser-untested), VS-02 [x] (`apps/worker/tests/test_verdict_v2_acceptance.py`: 8 fixtures in gold and auto mode through the real pipeline, SQL store, API, renderer and a fake GitHub client; auto-mode differences are encoded as `KNOWN_AUTO_DEVIATIONS` with reasons). VD-01, VD-02, VD-03, VD-06 [x]; VD-07 [~] lite; VD-08 [~]. Not validated: live GitHub, a browser, PostgreSQL. Contract 2 changes are in section 3.11; the fixture 06 question is settled in section 7.3 item 8 and DEC-028.
+
 ### 7.2 Order, parallelism and critical path
 
 ```
