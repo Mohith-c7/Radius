@@ -19,6 +19,8 @@ regexes = [
   '''MIIEowIBAAKCAQEAseededfakekeymaterial''',
   '''eyJhbGciOiJIUzI1NiJ9\.eyJzdWIiOiJzZWVkZWQifQ\.c2VlZGVkc2lnbmF0dXJl''',
   '''12345678-aaaa-bbbb-cccc-1234567890ab''',
+  # Planted fake secret in the LK-02 re-ranker leak test
+  '''sk-planted-secret-7731-zeta''',
   # Placeholder PEM body in tests/test_github_app_manifest.py (F-06)
   '''PRIVATE KEY-----.{1,4}AAA.{1,4}BBB.{1,4}-----END''',
 ]
