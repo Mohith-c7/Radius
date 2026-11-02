@@ -29,6 +29,9 @@ updates:
       day: monday
       time: "05:00"
       timezone: Etc/UTC
+    # Only raise a lower bound in pyproject.toml when the new release no longer
+    # satisfies it; stops churn from bumping every >= pin on each release.
+    versioning-strategy: increase-if-necessary
     open-pull-requests-limit: 5
     commit-message:
       prefix: "build(deps)"
@@ -46,6 +49,27 @@ updates:
       time: "05:00"
       timezone: Etc/UTC
     open-pull-requests-limit: 5
+    # Semver-major updates of the framework toolchain are handled in planned
+    # upgrade tasks (they need code, CSP/middleware and test changes), not as
+    # Dependabot PRs; a Next 16 bump failed CI that way. Security updates are
+    # not affected: Dependabot security updates ignore these rules.
+    ignore:
+      - dependency-name: "next"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint-config-next"
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "build(deps)"
       prefix-development: "build(deps-dev)"
