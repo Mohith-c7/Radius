@@ -5,16 +5,16 @@
 
 | Field | Value |
 |---|---|
-| Document version | 0.1-draft |
+| Document version | 0.2-draft |
 | Freeze date | not frozen |
-| Content hash (SHA-256, procedure in `CHANGELOG.md`) | not computed (draft) |
+| Content hash (SHA-256, procedure in `CHANGELOG.md`) | DRAFT hash of v0.2-draft, for tracking only, not a freeze hash: `c01cb5fc6e325c7c9d2b2a29de48ccce9af19c3b2fc6444491625e28418be71f` |
 | Frozen by (owner) | not frozen |
 | External deposit (archive / registry / signed git tag) | not done |
 
 Until this block says "FROZEN", every number in this file is a proposal. Do not run any confirmatory experiment (EP-07 to EP-12) against a test split before the freeze. After the freeze, the body of this file never changes; changes are amendments (section 14).
 <!-- FREEZE-BLOCK-END -->
 
-**Task:** EP-02. **Drafted:** 2026-11-02. **Depends on:** EP-01 (`../literature/`). **Parent plan:** `../EVALUATION_PLAN.md`.
+**Task:** EP-02. **Drafted:** 2026-11-02. **v0.2-draft:** 2026-11-02 (owner decisions in section 17 resolved by delegation, DEC-025; checklist status added; no analysis choice in sections 1 to 15 changed; still NOT frozen). **Depends on:** EP-01 (`../literature/`). **Parent plan:** `../EVALUATION_PLAN.md`.
 **Citation rule:** only works that have an entry in `../literature/references.bib` are cited, by BibTeX key in backticks. Every figure taken from a paper is the one recorded in `../literature/related-work.md` (primary-page verified in EP-01). Nothing in this file is a result.
 
 ---
@@ -429,24 +429,71 @@ Calculations were done with the Hanley-McNeil variance approximation for AUROC a
 - [ ] Hardware/sandbox configuration for RQ6 declared.
 - [ ] Compute budget declared (determines whether the RQ2 minimum of 5,000 patches is reachable).
 - [ ] Pre-freeze pilots listed in `CHANGELOG.md`; confirmation that no test-split labels or results have been viewed.
-- [ ] Owner decisions in section 17 answered and the answers written into this file.
+- [x] Owner decisions in section 17 answered and the answers written into this file (v0.2-draft, by delegation; the owner may veto before the freeze).
 - [ ] Hash computed per `CHANGELOG.md`, the freeze block filled in, the git tag created, and the file deposited externally (decision 17.10).
+
+### Status of the checklist at version 0.2-draft (2026-11-02)
+
+Resolved in v0.2: the owner-decision item (section 17, answered by delegation, DEC-025) and the licence decisions for B4 and B9 as far as they concern Radius itself (DEC-018: no code from AGPL or unlicensed tools is copied; Mutahunter-style tools may only be run as separate processes). Everything else below is **still open**, which is why this document is not frozen:
+
+| Prerequisite | State |
+|---|---|
+| Dataset manifests assembled (EP-03); SWE-ABS artifacts downloaded and hashed; public agent patches with licences checked | Manifests exist (`../datasets/INVENTORY.md`); patches from `swe-bench/experiments` not yet pinned; UTBoost, PatchDiff, SWE-Bench+, SWE-Mutation blocked pending author replies (`../datasets/AUTHOR_REQUESTS.md`, drafts not sent) |
+| Manifest facts re-measured; power table (section 12) recomputed; split cut points computed | Not done. Section 12 still uses literature numbers |
+| Gold set: guidelines, pilot kappa >= 0.60 on 30 PRs, >= 120 test PRs | Not done. No kappa has been measured |
+| Label agreement between sources; `L_audit` drawn | Not done (needs two sources) |
+| Baselines B0 to B12 implemented and validated | Not done |
+| Harness emits `algo_version`, seed, commit, manifest hash; feature-provenance test passes | Not done |
+| Pilot runs (timing, per-patch mutation cost, RQ1 pilot) | Not done. Needed to fix the RQ2 compute budget (17.3) |
+| Frozen-pipeline `algo_version` tagged; tuning closed and logged | Not done |
+| CA-05 conformal loss check; ECE floor with real dev scores | Not done |
+| User-study materials, ethics determination, consent form, recruitment plan | Not done |
+| RQ6 hardware declared | Not done |
+| Pre-freeze pilots listed; confirmation no test-split result viewed | Nothing viewed or run (changelog section 4 is empty) |
+| Freeze: hash, freeze block, signed tag, external deposit | **Owner act only.** Not done. Commands in 17.10 |
 
 ---
 
-## 17. Decisions the owner must make before freezing
+## 17. Decisions the owner must make before freezing (resolved by delegation, 2026-11-02; DEC-025)
 
-1. **Primary label.** Confirm `L_ABS` as the headline label (it depends on SWE-ABS artifacts being usable) and whether `L_union` or `L_cons` should be the headline instead.
-2. **Primary predictor for RQ2.** UIM as proposed, or a fitted combination (more power, less interpretable).
-3. **Compute budget and patch count for RQ2.** The 5,000-patch minimum implies mutation runs on thousands of patches; decide the budget or accept a smaller, underpowered RQ2.
-4. **alpha and tolerance for risk control** (RQ3): 0.10 and 0.03 are guesses; what error rate among accepted PRs would a user accept?
-5. **User-study primary outcome:** fixed-time-cap detection rate (proposed) or defects per minute; time cap; number of seeded defects.
-6. **Ethics route** for the user study and for partner data (institutional approval versus exemption), and recruitment channel and deadline.
-7. **RQ4 data:** which agent configurations will be run, and whether proprietary agents (partial traces) are worth including.
-8. **Multiplicity scope:** Holm within each RQ (proposed) versus a single family across all RQs (stricter, lower power).
-9. **Real-PR outcome horizon** (90 days) and whether partner-data results become confirmatory.
-10. **External deposit** of the frozen file (an archive, a registration site, or only a signed git tag) and who holds the signing key.
-11. **Whether AgentLens-Bench or UTBoost/PatchDiff artifacts, if they appear before freeze, are added** (by amendment or by re-drafting v0.2).
+The owner delegated these as "take the ideal decisions". Each answer is a recorded choice with its reason; the owner can veto any of them before the freeze, and nothing here is a result.
+
+1. **Primary label: `L_ABS` is the headline.** `L_cons` (incorrect under at least two sources) and `L_union` are sensitivity analyses, not the headline, because the second source (UTBoost, PatchDiff) is not available yet and a headline that depends on an unobtained artifact cannot be frozen. If the SWE-ABS artifacts turn out to be unusable, the pre-registration is not frozen and is redrafted (it is not switched silently). The robustness rule in 2.6 stays: the sign of the effect must agree on `L_cons` where it exists.
+2. **Primary predictor for RQ2: UIM as proposed (single pre-specified score).** A fitted combination adds degrees of freedom, hides what is being tested, and is the version most likely to overfit; it stays the secondary predictor in 6.1. This keeps claim C2 interpretable.
+3. **Compute budget for RQ2: target N = 5,000 patches (the stated minimum); the budget is fixed from a pilot, not guessed.** Rules: (a) sample at most 50 mutants per patch (fixed seeds), with a per-patch wall-clock cap of 20 minutes; (b) a timing pilot on 100 dev-split patches measures the median and 95th percentile cost, and the total budget is declared as N x median cost, written into this file before freeze (the figure is therefore blank in v0.2 and is a freeze prerequisite); (c) if the declared budget does not reach 5,000 patches, reduce mutants per patch (floor 20) before reducing N, because N drives power while mutant count only adds measurement noise; (d) if still short, sample whole task-instance clusters at random with the declared seed (rule 13.2) and label RQ2 underpowered with the achieved minimum detectable difference; never drop patches after seeing outcomes. Mutation-testing tools whose licence conflicts with DEC-018 are not linked into Radius.
+4. **alpha = 0.10 and tolerance 0.03 are kept.** With a base rate of incorrect-but-passing patches of about 0.20, accepting only sets whose error is at most 0.10 halves the error of unfiltered acceptance, which is a meaningful reviewer-facing guarantee, and the 0.30 coverage floor stops a vacuous result. A stricter alpha = 0.05 is reported as a secondary operating point (BH family), not confirmatory. Which error rate a real user accepts is a product question for the design-partner phase and does not change this scientific choice.
+5. **User-study primary outcome: fixed-time-cap detection rate (as proposed).** Cap 20 minutes per PR, 4 seeded defects per PR, 4 PRs per participant. Defects per minute and time to first defect are secondary. A fixed cap prevents trading accuracy for speed and keeps one primary comparison with no multiplicity.
+6. **Ethics route: ask the owner's institution for a written determination (exempt, minimal-risk) before any recruitment; written consent in all cases.** Partner data is not part of any confirmatory analysis (item 9), so it needs no ethics route for the pre-registered claims; any partner-data work follows DEC-020. Recruitment channel and deadline: developer volunteers via the owner's institution and open-source communities, with a deadline fixed at freeze (**owner to configure** the institution, the recruiter contact and the date). The study does not start until the determination is on file.
+7. **RQ4 data: at least 4 agent configurations that we run ourselves, built from open-source scaffolds crossed with at least 2 models** (for example mini-swe-agent, which the SWE-ABS repository bundles under MIT, and OpenHands, which AgentLens used), keeping full traces. The final list is fixed after the compute pilot and written here before freeze. Proprietary agents with partial traces are excluded from the primary analysis; they may appear in the exploratory partial-trace stratum (8.2) only.
+8. **Multiplicity: Holm within each RQ's confirmatory family (as proposed).** RQs are separate claims; a single family across all RQs would sacrifice power in RQ2 to guard against a combination nobody claims. The paper states this.
+9. **Outcome horizon 90 days; partner-data results are exploratory only, never confirmatory.** Revert and follow-up-fix labels mature slowly; 90 days is the stated initial guess and 180 days is run as a sensitivity analysis. Partner data would be small and consent-limited (DEC-020), so it cannot carry a confirmatory claim.
+10. **External deposit: two layers, both required, key holder = owner ("owner to configure").** (a) A signed git tag `prereg-v<version>` on the freeze commit. (b) An immutable archive with a DOI: a Zenodo deposit of the tagged archive (or an OSF Registration of `PREREGISTRATION.md` and `CHANGELOG.md`; either gives a timestamp independent of GitHub). Record the tag object, the SHA-256 and the DOI in the freeze block and in `CHANGELOG.md`. The agent does not create keys, tags or deposits. Exact commands for the owner (run in the repository root, after filling the freeze block and committing):
+
+    ```
+    # one-time: create a signing key (GPG) and tell git to use it
+    gpg --full-generate-key
+    gpg --list-secret-keys --keyid-format=long          # note the key id
+    git config user.signingkey <KEYID>
+    #   alternative, SSH signing:
+    #   git config gpg.format ssh
+    #   git config user.signingkey ~/.ssh/id_ed25519.pub
+    # recompute and compare the canonical hash (must equal the freeze block and CHANGELOG)
+    cd docs/research/preregistration
+    tr -d '\r' < PREREGISTRATION.md | sed '/<!-- FREEZE-BLOCK-START -->/,/<!-- FREEZE-BLOCK-END -->/d' | sha256sum
+    cd ../../..
+    # signed tag, verify it, then publish it
+    git tag -s prereg-v1.0 -m "Radius pre-registration v1.0 (frozen)"
+    git tag -v prereg-v1.0
+    git push origin prereg-v1.0
+    # archive plus checksum plus detached signature for the external deposit
+    git archive --format=tar.gz -o prereg-v1.0.tar.gz prereg-v1.0
+    sha256sum prereg-v1.0.tar.gz > prereg-v1.0.tar.gz.sha256
+    gpg --armor --detach-sign prereg-v1.0.tar.gz
+    # upload prereg-v1.0.tar.gz (+ .sha256, .asc) to Zenodo or OSF, publish, copy the DOI into the freeze block
+    ```
+
+    Extra artifacts to deposit with it: `CHANGELOG.md`, the dataset manifests (`benchmarks/datasets/manifests/*.json`) with their hashes, the split cut-point file computed from the manifest, the feature-provenance test, the `algo_version` tag and commit hash, the "tuning closed" log entry, the analysis scripts at the tagged commit, and the public key. (The tag signature proves the owner made the commitment at that commit; the external DOI proves when.)
+11. **Artifacts that appear before the freeze (AgentLens-Bench, UTBoost, PatchDiff, SWE-Bench+):** added by a logged draft revision (v0.3-draft and so on, recorded in `CHANGELOG.md` section 2), as secondary label sources or an external check, never as the headline. After the freeze they enter only as amendments under section 14 (a minor amendment if added as an extra secondary source, a major one if they would change a hypothesis or the primary label). Any artifact obtained must have its licence recorded in the inventory first (DEC-020).
 
 ---
 

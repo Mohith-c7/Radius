@@ -21,6 +21,7 @@ Applies to `PREREGISTRATION.md` in this folder.
 | Version | Date | Status | Canonical hash (SHA-256) | Notes |
 |---|---|---|---|---|
 | 0.1-draft | 2026-11-02 | DRAFT -- not frozen | not computed | Initial draft (EP-02). Incorporates EP-01 findings. |
+| 0.2-draft | 2026-11-02 | DRAFT -- not frozen | `c01cb5fc6e325c7c9d2b2a29de48ccce9af19c3b2fc6444491625e28418be71f` (draft hash computed with the procedure in section 1; not a freeze hash) | Section 17 owner decisions resolved by delegation (DEC-025); checklist status added. No change to sections 1 to 15. |
 
 ## 3. Amendments (post-freeze)
 
@@ -60,3 +61,4 @@ None yet.
 ## 7. History
 
 - 2026-11-02: created with the 0.1 draft (EP-02). Not frozen.
+- 2026-11-02: 0.2-draft. The 11 owner decisions of section 17 were resolved by delegation (DEC-025) and the section 16 checklist status was added. Still not frozen: datasets not assembled, gold-set kappa not measured, pilots not run, power table not recomputed from a real manifest. Pre-freeze draft revisions (for example adding an artifact that appears before the freeze) are logged here as 0.3-draft and so on; only post-freeze changes are amendments.
