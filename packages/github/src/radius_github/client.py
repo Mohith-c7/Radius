@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import random
 import time
 import urllib.error
 import urllib.parse
@@ -15,6 +16,19 @@ import jwt
 from pydantic import Field
 from radius_shared.config import RadiusBaseSettings
 from radius_shared.errors import AccessDeniedError, ValidationError
+
+from radius_github.rate_limit import (
+    IDEMPOTENT_METHODS,
+    TRANSIENT_STATUSES,
+    GitHubRateLimitError,
+    RateLimitInfo,
+    RetryPolicy,
+    backoff,
+    classify_rate_limit,
+    parse_rate_limit,
+    short_message,
+    wait_for_rate_limit,
+)
 
 
 class GitHubAppSettings(RadiusBaseSettings):
@@ -63,10 +77,18 @@ class GitHubAppClient:
         *,
         opener=None,
         clock=time.time,
+        retry_policy: RetryPolicy | None = None,
+        sleep=time.sleep,
+        rng=random.random,
     ) -> None:
         self._settings = settings
         self._opener = opener or urllib.request.urlopen
         self._clock = clock
+        self._retry = retry_policy or RetryPolicy()
+        self._sleep = sleep
+        self._rng = rng
+        #: Rate-limit headers of the most recent response that carried them.
+        self.last_rate_limit: RateLimitInfo | None = None
 
     def create_installation_token(
         self,
@@ -299,18 +321,123 @@ class GitHubAppClient:
                 "X-GitHub-Api-Version": self._settings.github_api_version,
             },
         )
-        try:
-            with self._opener(
-                request,
-                timeout=self._settings.github_timeout_seconds,
-            ) as response:
-                payload = response.read().decode("utf-8")
-        except urllib.error.HTTPError as exc:
-            message = exc.read().decode("utf-8") or str(exc)
-            raise AccessDeniedError(f"GitHub API request failed: {message}") from exc
-        except urllib.error.URLError as exc:
-            raise ValidationError(f"GitHub API request failed: {exc.reason}") from exc
-        return json.loads(payload) if payload else {}
+        attempt = 0
+        waited = 0.0
+        while True:
+            attempt += 1
+            try:
+                with self._opener(
+                    request,
+                    timeout=self._settings.github_timeout_seconds,
+                ) as response:
+                    self._note_rate_limit(getattr(response, "headers", None))
+                    payload = response.read().decode("utf-8")
+                return json.loads(payload) if payload else {}
+            except urllib.error.HTTPError as exc:
+                body = _read_error_body(exc)
+                self._note_rate_limit(exc.headers)
+                delay = self._decide_http_retry(method, exc, body, attempt, waited)
+                if delay is None:
+                    raise self._http_error(
+                        method, path, exc, body, attempt, waited
+                    ) from exc
+            except urllib.error.URLError as exc:
+                delay = self._decide_network_retry(method, attempt, waited)
+                if delay is None:
+                    raise ValidationError(
+                        f"GitHub API request failed: {exc.reason}"
+                    ) from exc
+            waited += delay
+            self._sleep(delay)
+
+    def _note_rate_limit(self, headers) -> None:
+        info = parse_rate_limit(headers)
+        if info.remaining is not None or info.retry_after is not None:
+            self.last_rate_limit = info
+
+    def _jittered(self, seconds: float) -> float:
+        return seconds + seconds * self._retry.jitter_fraction * self._rng()
+
+    def _fits(self, delay: float, attempt: int, waited: float) -> bool:
+        return (
+            attempt < self._retry.max_attempts
+            and waited + delay <= self._retry.max_total_wait_seconds
+        )
+
+    def _decide_http_retry(
+        self,
+        method: str,
+        exc: urllib.error.HTTPError,
+        body: str,
+        attempt: int,
+        waited: float,
+    ) -> float | None:
+        """Seconds to sleep before retrying, or ``None`` to give up."""
+
+        kind = classify_rate_limit(exc.code, exc.headers, body)
+        if kind is not None:
+            # Rejected before any work was done, so retrying is safe even for POST.
+            info = parse_rate_limit(exc.headers)
+            delay = self._jittered(
+                wait_for_rate_limit(kind, info, self._clock(), attempt)
+            )
+            return delay if self._fits(delay, attempt, waited) else None
+        if (
+            exc.code in TRANSIENT_STATUSES
+            and self._retry.retry_server_errors
+            and method.upper() in IDEMPOTENT_METHODS
+        ):
+            info = parse_rate_limit(exc.headers)
+            delay = self._jittered(
+                max(backoff(self._retry, attempt), info.retry_after or 0.0)
+            )
+            return delay if self._fits(delay, attempt, waited) else None
+        return None
+
+    def _decide_network_retry(
+        self, method: str, attempt: int, waited: float
+    ) -> float | None:
+        # A dropped connection or timeout may have happened after the server acted: only
+        # idempotent methods are repeated.
+        if (
+            not self._retry.retry_server_errors
+            or method.upper() not in IDEMPOTENT_METHODS
+        ):
+            return None
+        delay = self._jittered(backoff(self._retry, attempt))
+        return delay if self._fits(delay, attempt, waited) else None
+
+    def _http_error(
+        self,
+        method: str,
+        path: str,
+        exc: urllib.error.HTTPError,
+        body: str,
+        attempt: int,
+        waited: float,
+    ) -> AccessDeniedError:
+        kind = classify_rate_limit(exc.code, exc.headers, body)
+        if kind is None:
+            return AccessDeniedError(f"GitHub API request failed: {body or exc}")
+        info = parse_rate_limit(exc.headers)
+        wanted = wait_for_rate_limit(kind, info, self._clock(), attempt)
+        return GitHubRateLimitError(
+            f"GitHub {kind} rate limit hit on {method} {path.split('?', 1)[0]} "
+            f"(HTTP {exc.code}, {attempt} attempt(s), waited {waited:.1f}s, GitHub asks for "
+            f"{wanted:.0f}s, retry budget {self._retry.max_total_wait_seconds:.0f}s): "
+            f"{short_message(body)}",
+            kind=kind,
+            retry_after_seconds=wanted,
+            attempts=attempt,
+            waited_seconds=waited,
+        )
+
+
+def _read_error_body(exc: urllib.error.HTTPError) -> str:
+    try:
+        return exc.read().decode("utf-8", "replace")
+    except (OSError, ValueError):
+        return ""
 
 
 def _check_run_payload(

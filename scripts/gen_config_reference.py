@@ -59,7 +59,7 @@ SECRET_RE = re.compile(r"(SECRET|PASSWORD|PRIVATE_KEY|API_KEY)")
 #: Credentials embedded in the value although the name does not say so.
 EXTRA_SECRET = {"DATABASE_URL"}
 #: Names that look like env vars in the source but are not.
-NOT_ENV = {"RADIUS_ERROR", "RADIUS_DATA_"}
+NOT_ENV = {"RADIUS_ERROR", "RADIUS_DATA_", "GITHUB_RATE_LIMITED"}  # last: an error code, not a variable
 #: Variables set by tooling or CI rather than read by the application.
 SCAN_PATTERN = re.compile(r"""["']((?:RADIUS|WORKER|GITHUB|REPOSITORY|STORAGE)_[A-Z0-9_]*[A-Z0-9])["']""")
 STATUS_OVERRIDE = {

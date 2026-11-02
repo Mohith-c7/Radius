@@ -1,0 +1,1 @@
+Dashboard: the Verdict v2 panel now renders the policy section (mode, applied settings with policy line references, WAIVED findings with owner, reason and expiry, ignored waivers with codes) and uses the API presentation wording (alpha disclaimer, SUPPORTED labels). Only visible when the Verdict v2 flag serves a verdict.
