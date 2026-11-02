@@ -15,4 +15,8 @@ regexes = [
   '''ghs_abcdefghijklmnopqrstuvwxyz0123456789''',
   '''e2e-secret-api-key-0123456789''',
   '''MIIEbody\{TOKEN\}''',
+  # Seeded fakes in redaction/proxy tests (F-10, F-05)
+  '''MIIEowIBAAKCAQEAseededfakekeymaterial''',
+  '''eyJhbGciOiJIUzI1NiJ9\.eyJzdWIiOiJzZWVkZWQifQ\.c2VlZGVkc2lnbmF0dXJl''',
+  '''12345678-aaaa-bbbb-cccc-1234567890ab''',
 ]

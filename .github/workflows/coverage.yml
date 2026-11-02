@@ -44,7 +44,8 @@ jobs:
 
     env:
       DATABASE_URL: postgresql+psycopg://radius:radius@localhost:5432/radius
-      RADIUS_ENV: test
+      # RADIUS_ENV is deliberately unset: package tests assert the default
+      # (development) environment and fail if it is forced to "test".
       STORAGE_BACKEND: sql
 
     steps:
