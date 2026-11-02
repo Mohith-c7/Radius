@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from radius_intent.domain import (
     Criterion,
+    CriterionHints,
     CriterionState,
     ExtractionMethod,
     IntentSnapshot,
@@ -89,7 +90,24 @@ def _to_criterion(row: IntentCriterionRow) -> Criterion:
         testability=Testability(row.testability),
         testability_rationale=row.testability_rationale,
         state=CriterionState(row.state),
+        hints=_hints_from_json(row.hints),
     )
+
+
+def _hints_from_json(value: dict | None) -> CriterionHints:
+    if not value:
+        return CriterionHints()
+    return CriterionHints(
+        paths=tuple(value.get("paths", ())),
+        tests=tuple(value.get("tests", ())),
+        label=value.get("label"),
+    )
+
+
+def _hints_to_json(hints: CriterionHints) -> dict | None:
+    if hints.is_empty:
+        return None
+    return {"paths": list(hints.paths), "tests": list(hints.tests), "label": hints.label}
 
 
 def _to_snapshot(row: IntentSnapshotRow) -> IntentSnapshot:
@@ -352,7 +370,7 @@ class SqlAlchemyIntentRepository:
                     testability=criterion.testability.value,
                     testability_rationale=criterion.testability_rationale,
                     state=criterion.state.value,
-                    hints=None,
+                    hints=_hints_to_json(criterion.hints),
                 )
             )
         self._session.flush()
