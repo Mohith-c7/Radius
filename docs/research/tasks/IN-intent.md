@@ -35,7 +35,7 @@ Goal: capture what a change is *supposed* to do as a set of confirmable, testabl
 - Security: sources are untrusted data; never executed.
 - Research hook: record the distribution of which sources exist per PR (RQ1 context).
 
-### IN-03 Deterministic criterion extraction   [ ]
+### IN-03 Deterministic criterion extraction   [x]
 - Owner type: agent-ok
 - Depends on: IN-01
 - Branch: `feature/intent-extract-deterministic`
