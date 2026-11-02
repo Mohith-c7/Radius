@@ -107,6 +107,27 @@ class WorkerSettings(DatabaseSettings):
             "production. The worker refuses to start otherwise."
         ),
     )
+    test_reruns: int = Field(
+        default=0,
+        ge=0,
+        le=10,
+        alias="WORKER_TEST_RERUNS",
+        description=(
+            "F-11: rerun failing pytest tests up to N times in the sandbox and "
+            "classify them stable_fail or flaky. Default 0 = off (no rerun, "
+            "output identical to before). Sandbox mode only. Worst case wall "
+            "time per command is (1 + N) * WORKER_TEST_TIMEOUT_SECONDS."
+        ),
+    )
+    flaky_policy: str = Field(
+        default="exclude",
+        pattern="^(exclude|fail)$",
+        alias="WORKER_FLAKY_POLICY",
+        description=(
+            "exclude (default): flaky tests are neither pass nor fail and block "
+            "a 'verified' verdict. fail: flaky tests count as failures."
+        ),
+    )
     sandbox_runtime: str = Field(default="docker", alias="WORKER_SANDBOX_RUNTIME")
     sandbox_image: str = Field(
         default="python:3.12-slim",

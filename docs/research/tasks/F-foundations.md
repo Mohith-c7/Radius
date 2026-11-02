@@ -129,7 +129,7 @@ Goal: make the existing prototype trustworthy enough to build on. Fixes the gaps
 - Tests: unit tests for log redaction (no secrets).
 - Research hook: latency/cost metrics feed the paper's overhead analysis.
 
-### F-11 Flaky-test handling   [ ]
+### F-11 Flaky-test handling   [x]
 - Owner type: agent-ok
 - Depends on: F-07
 - Branch: `feature/testing-flaky`

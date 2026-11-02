@@ -60,8 +60,10 @@ from uuid import uuid4
 
 from radius_shared.observability.metrics import record_sandbox_kill
 
-from radius_testing.domain.entities import TestRunPlan, TestRunResult
+from radius_testing.domain.entities import CaseOutcome, TestRunPlan, TestRunResult
+from radius_testing.domain.flakiness import RerunPolicy
 from radius_testing.infrastructure.junit_parser import JUnitReportParser
+from radius_testing.infrastructure.result_matching import report_cases
 from radius_testing.infrastructure.subprocess_runner import (
     _CommandOutcome,
     build_run_result,
@@ -282,8 +284,10 @@ class ContainerSandboxRunner:
         aux_runner: AuxRunner | None = None,
         which: Callable[[str], str | None] | None = None,
         probe: AuxRunner | None = None,
+        rerun_policy: RerunPolicy | None = None,
     ) -> None:
         self._config = config or SandboxConfig()
+        self._rerun = rerun_policy or RerunPolicy()
         self._launch = launcher or subprocess.Popen
         self._aux = aux_runner or subprocess.run
         self._which = which or (lambda name: shutil.which(name))
@@ -375,6 +379,94 @@ class ContainerSandboxRunner:
         scratch: Path,
         outputs: list[str],
     ) -> _CommandOutcome:
+        outcome, results_dir, is_pytest = self._run_once(
+            runtime_path, command, args, workspace, scratch, outputs
+        )
+        if not (
+            self._rerun.enabled and is_pytest and outcome.error is None and outcome.failed > 0
+        ):
+            return outcome
+        return self._rerun_failures(
+            runtime_path, command, args, workspace, scratch, outputs, outcome, results_dir
+        )
+
+    def _rerun_failures(
+        self,
+        runtime_path: str,
+        command: str,
+        args: tuple[str, ...],
+        workspace: Path,
+        scratch: Path,
+        outputs: list[str],
+        outcome: _CommandOutcome,
+        first_results: Path,
+    ) -> _CommandOutcome:
+        """Rerun failed cases (F-11); reclassify those that pass as ``flaky``.
+
+        Each rerun is a fresh hardened container with the same limits and
+        timeout as the first run. A sandbox/runtime error (including exit codes
+        137/152/153) aborts the reruns and leaves the original failures as
+        failures: an error is never evidence of flakiness. Worst case wall time
+        per command is ``(1 + reruns) * timeout_seconds``.
+        """
+
+        failed_cases = [
+            case
+            for case in _junit_cases(first_results / "junit.xml")
+            if case.outcome == CaseOutcome.FAILED
+        ]
+        if not failed_cases or len(failed_cases) != outcome.failed:
+            return outcome  # cannot identify the failures precisely: stay failed
+        files = {case.key: resolve_case_file(case, workspace) for case in failed_cases}
+        if all(files.values()):
+            test_files = set(planned_test_files(args))
+            rerun_args = tuple(a for a in args if a not in test_files) + tuple(
+                sorted({f for f in files.values() if f})
+            )
+        else:
+            rerun_args = args
+        ids = {
+            case.key: f"{files[case.key] or case.classname or ''}::{case.name or ''}"
+            for case in failed_cases
+        }
+        recovered: set[tuple[str, str, str]] = set()
+        attempts = 0
+        for attempt in range(1, self._rerun.reruns + 1):
+            rerun_outcome, rerun_dir, _ = self._run_once(
+                runtime_path,
+                command,
+                rerun_args,
+                workspace,
+                scratch.parent / f"{scratch.name}-rerun-{attempt}",
+                outputs,
+            )
+            if rerun_outcome.error is not None:
+                outputs.append(f"Radius rerun {attempt} aborted: {rerun_outcome.error}")
+                break
+            attempts += 1
+            for case in _junit_cases(rerun_dir / "junit.xml"):
+                if case.key in ids and case.outcome == CaseOutcome.PASSED:
+                    recovered.add(case.key)
+            if recovered == set(ids):
+                break
+        outputs.append(
+            f"Radius rerun policy: {len(ids)} failing test(s), {attempts} rerun(s) "
+            f"completed, {len(recovered)} flaky, {len(ids) - len(recovered)} stable_fail."
+        )
+        outcome.failed -= len(recovered)
+        outcome.flaky += len(recovered)
+        outcome.flaky_tests = tuple(sorted(ids[key] for key in recovered))
+        return outcome
+
+    def _run_once(
+        self,
+        runtime_path: str,
+        command: str,
+        args: tuple[str, ...],
+        workspace: Path,
+        scratch: Path,
+        outputs: list[str],
+    ) -> tuple[_CommandOutcome, Path, bool]:
         results_dir = scratch / "results"
         results_dir.mkdir(parents=True)
         # The container runs as nobody; it must be able to write its report here.
@@ -394,25 +486,24 @@ class ContainerSandboxRunner:
             if stream:
                 outputs.append(stream)
         if execution.failure is not None:
-            return _CommandOutcome(error=f"{command}: {execution.failure}")
-        if execution.returncode in RUNTIME_EXIT_CODES:
-            return _CommandOutcome(
-                error=f"{command}: {RUNTIME_EXIT_CODES[execution.returncode]}"
-            )
-        if execution.returncode in CONTAINED_EXIT_CODES:
-            return _CommandOutcome(
-                error=f"{command}: {CONTAINED_EXIT_CODES[execution.returncode]}"
-            )
+            error = f"{command}: {execution.failure}"
+            return _CommandOutcome(error=error), results_dir, is_pytest
+        for table in (RUNTIME_EXIT_CODES, CONTAINED_EXIT_CODES):
+            if execution.returncode in table:
+                error = f"{command}: {table[execution.returncode]}"
+                return _CommandOutcome(error=error), results_dir, is_pytest
         if is_pytest:
-            return pytest_outcome(
+            outcome = pytest_outcome(
                 self._junit, execution.returncode, results_dir / "junit.xml"
             )
-        return exit_code_outcome(
-            command,
-            execution.returncode,
-            execution.stdout + execution.stderr,
-            planned_test_files(args),
-        )
+        else:
+            outcome = exit_code_outcome(
+                command,
+                execution.returncode,
+                execution.stdout + execution.stderr,
+                planned_test_files(args),
+            )
+        return outcome, results_dir, is_pytest
 
     def _execute(
         self,
@@ -526,6 +617,34 @@ class ContainerSandboxRunner:
                 "sandbox container cleanup failed",
                 extra={"argv": argv[1:], "error": exc.__class__.__name__},
             )
+
+
+def _junit_cases(path: Path) -> tuple:
+    """Parse the cases of a JUnit report written by the sandbox, or ``()``."""
+
+    try:
+        if not path.is_file() or path.is_symlink() or path.stat().st_size > 20 * 1024 * 1024:
+            return ()
+        return report_cases(path.read_bytes())
+    except Exception:  # noqa: BLE001 - an unreadable report means "no evidence"
+        return ()
+
+
+def resolve_case_file(case, workspace: Path) -> str | None:
+    """Map a JUnit case to a repo-relative ``.py`` file in the snapshot, if any."""
+
+    candidates: list[str] = []
+    if case.file:
+        candidates.append(case.file.replace("\\", "/"))
+    parts = [p for p in (case.classname or "").split(".") if p]
+    for end in range(len(parts), 0, -1):
+        candidates.append("/".join(parts[:end]) + ".py")
+    for candidate in candidates:
+        if candidate.startswith(("-", "/")) or ".." in candidate.split("/"):
+            continue
+        if (workspace / candidate).is_file():
+            return candidate
+    return None
 
 
 def _runtime_cli_env() -> dict[str, str]:

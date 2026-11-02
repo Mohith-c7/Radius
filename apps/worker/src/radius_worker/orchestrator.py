@@ -111,6 +111,7 @@ class Phase1AnalysisOrchestrator:
         confidence_service: ConfidenceApplicationService,
         execute_tests: bool = True,
         symbol_impact_enabled: bool = False,
+        flaky_policy: str = "exclude",
     ) -> None:
         self._analysis = analysis_service
         self._parser = parser_service
@@ -120,6 +121,7 @@ class Phase1AnalysisOrchestrator:
         self._confidence = confidence_service
         self._execute_tests = execute_tests
         self._symbol_impact_enabled = symbol_impact_enabled
+        self._flaky_policy = flaky_policy
 
     def execute(self, command: ExecuteAnalysisCommand) -> AnalysisExecutionResult:
         """Execute one analysis and mark its lifecycle status."""
@@ -343,11 +345,20 @@ class Phase1AnalysisOrchestrator:
             if result.status == "error"
             else TestRunOutcome.COMPLETED
         )
+        flaky = result.flaky
+        flaky_tests = tuple(result.flaky_tests)
+        failed = result.failed
+        if self._flaky_policy == "fail" and flaky:
+            # Strict policy: a flaky test is a failure. It never becomes a pass.
+            failed += flaky
+            flaky, flaky_tests = 0, ()
         return TestEvidence(
             total_tests=result.total_tests,
             passed=result.passed,
-            failed=result.failed,
+            failed=failed,
             skipped=result.skipped,
+            flaky=flaky,
+            flaky_tests=flaky_tests,
             coverage_percent=(
                 CoveragePercent(result.coverage_percent)
                 if result.coverage_percent is not None

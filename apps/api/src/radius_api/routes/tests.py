@@ -14,6 +14,7 @@ from radius_repository.application import RepositoryApplicationService
 from radius_shared.dto import success_response
 from radius_shared.errors import ConflictError, NotFoundError, ValidationError
 from radius_testing.application import TestingApplicationService
+from radius_testing.domain.flakiness import FlakinessConfig
 
 from radius_api.auth import ApiPrincipal, ensure_same_organization, get_api_principal
 from radius_api.dependencies import (
@@ -314,3 +315,35 @@ def get_recent_executions(
     ensure_same_organization(principal, repository.organization_id)
     executions = service.get_recent_executions(repository_id, limit)
     return success_response(executions)
+
+
+@router.get("/flaky", summary="List quarantined (flaky) tests of the analysis' repository")
+def get_flaky_tests(
+    analysis_id: UUID,
+    service: Annotated[
+        TestingApplicationService,
+        Depends(get_testing_service),
+    ],
+    analysis_service: Annotated[
+        AnalysisApplicationService,
+        Depends(get_analysis_service),
+    ],
+    repository_service: Annotated[
+        RepositoryApplicationService,
+        Depends(get_repository_service),
+    ],
+    principal: Annotated[ApiPrincipal, Depends(get_api_principal)],
+    window: Annotated[int, Query(ge=2, le=200)] = 20,
+    min_comparable: Annotated[int, Query(alias="minComparable", ge=1, le=200)] = 3,
+    threshold: Annotated[float, Query(gt=0.0, le=1.0)] = 0.2,
+) -> Any:
+    """Return tests whose flakiness score (F-11) is at or above the threshold.
+
+    Tenant-scoped through the analysis' repository. Deterministic for a given
+    history; see ``docs/FLAKY_TESTS.md`` for the score definition.
+    """
+    analysis = analysis_service.get_analysis(analysis_id)
+    repository = repository_service.get_repository(analysis.repository_id)
+    ensure_same_organization(principal, repository.organization_id)
+    config = FlakinessConfig(window=window, min_comparable=min_comparable, threshold=threshold)
+    return success_response(service.list_flaky_tests(analysis.repository_id, config))

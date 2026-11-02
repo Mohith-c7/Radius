@@ -76,13 +76,19 @@ class InMemoryTestStore:
         self._results[result.analysis_id] = result
         selection = self._selections.get(result.analysis_id)
         if selection is not None and not self._history.get(result.analysis_id):
-            status = "failed" if result.failed else "passed"
+            flaky_files = {t.split("::", 1)[0].replace("\\", "/") for t in result.flaky_tests}
             duration = result.duration_ms // max(1, len(selection.selected_tests))
             self._history[result.analysis_id] = [
                 {
                     "test_name": item.test_case.name.value,
                     "test_path": item.test_case.path.value,
-                    "status": status,
+                    "status": (
+                        "failed"
+                        if result.failed
+                        else "flaky"
+                        if item.test_case.path.value.replace("\\", "/") in flaky_files
+                        else "passed"
+                    ),
                     "duration_ms": duration,
                     "timestamp": datetime.now(UTC).isoformat(),
                     "failure_info": result.output if result.failed else None,
@@ -107,6 +113,22 @@ class InMemoryTestStore:
         """Return test execution history for an analysis."""
 
         return self._history.get(analysis_id, [])
+
+    def list_test_samples(self, repository_id: UUID, limit: int = 5000) -> list[dict]:
+        """Return history rows oldest first (the in-memory store is single-tenant)."""
+
+        rows = [
+            {
+                "test_path": item["test_path"],
+                "test_name": item["test_name"],
+                "status": item["status"],
+                "commit_sha": item.get("commit_sha"),
+                "analysis_id": str(analysis_id),
+            }
+            for analysis_id, items in self._history.items()
+            for item in items
+        ]
+        return rows[-limit:]
 
     def save_test_statistics(self, analysis_id: UUID, statistics: dict) -> None:
         """Persist test execution statistics for an analysis."""

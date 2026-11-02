@@ -305,6 +305,37 @@ Re-run selected tests.
 
 ---
 
+## GET /analyses/{analysisId}/tests/flaky
+
+Quarantined (flaky) tests of the analysis' repository (F-11). Tenant-scoped.
+Scores every test from its execution history; see `docs/FLAKY_TESTS.md`.
+
+Query (all optional): `window` (2-200, default 20), `minComparable` (default 3), `threshold` (0-1, default 0.2).
+
+Returns
+
+```json
+{
+  "repository_id": "uuid",
+  "window": 20, "min_comparable": 3, "threshold": 0.2,
+  "insufficient_history_count": 4,
+  "quarantined": [
+    {"test_path": "tests/test_x.py", "test_name": "test_x", "score": 0.5,
+     "comparable": 6, "flips": 3, "samples_considered": 8,
+     "quarantined": true, "last_status": "flaky"}
+  ]
+}
+```
+
+Sorted by score (descending), then path. Tests with fewer than `minComparable`
+comparable observations are never listed (counted in `insufficient_history_count`).
+
+The run result (`GET .../tests/run`-style payloads) also carries `flaky` (count)
+and `flaky_tests` (ids) when the worker reran failures; both are `0` / `[]`
+unless `WORKER_TEST_RERUNS > 0`.
+
+---
+
 # Confidence APIs
 
 ---

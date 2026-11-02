@@ -149,6 +149,32 @@ class TestRunPlanResponse:
 
 
 @dataclass(frozen=True, slots=True)
+class FlakyTestResponse:
+    """One test with its flakiness assessment (F-11 quarantine listing)."""
+
+    test_path: str
+    test_name: str
+    score: float | None
+    comparable: int
+    flips: int
+    samples_considered: int
+    quarantined: bool
+    last_status: str
+
+
+@dataclass(frozen=True, slots=True)
+class FlakyTestsResponse:
+    """Quarantined and watched tests of one repository."""
+
+    repository_id: UUID
+    window: int
+    min_comparable: int
+    threshold: float
+    quarantined: tuple[FlakyTestResponse, ...]
+    insufficient_history_count: int
+
+
+@dataclass(frozen=True, slots=True)
 class TestRunResultResponse:
     """Executed test run summary response."""
 
@@ -162,6 +188,8 @@ class TestRunResultResponse:
     duration_ms: int
     coverage_percent: float | None
     output: str
+    flaky: int = 0
+    flaky_tests: tuple[str, ...] = ()
 
     @classmethod
     def from_entity(cls, result: TestRunResult) -> "TestRunResultResponse":
@@ -178,6 +206,8 @@ class TestRunResultResponse:
             duration_ms=result.duration_ms,
             coverage_percent=result.coverage_percent,
             output=result.output,
+            flaky=result.flaky,
+            flaky_tests=result.flaky_tests,
         )
 
 

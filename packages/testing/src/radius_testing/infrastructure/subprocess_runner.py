@@ -51,6 +51,8 @@ class _CommandOutcome:
     failed: int = 0
     skipped: int = 0
     error: str | None = None
+    flaky: int = 0
+    flaky_tests: tuple[str, ...] = ()
 
 
 class SubprocessTestRunner:
@@ -255,11 +257,14 @@ def build_run_result(
 
     totals = _CommandOutcome()
     errors: list[str] = []
+    flaky_tests: list[str] = []
     for outcome in outcomes:
         totals.total += outcome.total
         totals.passed += outcome.passed
         totals.failed += outcome.failed
         totals.skipped += outcome.skipped
+        totals.flaky += outcome.flaky
+        flaky_tests.extend(outcome.flaky_tests)
         if outcome.error:
             errors.append(outcome.error)
 
@@ -281,4 +286,6 @@ def build_run_result(
         skipped=totals.skipped,
         duration_ms=int((time.monotonic() - started) * 1000),
         output="\n".join(item for item in outputs if item),
+        flaky=totals.flaky,
+        flaky_tests=tuple(sorted(flaky_tests)),
     )

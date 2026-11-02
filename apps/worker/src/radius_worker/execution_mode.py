@@ -20,6 +20,7 @@ from enum import StrEnum
 from radius_shared.config import RuntimeEnvironment
 from radius_shared.errors import ValidationError
 from radius_shared.logging import get_logger
+from radius_testing.domain.flakiness import RerunPolicy
 from radius_testing.infrastructure import (
     ContainerSandboxRunner,
     DisabledTestRunner,
@@ -125,7 +126,8 @@ def build_test_runner(
                 max_file_size_bytes=settings.sandbox_max_file_size_bytes,
                 max_output_bytes=settings.sandbox_max_output_bytes,
                 seccomp_profile=settings.sandbox_seccomp_profile or None,
-            )
+            ),
+            rerun_policy=RerunPolicy(reruns=settings.test_reruns),
         )
     if mode == TestExecutionMode.UNSAFE_IN_PROCESS:
         return SubprocessTestRunner(timeout_seconds=timeout)

@@ -7,6 +7,8 @@ from radius_testing.dto.commands import (
     SelectTestsCommand,
 )
 from radius_testing.dto.responses import (
+    FlakyTestResponse,
+    FlakyTestsResponse,
     SelectedTestAttributionResponse,
     SelectedTestResponse,
     TestCaseResponse,
@@ -31,6 +33,8 @@ __all__ = [
     "TestDiscoveryResponse",
     "TestIngestionResponse",
     "TestRunPlanResponse",
+    "FlakyTestResponse",
+    "FlakyTestsResponse",
     "TestRunResultResponse",
     "TestSelectionResponse",
     "TestUploadResponse",
