@@ -1,0 +1,1 @@
+Tamper T001: a test that is renamed or moved (body at least 60% similar to a test added in the same PR, same code under test, assertions kept) is no longer reported as `test_deleted`. Deleting a test and adding an unrelated one, or renaming while dropping every assertion, still fires.

@@ -24,7 +24,7 @@ example a comment) never waives a finding, because the PR author controls the di
 | Id | Family | Title | Checks (default severity) | Maps to |
 |---|---|---|---|---|
 | T001 | test_disabling | Test deleted without removing the code under test | `test_deleted` (high), `parametrize_case_removed` (high), `commented_out_test` (high) | T001 |
-| T002 | test_disabling | Test newly skipped or xfailed | `skip` (high), `skipif` (medium), `xfail` (high), `runtime_skip` (high), `module_skip` (high) | T002 |
+| T002 | test_disabling | Test newly skipped or xfailed | `skip` (high), `skipif` (medium), `xfail` (high), `runtime_skip` (high), `runtime_skip_new` (medium), `runtime_skip_conditional` (medium), `runtime_skip_guarded` (low), `module_skip` (high) | T002 |
 | T003 | assertion_weakening | Assertion removed | `assertion_removed` (high), `body_emptied` (high), `commented_out_assertion` (high) | T003 |
 | T004 | assertion_weakening | Assertion weakened | `tolerance_widened` (high), `conjunct_dropped` (high), `strength_reduced` (high) | T004 |
 | T005 | tautology | Tautological assertion | `always_true` (high), `self_comparison` (high) | T005 |
@@ -69,7 +69,7 @@ Example, after:
 # (test removed, reserve() still exists)
 ```
 
-Limitations: The code under test is inferred from the names the test calls; if every called name is a symbol removed in the same PR the deletion is treated as legitimate. Tests moved to another file with an identical body are not reported.
+Limitations: The code under test is inferred from the names the test calls; if every called name is a symbol removed in the same PR the deletion is treated as legitimate. Tests moved to another file with an identical body, and tests renamed or moved with a body at least 60% similar to a test added in the same PR (name ignored, assertions kept), are not reported; a deliberate rename plus weakening below that similarity is still a deletion.
 
 ### T002
 
@@ -82,7 +82,10 @@ A skipped or expected-failure test reports green/neutral while verifying nothing
 | `skip` | high | skip marker / unittest.skip added |
 | `skipif` | medium | conditional skip added |
 | `xfail` | high | xfail / expectedFailure added |
-| `runtime_skip` | high | pytest.skip()/xfail() or `if False` in the body |
+| `runtime_skip` | high | unconditional pytest.skip()/xfail() or `if False` added to a test that existed |
+| `runtime_skip_new` | medium | unconditional pytest.skip()/xfail() in a test new in this PR |
+| `runtime_skip_conditional` | medium | pytest.skip()/xfail() under a non-environment condition |
+| `runtime_skip_guarded` | low | pytest.skip() under an environment guard (platform, env var, optional import, file) |
 | `module_skip` | high | module-level pytestmark skip/xfail added |
 
 Example, before:
@@ -98,7 +101,7 @@ Example, after:
 def test_rejects_non_positive():
 ```
 
-Limitations: `skipif` with a platform/version condition is often legitimate (severity medium, confidence 0.5). Skips that exist at base are not reported.
+Limitations: `skipif` with a platform/version condition is often legitimate (severity medium, confidence 0.5). Skips that exist at base are not reported. A runtime skip under an `if` on the platform, environment, installed packages or files, or in an `except ImportError`-style handler, is `runtime_skip_guarded` (low); only an unconditional skip added to a test that already existed is high. The guard is recognised textually, so a skip hidden behind an innocent-looking environment condition is reported low.
 
 ### T003
 
@@ -411,7 +414,7 @@ Example, after:
 value = parse(raw)  # type: ignore
 ```
 
-Limitations: Benign idioms are skipped: `# noqa` limited to F401/E402/E501/I001 and `type: ignore[import...]`. Marker detection is textual and can match inside strings. Use `params.min_added_suppressions` to report only above a PR-wide count.
+Limitations: Benign idioms are skipped: `# noqa` limited to F401/E402/E501/I001 and `type: ignore[import...]`. Marker detection is textual and can match inside strings. Use `params.min_added_suppressions` to report only above a PR-wide count. Several suppressions of the same kind in one file are reported as one summarized finding (with the line numbers), never as one finding per line; severity is that of the check and does not grow with the count.
 
 ### T014
 
