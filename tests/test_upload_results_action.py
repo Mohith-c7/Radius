@@ -306,8 +306,8 @@ def test_secret_never_printed_even_if_server_echoes_it(fake, env, capsys) -> Non
     env.setenv("GITHUB_ACTIONS", "true")
     upload.run()
     out = capsys.readouterr().out
-    assert out.count(SECRET) == 1  # only the ::add-mask:: registration line
-    assert f"::add-mask::{SECRET}" in out
+    assert SECRET not in out  # the key is never printed, even when the server echoes it
+    assert "::add-mask::" not in out
     assert "***" in out
 
 

@@ -15,7 +15,7 @@ Design rules:
   an allow-list (see ``sanitize_junit``): suite/case names, file names, outcome
   and duration. Failure messages, stack traces, stdout/stderr and properties are
   dropped, because they can contain source lines or environment values.
-* The API key is registered with ``::add-mask::`` and scrubbed from all output.
+* The API key is never printed (Actions masks secrets passed via ``secrets.*``) and is scrubbed from all output.
 """
 
 from __future__ import annotations
@@ -505,8 +505,8 @@ def run(sleep=None) -> int:  # noqa: ANN001
     fail_mode = _flag("RADIUS_FAIL_ON_UPLOAD_ERROR")
     out = Outcome()
     dashboard = os.environ.get("RADIUS_DASHBOARD_URL", "").strip().rstrip("/")
-    if key and os.environ.get("GITHUB_ACTIONS") == "true":
-        print(f"::add-mask::{key}", flush=True)
+    # No explicit ::add-mask:: here: it would print the key. GitHub Actions already masks values
+    # passed from `secrets.*`, and Reporter scrubs the key from everything this script prints.
 
     def problem(message: str) -> int:
         out.status = "failed"
