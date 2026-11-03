@@ -1,0 +1,1 @@
+Verdict v2: confirming, editing or rejecting a criterion in the intent panel now recomputes the stored verdict (the author-hint cap and the unconfirmed inferred-intent block are lifted, rejected criteria are excluded) and updates the PR comment and Check Run in place; the verdict panel shows that it is out of date until then and refreshes itself after a confirm.

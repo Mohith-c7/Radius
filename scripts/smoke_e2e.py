@@ -17,7 +17,10 @@ What is faked: only the network edge. A stateful in-memory "GitHub"
 intent ``GitHubRestReader`` make, and the "repository" is a git repo built from
 the ``benchmarks/fixtures/intent/01_correct_strong_tests`` fixture (gold mode: the
 fixture's links are given as ``.radius/intent.yml`` hints, identical on the base
-ref so they are trusted as ``base_spec``).
+ref so they are trusted as ``base_spec``). The PR body has a "Summary" bullet and the
+worker runs with ``RADIUS_INTENT_EXTRACTION_MODE=summary`` (DEC-032), so one inferred,
+unconfirmed criterion blocks ``verified`` until the confirm stage (DEC-033) confirms
+the criteria through the real API and the worker recomputes and republishes.
 
 It creates a throw-away database (``radius_smoke_<random>``) next to the one in
 ``DATABASE_URL`` and drops it at the end. The webhook secret, the API-key pepper,
@@ -383,6 +386,8 @@ class Smoke:
         self.github: FakeGitHub
         self.base_sha = self.head_sha = ""
         self.analysis_id = ""
+        self.blocked_payload: dict[str, Any] = {}
+        self.blocked_comment = ""
 
     # -- helpers
     def api(self, method: str, path: str, **kwargs: Any):
@@ -442,6 +447,10 @@ class Smoke:
         self.origin = self.workdir / "origin"
         self.base_sha, self.head_sha = build_origin_repo(self.origin, spec)
         self.github = FakeGitHub(public_key_pem=public_pem, head_sha=self.head_sha, spec=spec)
+        self.github.pr_body = (
+            "Adds apply_discount to pricing.\n\n## Summary\n"
+            "- Rejects a percent outside 0..100 inclusive with a ValueError\n"
+        )
 
         env = {
             "DATABASE_URL": self.database_url,
@@ -451,6 +460,7 @@ class Smoke:
             "RADIUS_API_KEY_PEPPER": self.pepper,
             "RADIUS_FEATURE_VERDICT_V2": "on",
             "RADIUS_FEATURE_INTENT_INGESTION": "true",
+            "RADIUS_INTENT_EXTRACTION_MODE": "summary",
             "GITHUB_APP_ID": "12345",
             "GITHUB_APP_PRIVATE_KEY": private_pem,
             "GITHUB_PUBLISH_RESULTS": "true",
@@ -656,13 +666,112 @@ class Smoke:
         payload = r.json()["data"]
         if os.environ.get("SMOKE_DEBUG"):
             print(json.dumps(payload, indent=1)[:6000])
-        check(payload["verdict"] == "verified",
-              f"after CI results the verdict is verified, as designed for the fixture (got {payload['verdict']})")
+        check(payload["verdict"] == "insufficient_evidence",
+              "after CI results the verdict is still insufficient_evidence: an inferred "
+              f"criterion is unconfirmed (got {payload['verdict']})")
+        check(payload["justification"]["decided_by"] == "R2d",
+              f"decided by R2d (incomplete analysis: unconfirmed_inferred_intent), got {payload['justification']['decided_by']}")
+        check(any("unconfirmed" in c["flags"] for c in payload["criteria"]),
+              "criteria carry the 'unconfirmed' flag")
         check(payload["revision"] > self.first_payload["revision"],
               f"a new verdict revision was stored ({self.first_payload['revision']} -> {payload['revision']})")
         check(len(self.github.comments) == 1, "republish updated the PR comment in place (still one comment)")
         check(len(self.github.check_runs) == 1, "republish updated the Check Run in place (still one)")
+        self.assert_published(expected_verdict_label="insufficient", expect_rev=payload["revision"])
+        self.blocked_payload = payload
+        self.blocked_comment = self.github.comments[0]["body"]
+        writes_before = len(self.github.requests)
+        self.run_worker()
+        check(len(self.github.requests) == writes_before, "an idle worker makes no GitHub calls")
+
+    def wait_for_revision(self, above: int, *, timeout_s: float = 90.0) -> dict[str, Any]:
+        """Run the real worker loop until the stored revision is above ``above`` and no
+        refresh is queued (the API debounces intent changes by a few seconds)."""
+
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            self.run_worker()
+            r = self.api("GET", f"/analyses/{self.analysis_id}/verdict-v2")
+            body = r.json()
+            if (r.status_code == 200 and body["data"]["revision"] > above
+                    and not body.get("meta", {}).get("refresh_pending")):
+                return body["data"]
+            time.sleep(0.5)
+        raise SmokeFailure(f"no verdict revision above {above} appeared within {timeout_s:.0f}s")
+
+    def confirm_stage(self) -> None:
+        section("confirm criteria in the intent panel -> recompute -> republish in place")
+        base = f"/analyses/{self.analysis_id}"
+        before = self.blocked_payload
+        r = self.api("GET", f"{base}/intent")
+        criteria = r.json()["data"]["criteria"]
+        check(len(criteria) >= 2 and {c["state"] for c in criteria} == {"proposed"},
+              f"the intent panel lists {len(criteria)} proposed criteria")
+
+        # not authenticated / wrong scope: no state change, no recompute request
+        first = criteria[0]["id"]
+        url = f"/api/v1{base}/intent/criteria/{first}"
+        r = self.client.patch(url, json={"action": "confirm"})
+        check(r.status_code in (401, 403), f"confirm without credentials is refused ({r.status_code})")
+        r = self.client.patch(url, json={"action": "confirm"}, headers=self.read_headers)
+        check(r.status_code == 403, f"confirm with a read-only key is refused ({r.status_code})")
+        r = self.client.patch(url, json={"action": "confirm"}, headers={
+            "X-Radius-Organization-Id": str(self.other_org_id), "X-Radius-API-Key": self.legacy_key})
+        check(r.status_code in (401, 403), f"confirm with another organization's key is refused ({r.status_code})")
+        r = self.api("PATCH", f"{base}/intent/criteria/{first}",
+                     json={"action": "confirm", "provenance": "human_confirmed"})
+        check(r.status_code == 422, f"a request body cannot carry a provenance ({r.status_code})")
+        states = {c["state"] for c in self.api("GET", f"{base}/intent").json()["data"]["criteria"]}
+        check(states == {"proposed"}, "refused calls changed no criterion state")
+        r = self.api("GET", f"{base}/verdict-v2")
+        check("refresh_pending" not in r.json().get("meta", {}),
+              "refused calls enqueued no recompute (verdict not marked stale)")
+        writes = len(self.github.requests)
+        self.run_worker()
+        check(len(self.github.requests) == writes, "the worker has nothing to do after refused calls")
+
+        # confirming only some criteria must not lift the block (all summary-mode ones are needed)
+        inferred = [c for c in criteria if "summary" in json.dumps(c.get("origin", {}))]
+        check(len(inferred) >= 1, f"{len(inferred)} inferred (summary-mode) criterion listed")
+        others = [c for c in criteria if c not in inferred]
+        for criterion in others:
+            r = self.api("PATCH", f"{base}/intent/criteria/{criterion['id']}", json={"action": "confirm"})
+            check(r.status_code == 200, f"spec criterion {criterion['id'][:8]} confirmed through the API")
+        mid = self.wait_for_revision(before["revision"])
+        check(mid["verdict"] == "insufficient_evidence" and mid["justification"]["decided_by"] == "R2d",
+              "with an inferred criterion still unconfirmed the block stays (R2d)")
+
+        # the inferred criterion: confirmed twice in quick succession (second is refused)
+        for criterion in inferred:
+            r = self.api("PATCH", f"{base}/intent/criteria/{criterion['id']}", json={"action": "confirm"})
+            check(r.status_code == 200 and r.json()["data"]["criterion"]["state"] == "confirmed",
+                  f"inferred criterion {criterion['id'][:8]} confirmed through the API")
+        r = self.api("PATCH", f"{base}/intent/criteria/{inferred[0]['id']}", json={"action": "confirm"})
+        check(r.status_code == 409, f"confirming an already confirmed criterion is refused ({r.status_code})")
+        r = self.api("GET", f"{base}/verdict-v2")
+        meta = r.json().get("meta", {})
+        check(meta.get("refresh_pending") is True and meta.get("refresh_reason") == "intent_changed",
+              f"until the worker ran, the stored verdict is marked stale ({meta})")
+        check(r.json()["data"]["revision"] == mid["revision"],
+              "the stored revision has not changed yet (stale, as marked)")
+
+        payload = self.wait_for_revision(mid["revision"])
+        check(payload["verdict"] == "verified" and payload["justification"]["decided_by"] == "R4",
+              "the unconfirmed_inferred_intent block is lifted: the verdict is verified again "
+              f"(got {payload['verdict']} by {payload['justification']['decided_by']})")
+        check(not any("unconfirmed" in c["flags"] for c in payload["criteria"]),
+              "no criterion carries the 'unconfirmed' flag any more")
+        check({c["provenance"] for c in payload["criteria"]} == {"human_confirmed"},
+              "all criteria are now human_confirmed")
+        check(payload["revision"] == mid["revision"] + 1,
+              f"exactly one new revision was stored ({mid['revision']} -> {payload['revision']})")
+        check(len(self.github.comments) == 1 and len(self.github.check_runs) == 1,
+              "the PR comment and Check Run were edited in place (still one each)")
+        check(self.github.comments[0]["body"] != self.blocked_comment,
+              "the PR comment text changed after the confirm")
         self.assert_published(expected_verdict_label="supported", expect_rev=payload["revision"])
+        r = self.api("GET", f"{base}/verdict-v2")
+        check("refresh_pending" not in r.json().get("meta", {}), "the stale marker is gone")
         writes_before = len(self.github.requests)
         self.run_worker()
         check(len(self.github.requests) == writes_before, "an idle worker makes no GitHub calls")
@@ -722,6 +831,7 @@ def main() -> int:
         smoke.webhook_stage()
         smoke.worker_stage()
         smoke.ci_stage()
+        smoke.confirm_stage()
         smoke.regression_stage()
         ok = True
     except SmokeFailure as exc:

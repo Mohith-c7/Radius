@@ -32,6 +32,7 @@ import {
 import { ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { getVerdictV2 } from "../lib/verdict-v2";
+import { followRefresh, onIntentChanged, type RefreshState } from "../lib/verdict-refresh";
 import {
   authorHintCount,
   classifyVerdictError,
@@ -96,7 +97,7 @@ type Load =
   | { status: "disabled" }
   | { status: "not_computed" }
   | { status: "error"; message: string }
-  | { status: "ready"; verdict: VerdictV2 };
+  | { status: "ready"; verdict: VerdictV2; refresh: RefreshState };
 
 export function VerdictV2Panel({ analysisId }: { analysisId: string }) {
   const [load, setLoad] = useState<Load>({ status: "loading" });
@@ -108,8 +109,8 @@ export function VerdictV2Panel({ analysisId }: { analysisId: string }) {
     const ticket = ++latest.current;
     setReloading(true);
     try {
-      const { verdict } = await getVerdictV2(analysisId);
-      if (ticket === latest.current) setLoad({ status: "ready", verdict });
+      const { verdict, refresh } = await getVerdictV2(analysisId);
+      if (ticket === latest.current) setLoad({ status: "ready", verdict, refresh });
     } catch (error) {
       if (ticket !== latest.current) return;
       const info = classifyVerdictError(error);
@@ -120,6 +121,35 @@ export function VerdictV2Panel({ analysisId }: { analysisId: string }) {
       if (ticket === latest.current) setReloading(false);
     }
   }, [analysisId]);
+
+  // A criterion was confirmed, edited or rejected: the worker recomputes the verdict a few
+  // seconds later (DEC-033). Follow it with a bounded poll (about 30 s, widening delays).
+  const loadRef = useRef(load);
+  loadRef.current = load;
+  useEffect(
+    () =>
+      onIntentChanged(analysisId, () => {
+        const ticket = ++latest.current;
+        const current = loadRef.current;
+        const baseline = current.status === "ready" ? current.verdict.revision : 0;
+        if (current.status === "ready") {
+          setLoad({ ...current, refresh: { pending: true, failed: false } });
+        }
+        setReloading(true);
+        void followRefresh({
+          baseline,
+          load: () => getVerdictV2(analysisId),
+          sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+          cancelled: () => ticket !== latest.current,
+          onSnapshot: ({ verdict, refresh: state }) => {
+            if (ticket === latest.current) setLoad({ status: "ready", verdict, refresh: state });
+          },
+        }).finally(() => {
+          if (ticket === latest.current) setReloading(false);
+        });
+      }),
+    [analysisId],
+  );
 
   useEffect(() => {
     setLoad({ status: "loading" });
@@ -167,6 +197,14 @@ export function VerdictV2Panel({ analysisId }: { analysisId: string }) {
             <AlertTriangle size={16} aria-hidden="true" />
             <span>Could not load the verdict: {load.message}</span>
           </div>
+        ) : null}
+        {load.status === "ready" && load.refresh.pending ? (
+          <p className="vv2-state" role="status">
+            <Loader2 size={16} className={load.refresh.failed ? undefined : "spin"} aria-hidden="true" />{" "}
+            {load.refresh.failed
+              ? "The verdict below is out of date: updating it after your change failed and will be retried. Use Reload to check again."
+              : "The verdict below is out of date: it is being recomputed after your change. It updates in a few seconds."}
+          </p>
         ) : null}
         {load.status === "ready" ? <VerdictView verdict={load.verdict} /> : null}
       </div>

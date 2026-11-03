@@ -74,6 +74,7 @@ import {
   type SnapshotDiff,
   type SnapshotSummary,
 } from "../lib/intent-model";
+import { notifyIntentChanged } from "../lib/verdict-refresh";
 import { useAuth } from "./auth-provider";
 import "./intent-panel.css";
 
@@ -889,6 +890,7 @@ export function IntentPanel({ analysisId }: { analysisId: string }) {
           setCriteria((list) => list.map((c) => (c.id === id ? result.criterion : c)));
           etagRef.current = result.etag;
           setBanner({ tone: "notice", message: `Criterion ${stateMeta(result.criterion.state).label.toLowerCase()}.` });
+          notifyIntentChanged(analysisId); // the verdict panel follows the recompute (DEC-033)
         } catch (e) {
           if (!alive.current) return;
           const info = classifyIntentError(e);

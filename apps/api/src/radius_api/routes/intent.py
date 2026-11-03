@@ -3,11 +3,12 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, Query, Response, status
+from fastapi import APIRouter, Depends, Header, Query, Request, Response, status
 from radius_analysis.application import AnalysisApplicationService
 from radius_repository.application import RepositoryApplicationService
 from radius_shared.dto import ApiResponse, success_response
 from radius_shared.errors import NotFoundError, ValidationError
+from radius_shared.verdict_v2_repository import VerdictV2Repository
 
 from radius_api import intent_presenter as present
 from radius_api.auth import ApiPrincipal, get_api_principal
@@ -15,6 +16,7 @@ from radius_api.dependencies import (
     get_analysis_service,
     get_intent_service,
     get_repository_service,
+    get_verdict_v2_repository,
 )
 from radius_api.intent_management import (
     ACTOR_LABEL_PATTERN,
@@ -32,6 +34,7 @@ from radius_api.schemas.intent import (
     SourceDetailView,
     SubmitIntentSourceRequest,
 )
+from radius_api.verdict_v2_trigger import request_verdict_v2_recompute
 
 #: Largest accepted request body. Sources are capped at 64 KiB of text; the
 #: margin covers JSON escaping.
@@ -328,13 +331,17 @@ def update_criterion(
     principal: Principal,
     service: Service,
     response: Response,
+    request: Request,
+    verdicts: Annotated[VerdictV2Repository, Depends(get_verdict_v2_repository)],
     if_match: IfMatch = None,
     actor_label: ActorLabel = None,
 ):
     """Apply a human decision through the domain state machine (audited).
 
     Illegal moves (for example confirming a rejected criterion) return 409
-    `ILLEGAL_STATE_TRANSITION`. Weight edits are not supported yet.
+    `ILLEGAL_STATE_TRANSITION`. Weight edits are not supported yet. With
+    Verdict v2 enabled, a successful change also asks the worker to refresh the
+    stored verdict (debounced; a failure to ask never fails this call).
     """
 
     outcome = service.apply_action(
@@ -346,6 +353,9 @@ def update_criterion(
         reason=body.reason,
         actor=_actor(principal, actor_label),
         if_match=if_match,
+    )
+    request_verdict_v2_recompute(
+        request, verdicts, principal.organization_id, analysis_id
     )
     response.headers["ETag"] = outcome.bundle.etag
     return success_response(present.criterion_result_view(outcome))

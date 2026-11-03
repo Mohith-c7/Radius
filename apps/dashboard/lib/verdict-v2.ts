@@ -5,7 +5,12 @@
 import { radiusRequest } from "./api.ts";
 import { parseVerdictV2, type VerdictV2 } from "./verdict-v2-model.ts";
 
-export type VerdictLoad = { verdict: VerdictV2; etag: string | null };
+export type VerdictLoad = {
+  verdict: VerdictV2;
+  etag: string | null;
+  /** From the envelope `meta`: a recompute is queued (the verdict is stale). */
+  refresh: { pending: boolean; failed: boolean };
+};
 
 /**
  * Load the stored verdict. Rejects with RadiusApiError (404 with
@@ -18,5 +23,10 @@ export async function getVerdictV2(analysisId: string): Promise<VerdictLoad> {
   );
   const parsed = parseVerdictV2(result.data);
   if (!parsed.ok) throw new Error(parsed.reason);
-  return { verdict: parsed.value, etag: result.etag };
+  const meta = result.meta ?? {};
+  return {
+    verdict: parsed.value,
+    etag: result.etag,
+    refresh: { pending: meta.refresh_pending === true, failed: meta.refresh_failed === true },
+  };
 }
