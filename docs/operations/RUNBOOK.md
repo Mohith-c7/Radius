@@ -84,10 +84,13 @@ and that your proxy forwards the path.
 
 ## GitHub rate limits and API errors
 
-- The GitHub client (`packages/github/src/radius_github/client.py`) has **no specific rate-limit handling** (no
-  `Retry-After` / `x-ratelimit-*` logic was found in it). A 403 or 429 from GitHub surfaces as an error in
-  the worker log for that step. Whether such a publish failure fails the whole job is **Unverified**; check
-  `last_error` and the log.
+- The GitHub client (`packages/github/src/radius_github/client.py`) retries rate-limited calls within a bounded
+  budget and then raises `GitHubRateLimitError`; the pull request poller backs off per installation until GitHub's
+  reset time. A failure to publish the result (check run or comment) does **not** fail the job: it is logged
+  (`outcome=publish_error`) and the in-progress check is completed as "not verified". Look for `publish_error` in
+  the worker log. A job that fails for other reasons is retried with exponential backoff
+  (`WORKER_JOB_RETRY_BASE_SECONDS`, default 15 s, doubling, capped at `WORKER_JOB_RETRY_MAX_SECONDS`) and the poller
+  re-queues a failed head up to `RADIUS_GITHUB_POLL_FAILED_RETRIES` (default 2) times.
 - Intent ingestion is capped per analysis: `RADIUS_INTENT_MAX_API_CALLS` (15), `RADIUS_INTENT_DEADLINE_SECONDS` (30), and
   optional comment fetching is off. If you hit limits, leave `RADIUS_INTENT_INCLUDE_ISSUE_COMMENTS` off and lower the caps.
 - Installation tokens have GitHub-side hourly limits (GitHub documentation, not verified here); busy organizations

@@ -34,7 +34,7 @@ from radius_analysis.infrastructure import (
     SqlAlchemyAnalysisStore,
 )
 from radius_github import GitHubAppClient, GitHubRateLimitError
-from radius_github.pull_sync import sync_open_pull_requests
+from radius_github.pull_sync import FailedRetryPolicy, sync_open_pull_requests
 from radius_repository.application import RepositoryApplicationService
 from radius_repository.infrastructure import SqlAlchemyRepositoryStore
 from radius_shared.database import enums as db_enums
@@ -238,6 +238,17 @@ class PullRequestPoller:
         self._cursor = (start + len(chosen)) % len(targets)
         return chosen
 
+    def _failed_retry_policy(self) -> FailedRetryPolicy | None:
+        """Bounded retry of failed heads (C-05); ``None`` when switched off."""
+
+        retries = self._settings.github_poll_failed_retries
+        if retries <= 0:
+            return None
+        return FailedRetryPolicy(
+            max_failures=retries + 1,
+            base_delay_seconds=self._settings.github_poll_failed_retry_delay_seconds,
+        )
+
     def _token(self, cache: dict[int, str | None], installation_id: int) -> str:
         token = cache.get(installation_id)
         if token is None:
@@ -267,6 +278,7 @@ class PullRequestPoller:
                     repository=repository,
                     raw_pull_requests=raw,
                     retry_failed=False,
+                    failed_retry=self._failed_retry_policy(),
                     max_analyses=budget,
                 )
                 session.commit()

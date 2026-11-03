@@ -122,8 +122,18 @@ The Compose `api` and `worker` services run with `RADIUS_ENV=production` regardl
   Never set `DEV_AUTO_VERIFY_EMAIL` on a shared deployment.
 - **Session secret.** `SESSION_SECRET` (32+ random characters) is required; there is no default in
   `docker-compose.yml`.
-- **Database.** The bundled PostgreSQL uses the fixed credential `radius/radius` (container network
-  only) and is published on `127.0.0.1` only. Use an external database with your own credential for real use.
+- **Database.** The bundled PostgreSQL password is the required variable `POSTGRES_PASSWORD` (no default;
+  `make env` generates a random one for local dev, otherwise use a URL-safe random value such as
+  `openssl rand -hex 24`). It is used for the database and for the `DATABASE_URL` of migrations, api and
+  worker. Changing it later does not change the password inside an existing volume. The database is published on
+  `127.0.0.1` only. Use an external database with your own credential for real use.
+- **Published ports.** The api (8000) and dashboard (3000) are published on `127.0.0.1` by default
+  (`RADIUS_API_BIND_ADDRESS`, `RADIUS_DASHBOARD_BIND_ADDRESS`). For a deployment, keep that and put a TLS
+  reverse proxy in front, or set the variable to `0.0.0.0` knowingly.
+- **Restart and shutdown.** postgres, api, worker and dashboard use `restart: unless-stopped`. The worker
+  gets `WORKER_STOP_GRACE_PERIOD` (default 15m) to finish its current job on `docker compose stop worker`.
+  Its healthcheck fails when the worker loop (or the lease heartbeat of a running job) has not touched
+  its health file for `WORKER_HEALTH_MAX_AGE_SECONDS` (default 300), not only when the database is unreachable.
 - **Demo data.** `RADIUS_SEED_DEMO_DATA` is ignored in production mode. Use `make seed-demo` against a
   disposable database if you want illustrative data.
 

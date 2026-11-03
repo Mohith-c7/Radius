@@ -21,6 +21,7 @@ import io
 import json
 import secrets
 import urllib.error
+from email.utils import formatdate
 from typing import Any
 from urllib.parse import unquote, urlsplit
 
@@ -74,7 +75,9 @@ class FakeGitHubApp:
         self.pulls: list[dict[str, Any]] = []
         #: ``{(METHOD, path): status}`` forced error responses.
         self.fail: dict[tuple[str, str], int] = {}
-        self.server_date = "Tue, 03 Nov 2026 10:00:00 GMT"
+        # The current time, not a fixed date: the fake verifies token expiry against the real clock, so a
+        # hard-coded date made every signed token expire a few minutes after that moment in real time.
+        self.server_date = formatdate(usegmt=True)
         self.requests: list[tuple[str, str]] = []
         self.jwt_verified = 0
         self.tokens: set[str] = set()

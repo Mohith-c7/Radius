@@ -322,6 +322,10 @@ def extra_entries() -> list[Entry]:
         e("PORT", "int", "8000 (api), 3000 (dashboard)", "Listen port in the API and dashboard images (`uvicorn --port ${PORT:-8000}`; dashboard `PORT=3000`).", {"api", "dashboard"}, "apps/api/Dockerfile"),
         e("RADIUS_EXTRAS", "str", "empty", "Compose build argument: extra Python dependency groups to install in the api and worker images (for example `llm`, `gemini`, `observability`).", {"compose build"}, "docker-compose.yml"),
         e("POSTGRES_HOST_PORT", "int", "5432", "Compose: host port published for the bundled PostgreSQL.", {"compose"}, "docker-compose.yml"),
+        e("POSTGRES_PASSWORD", "str", "(secret, no default)", "Compose: password of the bundled PostgreSQL and inside the `DATABASE_URL` that migrations, api and worker receive. Required, no default; `make env` generates a random one. URL-safe characters only. Changing it does not change the password of an existing database volume.", {"compose"}, "docker-compose.yml"),
+        e("RADIUS_API_BIND_ADDRESS", "str", "127.0.0.1", "Compose: host address the API port 8000 is published on. Loopback by default; set 0.0.0.0 only deliberately (prefer a TLS reverse proxy).", {"compose"}, "docker-compose.yml"),
+        e("RADIUS_DASHBOARD_BIND_ADDRESS", "str", "127.0.0.1", "Compose: host address the dashboard port 3000 is published on. Loopback by default.", {"compose"}, "docker-compose.yml"),
+        e("WORKER_STOP_GRACE_PERIOD", "duration", "15m", "Compose: how long `docker compose stop worker` waits for the worker to finish its current job after SIGTERM before it is killed.", {"compose"}, "docker-compose.yml"),
     ]
     return [*items, *_llm_entries()]
 

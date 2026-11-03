@@ -144,12 +144,30 @@ class AnalysisApplicationService:
     def list_analyses(self, query: AnalysisListQuery) -> list[AnalysisResponse]:
         """List analyses with optional filters."""
 
+        extra: dict[str, object] = {}
+        if query.repository_ids is not None:
+            extra["repository_ids"] = query.repository_ids
+        if query.limit is not None:
+            extra["limit"] = query.limit
+        if query.offset:
+            extra["offset"] = query.offset
         analyses = self._store.list(
             repository_id=query.repository_id,
             pull_request_id=query.pull_request_id,
             status=self._parse_status(query.status),
+            **extra,
         )
         return [AnalysisResponse.from_entity(analysis) for analysis in analyses]
+
+    def count_analyses(self, query: AnalysisListQuery) -> int:
+        """Count analyses matching the filters of ``query`` (ignores its page window)."""
+
+        return self._store.count(
+            repository_id=query.repository_id,
+            pull_request_id=query.pull_request_id,
+            status=self._parse_status(query.status),
+            repository_ids=query.repository_ids,
+        )
 
     def mark_running(self, analysis_id: UUID) -> AnalysisResponse:
         """Move an analysis into running state."""

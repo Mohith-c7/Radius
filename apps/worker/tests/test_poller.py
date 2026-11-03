@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from cryptography.hazmat.primitives import serialization
@@ -386,3 +386,58 @@ def test_run_loop_does_not_start_when_stop_is_already_requested(
     runtime.stop_event.set()
     runtime.run_loop(poll_interval_seconds=0)  # returns at once
     assert env.analyses() == []
+
+
+def _fail_latest(env: Env, *, age: timedelta) -> None:
+    """Mark every non-failed analysis failed, completed ``age`` ago."""
+
+    with env.session_factory() as session:
+        for analysis in session.scalars(select(Analysis)):
+            if analysis.status != db_enums.AnalysisStatus.FAILED:
+                analysis.status = db_enums.AnalysisStatus.FAILED
+            analysis.completed_at = datetime.now(UTC) - age
+        session.commit()
+
+
+def test_failed_head_is_retried_after_the_delay_but_only_a_bounded_number_of_times(
+    key_pair,
+) -> None:
+    env = Env(
+        key_pair,
+        RADIUS_GITHUB_POLL_FAILED_RETRIES=2,
+        RADIUS_GITHUB_POLL_FAILED_RETRY_DELAY_SECONDS=900,
+    )
+    env.add_repository()
+    env.github.add_pull(7, head_sha=SHA[0])
+    poller = env.poller()
+    assert poller.poll_once().started == 1
+
+    # First failure: waits 900 s, then one retry.
+    _fail_latest(env, age=timedelta(seconds=100))
+    assert poller.poll_once().started == 0
+    _fail_latest(env, age=timedelta(seconds=901))
+    assert poller.poll_once().started == 1
+    assert len(env.analyses()) == 2
+
+    # Second failure: waits 1800 s (doubling), then the last retry.
+    _fail_latest(env, age=timedelta(seconds=901))
+    assert poller.poll_once().started == 0
+    _fail_latest(env, age=timedelta(seconds=1801))
+    assert poller.poll_once().started == 1
+    assert len(env.analyses()) == 3
+
+    # Third failure: the bound (1 + 2 retries) is reached, no further automatic retry.
+    _fail_latest(env, age=timedelta(days=30))
+    assert poller.poll_once().started == 0
+    assert len(env.analyses()) == 3
+
+
+def test_failed_head_retry_can_be_switched_off(key_pair) -> None:
+    env = Env(key_pair, RADIUS_GITHUB_POLL_FAILED_RETRIES=0)
+    env.add_repository()
+    env.github.add_pull(7, head_sha=SHA[0])
+    poller = env.poller()
+    poller.poll_once()
+    _fail_latest(env, age=timedelta(days=30))
+    assert poller.poll_once().started == 0
+    assert len(env.analyses()) == 1

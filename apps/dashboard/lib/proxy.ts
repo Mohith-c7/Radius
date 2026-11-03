@@ -92,7 +92,7 @@ export function buildUpstreamUrl(config: ProxyConfig, segments: string[], search
 export function buildUpstreamHeaders(
   config: ProxyConfig,
   incoming: Headers,
-  route: { segments?: string[]; method?: string } = {},
+  route: { segments?: string[]; method?: string; actor?: string } = {},
 ): Headers {
   const headers = new Headers();
   headers.set("Accept", "application/json");
@@ -105,7 +105,9 @@ export function buildUpstreamHeaders(
     // values. No other client-supplied X-Radius-* header is ever forwarded.
     const ifMatch = incoming.get("if-match");
     if (ifMatch && IF_MATCH_PATTERN.test(ifMatch)) headers.set("If-Match", ifMatch);
-    const actor = incoming.get("x-radius-actor");
+    // When the route handler validated the session, the audit actor is the
+    // signed-in user, never a client-chosen header (C-01).
+    const actor = route.actor !== undefined ? route.actor : incoming.get("x-radius-actor");
     if (actor && ACTOR_PATTERN.test(actor)) headers.set("X-Radius-Actor", actor);
   }
   const ct = (incoming.get("content-type") ?? "").split(";")[0].trim().toLowerCase();

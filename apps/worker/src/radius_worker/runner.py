@@ -1,7 +1,10 @@
 """Worker runtime shell."""
 
 import base64
+import contextlib
+import os
 import signal
+import socket
 import threading
 import time
 import traceback
@@ -9,6 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
+from uuid import uuid4
 
 from radius_analysis.application import AnalysisApplicationService
 from radius_analysis.infrastructure import (
@@ -36,7 +40,7 @@ from radius_parser.infrastructure import (
     default_language_parser_registry,
 )
 from radius_repository.domain.clone_url import GitUrlPolicy, parse_allowed_hosts
-from radius_repository.infrastructure import LocalGitRepositoryClient
+from radius_repository.infrastructure import GitTimeouts, LocalGitRepositoryClient
 from radius_shared.database import enums as db_enums
 from radius_shared.database import models as db_models
 from radius_shared.database.session import (
@@ -93,10 +97,98 @@ LOGGER = get_logger(__name__)
 
 #: Seconds between opt-in retention passes.
 RETENTION_INTERVAL_SECONDS = 3600.0
+#: Seconds between repository-cache housekeeping passes (C-07).
+CACHE_MAINTENANCE_INTERVAL_SECONDS = 3600.0
+#: Directory (inside the repository cache dir) holding per-analysis worktrees (C-03).
+WORKTREES_DIRNAME = ".worktrees"
 
 
 class AnalysisStuckError(RuntimeError):
     """An analysis was stopped by the reaper because it could not finish."""
+
+
+class LeaseLostError(RuntimeError):
+    """This worker no longer holds the job lease (C-02); its result must be discarded."""
+
+
+def new_worker_id() -> str:
+    """Unique id of this worker process (host, pid, random suffix)."""
+
+    return f"{socket.gethostname()[:60]}:{os.getpid()}:{uuid4().hex[:8]}"
+
+
+def touch_health_file(path: str) -> None:
+    """Record liveness for the container healthcheck (C-09); never raises."""
+
+    if not path:
+        return
+    try:
+        with open(path, "a"):
+            os.utime(path, None)
+    except OSError:
+        pass
+
+
+class _LeaseHeartbeat:
+    """Renews the job lease from a background thread while the job runs (C-02).
+
+    Each beat is one conditional UPDATE in its own short session. When the
+    update matches no row the lease is lost (the job was recovered, failed by
+    the reaper or claimed elsewhere): ``lost`` is set and the pipeline stops at
+    its next ``ensure_held`` check instead of publishing a duplicate result.
+    A transient database error is logged and retried at the next beat.
+    """
+
+    def __init__(self, runtime: "SqlAlchemyWorkerRuntime", job) -> None:
+        self._runtime = runtime
+        self._job = job
+        self._stop = threading.Event()
+        self.lost = threading.Event()
+        self._thread = threading.Thread(
+            target=self._run, name="radius-lease-heartbeat", daemon=True
+        )
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        self._thread.join(timeout=10)
+
+    def ensure_held(self) -> None:
+        if self.lost.is_set():
+            msg = "The job lease was lost; this worker stops working on it."
+            raise LeaseLostError(msg)
+
+    def _run(self) -> None:
+        interval = self._runtime.settings.heartbeat_interval
+        while not self._stop.wait(interval):
+            try:
+                with self._runtime.session_factory() as session:
+                    held = self._runtime._queue(session).heartbeat(self._job.analysis_id)
+                    session.commit()
+            except Exception as exc:
+                LOGGER.warning(
+                    "Lease heartbeat failed; will retry",
+                    extra={
+                        "analysis_id": str(self._job.analysis_id),
+                        "outcome": "heartbeat_error",
+                        "error": redact_secrets(exc),
+                    },
+                )
+                continue
+            if not held:
+                self.lost.set()
+                LOGGER.warning(
+                    "Job lease lost",
+                    extra={
+                        "analysis_id": str(self._job.analysis_id),
+                        "job_id": str(self._job.id),
+                        "outcome": "lease_lost",
+                    },
+                )
+                return
+            touch_health_file(self._runtime.settings.health_file)
 
 
 def run_worker() -> None:
@@ -160,6 +252,8 @@ class SqlAlchemyWorkerRuntime:
     stop_event: threading.Event = field(default_factory=threading.Event)
     #: Opt-in pull request poller (``None`` = off; built from settings when unset).
     poller: PullRequestPoller | None = None
+    #: C-02: identifies this process as the owner of the jobs it claims.
+    worker_id: str = field(default_factory=new_worker_id)
 
     def __post_init__(self) -> None:
         if self.poller is None and self.settings.github_poll_interval_seconds > 0:
@@ -228,10 +322,28 @@ class SqlAlchemyWorkerRuntime:
             return None
 
     def _run_claimed_job(self, job) -> None:
-        """Execute one claimed job inside its correlation/trace context."""
+        """Execute one claimed job while a heartbeat keeps its lease alive (C-02)."""
+
+        lease = _LeaseHeartbeat(self, job)
+        lease.start()
+        try:
+            self._run_claimed_job_leased(job, lease)
+        finally:
+            lease.stop()
+
+    def _run_claimed_job_leased(self, job, lease: _LeaseHeartbeat) -> None:
+        """Execute one claimed job inside its correlation/trace context.
+
+        C-04: the ``running`` state is committed before the long pipeline, and
+        the GitHub result is published only after the transaction that records
+        the result and the job completion has committed.
+        """
 
         try:
-            with self.session_factory() as session:
+            # Everything the pipeline reads from disk (analysis, linking, test
+            # selection, sandbox mount) lives in a per-analysis worktree that
+            # this stack removes on every exit path (C-03).
+            with self.session_factory() as session, contextlib.ExitStack() as checkout_stack:
                 skip_reason = _skip_reason(session, job.analysis_id)
                 if skip_reason is not None:
                     # Cancelled (e.g. PR closed) between enqueue and claim: do
@@ -248,6 +360,12 @@ class SqlAlchemyWorkerRuntime:
                         },
                     )
                     return
+                # C-04: make "running" visible now, in its own short transaction,
+                # instead of holding one transaction (and the analyses row) open
+                # for the whole job.
+                _mark_analysis_running(session, job.analysis_id)
+                session.commit()
+                lease.ensure_held()
                 # Best-effort: shows "in progress" on the PR while we work. It
                 # never raises, so it cannot fail the analysis.
                 _publish_github_in_progress(
@@ -271,6 +389,7 @@ class SqlAlchemyWorkerRuntime:
                     transport=self.intent_transport,
                     etag_cache=self.intent_etag_cache,
                 )
+                lease.ensure_held()
                 orchestrator = _create_sql_orchestrator(session, self.settings)
                 clone_headers = _github_clone_headers(
                     session=session,
@@ -284,8 +403,11 @@ class SqlAlchemyWorkerRuntime:
                     repository_cache_dir=self.repository_cache_dir,
                     git_client=self.git_client,
                     extra_headers=clone_headers,
+                    cleanup=checkout_stack,
                 )
+                lease.ensure_held()
                 orchestrator.execute(command)
+                lease.ensure_held()
                 if self.settings.verdict_v2_mode != "off":
                     # Verdict v2 Stage A/B (VS-05, flag RADIUS_FEATURE_VERDICT_V2):
                     # best-effort, own sessions, never raises; v1 is unaffected.
@@ -299,14 +421,33 @@ class SqlAlchemyWorkerRuntime:
                         command=command,
                         settings=self.settings,
                     )
+                lease.ensure_held()
+                if not self._queue(session).complete(job.analysis_id):
+                    # Lost the lease between the last check and now: discard this
+                    # run's artefacts (rolled back) and publish nothing.
+                    raise LeaseLostError("The job lease was lost before completion.")
+                session.commit()
+                # The result is durable. Publishing never raises and is
+                # idempotent (it updates the same check run), so a failure here
+                # cannot make the job run again or leave a half-recorded result.
                 _publish_github_result(
                     session=session,
                     analysis_id=job.analysis_id,
                     settings=self.settings,
                     github_client=self.github_client,
                 )
-                self._queue(session).complete(job.analysis_id)
                 session.commit()
+        except LeaseLostError as exc:
+            LOGGER.warning(
+                "Job abandoned: lease lost",
+                extra={
+                    "analysis_id": str(job.analysis_id),
+                    "job_id": str(job.id),
+                    "outcome": "lease_lost",
+                    "error": redact_secrets(exc),
+                },
+            )
+            return
         except Exception as exc:
             self._record_job_failure(job, exc)
             raise
@@ -348,13 +489,15 @@ class SqlAlchemyWorkerRuntime:
         with self.session_factory() as session:
             queue = self._queue(session)
             if final_attempt:
-                queue.fail(job.analysis_id, error)
-                queue.mark_analysis_failed(job.analysis_id)
+                held = queue.fail(job.analysis_id, error)
+                if held:
+                    queue.mark_analysis_failed(job.analysis_id)
             else:
-                queue.requeue(job.analysis_id, error)
-                obs_metrics.record_retry()
+                held = queue.requeue(job.analysis_id, error)
+                if held:
+                    obs_metrics.record_retry()
             session.commit()
-            if final_attempt:
+            if final_attempt and held:
                 _publish_github_failure(
                     session=session,
                     analysis_id=job.analysis_id,
@@ -404,6 +547,7 @@ class SqlAlchemyWorkerRuntime:
         next_retention = (
             time.monotonic() + 60.0 if self.settings.retention_days > 0 else None
         )
+        next_cache_maintenance = time.monotonic() + 120.0
         next_poll = (
             time.monotonic() + self.poller.first_delay() if self.poller is not None else None
         )
@@ -420,6 +564,7 @@ class SqlAlchemyWorkerRuntime:
                 },
             )
         while not self.stop_event.is_set():
+            touch_health_file(self.settings.health_file)
             self._process_verdict_v2_requests()
             if (
                 self.poller is not None
@@ -437,6 +582,9 @@ class SqlAlchemyWorkerRuntime:
                         "Stuck-analysis reaper failed",
                         extra={"outcome": "reaper_error", "error": redact_secrets(exc)},
                     )
+            if time.monotonic() >= next_cache_maintenance:
+                next_cache_maintenance = time.monotonic() + CACHE_MAINTENANCE_INTERVAL_SECONDS
+                self.run_cache_maintenance()  # never raises
             if next_retention is not None and time.monotonic() >= next_retention:
                 next_retention = time.monotonic() + RETENTION_INTERVAL_SECONDS
                 self.run_retention()  # never raises
@@ -476,6 +624,50 @@ class SqlAlchemyWorkerRuntime:
                 extra={"outcome": "retention_error", "error": redact_secrets(exc)},
             )
 
+    def run_cache_maintenance(self) -> None:
+        """Repository-cache housekeeping and opt-in pruning (C-07); never raises.
+
+        Stale ``index.lock`` files, dangling worktree registrations, orphaned
+        analysis worktrees and ``git gc --auto`` always run. Deleting an idle
+        cache is opt-in: ``RADIUS_GIT_CACHE_MAX_IDLE_DAYS``, else
+        ``RADIUS_RETENTION_DAYS``. A cache that is locked or has a live
+        worktree is never deleted.
+        """
+
+        maintain = getattr(self.git_client, "maintain_cache", None)
+        if maintain is None:
+            return
+        try:
+            from radius_worker.maintenance import normalise_retention_days
+
+            idle_days = self.settings.git_cache_max_idle_days or normalise_retention_days(
+                self.settings.retention_days
+            )
+            report = maintain(
+                self.repository_cache_dir,
+                worktrees_root=self.repository_cache_dir / WORKTREES_DIRNAME,
+                max_idle_days=idle_days,
+                orphan_worktree_seconds=max(2.0 * self.settings.job_stale_after_seconds, 3600.0),
+            )
+            LOGGER.info(
+                "Repository cache maintenance finished",
+                extra={
+                    "outcome": "cache_maintenance_done",
+                    "repositories_seen": report.repositories_seen,
+                    "repositories_busy": report.repositories_busy,
+                    "repositories_pruned": report.repositories_pruned,
+                    "stale_index_locks_removed": report.stale_index_locks_removed,
+                    "orphan_worktrees_removed": report.orphan_worktrees_removed,
+                    "errors": report.errors,
+                    "max_idle_days": idle_days,
+                },
+            )
+        except Exception as exc:
+            LOGGER.warning(
+                "Repository cache maintenance failed; continuing",
+                extra={"outcome": "cache_maintenance_error", "error": redact_secrets(exc)},
+            )
+
     def _process_verdict_v2_requests(self) -> None:
         """VS-07: republish after CI. No-op with the flag off; never raises."""
 
@@ -506,6 +698,9 @@ class SqlAlchemyWorkerRuntime:
             session,
             stale_after=timedelta(seconds=self.settings.job_stale_after_seconds),
             max_attempts=self.settings.job_max_attempts,
+            worker_id=self.worker_id,
+            retry_base_seconds=self.settings.job_retry_base_seconds,
+            retry_max_seconds=self.settings.job_retry_max_seconds,
         )
 
 
@@ -527,7 +722,13 @@ def create_sql_worker_runtime(settings: WorkerSettings) -> SqlAlchemyWorkerRunti
         session_factory=session_factory,
         repository_cache_dir=settings.repository_cache_dir,
         git_client=LocalGitRepositoryClient(
-            GitUrlPolicy(allowed_hosts=parse_allowed_hosts(settings.git_allowed_hosts))
+            GitUrlPolicy(allowed_hosts=parse_allowed_hosts(settings.git_allowed_hosts)),
+            GitTimeouts(
+                clone=settings.git_clone_timeout_seconds,
+                command=settings.git_timeout_seconds,
+                lock_wait=settings.git_lock_timeout_seconds,
+                stale_lock=settings.git_stale_lock_seconds,
+            ),
         ),
         settings=settings,
         github_client=GitHubAppClient(_github_settings(settings)),
@@ -624,8 +825,17 @@ def load_persisted_analysis_command(
     repository_cache_dir: Path,
     git_client: LocalGitRepositoryClient,
     extra_headers: tuple[str, ...] = (),
+    cleanup: contextlib.ExitStack | None = None,
 ) -> ExecuteAnalysisCommand:
-    """Resolve an analysis row into an executable worker command."""
+    """Resolve an analysis row into an executable worker command.
+
+    ``repository_cache_dir`` holds one object cache per repository; the command's
+    ``repository_path`` is a PRIVATE worktree of the analysed commit, created
+    under ``<cache dir>/.worktrees`` and registered on ``cleanup`` so it is
+    removed when the caller's stack closes (C-03). Without ``cleanup`` (or with a
+    git client that cannot make worktrees, e.g. a test double) the legacy shared
+    checkout of the cache is used and nothing is removed.
+    """
 
     analysis = session.get(db_models.Analysis, analysis_id)
     if analysis is None:
@@ -661,7 +871,17 @@ def load_persisted_analysis_command(
                 "Could not fetch pull request ref directly; continuing with commit SHA checkout.",
                 extra={"pr_number": pull_request.github_pr_number},
             )
-    git_client.checkout(repository_path, analysis.commit_sha)
+    if cleanup is not None and hasattr(git_client, "analysis_worktree"):
+        repository_path = cleanup.enter_context(
+            git_client.analysis_worktree(
+                repository_path,
+                analysis.commit_sha,
+                repository_cache_dir / WORKTREES_DIRNAME,
+                str(analysis.id),
+            )
+        )
+    else:
+        git_client.checkout(repository_path, analysis.commit_sha)
     return ExecuteAnalysisCommand(
         analysis_id=analysis.id,
         repository_id=repository.id,
@@ -844,6 +1064,15 @@ def _publish_github_result(
             github_client=github_client,
             error=RuntimeError("Radius could not publish its result to GitHub."),
         )
+
+
+def _mark_analysis_running(session: Session, analysis_id) -> None:
+    """Flip a pending analysis to running (the caller commits); other states are kept."""
+
+    analysis = session.get(db_models.Analysis, analysis_id)
+    if analysis is not None and analysis.status == db_enums.AnalysisStatus.PENDING:
+        analysis.status = db_enums.AnalysisStatus.RUNNING
+        session.flush()
 
 
 def _skip_reason(session: Session, analysis_id) -> str | None:

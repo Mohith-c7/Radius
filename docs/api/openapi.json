@@ -2409,7 +2409,7 @@
   "paths": {
     "/api/v1/analyses": {
       "get": {
-        "description": "List analyses with optional filters.",
+        "description": "List analyses with optional filters, newest first (paginated: ``limit``/``offset``).",
         "operationId": "list_analyses",
         "parameters": [
           {
@@ -2460,6 +2460,34 @@
                 }
               ],
               "title": "Status"
+            }
+          },
+          {
+            "description": "Page size (max 500).",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "description": "Page size (max 500).",
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Items to skip.",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Items to skip.",
+              "maximum": 1000000,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
             }
           }
         ],
@@ -6222,6 +6250,34 @@
               ],
               "title": "Visibility"
             }
+          },
+          {
+            "description": "Page size (max 500).",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "description": "Page size (max 500).",
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Items to skip.",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Items to skip.",
+              "maximum": 1000000,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -6586,7 +6642,7 @@
     },
     "/api/v1/repositories/{repository_id}/pull-requests": {
       "get": {
-        "description": "List all pull requests for one repository.",
+        "description": "List the pull requests of one repository, newest first (``limit``/``offset``).",
         "operationId": "list_pull_requests",
         "parameters": [
           {
@@ -6597,6 +6653,34 @@
               "format": "uuid",
               "title": "Repository Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Page size (max 500).",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "description": "Page size (max 500).",
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Items to skip.",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Items to skip.",
+              "maximum": 1000000,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
             }
           }
         ],

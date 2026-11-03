@@ -9,14 +9,15 @@ opt-in poller (``RADIUS_GITHUB_POLL_INTERVAL_SECONDS``) run exactly the same cod
 Idempotence: a head commit with a pending, running or completed analysis is not
 analyzed again. ``retry_failed=False`` (the poller) also leaves failed and
 cancelled analyses alone, so a head commit that cannot be analyzed is not retried
-on every tick; the user re-runs it explicitly.
+on every tick; the user re-runs it explicitly. A ``FailedRetryPolicy`` lets the
+poller retry a failed head a bounded number of times with exponential spacing.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -80,6 +81,24 @@ def skip_reason(exc: Exception) -> str:
     return type(exc).__name__
 
 
+@dataclass(frozen=True, slots=True)
+class FailedRetryPolicy:
+    """Bounded automatic retry of a head commit whose analysis failed (C-05).
+
+    A head commit with failed analyses is analysed again by the poller only
+    while fewer than ``max_failures`` of them exist, and only once the newest
+    failure is older than ``base_delay_seconds * 2 ** (failures - 1)``. Cancelled
+    analyses are never retried automatically.
+    """
+
+    max_failures: int
+    base_delay_seconds: float = 900.0
+
+
+def _utc(value: datetime) -> datetime:
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
 def already_analyzed(
     analysis_service: Any,
     repository_id: UUID,
@@ -87,19 +106,44 @@ def already_analyzed(
     commit_sha: str,
     *,
     retry_failed: bool = True,
+    failed_retry: FailedRetryPolicy | None = None,
+    now: datetime | None = None,
 ) -> bool:
-    """True when this head commit has a live or finished analysis (repeat syncs are no-ops)."""
+    """True when this head commit has a live or finished analysis (repeat syncs are no-ops).
+
+    With ``retry_failed=False`` failed and cancelled analyses count as analysed,
+    except that ``failed_retry`` lets a failed head be tried again a bounded
+    number of times with exponential spacing.
+    """
 
     dead = ("failed", "cancelled") if retry_failed else ()
-    return any(
-        analysis.commit_sha.lower() == commit_sha.lower()
-        and analysis.status not in dead
+    same_head = [
+        analysis
         for analysis in analysis_service.list_analyses(
             AnalysisListQuery(
                 repository_id=repository_id, pull_request_id=pull_request_id
             )
         )
-    )
+        if analysis.commit_sha.lower() == commit_sha.lower()
+    ]
+    if any(analysis.status not in dead for analysis in same_head):
+        if (
+            not retry_failed
+            and failed_retry is not None
+            and all(analysis.status == "failed" for analysis in same_head)
+        ):
+            failures = len(same_head)
+            if failures >= failed_retry.max_failures:
+                return True
+            newest = max(
+                _utc(a.completed_at or a.created_at) for a in same_head
+            )
+            wait = timedelta(
+                seconds=failed_retry.base_delay_seconds * (2 ** (failures - 1))
+            )
+            return (now or datetime.now(UTC)) < newest + wait
+        return True
+    return False
 
 
 def record_pull_request(
@@ -111,6 +155,7 @@ def record_pull_request(
     analyze: bool,
     skip_analyzed: bool = False,
     retry_failed: bool = True,
+    failed_retry: FailedRetryPolicy | None = None,
 ):
     """Upsert one parsed pull request; start an analysis for its head commit.
 
@@ -143,6 +188,7 @@ def record_pull_request(
             UUID(str(upserted.id)),
             sha,
             retry_failed=retry_failed,
+            failed_retry=failed_retry,
         )
     ):
         analyze = False
@@ -176,6 +222,7 @@ def sync_open_pull_requests(
     raw_pull_requests: list[dict[str, Any]],
     auto_analyze: bool = True,
     retry_failed: bool = True,
+    failed_retry: FailedRetryPolicy | None = None,
     max_analyses: int | None = None,
     parse: Callable[[dict[str, Any]], Any] = parse_pull_request_facts,
     on_analysis: Callable[[Any, Any], None] | None = None,
@@ -208,6 +255,7 @@ def sync_open_pull_requests(
                 analyze=analyze and not over_budget,
                 skip_analyzed=True,
                 retry_failed=retry_failed,
+                failed_retry=failed_retry,
             )
             if analysis is not None and on_analysis is not None:
                 on_analysis(analysis, parsed)
@@ -220,6 +268,7 @@ def sync_open_pull_requests(
                     UUID(str(upserted.id)),
                     parsed.head.sha,
                     retry_failed=retry_failed,
+                    failed_retry=failed_retry,
                 )
             ):
                 outcome.deferred.append(int(parsed.number))

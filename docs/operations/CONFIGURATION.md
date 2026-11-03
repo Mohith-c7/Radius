@@ -22,7 +22,7 @@ How to read it.
   (`RADIUS_LLM_*`) silently fall back to their default on a bad number.
 
 
-Variables documented: **140** (14 secret, 10 feature flags).
+Variables documented: **157** (15 secret, 10 feature flags).
 
 ## Core, API, GitHub and observability
 
@@ -55,17 +55,26 @@ Variables documented: **140** (14 secret, 10 feature flags).
 | `GOOGLE_REDIRECT_URI` | str \| None | `unset` | api | no | - | Auth module: Google OAuth redirect URI (optional). Must be exactly `<api origin>/api/v1/auth/oauth/google/callback` and registered with Google; it is never taken from a request. `https` is required (plain `http` only for localhost outside production; the API refuses to start in production with a non-https value). Sign-in uses PKCE (S256), a single-use `state` bound to a cookie, and, for Google, ID-token validation with `nonce`. |
 | `PORT` | int | `8000 (api), 3000 (dashboard)` | api, dashboard | no | - | Listen port in the API and dashboard images (`uvicorn --port ${PORT:-8000}`; dashboard `PORT=3000`). |
 | `POSTGRES_HOST_PORT` | int | `5432` | compose | no | - | Compose: host port published for the bundled PostgreSQL. |
+| `POSTGRES_PASSWORD` | str | `(secret, no default)` | compose | yes | - | Compose: password of the bundled PostgreSQL and inside the `DATABASE_URL` that migrations, api and worker receive. Required, no default; `make env` generates a random one. URL-safe characters only. Changing it does not change the password of an existing database volume. |
 | `RADIUS_ALLOW_INSECURE_DEV` | bool | `false` | api, worker | no | - | Explicit opt-in to accept unsigned GitHub webhooks and API calls without configured API keys. Honoured only in development/test; ignored in every other environment. |
 | `RADIUS_ALLOW_UNSAFE_EXECUTION` | bool | `false` | worker | no | - | Required to use unsafe_in_process when RADIUS_ENV is uat or production. The worker refuses to start otherwise. |
+| `RADIUS_API_BIND_ADDRESS` | str | `127.0.0.1` | compose | no | - | Compose: host address the API port 8000 is published on. Loopback by default; set 0.0.0.0 only deliberately (prefer a TLS reverse proxy). |
 | `RADIUS_CORS_ALLOW_CREDENTIALS` | bool | `true` | api | no | - | Send `Access-Control-Allow-Credentials`. Never combined with `*`. |
 | `RADIUS_ENV` | RuntimeEnvironment | `development` | api, worker | no | - | Runtime environment: `development`, `test`, `uat` or `production`. Production tightens CORS validation (https origins only, no wildcard, no automatic localhost), ignores demo seeding, refuses the public session secret and `EMAIL_DELIVERY_MODE=log`. `docker-compose.yml` pins `production`; `docker-compose.dev.yml` (used by `make dev`) sets `development` for the api. |
 | `RADIUS_EVAL_ALLOW_REAL_LLM` | str | `unset` | evaluation CLI | no | - | Intent evaluation CLI only: must be `1`, together with `--allow-real-llm`, before a real provider is used. Tests and CI never set it. |
 | `RADIUS_EXTRAS` | str | `empty` | compose build | no | - | Compose build argument: extra Python dependency groups to install in the api and worker images (for example `llm`, `gemini`, `observability`). |
 | `RADIUS_GITHUB_DEV_SINGLE_TENANT` | bool \| None | `unset` | api | no | - | Single-tenant development mode for `POST /repositories/connect-github`: when true an organization with no GitHub installation may adopt the installation the App has on the requested repository. Default: true when `RADIUS_ENV=development`, false otherwise. Never enable it on a deployment where more than one organization uses the App: any caller could then attach another customer's installation. |
+| `RADIUS_GITHUB_POLL_FAILED_RETRIES` | int | `2` | worker | no | - | How many times the poller queues a head commit again after its analysis FAILED (for example after a GitHub or network outage that outlasted the job retries). Spacing doubles from RADIUS_GITHUB_POLL_FAILED_RETRY_DELAY_SECONDS. 0 = never retry a failed head automatically (re-run it explicitly). |
+| `RADIUS_GITHUB_POLL_FAILED_RETRY_DELAY_SECONDS` | float | `900.0` | worker | no | - | Minimum wait after a failed analysis before the poller retries its head. |
 | `RADIUS_GITHUB_POLL_INTERVAL_SECONDS` | float | `0.0` | worker | no | - | Opt-in pull-based trigger (no webhook needed): every this many seconds (plus or minus 10 percent jitter) the worker lists the open, non-draft pull requests of connected repositories whose GitHub App installation it can reach and queues an analysis for every head commit that has none yet. 0 (default) = off. Values from 1 to 29 are raised to 30; negative = off. Needs GITHUB_APP_ID and a private key in the worker. |
 | `RADIUS_GITHUB_POLL_MAX_ANALYSES_PER_TICK` | int | `10` | worker | no | - | Upper bound of analyses one poll tick may queue; the rest wait for the next tick. |
 | `RADIUS_GITHUB_POLL_MAX_REPOSITORIES_PER_TICK` | int | `25` | worker | no | - | Upper bound of repositories one poll tick lists from GitHub (one API call each); repositories take turns so none starves. |
 | `RADIUS_GIT_ALLOWED_HOSTS` | str | `github.com` | api, worker | no | - | Comma separated hosts a repository clone URL may name (https only, `https://<host>/<owner>/<repo>[.git]`). Default `github.com`; set your GitHub Enterprise Server host to use it instead. Clone URLs on any other host are refused at the API and again by the worker, and the GitHub installation token is never sent to a host that is not listed. |
+| `RADIUS_GIT_CACHE_MAX_IDLE_DAYS` | int | `0` | worker | no | - | Opt-in pruning of repository caches: every hour a cache unused for this many days (and not locked or in use by a worktree) is deleted and re-cloned on next use. 0 (default) = fall back to RADIUS_RETENTION_DAYS when that is set, else never prune. Cache housekeeping (stale locks, `git worktree prune`, `git gc --auto`, orphaned analysis worktrees) always runs. |
+| `RADIUS_GIT_CLONE_TIMEOUT_SECONDS` | float | `300.0` | worker | no | - | Time limit for `git clone`. The git process group is killed on expiry and the job is retried. |
+| `RADIUS_GIT_LOCK_TIMEOUT_SECONDS` | float | `300.0` | worker | no | - | How long a job waits for the exclusive lock of one repository cache (held while fetching or creating a worktree) before it fails retryably. |
+| `RADIUS_GIT_STALE_LOCK_SECONDS` | float | `900.0` | worker | no | - | A git `index.lock` older than this, found while the worker holds the repository lock, is a leftover of a dead process and is removed. |
+| `RADIUS_GIT_TIMEOUT_SECONDS` | float | `120.0` | worker | no | - | Time limit for every other git command (fetch, worktree, checkout, gc). The process group is killed on expiry and the job is retried. |
 | `RADIUS_HSTS_ENABLED` | bool | `false` | api | no | - | Send Strict-Transport-Security. Enable only when served over TLS. |
 | `RADIUS_HSTS_MAX_AGE` | int | `31536000` | api | no | - | `max-age` in seconds of the Strict-Transport-Security header when HSTS is enabled. |
 | `RADIUS_INTENT_ALLOW_CROSS_REPO` | bool | `false` | worker | no | - | Fetch issues named by closing references in OTHER repositories (owner/repo#n, issue URLs). Off by default: the installation token can read every repository of the installation, so honoring a link written by a PR author would expose that repository's issue text. Skipped links are recorded as absent (cross_repo_disabled). |
@@ -102,6 +111,7 @@ Variables documented: **140** (14 secret, 10 feature flags).
 | `RADIUS_WEBHOOK_MAX_BODY_BYTES` | int | `5242880` | api | no | - | Body cap in bytes for GitHub webhook deliveries. |
 | `RADIUS_WORKER_METRICS_PORT` | int | `0` | api, worker | no | - | Port for the worker's Prometheus endpoint; ``0`` disables it. |
 | `SERVICE_NAME` | str | `radius-api` | api, worker | no | - | Service name used in logs. Defaults differ per service (`radius-api`, `radius-worker`); normally left alone. |
+| `SESSION_COOKIE_DOMAIN` | str \| None | `unset` | api | no | - | Optional ``Domain`` of the session cookie (C-20), for example ``example.com`` when the dashboard (``app.example.com``) and the API (``api.example.com``) are separate hosts. Unset (default) keeps a host-only cookie, which needs one origin or localhost. |
 | `SESSION_COOKIE_SECURE` | bool | `false` | api | no | - | Auth module: set the Secure flag on the session cookie. Set true behind TLS. |
 | `SESSION_SECRET` | str | `(placeholder in code, change it)` | api | yes | - | Auth module: secret used to sign sessions (minimum 32 characters). The default in code and the `.env.example` placeholder are public; with `RADIUS_ENV=production` the API refuses to start with either. `docker-compose.yml` has no default and stops if it is unset; `make env` generates a random one for local dev. |
 | `SMTP_FROM_EMAIL` | str \| None | `unset` | api | no | - | Auth module: From address of verification and reset e-mails. |
@@ -119,8 +129,13 @@ Variables documented: **140** (14 secret, 10 feature flags).
 | `WORKER_ANALYSIS_DEADLINE_SECONDS` | int | `7200` | worker | no | - | An analysis still pending/running this long after it started is failed by the reaper and its GitHub check completed. Keep it above WORKER_JOB_STALE_AFTER_SECONDS * WORKER_JOB_MAX_ATTEMPTS plus queue wait. |
 | `WORKER_EXECUTE_TESTS` | bool | `false` | worker | no | deprecated (use WORKER_TEST_EXECUTION_MODE) | Run selected tests inside the worker. Disabled by default: the tests are pull-request-controlled code and the worker process holds database and GitHub App credentials. Enable only when the worker runs in an isolated sandbox with no credentials; otherwise run the selected tests in CI and upload JUnit results. |
 | `WORKER_FLAKY_POLICY` | str | `exclude` | worker | no | - | exclude (default): flaky tests are neither pass nor fail and block a 'verified' verdict. fail: flaky tests count as failures. |
+| `WORKER_HEALTH_FILE` | str | `empty` | worker | no | - | When set, the worker touches this file on every loop iteration and while a job's lease is renewed. The container healthcheck (python -m radius_worker.healthcheck) fails when it is older than WORKER_HEALTH_MAX_AGE_SECONDS. |
+| `WORKER_HEALTH_MAX_AGE_SECONDS` | int | `300` | worker | no | - | Maximum age of WORKER_HEALTH_FILE before the worker is reported unhealthy. |
+| `WORKER_HEARTBEAT_INTERVAL_SECONDS` | float \| None | `unset` | worker | no | - | How often a worker renews the lease of the job it is running. Default (unset): the smaller of 60 and one third of WORKER_JOB_STALE_AFTER_SECONDS. When set it must be at most half of WORKER_JOB_STALE_AFTER_SECONDS. |
 | `WORKER_JOB_MAX_ATTEMPTS` | int | `3` | worker | no | - | Attempts before a job is marked failed. |
-| `WORKER_JOB_STALE_AFTER_SECONDS` | int | `1800` | worker | no | - | A job in `running` longer than this is returned to `pending` (or marked `failed` when its attempts are exhausted) by stale-job recovery. |
+| `WORKER_JOB_RETRY_BASE_SECONDS` | float | `15.0` | worker | no | - | Retry backoff: a failed attempt is retried after base * 2^(attempt-1) seconds (+-25% jitter), capped by WORKER_JOB_RETRY_MAX_SECONDS. 0 = retry at once. |
+| `WORKER_JOB_RETRY_MAX_SECONDS` | float | `900.0` | worker | no | - | Upper bound of the retry backoff delay. |
+| `WORKER_JOB_STALE_AFTER_SECONDS` | int | `1800` | worker | no | - | A running job whose lease was not renewed for this long is treated as abandoned and returned to pending (or failed when its attempts are exhausted). A live worker renews the lease every WORKER_HEARTBEAT_INTERVAL_SECONDS, so this bounds crash recovery, not job length. |
 | `WORKER_POLL_INTERVAL_SECONDS` | float | `2.0` | worker | no | - | Seconds between queue polls when idle. |
 | `WORKER_REAPER_INTERVAL_SECONDS` | float | `60.0` | worker | no | - | How often the reaper looks for analyses past the deadline. |
 | `WORKER_SANDBOX_CPUS` | str | `1.0` | worker | no | - | CPU limit of each sandbox container (`--cpus`). |
@@ -133,6 +148,7 @@ Variables documented: **140** (14 secret, 10 feature flags).
 | `WORKER_SANDBOX_RUNTIME` | str | `docker` | worker | no | - | Container runtime CLI used for sandbox mode (default `docker`). |
 | `WORKER_SANDBOX_SECCOMP_PROFILE` | str \| None | `unset` | worker | no | - | Optional path to a custom seccomp profile JSON. Unset keeps the runtime's default profile. 'unconfined' is rejected. |
 | `WORKER_SANDBOX_TMPFS_SIZE` | str | `256m` | worker | no | - | Size of the writable tmpfs in the sandbox. |
+| `WORKER_STOP_GRACE_PERIOD` | duration | `15m` | compose | no | - | Compose: how long `docker compose stop worker` waits for the worker to finish its current job after SIGTERM before it is killed. |
 | `WORKER_TEST_EXECUTION_MODE` | str \| None | `unset` | worker | no | safety switch: disabled, sandbox or unsafe_in_process | disabled (default) \| sandbox \| unsafe_in_process. Unset falls back to the legacy WORKER_EXECUTE_TESTS flag (true => unsafe_in_process). |
 | `WORKER_TEST_RERUNS` | int | `0` | worker | no | - | F-11: rerun failing pytest tests up to N times in the sandbox and classify them stable_fail or flaky. Default 0 = off (no rerun, output identical to before). Sandbox mode only. Worst case wall time per command is (1 + N) * WORKER_TEST_TIMEOUT_SECONDS. |
 | `WORKER_TEST_TIMEOUT_SECONDS` | int | `600` | worker | no | - | Timeout per test command; with reruns the worst case is `(1 + WORKER_TEST_RERUNS)` times this. |
@@ -186,5 +202,6 @@ Variables documented: **140** (14 secret, 10 feature flags).
 | `RADIUS_API_KEY` | str | `(secret, no default)` | dashboard | yes | - | Server-only secret the dashboard proxy (`/api/radius/*`) sends as `X-Radius-API-Key`. Must never carry a `NEXT_PUBLIC_` prefix. |
 | `RADIUS_API_KEY_LAST_USED_INTERVAL` | int | `300` | api | yes | - | Minimum seconds between ``last_used_at`` writes for one key. |
 | `RADIUS_API_KEY_PEPPER` | str | `(secret, no default)` | api | yes | - | Server-side secret mixed into managed-key fingerprints (>= 32 chars). Without it managed keys are disabled (legacy ``API_KEYS`` still work). |
+| `RADIUS_DASHBOARD_BIND_ADDRESS` | str | `127.0.0.1` | compose | no | - | Compose: host address the dashboard port 3000 is published on. Loopback by default. |
 | `RADIUS_DASHBOARD_INTERNAL_URL` | str | `http://localhost:3000` | dashboard | no | - | Dashboard origin used for server-side calls to its own proxy. |
 | `RADIUS_ORGANIZATION_ID` | str | `empty` | dashboard | no | - | Server-side organization id for the dashboard proxy. Falls back to NEXT_PUBLIC_RADIUS_ORGANIZATION_ID. |

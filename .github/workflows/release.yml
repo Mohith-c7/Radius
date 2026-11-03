@@ -11,7 +11,12 @@ name: Release
 #   - the event is a pushed tag `v*` (never workflow_dispatch),
 #   - `dry_run` is not true (a tag push has no such input),
 #   - the repository variable RADIUS_RELEASE_PUBLISH is exactly "true",
-#   - the repository variable RADIUS_COSIGN_IMAGE names a cosign image pinned by digest.
+#   - the repository variable RADIUS_COSIGN_IMAGE names a cosign image pinned by digest,
+#   - the tagged commit is an ancestor of origin/main (a tag on a side branch cannot publish),
+#   - the job is approved through the GitHub environment `release` (create it in
+#     Settings > Environments and add required reviewers; it needs no secrets).
+# The image is built ONCE in the publish job, pushed by digest WITHOUT a tag, scanned (Trivy gate
+# and SBOM) at that digest, and only then tagged; cosign signs that same digest.
 # See docs/RELEASING.md and docs/security/CI_CHECKS.md ("Release workflow").
 on:
   push:
@@ -158,6 +163,10 @@ jobs:
       && inputs.dry_run != true && vars.RADIUS_RELEASE_PUBLISH == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    # Protected environment (C-16): add required reviewers to `release` in the repository
+    # settings so a pushed tag alone cannot publish. No secrets are stored in it.
+    environment:
+      name: release
     permissions:
       contents: read
       packages: write # push to GHCR
@@ -183,17 +192,26 @@ jobs:
             *) echo "::error::Set repository variable RADIUS_COSIGN_IMAGE to a cosign image pinned by @sha256 digest"; exit 1 ;;
           esac
 
-      - name: Checkout
+      - name: Checkout (full history for the main-ancestry check)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
+
+      - name: Require the tagged commit to be on main
+        run: |
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main; then
+            echo "::error::Tag $GITHUB_REF_NAME ($GITHUB_SHA) is not an ancestor of origin/main; refusing to publish"
+            exit 1
+          fi
 
       - name: Log in to GHCR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
 
-      - name: Build and push (amd64, BuildKit max provenance)
+      - name: Build once and push by digest, without a tag (amd64, BuildKit max provenance)
         id: push
         env:
           DOCKERFILE: ${{ matrix.dockerfile }}
@@ -202,14 +220,28 @@ jobs:
         run: |
           repo="ghcr.io/${GITHUB_REPOSITORY,,}"
           ref="$repo/$NAME"
-          docker buildx build --platform linux/amd64 --push \
+          docker buildx build --platform linux/amd64 \
             --provenance=mode=max --sbom=false \
-            -f "$DOCKERFILE" -t "$ref:$VERSION" \
+            -f "$DOCKERFILE" \
+            --output "type=image,name=$ref,push-by-digest=true,name-canonical=true,push=true" \
             --build-arg "RADIUS_VERSION=$VERSION" --build-arg "VCS_REF=$GITHUB_SHA" \
             --metadata-file meta.json .
           digest=$(jq -r '."containerimage.digest"' meta.json)
           case "$digest" in sha256:*) ;; *) echo "::error::no digest in build metadata"; exit 1 ;; esac
+          echo "base=$ref" >> "$GITHUB_OUTPUT"
           echo "ref=$ref@$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Trivy gate on the pushed digest (fail on fixable HIGH/CRITICAL)
+        env:
+          REF: ${{ steps.push.outputs.ref }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/trivy-cache"
+          docker run --rm \
+            -v "$HOME/.docker/config.json:/root/.docker/config.json:ro" \
+            -v "$RUNNER_TEMP/trivy-cache:/root/.cache" \
+            -v "$PWD:/work:ro" -w /work "$TRIVY_IMAGE" image \
+            --severity HIGH,CRITICAL --ignore-unfixed --ignorefile /work/.trivyignore \
+            --exit-code 1 "$REF"
 
       - name: CycloneDX SBOM of the pushed image (Trivy)
         env:
@@ -220,6 +252,13 @@ jobs:
             -v "$HOME/.docker/config.json:/root/.docker/config.json:ro" \
             -v "$PWD:/work" -w /work "$TRIVY_IMAGE" image \
             --format cyclonedx --output "/work/sbom-$NAME.cdx.json" "$REF"
+
+      - name: Tag the scanned digest with the version
+        env:
+          REF: ${{ steps.push.outputs.ref }}
+          BASE: ${{ steps.push.outputs.base }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: docker buildx imagetools create -t "$BASE:$VERSION" "$REF"
 
       - name: Cosign keyless sign and attach SBOM attestation
         env:

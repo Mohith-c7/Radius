@@ -29,6 +29,7 @@ from radius_api.idempotency import (
     replay_or_validate,
     request_hash,
 )
+from radius_api.pagination import PageParams
 from radius_api.schemas.analyses import StartAnalysisRequest
 
 router = APIRouter(prefix="/analyses", tags=["analyses"])
@@ -112,39 +113,41 @@ def list_analyses(
         Depends(get_repository_service),
     ],
     principal: Annotated[ApiPrincipal, Depends(get_api_principal)],
+    page: PageParams,
     repository_id: Annotated[UUID | None, Query(alias="repositoryId")] = None,
     pull_request_id: Annotated[UUID | None, Query(alias="pullRequestId")] = None,
     status_filter: Annotated[str | None, Query(alias="status")] = None,
 ):
-    """List analyses with optional filters."""
+    """List analyses with optional filters, newest first (paginated: ``limit``/``offset``)."""
 
-    repository_ids = (
-        [repository_id]
-        if repository_id is not None
-        else [
-            repository.id
-            for repository in repository_service.list_repositories(
-                RepositoryListQuery(organization_id=principal.organization_id)
-            )
-            if repository.id is not None
-        ]
-    )
-    for candidate_repository_id in repository_ids:
-        repository = repository_service.get_repository(candidate_repository_id)
+    if repository_id is not None:
+        repository = repository_service.get_repository(repository_id)
         ensure_same_organization(principal, repository.organization_id)
-
-    analyses = []
-    for candidate_repository_id in repository_ids:
-        analyses.extend(
-            service.list_analyses(
-                AnalysisListQuery(
-                    repository_id=candidate_repository_id,
-                    pull_request_id=pull_request_id,
-                    status=status_filter,
+        scope: dict[str, object] = {"repository_id": repository_id}
+    else:
+        # Repositories listed for this organization are its own by construction:
+        # no per-repository lookup (that was the N+1).
+        scope = {
+            "repository_ids": tuple(
+                repository.id
+                for repository in repository_service.list_repositories(
+                    RepositoryListQuery(organization_id=principal.organization_id)
                 )
+                if repository.id is not None
             )
-        )
-    return success_response(analyses)
+        }
+    query = AnalysisListQuery(
+        pull_request_id=pull_request_id,
+        status=status_filter,
+        limit=page.limit,
+        offset=page.offset,
+        **scope,
+    )
+    analyses = service.list_analyses(query)
+    total = service.count_analyses(query)
+    return success_response(
+        analyses, meta=page.meta(total=total, returned=len(analyses))
+    )
 
 
 @router.get("/lookup")

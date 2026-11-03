@@ -40,6 +40,7 @@ from radius_api.idempotency import (
     replay_or_validate,
     request_hash,
 )
+from radius_api.pagination import PageParams
 from radius_api.schemas.repositories import (
     ConnectGitHubRepositoryRequest,
     ConnectRepositoryRequest,
@@ -136,6 +137,7 @@ def list_repositories(
         Depends(get_repository_service),
     ],
     principal: Annotated[ApiPrincipal, Depends(get_api_principal)],
+    page: PageParams,
     organization_id: Annotated[UUID | None, Query(alias="organizationId")] = None,
     status_filter: Annotated[str | None, Query(alias="status")] = None,
     visibility: str | None = None,
@@ -151,7 +153,10 @@ def list_repositories(
             visibility=visibility,
         )
     )
-    return success_response(repositories)
+    window = page.slice(repositories)
+    return success_response(
+        window, meta=page.meta(total=len(repositories), returned=len(window))
+    )
 
 
 @router.get("/{repository_id}")
@@ -228,12 +233,16 @@ def list_pull_requests(
         Depends(get_repository_service),
     ],
     principal: Annotated[ApiPrincipal, Depends(get_api_principal)],
+    page: PageParams,
 ):
-    """List all pull requests for one repository."""
+    """List the pull requests of one repository, newest first (``limit``/``offset``)."""
 
     _owned_repository(service, principal, repository_id)
     pull_requests = service.list_pull_requests(repository_id)
-    return success_response(pull_requests)
+    window = page.slice(pull_requests)
+    return success_response(
+        window, meta=page.meta(total=len(pull_requests), returned=len(window))
+    )
 
 
 @router.post("/connect-github", status_code=status.HTTP_201_CREATED)

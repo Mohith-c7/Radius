@@ -172,9 +172,16 @@ def test_deletes_in_bounded_batches(env) -> None:
     assert _count(factory, IdempotencyKey) == 0
 
 
-def test_only_the_three_disposable_tables_are_targets() -> None:
-    names = {model.__tablename__ for _, model, _ in maintenance._targets(NOW)}
-    assert names == {"idempotency_keys", "verdict_v2_requests", "mutation_result_cache"}
+def test_only_the_disposable_tables_are_targets() -> None:
+    names = {name for name, _, _ in maintenance._targets(NOW)}
+    assert names == {
+        "idempotency_keys",
+        "verdict_v2_requests",
+        "mutation_result_cache",
+        "auth_sessions",
+        "auth_tokens",
+        "auth_oauth_flows",
+    }
     for forbidden in ("analyses", "verdict_v2", "confidence_reports", "audit_log"):
         assert forbidden not in names
 
@@ -212,3 +219,45 @@ def test_runtime_pass_never_raises_and_respects_dry_run(env) -> None:
 
     runtime.session_factory = boom
     runtime.run_retention()  # swallowed, logged
+
+
+def test_expired_sign_in_sessions_tokens_and_flows_are_purged_live_ones_kept(env) -> None:
+    """C-13: auth_sessions / auth_tokens / auth_oauth_flows no longer grow without bound."""
+
+    import app.models as auth_models
+    from app.database import Base as AuthBase
+
+    factory, _org, _repo = env
+    engine = factory.kw["bind"]
+    AuthBase.metadata.create_all(bind=engine)
+    live = NOW + timedelta(days=5)
+    with factory() as s:
+        user = auth_models.User(name="A", email="a@example.test")
+        s.add(user)
+        s.flush()
+        s.add_all(
+            [
+                auth_models.AuthSession(user_id=user.id, expires_at=OLD),  # expired long ago
+                auth_models.AuthSession(user_id=user.id, expires_at=live, revoked_at=OLD),  # revoked long ago
+                auth_models.AuthSession(user_id=user.id, expires_at=live),  # live: must survive
+                auth_models.AuthSession(user_id=user.id, expires_at=YOUNG),  # expired 2 days ago: inside the window
+                auth_models.AuthToken(user_id=user.id, purpose="verify_email", token_hash="h1", expires_at=OLD),
+                auth_models.AuthToken(user_id=user.id, purpose="verify_email", token_hash="h2", expires_at=live),
+                auth_models.AuthOAuthFlow(
+                    flow_hash="f1", state_hash="s", provider="google", nonce="n", code_verifier="v", expires_at=OLD
+                ),
+            ]
+        )
+        s.commit()
+
+    dry = run_retention(factory, retention_days=30, now=NOW, dry_run=True)
+    assert dry.counts["auth_sessions"] == 2 and dry.counts["auth_tokens"] == 1
+    assert _count(factory, auth_models.AuthSession) == 4
+
+    report = run_retention(factory, retention_days=30, now=NOW)
+    assert report.counts["auth_sessions"] == 2
+    assert report.counts["auth_tokens"] == 1
+    assert report.counts["auth_oauth_flows"] == 1
+    assert _count(factory, auth_models.AuthSession) == 2  # the live one and the recently expired one
+    assert _count(factory, auth_models.AuthToken) == 1
+    assert _count(factory, auth_models.User) == 1  # accounts are never retention targets

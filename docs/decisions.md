@@ -505,3 +505,44 @@ Decision:
 
 Consequences: more analyses end in `Not verified` because of markers (visible in the comment, payload and dashboard); the PR author can no longer shrink the unproven mass or cover the whole change with one glob; a failed recompute shows as unavailable instead of an old pass. Open: per-person identity for confirmations, a separate column for Stage A, Postgres-level tests of the claim handling (SQLite and memory only here), and the confirm-UI change that shows the LLM quote next to the criterion text (B-11, not done).
 
+
+## DEC-038: Per-analysis git worktrees over a locked object cache (C-03, C-06, C-07)
+
+Context: all analyses of one repository shared a single working tree with no lock (review C, C-03), git ran without time limits (C-06), and the cache was never pruned and could be wedged by a stale `index.lock` or a dirty tree (C-07).
+
+Decision:
+
+1. The per-repository directory stays the **object cache** (cloned with `--no-checkout`). Clone, fetch, PR-ref fetch and worktree creation run under an exclusive OS advisory lock on a sibling `<cache>.lock` file (`fcntl.flock` on Linux, `msvcrt.locking` on Windows, plus an in-process mutex). The kernel releases it when its holder dies, so a crash cannot leave a stale lock; waiting has a timeout (`RADIUS_GIT_LOCK_TIMEOUT_SECONDS`) and fails retryably.
+2. Every analysis gets a private `git worktree add --detach` under `<REPOSITORY_CACHE_DIR>/.worktrees/`, whose path is the `repository_path` the whole pipeline (parser, linking, test selection, sandbox copy/mount, verdict v2) uses. It is removed in a `finally` (an `ExitStack` around the job).
+3. Every git command has a time limit (`RADIUS_GIT_CLONE_TIMEOUT_SECONDS` 300, `RADIUS_GIT_TIMEOUT_SECONDS` 120) and runs in its own process group (session on POSIX, process tree via `taskkill` on Windows) that is killed on expiry; the error is retryable.
+4. Housekeeping every hour: `index.lock` older than `RADIUS_GIT_STALE_LOCK_SECONDS` is removed only while the repository lock is held, `git worktree prune`, `git gc --auto`, orphaned worktree directories older than twice `WORKER_JOB_STALE_AFTER_SECONDS` are deleted, and (opt-in, `RADIUS_GIT_CACHE_MAX_IDLE_DAYS`, else `RADIUS_RETENTION_DAYS`) idle caches are deleted. A locked cache or one with a live worktree is never deleted.
+
+| Option | Trade-off |
+| --- | --- |
+| One lock held for the whole analysis | Serialises every analysis of a repository (minutes); rejected. |
+| A fresh full clone per analysis | Correct but costs bandwidth and time for large repositories. |
+| **Locked cache plus per-analysis worktree** | Short critical sections; a worktree is cheap (no object copy). Cost: the lock is advisory and needs a filesystem with working locks (not NFS without lock support); two workers must share the cache directory for the lock to matter, otherwise each has its own cache anyway. |
+
+Consequences: idle pruning is age-based only (no size cap or per-organization quota). Lock files `<cache>.lock` are kept on purpose (deleting a lock file others may wait on is racy). The legacy `LocalGitRepositoryClient.checkout` still exists for private clones and now forces the checkout; the worker uses it only for git clients that cannot make worktrees (test doubles).
+
+## DEC-039: Platform review C fixes: job lease with owner check, early `running`, publish after commit, validated dashboard sessions
+
+Context: the independent platform review (`docs/review/CODE_REVIEW_C_PLATFORM.md`) found that a job running past the stale window was re-claimed by another worker while the first still ran (no lease renewal, no owner check), that one DB transaction wrapped the whole analysis, that retries had no backoff, that the dashboard proxy accepted any non-empty `radius_session` cookie, and that nothing stopped duplicate analyses for one head commit.
+
+Decision:
+
+1. **Lease with an owner.** `analysis_jobs.claimed_by` (worker id: host, pid, random suffix) is set by `claim_next`. A background thread renews `locked_at` every `WORKER_HEARTBEAT_INTERVAL_SECONDS` (default min(60 s, stale/3)) with one conditional UPDATE. `complete`, `fail`, `requeue`, `skip_claimed` and the heartbeat only act on a job that is still `running` and claimed by this worker; otherwise they are a logged no-op returning `False` and the worker discards its result (no publish). The pipeline checks the lease at its stage boundaries; a single long git or test call is not interrupted (the reaper deadline still bounds a hung job).
+2. **Retry backoff.** `analysis_jobs.available_at`: a requeued job waits `WORKER_JOB_RETRY_BASE_SECONDS * 2^(attempt-1)` (default 15 s, capped at 900 s, +-25% jitter). The poller may queue a failed head again at most `RADIUS_GITHUB_POLL_FAILED_RETRIES` (default 2) times, spaced from `RADIUS_GITHUB_POLL_FAILED_RETRY_DELAY_SECONDS` (900 s, doubling). Permanent-error classification was not added.
+3. **Smaller transactions, publish after commit.** `running` is committed before the pipeline; the artefacts and the job completion commit together; the GitHub result is published only after that commit (publishing never raises and updates the same check run, so it is idempotent). The pipeline still runs in one session; only the status transitions and the publication moved. A requeue returns the analysis to `pending`.
+4. **One active analysis per head commit.** Partial unique index `uq_analyses_active_pr_commit` on `(pull_request_id, commit_sha)` where `status IN ('pending','running')`. The store catches the `IntegrityError` in a savepoint and returns the existing analysis. Reruns of finished analyses are unaffected; a rerun of an analysis whose twin is still active returns that active one. The migration cancels (never deletes) existing duplicate active rows first. Not changed: the global `unique` on `repositories.github_repository_id` (security review A-05).
+5. **Dashboard sessions are validated.** The Next.js middleware and the proxy route call `GET /api/v1/auth/me` with the cookie (15 s positive and 5 s negative in-memory cache, 5 s timeout, fail closed). `DELETE` needs the `admin` role; the audit actor is the validated e-mail. A deployment is **single-tenant**: all authenticated dashboard users share the one organization of the configured API key.
+6. **Operational.** Compose: required `POSTGRES_PASSWORD`, loopback port publishing by default (a variable, so production chooses deliberately), `restart: unless-stopped`, worker `stop_grace_period` 15 m, worker health file. Alembic takes a PostgreSQL transaction advisory lock. The auth tables are created idempotently by a migration (`create_all` stays). Release publishing needs the GitHub environment `release`, a tag on `main`, and pushes by digest before scanning and tagging.
+
+| Option | Trade-off |
+| --- | --- |
+| Commit every pipeline stage separately | Larger rewrite of the orchestrator; rejected for now, the long transaction no longer holds the analyses row or hides `running`. |
+| Fencing token column instead of `claimed_by` | Equivalent here (the worker id is unique per process start); a counter would also survive id reuse. Not needed. |
+| Per-user organization routing in the dashboard | Real multi-tenancy; needs per-user keys and routing. Documented as single-tenant instead. |
+| Remove `alembic upgrade head` from the API image | Breaks non-Compose deployments; the advisory lock makes concurrent starts safe. |
+
+Consequences: PostgreSQL behaviour (advisory lock, `FOR UPDATE`, the partial index, concurrent savepoints) was exercised on SQLite only. A job killed hard is recovered after the stale window, not instantly. Listing endpoints now return at most `limit` (default 100) items.

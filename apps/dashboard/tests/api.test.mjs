@@ -22,7 +22,7 @@ function envelope(data, init = {}) {
 
 test("listRepositories calls the same-origin proxy without credentials", async () => {
   globalThis.fetch = async (input, init) => {
-    assert.equal(String(input), "http://dashboard.test/api/radius/repositories");
+    assert.equal(String(input), "http://dashboard.test/api/radius/repositories?limit=500");
     assert.equal(init?.cache, "no-store");
 
     const headers = new Headers(init?.headers);
@@ -42,6 +42,8 @@ test("listAnalyses preserves supported filters as query parameters", async () =>
     assert.equal(url.searchParams.get("repositoryId"), "repo-1");
     assert.equal(url.searchParams.get("status"), "completed");
     assert.equal(url.searchParams.has("pullRequestId"), false);
+    assert.equal(url.searchParams.get("limit"), "500"); // API lists are paginated (max 500)
+    assert.equal(url.searchParams.has("offset"), false);
 
     return envelope({ success: true, data: [] });
   };

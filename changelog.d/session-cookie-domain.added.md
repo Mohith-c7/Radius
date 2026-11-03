@@ -1,0 +1,1 @@
+Optional `SESSION_COOKIE_DOMAIN` sets the session cookie domain for a dashboard and API on separate hosts. `alembic upgrade` takes a PostgreSQL advisory lock so concurrently starting API replicas do not race.

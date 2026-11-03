@@ -8,7 +8,8 @@ from uuid import UUID
 from radius_shared.database import enums as db_enums
 from radius_shared.database import models as db_models
 from radius_shared.errors import NotFoundError
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from radius_analysis.domain.entities import Analysis, BlastRadius, ChangedFile
@@ -60,10 +61,51 @@ class SqlAlchemyAnalysisStore:
         repository_id: UUID | None = None,
         pull_request_id: UUID | None = None,
         status: AnalysisStatus | None = None,
+        *,
+        repository_ids: tuple[UUID, ...] | None = None,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> list[Analysis]:
-        """Return analyses matching optional filters."""
+        """Return analyses matching optional filters, newest first, optionally one page.
 
-        statement = self._analysis_query()
+        One query (plus the two eager loads) whatever the number of repositories.
+        """
+
+        statement = self._filters(
+            self._analysis_query(), repository_id, pull_request_id, status, repository_ids
+        ).order_by(db_models.Analysis.created_at.desc(), db_models.Analysis.id)
+        if limit is not None:
+            statement = statement.limit(limit)
+        if offset:
+            statement = statement.offset(offset)
+        rows = self._session.scalars(statement).all()
+        return [self._to_domain(row) for row in rows if row is not None]
+
+    def count(
+        self,
+        repository_id: UUID | None = None,
+        pull_request_id: UUID | None = None,
+        status: AnalysisStatus | None = None,
+        *,
+        repository_ids: tuple[UUID, ...] | None = None,
+    ) -> int:
+        """Return how many analyses match the filters."""
+
+        statement = self._filters(
+            select(func.count()).select_from(db_models.Analysis),
+            repository_id,
+            pull_request_id,
+            status,
+            repository_ids,
+        )
+        return int(self._session.scalar(statement) or 0)
+
+    @staticmethod
+    def _filters(statement, repository_id, pull_request_id, status, repository_ids):
+        if repository_ids is not None:
+            statement = statement.where(
+                db_models.Analysis.repository_id.in_(list(repository_ids))
+            )
         if repository_id is not None:
             statement = statement.where(
                 db_models.Analysis.repository_id == repository_id
@@ -76,24 +118,46 @@ class SqlAlchemyAnalysisStore:
             statement = statement.where(
                 db_models.Analysis.status == db_enums.AnalysisStatus(status.value)
             )
-
-        rows = self._session.scalars(
-            statement.order_by(db_models.Analysis.created_at.desc())
-        ).all()
-        return [self._to_domain(row) for row in rows if row is not None]
+        return statement
 
     def save(self, analysis: Analysis) -> Analysis:
         """Persist an analysis."""
 
-        if analysis.id is not None:
+        if analysis.id is None:
+            # C-12: ``uq_analyses_active_pr_commit`` allows one active analysis per
+            # PR head commit. A concurrent trigger that lost the race gets the
+            # winner's row back instead of an error (and no second job). The
+            # savepoint starts BEFORE the row is added: ``begin_nested`` flushes
+            # pending state, which must not include the contested insert.
+            try:
+                with self._session.begin_nested():
+                    row = db_models.Analysis()
+                    self._session.add(row)
+                    self._apply(row, analysis)
+                    self._session.flush()
+            except IntegrityError:
+                existing = self.find_active(
+                    analysis.pull_request_id, analysis.commit_sha.value
+                )
+                if existing is None:
+                    raise
+                return existing
+        else:
             row = self._session.get(db_models.Analysis, analysis.id)
             if row is None:
                 row = db_models.Analysis(id=analysis.id)
                 self._session.add(row)
-        else:
-            row = db_models.Analysis()
-            self._session.add(row)
+            self._apply(row, analysis)
+            self._session.flush()
+        self._session.refresh(row, attribute_names=["changed_files", "blast_radius"])
+        domain = self._to_domain(row)
+        if domain is None:
+            msg = "Analysis could not be saved."
+            raise NotFoundError(msg)
+        return domain
 
+    @staticmethod
+    def _apply(row: db_models.Analysis, analysis: Analysis) -> None:
         row.repository_id = analysis.repository_id
         row.pull_request_id = analysis.pull_request_id
         row.commit_sha = analysis.commit_sha.value
@@ -101,14 +165,6 @@ class SqlAlchemyAnalysisStore:
         row.started_at = analysis.started_at
         row.completed_at = analysis.completed_at
         row.created_at = analysis.created_at
-
-        self._session.flush()
-        self._session.refresh(row, attribute_names=["changed_files", "blast_radius"])
-        domain = self._to_domain(row)
-        if domain is None:
-            msg = "Analysis could not be saved."
-            raise NotFoundError(msg)
-        return domain
 
     def update_status(
         self,

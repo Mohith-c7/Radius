@@ -1,0 +1,1 @@
+List endpoints `/analyses`, `/repositories` and `/repositories/{id}/pull-requests` are paginated with `limit` (default 100, maximum 500) and `offset` and return `meta.pagination`; `GET /analyses` no longer queries once per repository.

@@ -17,10 +17,11 @@
 services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: radius
       POSTGRES_USER: radius
-      POSTGRES_PASSWORD: radius
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required. For local dev run `make env` (generates one). An existing dev database volume still uses the old password. Run `make clean-volumes` or set POSTGRES_PASSWORD to that old password. See docs/operations/INSTALL.md}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U radius -d radius"]
       interval: 5s
@@ -39,11 +40,12 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+psycopg://radius:radius@postgres:5432/radius
+      DATABASE_URL: postgresql+psycopg://radius:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required. For local dev run `make env` (generates one). An existing dev database volume still uses the old password. Run `make clean-volumes` or set POSTGRES_PASSWORD to that old password. See docs/operations/INSTALL.md}@postgres:5432/radius
     command: ["alembic", "upgrade", "head"]
     restart: "no"
 
   api:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: apps/api/Dockerfile
@@ -58,7 +60,7 @@ services:
       RADIUS_ENV: production
       RADIUS_LOG_LEVEL: INFO
       STORAGE_BACKEND: sql
-      DATABASE_URL: postgresql+psycopg://radius:radius@postgres:5432/radius
+      DATABASE_URL: postgresql+psycopg://radius:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required. For local dev run `make env` (generates one). An existing dev database volume still uses the old password. Run `make clean-volumes` or set POSTGRES_PASSWORD to that old password. See docs/operations/INSTALL.md}@postgres:5432/radius
       API_KEYS: ${API_KEYS:-}
       # Managed API keys (docs/security/API_KEYS.md). Without a pepper (>= 32 random
       # characters) managed keys are disabled and only the deprecated API_KEYS work.
@@ -86,6 +88,7 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-}
       RADIUS_HSTS_ENABLED: ${RADIUS_HSTS_ENABLED:-false}
       RADIUS_TRUSTED_PROXIES: ${RADIUS_TRUSTED_PROXIES:-}
+      SESSION_COOKIE_DOMAIN: ${SESSION_COOKIE_DOMAIN:-}
       # Sign-in module (app.config.Settings). Without these the container would use
       # the public placeholder session secret from the code and could not send mail.
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required (>= 32 random characters). For local dev run `make env` or `python scripts/gen_dev_env.py`, then use `make dev`. See docs/operations/INSTALL.md}
@@ -98,8 +101,10 @@ services:
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+    # Loopback by default. Production: keep it behind a TLS reverse proxy, or set
+    # RADIUS_API_BIND_ADDRESS (for example 0.0.0.0) deliberately. docs/security/HTTP_HARDENING.md
     ports:
-      - "8000:8000"
+      - "${RADIUS_API_BIND_ADDRESS:-127.0.0.1}:8000:8000"
     healthcheck:
       test:
         [
@@ -111,6 +116,12 @@ services:
       retries: 12
 
   worker:
+    restart: unless-stopped
+    # `docker compose stop worker` sends SIGTERM; the worker then finishes the job it is
+    # running and exits (no new job is claimed). Compose's default 10 s would SIGKILL a
+    # running job, so wait for a normal drain. A job that is still running after this is
+    # killed; it is recovered after WORKER_JOB_STALE_AFTER_SECONDS (docs/operations/RUNBOOK.md).
+    stop_grace_period: ${WORKER_STOP_GRACE_PERIOD:-15m}
     build:
       context: .
       dockerfile: apps/worker/Dockerfile
@@ -124,11 +135,19 @@ services:
     environment:
       RADIUS_ENV: production
       RADIUS_LOG_LEVEL: INFO
-      DATABASE_URL: postgresql+psycopg://radius:radius@postgres:5432/radius
+      DATABASE_URL: postgresql+psycopg://radius:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required. For local dev run `make env` (generates one). An existing dev database volume still uses the old password. Run `make clean-volumes` or set POSTGRES_PASSWORD to that old password. See docs/operations/INSTALL.md}@postgres:5432/radius
       REPOSITORY_CACHE_DIR: /var/lib/radius/repositories
       WORKER_POLL_INTERVAL_SECONDS: ${WORKER_POLL_INTERVAL_SECONDS:-2}
       WORKER_JOB_STALE_AFTER_SECONDS: ${WORKER_JOB_STALE_AFTER_SECONDS:-1800}
       WORKER_JOB_MAX_ATTEMPTS: ${WORKER_JOB_MAX_ATTEMPTS:-3}
+      WORKER_HEARTBEAT_INTERVAL_SECONDS: ${WORKER_HEARTBEAT_INTERVAL_SECONDS:-}
+      WORKER_JOB_RETRY_BASE_SECONDS: ${WORKER_JOB_RETRY_BASE_SECONDS:-15}
+      WORKER_JOB_RETRY_MAX_SECONDS: ${WORKER_JOB_RETRY_MAX_SECONDS:-900}
+      WORKER_ANALYSIS_DEADLINE_SECONDS: ${WORKER_ANALYSIS_DEADLINE_SECONDS:-7200}
+      WORKER_REAPER_INTERVAL_SECONDS: ${WORKER_REAPER_INTERVAL_SECONDS:-60}
+      WORKER_HEALTH_MAX_AGE_SECONDS: ${WORKER_HEALTH_MAX_AGE_SECONDS:-300}
+      WORKER_TEST_EXECUTION_MODE: ${WORKER_TEST_EXECUTION_MODE:-}
+      WORKER_TEST_TIMEOUT_SECONDS: ${WORKER_TEST_TIMEOUT_SECONDS:-600}
       GITHUB_APP_ID: ${GITHUB_APP_ID:-}
       GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
       GITHUB_INSTALLATION_ID: ${GITHUB_INSTALLATION_ID:-}
@@ -137,11 +156,14 @@ services:
       RADIUS_GITHUB_POLL_INTERVAL_SECONDS: ${RADIUS_GITHUB_POLL_INTERVAL_SECONDS:-0}
       RADIUS_GITHUB_POLL_MAX_ANALYSES_PER_TICK: ${RADIUS_GITHUB_POLL_MAX_ANALYSES_PER_TICK:-10}
       RADIUS_GITHUB_POLL_MAX_REPOSITORIES_PER_TICK: ${RADIUS_GITHUB_POLL_MAX_REPOSITORIES_PER_TICK:-25}
+      RADIUS_GITHUB_POLL_FAILED_RETRIES: ${RADIUS_GITHUB_POLL_FAILED_RETRIES:-2}
+      RADIUS_GITHUB_POLL_FAILED_RETRY_DELAY_SECONDS: ${RADIUS_GITHUB_POLL_FAILED_RETRY_DELAY_SECONDS:-900}
       GITHUB_API_BASE_URL: ${GITHUB_API_BASE_URL:-https://api.github.com}
       GITHUB_API_VERSION: ${GITHUB_API_VERSION:-2026-03-10}
       GITHUB_TIMEOUT_SECONDS: ${GITHUB_TIMEOUT_SECONDS:-10}
       RADIUS_FEATURE_INTENT_INGESTION: ${RADIUS_FEATURE_INTENT_INGESTION:-false}
       RADIUS_FEATURE_VERDICT_V2: ${RADIUS_FEATURE_VERDICT_V2:-off}
+      RADIUS_VERDICT_V2_CHECK_CONCLUSIONS: ${RADIUS_VERDICT_V2_CHECK_CONCLUSIONS:-advisory}
       RADIUS_INTENT_MAX_API_CALLS: ${RADIUS_INTENT_MAX_API_CALLS:-15}
       RADIUS_INTENT_DEADLINE_SECONDS: ${RADIUS_INTENT_DEADLINE_SECONDS:-30}
       RADIUS_INTENT_INCLUDE_ISSUE_COMMENTS: ${RADIUS_INTENT_INCLUDE_ISSUE_COMMENTS:-false}
@@ -156,10 +178,28 @@ services:
       RADIUS_FEATURE_SYMBOL_CHANGES: ${RADIUS_FEATURE_SYMBOL_CHANGES:-false}
       RADIUS_FEATURE_TAMPER_RULES: ${RADIUS_FEATURE_TAMPER_RULES:-false}
       RADIUS_FEATURE_ASSERTION_EXTRACTION: ${RADIUS_FEATURE_ASSERTION_EXTRACTION:-false}
+      RADIUS_FEATURE_MUTATION: ${RADIUS_FEATURE_MUTATION:-false}
+      RADIUS_MUTATION_MAX_MUTANTS: ${RADIUS_MUTATION_MAX_MUTANTS:-50}
+      RADIUS_MUTATION_WALL_CLOCK_SECONDS: ${RADIUS_MUTATION_WALL_CLOCK_SECONDS:-600}
+      RADIUS_MUTATION_MUTANT_TIMEOUT_SECONDS: ${RADIUS_MUTATION_MUTANT_TIMEOUT_SECONDS:-60}
+      RADIUS_FEATURE_SUGGEST_TESTS: ${RADIUS_FEATURE_SUGGEST_TESTS:-false}
+      RADIUS_INTENT_EXTRACTION_MODE: ${RADIUS_INTENT_EXTRACTION_MODE:-sections}
+      # Opt-in data retention (docs/operations/CONFIGURATION.md): 0 = off.
+      RADIUS_RETENTION_DAYS: ${RADIUS_RETENTION_DAYS:-0}
+      RADIUS_RETENTION_DRY_RUN: ${RADIUS_RETENTION_DRY_RUN:-false}
+      RADIUS_MUTATION_STAGE2: ${RADIUS_MUTATION_STAGE2:-false}
+      RADIUS_MUTATION_STAGE2_MAX_TESTS: ${RADIUS_MUTATION_STAGE2_MAX_TESTS:-60}
+      RADIUS_MUTATION_STAGE2_WALL_CLOCK_SECONDS: ${RADIUS_MUTATION_STAGE2_WALL_CLOCK_SECONDS:-300}
+      RADIUS_GIT_CLONE_TIMEOUT_SECONDS: ${RADIUS_GIT_CLONE_TIMEOUT_SECONDS:-300}
+      RADIUS_GIT_TIMEOUT_SECONDS: ${RADIUS_GIT_TIMEOUT_SECONDS:-120}
+      RADIUS_GIT_LOCK_TIMEOUT_SECONDS: ${RADIUS_GIT_LOCK_TIMEOUT_SECONDS:-300}
+      RADIUS_GIT_STALE_LOCK_SECONDS: ${RADIUS_GIT_STALE_LOCK_SECONDS:-900}
+      RADIUS_GIT_CACHE_MAX_IDLE_DAYS: ${RADIUS_GIT_CACHE_MAX_IDLE_DAYS:-0}
     volumes:
       - radius-repository-cache:/var/lib/radius/repositories
 
   dashboard:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: apps/dashboard/Dockerfile
@@ -177,8 +217,9 @@ services:
       RADIUS_API_KEY: ${RADIUS_API_KEY:-}
       RADIUS_API_BASE_URL: ${RADIUS_API_BASE_URL:-http://api:8000}
       RADIUS_HSTS_ENABLED: ${RADIUS_HSTS_ENABLED:-false}
+    # Loopback by default (see the api service for the production binding).
     ports:
-      - "3000:3000"
+      - "${RADIUS_DASHBOARD_BIND_ADDRESS:-127.0.0.1}:3000:3000"
 
   # ---- profile: sandbox ---------------------------------------------------
   # One-shot build of the sandbox test image (same recipe CI uses). It does not

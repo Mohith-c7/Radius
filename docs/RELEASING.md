@@ -39,4 +39,6 @@ The check is **not** required, so it cannot block merging until the owner decide
 3. On a branch `chore/release-<version>`, fold the fragments in `changelog.d/` into a new `## [<version>] - <date>` section of `CHANGELOG.md` (Added, Changed, Deprecated, Removed, Fixed, Security), delete the folded fragments, leave an empty `## [Unreleased]`, update the comparison links, and set the version in `pyproject.toml` and the `package.json` files.
 4. After that pull request merges, tag the merge commit on `main` (`git tag -a v<version>`; signing is not set up yet) and publish release notes from the changelog section.
 
-Not yet available: container images, signed artifacts, SBOM attached to a release, provenance. Do not describe a release as signed or reproducible until they exist.
+Publishing safeguards in `release.yml` (all off by default; see C-16 in `docs/review/CODE_REVIEW_C_RESPONSE.md`): the `publish` job needs the repository variable `RADIUS_RELEASE_PUBLISH=true`, a digest-pinned `RADIUS_COSIGN_IMAGE`, approval through the GitHub environment **`release`** (create it under Settings > Environments, add required reviewers; it holds no secrets), and the tagged commit must be an ancestor of `origin/main`. The image is built once in that job, pushed by digest without a tag, scanned at that digest (Trivy gate, SBOM), only then tagged, and cosign signs that same digest.
+
+Not yet available in practice: no release has been cut, so no published image, signature or SBOM attached to a release exists. Do not describe a release as signed or reproducible until one does.

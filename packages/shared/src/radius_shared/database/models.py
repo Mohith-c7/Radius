@@ -15,6 +15,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -265,6 +266,16 @@ class Analysis(UuidPrimaryKeyMixin, Base):
         Index("ix_analyses_repository_id", "repository_id"),
         Index("ix_analyses_pull_request_id", "pull_request_id"),
         Index("ix_analyses_commit_sha", "commit_sha"),
+        # C-12: at most one active (pending/running) analysis per PR head commit.
+        # Reruns of a finished analysis are still allowed.
+        Index(
+            "uq_analyses_active_pr_commit",
+            "pull_request_id",
+            "commit_sha",
+            unique=True,
+            postgresql_where=text("status IN ('pending', 'running')"),
+            sqlite_where=text("status IN ('pending', 'running')"),
+        ),
     )
 
 
@@ -692,6 +703,14 @@ class AnalysisJob(UuidPrimaryKeyMixin, TimestampMixin, Base):
     )
     #: W3C ``traceparent`` captured at enqueue so the worker continues the trace.
     traceparent: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: C-02: id of the worker process that holds the lease. Completion, failure,
+    #: requeue and heartbeat only apply while this still matches.
+    claimed_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    #: C-05: earliest time a pending job may be claimed (retry backoff); NULL = now.
+    available_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
     analysis: Mapped[Analysis] = relationship(back_populates="analysis_job")
 

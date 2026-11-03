@@ -295,3 +295,10 @@ then keep `WORKER_TEST_EXECUTION_MODE=disabled` and run tests in the customer's 
 Real-runtime runs used docker 29.9.2 (cgroup v1, overlayfs, runc, running as root) in
 the development container. Untested: podman, rootless docker, gVisor, cgroup v2, actual
 memory/pids-limit enforcement, and egress blocking against a host that has egress.
+
+## Checkout isolation (review C, C-03)
+
+The path handed to the sandbox, the in-process runner, the parser and the verdict v2 mutation
+step is a **per-analysis git worktree** (`<REPOSITORY_CACHE_DIR>/.worktrees/<analysis id>-<random>`),
+not a directory shared by every analysis of the repository, and it is deleted when the job ends
+(also on failure). The sandbox still copies the tree without `.git`. See DEC-038.

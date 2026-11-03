@@ -226,13 +226,8 @@ def provision_domain_user_and_org(
         except (ValueError, TypeError, AttributeError):
             user_uuid = uuid4()
 
-        if github_user_id is None:
-            github_user_id = int(
-                hashlib.sha256(
-                    f"radius:user:{user.email.lower()}".encode()
-                ).hexdigest()[:15],
-                16,
-            )
+        # C-15: password users have no GitHub id; store NULL (the column is
+        # nullable) instead of a number fabricated from the e-mail address.
 
         role = (
             UserRole.ADMIN

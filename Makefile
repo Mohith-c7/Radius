@@ -58,7 +58,7 @@ lint: ## Ruff on the Python code
 	uv run --frozen python -m ruff check .
 
 seed-demo: ## OPT-IN demo data into the SQL database (DEMO ONLY, see scripts/seed_demo.py)
-	STORAGE_BACKEND=sql DATABASE_URL=postgresql+psycopg://radius:radius@localhost:$${POSTGRES_HOST_PORT:-5432}/radius $(PY) scripts/seed_demo.py --yes
+	STORAGE_BACKEND=sql DATABASE_URL="$$($(PYTHON) scripts/gen_dev_env.py --env-file $(ENV_FILE) --print-database-url $${POSTGRES_HOST_PORT:-5432})" $(PY) scripts/seed_demo.py --yes
 
 sandbox: ## Build the sandbox test image (compose profile: sandbox)
 	$(COMPOSE) --profile sandbox up --build sandbox-image

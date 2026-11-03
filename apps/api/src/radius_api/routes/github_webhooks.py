@@ -811,11 +811,10 @@ def _record_installation_id(
         return
     if organization.github_installation_id is None:
         if not _may_adopt_installation(request.app.state.settings):
+            # No request-derived values in the log line (they are typed, but static analysis cannot tell).
             LOGGER.warning(
-                "Not linking GitHub installation %s to organization %s: no proof of "
-                "ownership (single-tenant mode is off)",
-                installation_id,
-                org_id,
+                "Not linking a GitHub installation to an organization: no proof of ownership "
+                "(single-tenant mode is off)"
             )
             return
         organization.github_installation_id = installation_id
