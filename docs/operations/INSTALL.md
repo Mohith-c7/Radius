@@ -1,9 +1,11 @@
 # Install (Docker Compose)
 
 This is the only supported install path today. There are no published images, Helm chart or
-release artifacts; the images are built from your checkout. **Unverified:** a clean-machine run of
-this exact procedure was not performed while writing this page (no Docker build was run); the steps
-come from `Makefile`, `docker-compose.yml`, `docker-compose.dev.yml`, the Dockerfiles and the code.
+release artifacts; the images are built from your checkout. **Verified (2026-11-03):** the local development profile (`make dev`) builds and its four services
+(migrations, api, worker, dashboard) run healthy, and sign-up, dashboard pages, demo sign-in and a
+Verdict v2 analysis page work in Chrome. **Unverified:** the production-like procedure below, a
+clean-machine run, and anything against real GitHub. The production steps come from `Makefile`,
+`docker-compose.yml`, the Dockerfiles and the code.
 
 ## Prerequisites
 
@@ -71,9 +73,12 @@ dashboard bundle at build time (build argument `NEXT_PUBLIC_RADIUS_ORGANIZATION_
 in `.env` rebuild with `make dev`. For illustrative data in that organization run `make seed-demo`
 (opt-in, demo only).
 
-**Unverified:** a full-stack run of this profile (build, sign-up in a browser, dashboard data) was not
-performed while writing this page. The Compose files were validated with `docker compose config` only,
-and `scripts/check_compose.py` checks them statically.
+**Verified (2026-11-03):** a full-stack run of this profile (build, services healthy, sign-up in a
+browser, dashboard pages, demo data) was done in Chrome. The demo data was loaded by running
+`scripts/seed_demo.py --yes` directly, which is the command `make seed-demo` wraps; the make target
+itself was not run. Not covered: other browsers, other host operating systems than the one used, and
+timing or sizing figures.
+`scripts/check_compose.py` additionally checks the Compose files statically.
 
 ## Steps: production-like Compose
 

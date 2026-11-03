@@ -1,0 +1,1 @@
+The API and worker Docker images now include the evidence and linking packages on PYTHONPATH. The worker image crashed at start-up with "No module named radius_evidence" whenever the Verdict v2 flag was on. A new test checks every package is on the path in both images.
