@@ -50,6 +50,10 @@ Because failures come first, a tamper finding fails the verdict immediately, wit
 
 Unsupported intent mass (UIM; "unproven" in the design documents) is the weighted share of non-excluded criteria whose support is below 0.50. Intent coverage is the share of behavioral changes that a stated criterion accounts for.
 
+## The dashboard analysis page tells one story
+
+When a v2 result is available for an analysis, the page header (verdict pill, headline, summary line) and the Recommendation card show the v2 verdict in the alpha wording, for example `Not verified - insufficient evidence (alpha, static evidence only)` with `0 of 2 stated criteria supported`. The Recommendation card shows the v2 "What to do next" actions; for anything other than a supported verdict it starts with `Do not treat this PR as verified: ...`, and for a supported verdict it says static evidence supports the stated intent and the change still needs review (never "safe to merge"). The v1 0-100 heuristic ring and the v1 sentence move into a muted block titled `Legacy v1 result (file-level test selection, uncalibrated heuristic)`; they are never styled as a pass. No v2 verdict is shown in green. While the v2 result is loading the header shows neither verdict. When v2 is off, not computed or unavailable, the page is unchanged (v1 wording and styling). The mapping is the pure function `buildHeaderModel` in `apps/dashboard/lib/analysis-header-model.ts`.
+
 ## Criterion states
 
 | State in the comment (internal value) | Meaning |
