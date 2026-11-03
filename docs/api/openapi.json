@@ -979,15 +979,21 @@
         "description": "Request to connect a repository.",
         "properties": {
           "cloneUrl": {
+            "maxLength": 300,
+            "minLength": 1,
             "title": "Cloneurl",
             "type": "string"
           },
           "defaultBranch": {
             "default": "main",
+            "maxLength": 255,
+            "minLength": 1,
             "title": "Defaultbranch",
             "type": "string"
           },
           "name": {
+            "maxLength": 100,
+            "minLength": 1,
             "title": "Name",
             "type": "string"
           },
@@ -997,6 +1003,8 @@
             "type": "string"
           },
           "owner": {
+            "maxLength": 100,
+            "minLength": 1,
             "title": "Owner",
             "type": "string"
           },
@@ -1530,6 +1538,7 @@
         "type": "object"
       },
       "Login": {
+        "description": "Sign-in body. Deliberately NOT subject to the signup password-strength rule:\naccounts created under an older or weaker policy must still be able to sign in.",
         "properties": {
           "email": {
             "format": "email",
@@ -1538,7 +1547,7 @@
           },
           "password": {
             "maxLength": 256,
-            "minLength": 8,
+            "minLength": 1,
             "title": "Password",
             "type": "string"
           },
@@ -2062,6 +2071,7 @@
         "description": "Request to start an analysis.",
         "properties": {
           "commitSha": {
+            "pattern": "^[0-9a-fA-F]{7,40}$",
             "title": "Commitsha",
             "type": "string"
           },
@@ -5583,7 +5593,7 @@
     },
     "/api/v1/auth/refresh": {
       "post": {
-        "description": "Rotate the session cookie.",
+        "description": "Rotate the session: the presented one is revoked, a fresh one is issued.\n\nA stolen cookie therefore cannot mint sessions that outlive the original\n(each refresh kills its predecessor), and the \"remember me\" lifetime is kept.",
         "operationId": "refresh",
         "responses": {
           "200": {
@@ -5803,7 +5813,7 @@
     },
     "/api/v1/coverage": {
       "post": {
-        "description": "Ingest normalized coverage artifacts produced by CI.",
+        "description": "Ingest normalized coverage artifacts produced by CI.\n\nThe analysis must belong to the caller's organization (unknown and foreign\nanalyses are both 404). ``X-Radius-Organization-Id`` is optional and, when\nsent, must be the caller's own organization.",
         "operationId": "ingest_coverage",
         "parameters": [
           {
@@ -5811,6 +5821,7 @@
             "name": "X-Analysis-Id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "X-Analysis-Id",
               "type": "string"
             }
@@ -5883,6 +5894,7 @@
             "name": "analysis_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Analysis Id",
               "type": "string"
             }
@@ -5938,6 +5950,7 @@
             "name": "analysis_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Analysis Id",
               "type": "string"
             }

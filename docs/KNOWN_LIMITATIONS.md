@@ -36,6 +36,20 @@ status section of the [README](../README.md)); everything else is untested. Trac
 | **Single maintainer, capstone origin.** Bus factor of one; a second author's commits and the capstone sponsor relationship are unresolved for licensing. | Apache-2.0 files are in the repository; DCO sign-off. | PRD-01 (owner); see [RELEASE_CHECKLIST](RELEASE_CHECKLIST.md). |
 | **Backup/restore, upgrade/downgrade and several worker replicas** are documented from code, not run. | Marked Unverified in the [operations docs](operations/README.md). | QS-11, PRD-28. |
 
+### Security review A follow-ups (2026-11)
+
+These remain after the fixes in [CODE_REVIEW_A_RESPONSE](security/CODE_REVIEW_A_RESPONSE.md).
+
+| Limitation | Mitigation today | Planned fix / tracked in |
+|---|---|---|
+| **No customer-facing proof that a tenant controls a GitHub installation.** Multi-tenant deployments must link `organizations.github_installation_id` by an operator step (or use explicit single-tenant mode); `connect-github` and webhooks no longer attach an installation on the strength of a repository name. | Rule and rationale in [INSTALLATION_BINDING](security/INSTALLATION_BINDING.md); refused with `403 GITHUB_INSTALLATION_NOT_LINKED`. | Authenticated install/OAuth callback flow: OWNER decision (needs UI and an OAuth permission decision). |
+| **Repository ownership on `POST /repositories` is caller-asserted.** The first organization to register a numeric GitHub repository id owns that row; others get 409. Webhook routing no longer trusts that row alone (an installation linked to another organization wins and is refused for the row's owner, and an unlinked installation is not routed to it outside single-tenant modes). | Clone URLs are validated (https, allow-listed host, `owner/repo`), the token only goes to allow-listed hosts, and caches are per organization. | Verify ids against GitHub with the linked installation (same OWNER decision as above). |
+| **Email verification clears the signup password in uat/production.** To defeat account pre-hijacking, verifying an address that was unverified until now removes the password chosen at signup; the mailbox owner then uses "Forgot password" or OAuth. Sign-in is refused for unverified accounts in uat/production. | Development and test behave as before. | Collect the password on the verify page so a genuine signup is not forced through a reset: dashboard change, OWNER decision. |
+| **Login throttle is in memory, per process.** 10 failures per account per 15 minutes then 429 (also for the right password, so a known email can be locked out for 15 minutes); the per-IP limit is unchanged. Multi-replica deployments get N times the budget. | Argon2 work is constant for unknown accounts. | Shared rate-limit store (existing seam in `middleware/rate_limit.py`). |
+| **Test outcomes are produced by PR-controlled code.** A `conftest.py` or test can emit any JUnit file or exit code; CI uploads are bound only to the commit sha. The sandbox contains the code, not the evidence. | Verdict wording ("supported", not "proven"), tamper rules, base-branch policy. | By design; see the verdict v2 threat model. |
+| **Sandbox results directory is `0777` inside a `0700` per-run scratch root.** The container user (nobody) must be able to write the report. Only a host root user can reach it. | Scratch root created `0700`; artifacts are read only as regular non-symlink files. | A user-namespace mapped directory when rootless Docker is the supported mode. |
+| **Webhook replay.** Signed payloads carry no timestamp; GitHub redeliveries are deduplicated by delivery id, a replay with a fresh id is accepted. Concurrent redeliveries can both process. | Idempotency per delivery id and body hash. | Inherent to GitHub's scheme. |
+
 ## 3. Research
 
 | Limitation | Mitigation today | Planned fix / tracked in |

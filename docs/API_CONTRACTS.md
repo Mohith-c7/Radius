@@ -96,7 +96,7 @@ Failures produced before routing use the standard envelope:
 
 | Status | `error.code` | When | Notes |
 |---|---|---|---|
-| 413 | `PAYLOAD_TOO_LARGE` | body over the cap (1 MiB default, 25 MiB webhook, 20 MiB test-report upload) | `meta.max_bytes` |
+| 413 | `PAYLOAD_TOO_LARGE` | body over the cap (1 MiB default, 5 MiB webhook, 20 MiB test-report upload) | `meta.max_bytes` |
 | 415 | `UNSUPPORTED_MEDIA_TYPE` | POST/PUT/PATCH with a body that is not `application/json` (or `+json`) | not applied to webhook and test-report upload |
 | 429 | `RATE_LIMITED` | token bucket empty | `Retry-After`, `meta.retry_after_seconds`, `meta.bucket` |
 

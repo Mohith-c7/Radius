@@ -17,7 +17,7 @@ What "pull-based" means here:
 | Step | Webhook flow | Pull flow (this page) |
 | --- | --- | --- |
 | Radius learns the repository | `installation` / `pull_request` webhook | `POST /api/v1/repositories/connect-github` |
-| Radius learns the installation id | webhook payload | discovered with the App JWT, stored on the organization |
+| Radius learns the installation id | webhook payload | discovered with the App JWT and stored on the organization, **only in single-tenant development mode** (`RADIUS_GITHUB_DEV_SINGLE_TENANT`, see below) |
 | A pull request starts an analysis | `pull_request` webhook | `POST /api/v1/repositories/{id}/pull-requests/{n}/analyze` or `.../sync-pull-requests` |
 | Worker clones, analyzes, publishes | same | same (outbound calls only) |
 
@@ -89,6 +89,18 @@ the single-line variable.
 You do **not** need `GITHUB_WEBHOOK_SECRET`, `GITHUB_INSTALLATION_ID`, a public URL or a tunnel. The
 installation id is discovered when you connect the repository. (`GITHUB_INSTALLATION_ID`, if set, wins
 and is used for every organization.)
+
+**Single-tenant development mode.** GitHub answers "which installation covers `owner/name`?" for every
+repository of every customer of a shared App, so Radius does not attach a discovered installation to an
+organization on the strength of a repository name alone (security review A-03,
+[../security/INSTALLATION_BINDING.md](../security/INSTALLATION_BINDING.md)). The discovery above works
+because `make dev` runs the API with `RADIUS_ENV=development`, where `RADIUS_GITHUB_DEV_SINGLE_TENANT`
+defaults to **on** (it defaults to off in every other environment). If your API runs with another
+`RADIUS_ENV`, set `RADIUS_GITHUB_DEV_SINGLE_TENANT=true` explicitly, and only when exactly one organization
+uses this App. Without it, `connect-github` answers `403 GITHUB_INSTALLATION_NOT_LINKED` for an organization
+that has no installation yet. Even in dev mode an installation already linked to another organization is
+never taken (`409 GITHUB_INSTALLATION_MISMATCH`). Repository clone URLs must be `https://github.com/...`
+(or the host in `RADIUS_GIT_ALLOWED_HOSTS`, for GitHub Enterprise Server).
 
 ## 4. Start the stack
 
@@ -249,7 +261,8 @@ structure is expected, which is exactly what this demo is meant to confirm.
 | Analysis `completed` but nothing on the pull request | `GITHUB_PUBLISH_RESULTS=false`, credentials missing in the **worker**, or `checks`/`pull_requests` not writable | Run the `exec worker` check; read `docker compose logs worker` for "Could not publish GitHub Check Run or PR comment" (the message names the GitHub error). |
 | Analysis stays `pending` | Worker not running | `docker compose ps`; `docker compose logs worker`. |
 | Analysis `failed`, clone error | App lacks **Contents: Read**, or the repository is large/empty | Check the permission; read the worker log (token values are redacted). |
-| `409 GITHUB_INSTALLATION_MISMATCH` | The organization is already linked to a different installation (another account's) | One Radius organization uses one installation. Use a repository under the same account, or a different organization id. |
+| `403 GITHUB_INSTALLATION_NOT_LINKED` | The organization has no installation yet and single-tenant development mode is off | Dev stack: use `make dev` (`RADIUS_ENV=development`) or set `RADIUS_GITHUB_DEV_SINGLE_TENANT=true`. Otherwise have the installation linked to the organization first ([INSTALLATION_BINDING](../security/INSTALLATION_BINDING.md)). |
+| `409 GITHUB_INSTALLATION_MISMATCH` | The organization is already linked to a different installation (another account's), or this repository's installation belongs to another organization | One Radius organization uses one installation. Use a repository under the same account, or a different organization id. |
 | Rate limit message (`GITHUB_RATE_LIMITED` / "rate limit hit") | Primary (5000/h per installation) or secondary limit | The client waits and retries within a budget; if it still fails the message says how long GitHub asks you to wait. Re-run after that. |
 | `sync-pull-requests` returns the stored PRs and `meta.github = not_configured` | The API has no App credentials | Same as the first row. |
 | `sync-pull-requests` skips a pull request (`meta.skipped`) | GitHub returned a shape Radius could not parse | The reason is in `meta.skipped[].reason`; the dashboard lists it under the sync banner. |
@@ -265,7 +278,7 @@ structure is expected, which is exactly what this demo is meant to confirm.
 - The poller only sees repositories connected through Radius (dashboard or `connect-github`) whose
   organization has an active installation id.
 - `sync-pull-requests` reads only the first 100 open pull requests and does not analyze drafts.
-- One Radius organization maps to one GitHub installation.
+- One Radius organization maps to one GitHub installation, and one installation to one organization.
 - Verified only against a fake GitHub (see the status line). Real-GitHub behaviours the fake cannot
   show: secondary rate limits, organization SSO enforcement, renamed repositories, differences in
   GitHub's JSON for unusual pull requests.
