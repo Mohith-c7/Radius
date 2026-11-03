@@ -92,3 +92,28 @@ def test_fake_github_rejects_unsigned_and_unknown_calls() -> None:
         {"Authorization": "Bearer ghs_x"}, None,
     )
     assert status == 404 and fake.unhandled
+
+
+def test_fixture_selectors_resolve_to_one_directory() -> None:
+    assert smoke.fixture_dir("03").name == "03_incorrect_passes_weak_tests"
+    assert smoke.fixture_dir("08_multi").name == "08_multi_criterion_partial_evidence"
+    assert [smoke.fixture_dir(n).name[:2] for n in smoke.DEFAULT_FIXTURES] == ["01", "04"]
+    with pytest.raises(SystemExit):
+        smoke.fixture_dir("99")
+
+
+def test_known_deviations_are_real_and_explained() -> None:
+    doc = json.loads(smoke.EXPECTATIONS.read_text(encoding="utf-8"))
+    by_name = {f["fixture"]: f for f in doc["fixtures"]}
+    for name, dev in smoke.KNOWN_E2E_DEVIATIONS.items():
+        exp = by_name[name]
+        for key in ("verdict", "decided_by"):
+            if key in dev:
+                want = exp["expected_verdict"] if key == "verdict" else exp["decided_by"].split(" ")[0]
+                assert dev[key][0] != want and len(dev[key][1]) > 20, (name, key)
+        for cid, (state, why) in dev.get("states", {}).items():
+            assert state != exp["gold"]["states"][cid] and len(why) > 20, (name, cid)
+        for cid, (value, why) in dev.get("S", {}).items():
+            assert abs(value - exp["gold"]["S"][cid]) > doc["tolerance"] and len(why) > 20, (name, cid)
+    offline = by_name["06_hallucinated_dependency"]["offline_registry_variant"]
+    assert smoke.KNOWN_E2E_DEVIATIONS["06_hallucinated_dependency"]["verdict"][0] == offline["expected_verdict"]
