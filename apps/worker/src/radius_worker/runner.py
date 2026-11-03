@@ -1,6 +1,8 @@
 """Worker runtime shell."""
 
 import base64
+import signal
+import threading
 import time
 import traceback
 from collections.abc import Callable
@@ -76,6 +78,7 @@ from radius_worker.orchestrator import (
     ExecuteAnalysisCommand,
     Phase1AnalysisOrchestrator,
 )
+from radius_worker.poller import PullRequestPoller
 from radius_worker.queue import InMemoryAnalysisQueue
 from radius_worker.verdict_v2.publish import publish_in_job as publish_v2_in_job
 from radius_worker.verdict_v2.publish import v2_replaces_v1
@@ -100,8 +103,25 @@ def run_worker() -> None:
     runtime = create_sql_worker_runtime(settings)
     if obs_metrics.metrics_enabled():
         obs_metrics.set_queue_depth_provider(runtime.queue_depths)
+    _install_stop_handlers(runtime.stop_event)
     print("Radius worker ready")
     runtime.run_loop(poll_interval_seconds=settings.poll_interval_seconds)
+    LOGGER.info("Radius worker stopped", extra={"outcome": "worker_stopped"})
+
+
+def _install_stop_handlers(stop_event: threading.Event) -> None:
+    """SIGTERM / SIGINT finish the current job, then end the loop (no new work is claimed)."""
+
+    def _stop(signum, _frame) -> None:
+        LOGGER.info("Stop requested", extra={"outcome": "worker_stopping", "signal": signum})
+        stop_event.set()
+
+    if threading.current_thread() is not threading.main_thread():
+        return
+    for name in ("SIGTERM", "SIGINT"):
+        sig = getattr(signal, name, None)
+        if sig is not None:
+            signal.signal(sig, _stop)
 
 
 def configure_observability(settings: ObservabilitySettings | None = None) -> None:
@@ -131,6 +151,26 @@ class SqlAlchemyWorkerRuntime:
     #: VS-07: Stage B recompute used by the verdict v2 outbox consumer (``None`` =
     #: republish the latest stored verdict without recomputing). Wired by VS-06.
     verdict_v2_recomputer: VerdictV2Recomputer | None = None
+    #: Set to end ``run_loop`` after the current job (SIGTERM / SIGINT in ``run_worker``).
+    stop_event: threading.Event = field(default_factory=threading.Event)
+    #: Opt-in pull request poller (``None`` = off; built from settings when unset).
+    poller: PullRequestPoller | None = None
+
+    def __post_init__(self) -> None:
+        if self.poller is None and self.settings.github_poll_interval_seconds > 0:
+            if not self.github_client.settings.enabled:
+                LOGGER.warning(
+                    "RADIUS_GITHUB_POLL_INTERVAL_SECONDS is set but GITHUB_APP_ID / the "
+                    "private key are missing in the worker; the poller stays off",
+                    extra={"outcome": "poll_disabled"},
+                )
+                return
+            self.poller = PullRequestPoller(
+                session_factory=self.session_factory,
+                github_client=self.github_client,
+                settings=self.settings,
+                should_stop=self.stop_event.is_set,
+            )
 
     def run_once(self) -> bool:
         """Claim and execute one durable analysis job."""
@@ -355,8 +395,30 @@ class SqlAlchemyWorkerRuntime:
 
         idle_cycles = 0
         next_reap = 0.0
-        while True:
+        next_poll = (
+            time.monotonic() + self.poller.first_delay() if self.poller is not None else None
+        )
+        if self.poller is not None:
+            LOGGER.info(
+                "GitHub pull request poller enabled",
+                extra={
+                    "outcome": "poll_enabled",
+                    "interval_seconds": self.poller.interval,
+                    "max_analyses_per_tick": self.settings.github_poll_max_analyses_per_tick,
+                    "max_repositories_per_tick": (
+                        self.settings.github_poll_max_repositories_per_tick
+                    ),
+                },
+            )
+        while not self.stop_event.is_set():
             self._process_verdict_v2_requests()
+            if (
+                self.poller is not None
+                and next_poll is not None
+                and time.monotonic() >= next_poll
+            ):
+                self.poller.poll_once()  # never raises
+                next_poll = time.monotonic() + self.poller.next_delay()
             if time.monotonic() >= next_reap:
                 next_reap = time.monotonic() + self.settings.reaper_interval_seconds
                 try:
@@ -374,7 +436,7 @@ class SqlAlchemyWorkerRuntime:
                     extra={"outcome": "iteration_error", "error": redact_secrets(exc)},
                 )
                 idle_cycles = 0
-                time.sleep(poll_interval_seconds)
+                self.stop_event.wait(poll_interval_seconds)
                 continue
             if processed:
                 idle_cycles = 0
@@ -385,7 +447,7 @@ class SqlAlchemyWorkerRuntime:
                 and idle_cycles >= stop_after_idle_cycles
             ):
                 return
-            time.sleep(poll_interval_seconds)
+            self.stop_event.wait(poll_interval_seconds)
 
     def _process_verdict_v2_requests(self) -> None:
         """VS-07: republish after CI. No-op with the flag off; never raises."""
