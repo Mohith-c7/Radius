@@ -82,7 +82,11 @@ test("API down, 5xx, malformed body and timeout all fail closed (not cached)", a
     assert.equal(f.calls.length, 2, "failures must not be cached");
   }
   const slow = makeFetch((_u, init) => new Promise((_res, rej) => init.signal.addEventListener("abort", () => rej(new Error("timeout")))));
+  // AbortSignal.timeout() uses an unref'd timer; a fake fetch holds no handle, so on some Node versions the
+  // event loop would drain before the abort fires. A real request keeps it alive in production.
+  const keepAlive = setTimeout(() => {}, 5000);
   const r = await session.validateSession(goodCookie, opts(slow.impl, { timeoutMs: 20 }));
+  clearTimeout(keepAlive);
   assert.deepEqual(r, { ok: false, reason: "unavailable" });
 });
 

@@ -152,7 +152,9 @@ export function LoginForm() {
         body: JSON.stringify({ email, password, remember }),
       });
       await refresh();
-      router.replace("/");
+      // A full navigation, not router.replace: while signed out the client router may have prefetched
+      // "/" and cached the redirect to /login, and a soft navigation would reuse that stale result.
+      window.location.assign("/");
     } catch (reason) {
       setError(
         reason instanceof Error
