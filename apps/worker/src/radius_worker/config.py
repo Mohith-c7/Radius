@@ -94,8 +94,11 @@ class WorkerSettings(DatabaseSettings):
         le=2592000,
         alias="WORKER_ANALYSIS_DEADLINE_SECONDS",
         description=(
-            "An analysis still pending/running this long after it started is "
-            "failed by the reaper and its GitHub check completed. Keep it above "
+            "An analysis that is still pending/running this long after its job last changed "
+            "(queued, claimed or requeued) is failed by the reaper and its GitHub check "
+            "completed. A job whose worker keeps renewing its lease (heartbeat) is never "
+            "reaped for being long; one that stops heartbeating is recovered after "
+            "WORKER_JOB_STALE_AFTER_SECONDS. Keep it above "
             "WORKER_JOB_STALE_AFTER_SECONDS * WORKER_JOB_MAX_ATTEMPTS plus queue wait."
         ),
     )
@@ -523,6 +526,19 @@ class WorkerSettings(DatabaseSettings):
             "failing CI, high-severity tamper). strict: verified is success."
         ),
     )
+    verdict_v2_confirm_policy: str = Field(
+        default="allow_unverified",
+        alias="RADIUS_VERDICT_V2_CONFIRM_POLICY",
+        description=(
+            "Who may lift the unconfirmed-intent block and the author-hint cap by confirming "
+            "a criterion (B-07). The confirmer is the authenticated principal recorded by the "
+            "API. A confirmer linked to the PR author's GitHub login never counts. "
+            "allow_unverified (default): a confirmer whose GitHub link is unknown counts but "
+            "is labelled 'unverified confirmer' in the verdict. require_second_person: only "
+            "a confirmer verifiably linked to a different GitHub account counts. An "
+            "unrecognised value stops the worker at start."
+        ),
+    )
     intent_extraction_mode: str = Field(
         default="sections",
         alias="RADIUS_INTENT_EXTRACTION_MODE",
@@ -561,6 +577,17 @@ class WorkerSettings(DatabaseSettings):
     def _parse_check_conclusions(cls, value: object) -> str:
         """Only the exact word ``strict`` opts in; anything else stays advisory."""
         return "strict" if str(value).strip().lower() == "strict" else "advisory"
+
+    @field_validator("verdict_v2_confirm_policy", mode="before")
+    @classmethod
+    def _check_confirm_policy(cls, value: object) -> str:
+        text = str(value).strip().lower() or "allow_unverified"
+        if text == "allow":
+            text = "allow_unverified"
+        if text not in {"allow_unverified", "require_second_person"}:
+            msg = "RADIUS_VERDICT_V2_CONFIRM_POLICY must be allow_unverified or require_second_person."
+            raise ValueError(msg)
+        return text
 
     @field_validator("verdict_v2_mode", mode="before")
     @classmethod

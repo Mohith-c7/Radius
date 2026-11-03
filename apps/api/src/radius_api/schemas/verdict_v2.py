@@ -194,8 +194,11 @@ class CriterionOut(_Out):
     mutation: CriterionMutationOut | None = None
     confirmed_by: str | None = Field(
         default=None,
-        description="Optional (B-07). Unverified label of the actor who confirmed or edited the "
-        "criterion; may carry a suffix when the confirmation was not counted. UNTRUSTED.",
+        description="Optional (B-07, DEC-040). Who confirmed or edited the criterion, from the "
+        "authenticated principal recorded by the intent API (a GitHub login when the signed-in "
+        "user is linked to one, else a user or API key handle). A suffix says '(unverified "
+        "confirmer)' when the GitHub link is unknown, or why the confirmation was not counted. "
+        "Render as text only.",
     )
 
 

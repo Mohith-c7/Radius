@@ -239,3 +239,25 @@ test("actor label comes from the session user and is header-safe", () => {
   assert.equal(m.actorLabel({ id: "bad id\r\nX-Evil: 1" }), null);
   assert.equal(m.actorLabel({ id: "x".repeat(200) }), null);
 });
+
+// --- B-11: the verbatim source quote next to an LLM-proposed criterion
+const llmOrigin = { method: "llm", extractor_version: "v1", source_kind: "pr_body", source_id: "pr-body", source_hash: "h", retrieved_at: "2026-11-02T10:00:00Z" };
+
+test("source quote is shown only for LLM-proposed criteria and only as plain text", () => {
+  const html = '<img src=x onerror="alert(1)"> must log in';
+  const view = m.sourceQuoteView(crit({ origin: llmOrigin, source_quote: html }));
+  assert.deepEqual(view, { quote: html, truncated: false }); // returned verbatim; React renders it as text
+  assert.equal(m.sourceQuoteView(crit({ source_quote: html })), null); // deterministic origin
+  assert.equal(m.sourceQuoteView(crit({ origin: llmOrigin, source_quote: null })), null);
+  assert.equal(m.sourceQuoteView(crit({ origin: llmOrigin, source_quote: "   " })), null);
+  assert.equal(m.sourceQuoteView(crit({ origin: llmOrigin })), null); // older API without the field
+});
+
+test("a long quote is cut client side and the server truncation flag is kept", () => {
+  const long = "x".repeat(m.MAX_SOURCE_QUOTE_CHARS + 50);
+  const cut = m.sourceQuoteView(crit({ origin: llmOrigin, source_quote: long }));
+  assert.equal(Array.from(cut.quote).length, m.MAX_SOURCE_QUOTE_CHARS);
+  assert.equal(cut.truncated, true);
+  const server = m.sourceQuoteView(crit({ origin: llmOrigin, source_quote: "short quote here", source_quote_truncated: true }));
+  assert.equal(server.truncated, true);
+});

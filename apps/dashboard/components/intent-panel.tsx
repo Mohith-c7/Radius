@@ -61,6 +61,7 @@ import {
   sourceKindLabel,
   stateMeta,
   testabilityMeta,
+  sourceQuoteView,
   truncateText,
   validateCriterionText,
   validateSourceText,
@@ -612,6 +613,7 @@ function CriterionRow({
   const actions = legalActions(criterion.state);
   const label = truncateText(criterion.text, 60).text;
   const draftLen = countCodePoints(draft);
+  const quote = sourceQuoteView(criterion);
 
   useEffect(() => {
     if (editing) editRef.current?.focus();
@@ -682,6 +684,13 @@ function CriterionRow({
         </form>
       ) : (
         <p className="intent-criterion-text"><LongText text={criterion.text} /></p>
+      )}
+
+      {quote && (
+        <figure className="intent-quote" data-testid="intent-source-quote">
+          <figcaption className="muted">The model quoted this from the source{quote.truncated ? " (shortened)" : ""}. Confirm only if the wording above is what it says:</figcaption>
+          <blockquote><LongText text={quote.quote} max={240} /></blockquote>
+        </figure>
       )}
 
       {state.tone === "warn" || state.tone === "bad" ? (

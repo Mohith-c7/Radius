@@ -33,11 +33,40 @@ from radius_api.schemas.intent import (
     SpanView,
 )
 
+#: Longest source quote returned with a criterion (B-11).
+MAX_SOURCE_QUOTE_CHARS = 500
 
-def criterion_view(criterion: Criterion) -> CriterionView:
-    """Return the API view of a criterion."""
+
+def _source_quote(
+    criterion: Criterion, sources: dict[tuple[str, str, str], IntentSource] | None
+) -> tuple[str | None, bool]:
+    """The verbatim source text of an LLM-proposed criterion (B-11), else ``(None, False)``.
+
+    The extractor accepts a proposal only when its quote equals the source text at the span,
+    so the span is the evidence a reviewer must compare the model's wording with."""
+
+    if criterion.origin.extraction_method.value != "llm" or not sources:
+        return None, False
+    ref = criterion.origin.source
+    stored = sources.get((ref.kind.value, ref.source_id, ref.raw_text_hash))
+    if stored is None:
+        return None, False
+    if not criterion.span.within(stored.text):
+        return None, False
+    quote = criterion.span.slice(stored.text)
+    if not quote.strip():
+        return None, False
+    return quote[:MAX_SOURCE_QUOTE_CHARS], len(quote) > MAX_SOURCE_QUOTE_CHARS
+
+
+def criterion_view(
+    criterion: Criterion,
+    sources: dict[tuple[str, str, str], IntentSource] | None = None,
+) -> CriterionView:
+    """Return the API view of a criterion (``sources``: the stored texts, for B-11)."""
 
     origin = criterion.origin
+    quote, quote_truncated = _source_quote(criterion, sources)
     return CriterionView(
         id=criterion.id,
         text=criterion.text,
@@ -63,6 +92,8 @@ def criterion_view(criterion: Criterion) -> CriterionView:
             tests=list(criterion.hints.tests),
             label=criterion.hints.label,
         ),
+        source_quote=quote,
+        source_quote_truncated=quote_truncated,
     )
 
 
@@ -106,7 +137,7 @@ def snapshot_view(bundle: SnapshotBundle) -> SnapshotView:
     return SnapshotView(
         **_summary_fields(snapshot),
         etag=bundle.etag,
-        criteria=[criterion_view(c) for c in snapshot.criteria],
+        criteria=[criterion_view(c, bundle.sources) for c in snapshot.criteria],
         sources=[_source_summary(ref, bundle) for ref in snapshot.sources],
     )
 
@@ -169,7 +200,7 @@ def criterion_result_view(outcome: CriterionOutcome) -> CriterionResultView:
 
     snapshot = outcome.bundle.snapshot
     return CriterionResultView(
-        criterion=criterion_view(outcome.criterion),
+        criterion=criterion_view(outcome.criterion, outcome.bundle.sources),
         snapshot_id=snapshot.snapshot_id,
         snapshot_version=snapshot.version,
         etag=outcome.bundle.etag,

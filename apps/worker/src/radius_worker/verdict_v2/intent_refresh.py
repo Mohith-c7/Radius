@@ -18,9 +18,11 @@ Separation of duties (B-07): the confirming actor is recorded on the criterion
 (``confirmed_by``, shown in the verdict). When a ``ConfirmPolicy`` says the actor is the
 PR author, the confirmation is NOT counted: the criterion stays unconfirmed (the
 ``unconfirmed_inferred_intent`` block and the author-hint cap stay) and a reason says why.
-Actor labels come from the unverified ``X-Radius-Actor`` header, so this is a best-effort
-guard against the honest mistake and the lazy bypass, not against a determined author
-(see the threat model).
+The actor is written by the intent API from the authenticated principal (a signed-in
+session user, or the API key), never from a request header (DEC-040). A session user linked
+to a GitHub account is compared with the PR author's login; an unlinked confirmer is handled
+by the ``confirm_policy`` (default: counted but labelled "unverified confirmer";
+``require_second_person``: not counted). Residual risk: see the threat model.
 
 Limits: no re-linking (hints or text edited after the analysis do not create new
 edges until a new analysis), criteria that were not in Stage A are not scored (B-09: the
@@ -33,7 +35,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from types import SimpleNamespace
 from typing import Any
 
@@ -53,27 +55,140 @@ def _state(criterion: Any) -> str:
     return adapters._enum_value(getattr(criterion, "state", "proposed"))
 
 
-#: ``(actor label, PR author login) -> True`` when the confirmation must not count.
-ConfirmPolicy = Callable[[str, str | None], bool]
-
 _LABEL_PREFIX = re.compile(r"^(?:github|gh|user):", re.IGNORECASE)
 NOT_IN_ANALYSIS_PREFIX = "intent_not_in_analysis:"
 
+#: ``confirm_policy`` values (setting ``RADIUS_VERDICT_V2_CONFIRM_POLICY``).
+POLICY_ALLOW_UNVERIFIED = "allow_unverified"
+POLICY_REQUIRE_SECOND_PERSON = "require_second_person"
+CONFIRM_POLICIES = (POLICY_ALLOW_UNVERIFIED, POLICY_REQUIRE_SECOND_PERSON)
+
+UNVERIFIED_NOTE = "unverified confirmer"
+SELF_NOTE = "the PR author: not counted"
+SECOND_PERSON_NOTE = "not counted: not verified as a different person than the PR author"
+
+
+@dataclass(frozen=True, slots=True)
+class Confirmer:
+    """Who confirmed, as recorded by the API from the authenticated principal (B-07).
+
+    ``kind``: ``user`` (a signed-in session), ``api_key`` / ``legacy_key`` / ``dev`` (an
+    organisation credential, no person) or ``label`` (an old row written before DEC-040,
+    whose label was an unverified request header). ``github_login`` is set only when the
+    signed-in user is linked to a GitHub account (OAuth), never from a header."""
+
+    kind: str
+    subject: str = ""
+    github_login: str | None = None
+
+    @property
+    def display(self) -> str:
+        if self.github_login:
+            return self.github_login
+        if self.kind == "user":
+            return f"user {self.subject[:8]}" if self.subject else "user"
+        if self.kind == "api_key":
+            return f"api key {self.subject}" if self.subject else "api key"
+        return self.subject or self.kind
+
+    @property
+    def declared_label(self) -> bool:
+        """True when the name was chosen by the caller (old rows, development mode)."""
+
+        return self.kind in {"label", "dev"}
+
+
+@dataclass(frozen=True, slots=True)
+class ConfirmDecision:
+    counted: bool
+    shown: str
+
+
+#: ``(confirmer, PR author login) -> decision``; replaceable (see ``confirm_policy_for``).
+ConfirmPolicy = Callable[[Confirmer, "str | None"], ConfirmDecision]
+
+
+def parse_actor(actor: str) -> Confirmer:
+    """Parse the audit actor ``org:<id>[/<principal>...]`` written by the intent API."""
+
+    _, _, rest = actor.partition("/")
+    rest = rest.strip()
+    if not rest:
+        return Confirmer(kind="org")
+    kind, subject, login = "label", rest, None
+    for part in rest.split("/"):
+        if part.startswith("user="):
+            kind, subject = "user", part[5:]
+        elif part.startswith("key="):
+            kind, subject = "api_key", part[4:]
+        elif part.startswith("dev="):
+            kind, subject = "dev", part[4:]
+        elif part.startswith("gh="):
+            login = part[3:] or None
+        elif part == "legacy-env-key":
+            kind, subject = "legacy_key", part
+    if login is not None and kind != "user":
+        login = None  # only a signed-in session can vouch for a GitHub link
+    return Confirmer(kind=kind, subject=subject, github_login=login)
+
 
 def actor_label(actor: str) -> str:
-    """The human label of an audit actor ``org:<id>[/<label>]`` (empty when none)."""
+    """Display label of an audit actor (empty when none)."""
 
-    _, _, label = actor.partition("/")
-    return label.strip()
+    who = parse_actor(actor)
+    return "" if who.kind == "org" else who.display
 
 
-def default_confirm_policy(label: str, pr_author: str | None) -> bool:
-    """True (reject) when the confirming label names the PR author. Unknown author: accept."""
+def _norm_login(value: str) -> str:
+    return _LABEL_PREFIX.sub("", value).strip().lower()
 
-    if not pr_author or not label:
+
+def _is_author(who: Confirmer, pr_author: str | None) -> bool:
+    if not pr_author:
         return False
-    norm = _LABEL_PREFIX.sub("", label).strip().lower()
-    return bool(norm) and norm == _LABEL_PREFIX.sub("", pr_author).strip().lower()
+    author = _norm_login(pr_author)
+    if not author:
+        return False
+    if who.github_login and _norm_login(who.github_login) == author:
+        return True
+    # a name the caller chose (old rows, development) equal to the author is never counted
+    return who.declared_label and _norm_login(who.subject) == author
+
+
+def default_confirm_policy(who: Confirmer, pr_author: str | None) -> ConfirmDecision:
+    """Default: a self-confirmation never counts; a confirmer whose GitHub link is unknown
+    counts but is labelled as unverified (it may be the PR author under another identity)."""
+
+    name = who.display if who.kind != "org" else "org"
+    if _is_author(who, pr_author):
+        return ConfirmDecision(False, f"{name} ({SELF_NOTE})")
+    if who.github_login and pr_author:
+        return ConfirmDecision(True, name)  # verified: a linked account that is not the author
+    return ConfirmDecision(True, f"{name} ({UNVERIFIED_NOTE})")
+
+
+def require_second_person_policy(who: Confirmer, pr_author: str | None) -> ConfirmDecision:
+    """Strict: only a confirmer verifiably linked to a GitHub account other than the PR
+    author's counts; an unknown link or an unknown author does not."""
+
+    name = who.display if who.kind != "org" else "org"
+    if _is_author(who, pr_author):
+        return ConfirmDecision(False, f"{name} ({SELF_NOTE})")
+    if who.github_login and pr_author:
+        return ConfirmDecision(True, name)
+    return ConfirmDecision(False, f"{name} ({SECOND_PERSON_NOTE})")
+
+
+def confirm_policy_for(name: str | None) -> ConfirmPolicy:
+    """The policy for a setting value; an unknown value is an error, not a silent default."""
+
+    value = (name or POLICY_ALLOW_UNVERIFIED).strip().lower()
+    if value in {POLICY_ALLOW_UNVERIFIED, "allow"}:
+        return default_confirm_policy
+    if value == POLICY_REQUIRE_SECOND_PERSON:
+        return require_second_person_policy
+    msg = f"confirm policy must be one of {', '.join(CONFIRM_POLICIES)}."
+    raise ValueError(msg)
 
 
 def confirming_actors(changes: Iterable[Any]) -> dict[str, str]:
@@ -101,15 +216,21 @@ def refresh_stage_a_intent(
     """Return ``stage_a`` with the current human decisions applied (identity if none).
 
     ``actors`` maps criterion id to the audit actor of its latest confirm / edit; with the
-    PR author's login a self-confirmation is ignored (B-07)."""
+    PR author's login a self-confirmation is ignored; ``confirm_policy`` decides the rest (B-07)."""
 
     current = {str(getattr(c, "id", "")): c for c in criteria}
-    labels = {cid: actor_label(a) for cid, a in (actors or {}).items()}
-    # self-confirmed criteria are treated as not confirmed everywhere below
+    # one decision per confirmed criterion; a row without a recorded actor is an anonymous
+    # organisation confirmation (counts under the default policy, labelled unverified)
+    decisions = {
+        cid: confirm_policy(parse_actor((actors or {}).get(cid, "")), pr_author)
+        for cid, c in current.items()
+        if _state(c) in _CONFIRMED
+    }
+    # criteria whose confirmation the policy refuses are treated as not confirmed below
     self_confirmed = {
         cid
         for cid, c in current.items()
-        if _state(c) in _CONFIRMED and confirm_policy(labels.get(cid, ""), pr_author)
+        if _state(c) in _CONFIRMED and cid in decisions and not decisions[cid].counted
     }
     for cid in self_confirmed:
         db = current[cid]
@@ -141,7 +262,7 @@ def refresh_stage_a_intent(
                     text=text if life == "edited" and text else item.text,
                     provenance=_HUMAN,
                     hints_provenance=_HUMAN,
-                    confirmed_by=labels.get(item.criterion_id) or "org",
+                    confirmed_by=decisions[item.criterion_id].shown[:160],
                 )
             )
             continue
@@ -150,7 +271,7 @@ def refresh_stage_a_intent(
                 item,
                 lifecycle=life,
                 confirmed_by=(
-                    f"{labels.get(item.criterion_id) or 'org'} (the PR author: not counted)"
+                    decisions[item.criterion_id].shown[:160]
                     if item.criterion_id in self_confirmed
                     else None
                 ),

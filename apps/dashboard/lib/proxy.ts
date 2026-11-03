@@ -66,6 +66,8 @@ export function checkRoute(segments: string[], method: string): "ok" | "not_foun
 export const IF_MATCH_PATTERN =
   /^(\*|"[A-Za-z0-9_-]{1,128}"(\s*,\s*"[A-Za-z0-9_-]{1,128}"){0,9})$/;
 // Same pattern the API enforces for X-Radius-Actor.
+// A signed session token (JWT): three base64url parts.
+export const SESSION_TOKEN_PATTERN = /^[A-Za-z0-9_-]{4,1024}\.[A-Za-z0-9_-]{4,2048}\.[A-Za-z0-9_-]{4,1024}$/;
 export const ACTOR_PATTERN = /^[A-Za-z0-9_.@:+-]{1,128}$/;
 
 function isIntentWrite(segments: string[] | undefined, method: string | undefined): boolean {
@@ -92,7 +94,7 @@ export function buildUpstreamUrl(config: ProxyConfig, segments: string[], search
 export function buildUpstreamHeaders(
   config: ProxyConfig,
   incoming: Headers,
-  route: { segments?: string[]; method?: string; actor?: string } = {},
+  route: { segments?: string[]; method?: string; actor?: string; session?: string } = {},
 ): Headers {
   const headers = new Headers();
   headers.set("Accept", "application/json");
@@ -105,10 +107,17 @@ export function buildUpstreamHeaders(
     // values. No other client-supplied X-Radius-* header is ever forwarded.
     const ifMatch = incoming.get("if-match");
     if (ifMatch && IF_MATCH_PATTERN.test(ifMatch)) headers.set("If-Match", ifMatch);
-    // When the route handler validated the session, the audit actor is the
-    // signed-in user, never a client-chosen header (C-01).
-    const actor = route.actor !== undefined ? route.actor : incoming.get("x-radius-actor");
-    if (actor && ACTOR_PATTERN.test(actor)) headers.set("X-Radius-Actor", actor);
+    // B-07: when the route handler validated the session, the API is given that session
+    // (server to server) and derives the audit actor from it: the signed-in user and their
+    // linked GitHub account. A client-chosen actor header is never forwarded then. Without a
+    // validated session (development) the old label is passed; the API honours it only in
+    // its insecure development mode.
+    if (route.session && SESSION_TOKEN_PATTERN.test(route.session)) {
+      headers.set("X-Radius-Session", route.session);
+    } else {
+      const actor = route.actor !== undefined ? route.actor : incoming.get("x-radius-actor");
+      if (actor && ACTOR_PATTERN.test(actor)) headers.set("X-Radius-Actor", actor);
+    }
   }
   const ct = (incoming.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
   if (FORWARDED_CONTENT_TYPES.includes(ct)) headers.set("Content-Type", ct);

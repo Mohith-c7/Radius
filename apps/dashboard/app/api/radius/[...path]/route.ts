@@ -29,8 +29,10 @@ async function handle(request: NextRequest, ctx: { params: Promise<{ path: strin
   // (short cache), whatever the middleware decided. Fail closed.
   const config = loadProxyConfig();
   let actor: string | undefined;
+  let sessionToken: string | undefined;
   if (process.env.NODE_ENV !== "development") {
-    const session = await validateSession(request.cookies.get(SESSION_COOKIE)?.value, {
+    const cookieValue = request.cookies.get(SESSION_COOKIE)?.value;
+    const session = await validateSession(cookieValue, {
       apiBaseUrl: config.apiBaseUrl,
     });
     if (!session.ok) {
@@ -42,6 +44,8 @@ async function handle(request: NextRequest, ctx: { params: Promise<{ path: strin
     if (!roleAllows(session.user, request.method)) {
       return error(403, "FORBIDDEN", "Your role does not allow this action.");
     }
+    // B-07: the API resolves the confirmer from this session (not from a label).
+    sessionToken = cookieValue;
     actor = session.user.email;
   }
 
@@ -64,6 +68,7 @@ async function handle(request: NextRequest, ctx: { params: Promise<{ path: strin
         segments: path,
         method: request.method,
         actor,
+        session: sessionToken,
       }),
       body: body && body.byteLength > 0 ? body : undefined,
       cache: "no-store",

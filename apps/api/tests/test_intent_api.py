@@ -461,9 +461,11 @@ def test_confirm_reject_reopen_and_audit_trail(env: Env) -> None:
         ("confirmed", "rejected"),
         ("rejected", "proposed"),
     ]
-    assert history[0]["actor"] == f"org:{env.org_a}/dana@example.com"
+    # B-07: this app runs in the insecure development mode, the only mode that still honours
+    # the label, and it is marked as a declared (unverified) one
+    assert history[0]["actor"] == f"org:{env.org_a}/dev=dana@example.com"
     assert history[0]["reason"] == "matches the ticket"
-    assert history[1]["actor"] == f"org:{env.org_a}"
+    assert history[1]["actor"] == f"org:{env.org_a}/dev"
     assert history[0]["snapshot_version"] == 1
 
 
@@ -652,7 +654,7 @@ def test_add_manual_criterion_is_human_and_confirmed(env: Env) -> None:
     assert data["snapshot_version"] == 1
     history = env.get(analysis, f"/criteria/{criterion['id']}/history").json()["data"]
     assert history[0]["new_state"] == "confirmed"
-    assert history[0]["actor"] == f"org:{env.org_a}"
+    assert history[0]["actor"] == f"org:{env.org_a}/dev"
 
     again = _add(env, analysis, "  audit LOGS are kept for 90 days ")
     assert again.status_code == 200
@@ -833,6 +835,56 @@ def test_extractors_are_wired_through_the_container(env: Env) -> None:
 
     methods = {c["origin"]["method"] for c in _criteria(response)}
     assert "llm" in methods
+
+
+class _WholeLineExtractor:
+    """An LLM-method extractor whose span is the whole first line (the cited quote)."""
+
+    def extract(self, source: IntentSource) -> tuple[Criterion, ...]:
+        if not source.text.startswith("QUOTE"):
+            return ()
+        end = source.text.find("\n") if "\n" in source.text else len(source.text)
+        return (
+            Criterion.create(
+                source,
+                Span(source.source_id, 0, end),
+                extraction_method=ExtractionMethod.LLM,
+                extractor_version="test-llm-v1",
+                text="The system rejects empty input",
+            ),
+        )
+
+
+def test_b11_llm_criterion_carries_its_verbatim_source_quote(env: Env) -> None:
+    env.app.state.container.intent_extractors += (_WholeLineExtractor(),)
+    analysis = env.analysis()
+    line = "QUOTE <b>Reject</b> empty input & log it"
+
+    response = env.submit(analysis, f"{line}\nsecond line stays out\n", kind="agent_prompt")
+
+    llm = [c for c in _criteria(response) if c["origin"]["method"] == "llm"]
+    assert [c["source_quote"] for c in llm] == [line]  # verbatim, markup untouched (UI escapes)
+    assert llm[0]["source_quote_truncated"] is False
+    assert llm[0]["text"] == "The system rejects empty input"
+    # the same field on the single-criterion write result
+    confirmed = env.patch(analysis, llm[0]["id"], {"action": "confirm"})
+    assert confirmed.json()["data"]["criterion"]["source_quote"] == line
+
+
+def test_b11_other_origins_have_no_quote_and_long_quotes_are_cut(env: Env) -> None:
+    env.app.state.container.intent_extractors += (_WholeLineExtractor(),)
+    analysis = env.analysis()
+    long_line = "QUOTE " + "x" * 800
+
+    response = env.submit(analysis, long_line, kind="agent_prompt")
+
+    by_method = {c["origin"]["method"]: c for c in _criteria(response)}
+    assert len(by_method["llm"]["source_quote"]) == 500
+    assert by_method["llm"]["source_quote_truncated"] is True
+    env.submit(analysis, BODY, kind="pr_body")
+    for c in env.get(analysis).json()["data"]["criteria"]:
+        if c["origin"]["method"] != "llm":
+            assert c["source_quote"] is None
 
 
 def test_sql_commits_per_request_and_survives_a_new_app(

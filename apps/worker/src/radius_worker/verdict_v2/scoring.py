@@ -41,7 +41,6 @@ from radius_evidence.domain.enums import (
     EvidenceKind,
     Flag,
     NodeKind,
-    Outcome,
     SupportState,
 )
 from radius_evidence.domain.factories import normalize_test_id
@@ -82,7 +81,6 @@ from radius_evidence.domain.support import (
 from radius_evidence.domain.versions import (
     ALGO_VERSION,
     BUNDLE_SCHEMA,
-    CONTRACT_VERSION,
     DEFAULT_COMPONENT_VERSIONS,
     MUTATION_VERSION,
 )
@@ -101,7 +99,8 @@ from radius_evidence.policy.repo_config import resolve_repo_config
 from radius_evidence.policy.report import policy_block, waiver_block
 from radius_shared.logging import get_logger
 from radius_shared.verdict_v2_flag import VerdictV2Mode
-from radius_shared.verdict_v2_wording import presentation
+from radius_shared.verdict_v2_payload import StoredVerdict
+from radius_shared.verdict_v2_payload import build_payload as shared_build_payload
 
 from radius_worker.verdict_v2.adapters import behavioral_symbols, failed_case_count
 from radius_worker.verdict_v2.suggested_tests import make_suggester
@@ -727,105 +726,6 @@ def _versions(sa: StageAInput) -> dict[str, str]:
 
 # ------------------------------------------------------------------ outputs
 
-_ACTION_TEXT = {
-    "no_linked_test": (
-        "No test is linked to this criterion. Add a test that checks it, or add a "
-        "tests hint in .radius/intent.yml."
-    ),
-    "weak_assertion": (
-        "The linked tests assert too little. Assert the exact expected value."
-    ),
-    "single_test": (
-        "Support is below the threshold. Add another independent case or a "
-        "boundary case."
-    ),
-    "failing_test": "A linked test fails. Fix the code or the test.",
-    "needs_typed_evidence": (
-        "This criterion needs non-functional evidence that alpha does not collect."
-    ),
-}
-
-
-def next_actions(criteria: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Fixed-text actions per criterion (same rules as the stored-bundle reader)."""
-
-    out: list[dict[str, Any]] = []
-    for c in criteria:
-        state, flags = c.get("state"), set(c.get("flags") or [])
-        if state in ("proven", "excluded"):
-            continue
-        if state == "contradicted":
-            code = "failing_test"
-        elif "needs_typed_evidence" in flags:
-            code = "needs_typed_evidence"
-        elif "no_linked_test" in flags:
-            code = "no_linked_test"
-        elif "no_strong_assertion" in flags:
-            code = "weak_assertion"
-        else:
-            code = "single_test"
-        out.append(
-            {
-                "criterion_id": c.get("criterion_id"),
-                "code": code,
-                "text": _ACTION_TEXT[code],
-            }
-        )
-    return out
-
-
-def _item_rows(
-    verdict: VerdictV2, items: Mapping[str, EvidenceItem]
-) -> dict[str, list[dict[str, Any]]]:
-    out: dict[str, list[dict[str, Any]]] = {}
-    for c in verdict.criteria:
-        rows = []
-        for q in c.items:
-            item = items.get(q.evidence_id)
-            outcome = (
-                item.outcome.value if item and item.outcome else Outcome.NOT_RUN.value
-            )
-            rows.append(
-                {
-                    "evidence_id": q.evidence_id,
-                    "test_id": q.path.test_id
-                    if q.path
-                    else (item.subject_id if item else ""),
-                    "outcome": outcome,
-                    "a_static": _r(q.a_static),
-                    "d_eff": _r(q.d_eff),
-                    "i": _r(q.i),
-                    "f": _r(q.f),
-                    "flaky_f": _r(q.flaky_f),
-                    "tamper_penalty": _r(q.tamper_penalty),
-                    "q": _r(q.q),
-                    "l_cs": _r(q.l_cs),
-                    "l_st": _r(q.l_st),
-                    "r_ct": _r(q.r_ct),
-                    "l": _r(q.l),
-                    "term": _r(q.term),
-                    "group_symbol": q.group_symbol or None,
-                    "rank_in_group": q.rank_in_group,
-                    "discount": _r(q.discount),
-                    "contribution": _r(q.contribution),
-                    "status": q.status,
-                }
-                | (
-                    {
-                        "basis": q.basis,
-                        "d_mut": _r(q.d_mut),
-                        "d_mut_lcb": _r(q.d_mut_lcb),
-                        "mutation_n": q.mutation_n,
-                        "mutation_killed": q.mutation_killed,
-                    }
-                    if q.mutation_n is not None
-                    else {}
-                )
-            )
-        out[c.criterion_id] = rows
-    return out
-
-
 def build_payload(
     result: PipelineResult,
     stage_b: StageBInput,
@@ -834,124 +734,45 @@ def build_payload(
     computed_at: str,
     v1: Mapping[str, Any] | None = None,
     dashboard_url: str | None = None,
+    bundle: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """The served payload (``verdict_v2.schema.json``), as the API and renderer see it."""
+    """The served payload (``verdict_v2.schema.json``), as the API and renderer see it.
+
+    B-20: there is ONE payload builder, ``radius_shared.verdict_v2_payload.build_payload``,
+    which is what the API serves from a stored row. This function only wraps the freshly
+    computed bundle in the same ``StoredVerdict`` shape and calls it, so the payload the
+    worker renders and the payload the API serves cannot drift. ``bundle`` is the bundle
+    that is (or will be) stored; when omitted one is built without the size cap.
+    """
 
     v = result.verdict
-    sev: dict[str, int] = {"critical": 0, "high": 0, "medium": 0, "low": 0}
-    for t in v.tamper:
-        if t.severity in sev:
-            sev[t.severity] += 1
-    counts = dict.fromkeys(
-        ("proven", "weak", "unevidenced", "contradicted", "excluded"), 0
+    if bundle is None:
+        bundle = build_bundle(result, stage_b, max_bytes=2**62)
+    stored = StoredVerdict(
+        row_id="",
+        organization_id="",
+        analysis_id=v.analysis_id,
+        head_sha=v.head_sha,
+        revision=v.revision,
+        inputs_digest=str(bundle.get("inputs_digest") or v.inputs_digest),
+        status=STATUS_OK,
+        mode=mode,
+        verdict=v.verdict.value,
+        pending=v.pending,
+        reason_code=bundle.get("reason_code"),
+        algo_version=v.algo_version,
+        profile=v.profile,
+        config_digest=v.config_digest,
+        bundle=bundle,
+        justification=v.justification,
+        error_detail=None,
+        fallback=None,
+        published_at=None,
+        published_digest=None,
+        publish_error=None,
+        computed_at=datetime.strptime(computed_at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC),
     )
-    for c in v.criteria:
-        counts[c.state.value] += 1
-    rows = _item_rows(v, {i.evidence_id: i for i in result.items})
-    criteria = [
-        {
-            "criterion_id": c.criterion_id,
-            "text": c.text,
-            "state": c.state.value,
-            "S": _r(c.S),
-            "S_raw": _r(c.S_raw),
-            "weight": c.weight,
-            "testability": c.testability,
-            "lifecycle": c.lifecycle,
-            "flags": [f.value for f in c.flags],
-            "provenance": c.provenance or "author_pr_body",
-            "hints": [dict(h) for h in c.hints],
-            "reasons": [
-                {"code": r.code, "detail": r.detail, "ref": r.ref}
-                | ({"refs": list(r.refs)} if r.refs else {})
-                for r in c.reasons
-            ],
-            "best_link": (
-                {k: (_r(v) if isinstance(v, float) else v) for k, v in c.best_link.items()}
-                or None
-            ),
-            "items": rows[c.criterion_id],
-        }
-        | (
-            {
-                "evidence_basis": c.mutation.get("basis", BASIS_STATIC),
-                "mutation": dict(c.mutation),
-            }
-            if c.mutation
-            else {}
-        )
-        | ({"confirmed_by": c.confirmed_by} if c.confirmed_by else {})
-        for c in v.criteria
-    ]
-    reasons = [
-        {
-            "code": r.code,
-            "detail": r.detail,
-            "rule_id": r.rule_id or r.ref,
-            "ref": r.ref,
-        }
-        for r in v.reasons
-    ]
-    payload: dict[str, Any] = {
-        "verdict_version": 2,
-        "algo_version": v.algo_version,
-        "profile": v.profile,
-        "mode": mode,
-        "status": STATUS_OK,
-        "analysis_id": v.analysis_id,
-        "head_sha": v.head_sha,
-        "revision": v.revision,
-        "computed_at": computed_at,
-        "verdict": v.verdict.value,
-        "pending": v.pending,
-        "reasons": reasons,
-        "score": None,
-        "score_kind": "none",
-        "trust_probability": None,
-        "contract_version": CONTRACT_VERSION,
-        "alpha": True,
-        "calibrated": False,
-        "evidence_basis": v.evidence_basis,
-        "presentation": presentation(
-            v.verdict.value,
-            counts["proven"],
-            len(v.criteria),
-            author_hint_criteria=sum(
-                1 for c in v.criteria if Flag.AUTHOR_SUPPLIED_HINT in c.flags
-            ),
-            evidence_basis=v.evidence_basis,
-        ),
-        "summary": {
-            "criteria_total": len(v.criteria),
-            **counts,
-            "author_hint_criteria": sum(
-                1 for c in v.criteria if Flag.AUTHOR_SUPPLIED_HINT in c.flags
-            ),
-            "uim": _r(v.uim),
-            "intent_coverage": _r(v.intent_coverage),
-            "tamper": sev,
-            "evidence_basis": v.evidence_basis,
-        },
-        "criteria": criteria,
-        "tamper_findings": [t.to_dict() for t in v.tamper] + [dict(w) for w in v.tamper_waived],
-        "unlinked_symbols": list(v.unlinked_symbols),
-        "next_actions": next_actions(criteria),
-        "justification": v.justification,
-        "v1": dict(v1) if v1 is not None else None,
-        "dashboard_url": dashboard_url,
-        "error": None,
-        "degraded": list(stage_b.stage_a.degraded),
-    }
-    run_block = _run_block(stage_b.stage_a)
-    if run_block is not None:
-        payload["mutation"] = run_block
-    if v.tamper_waived:
-        payload["summary"]["tamper_waived"] = len(v.tamper_waived)
-    if v.policy:
-        payload["policy"] = dict(v.policy)
-    if v.waivers:
-        payload["waivers"] = dict(v.waivers)
-    return payload
+    return shared_build_payload(stored, v1=v1, dashboard_url=dashboard_url)
 
 
 def build_bundle(
@@ -1088,18 +909,9 @@ class ScoringPipeline:
             collected_at=computed_at,
         )
         bundle = build_bundle(result, stage_b, max_bytes=self.config.rules.max_bundle_bytes)
-        payload = build_payload(
-            result,
-            stage_b,
-            mode=self.mode,
-            computed_at=computed_at,
-            v1=self.v1,
-            dashboard_url=self.dashboard_url,
-        )
         suggested = self._suggest(result, stage_b)
         if suggested:
             bundle["suggested_tests"] = suggested
-            payload["suggested_tests"] = [dict(s) for s in suggested]
             # B-19: the store keys on the bundle digest. Suggestions are not a scoring input
             # (``verdict.inputs_digest`` is unchanged) but a different set must be stored as
             # a new revision, not dropped as "identical inputs". Without suggestions the
@@ -1107,6 +919,17 @@ class ScoringPipeline:
             bundle["inputs_digest"] = "sha256:" + sha256_hex(
                 canonical_json({"scoring": bundle["inputs_digest"], "suggested_tests": suggested})
             )
+        # the payload is read from the final bundle by the shared builder (B-20): what is
+        # stored and what is served/rendered come from the same data
+        payload = build_payload(
+            result,
+            stage_b,
+            mode=self.mode,
+            computed_at=computed_at,
+            v1=self.v1,
+            dashboard_url=self.dashboard_url,
+            bundle=bundle,
+        )
         return Scored(result, bundle, payload)
 
     def _suggest(self, result: PipelineResult, stage_b: StageBInput) -> list[dict[str, Any]]:
@@ -1402,6 +1225,8 @@ class StageBRecomputer:
     clock: Callable[[], datetime] = lambda: datetime.now(UTC)  # noqa: E731
     #: ``organization_id -> suggester | None`` (DEC-034); ``None`` = feature off.
     suggester_for: Callable[[UUID], Any] | None = None
+    #: ``RADIUS_VERDICT_V2_CONFIRM_POLICY`` (B-07): who may lift the cap by confirming.
+    confirm_policy: str = "allow_unverified"
 
     def recompute(
         self, session: Any, organization_id: UUID, analysis_id: UUID
@@ -1447,7 +1272,10 @@ class StageBRecomputer:
     ) -> bool:
         from radius_testing.infrastructure.sqlalchemy_store import SqlAlchemyTestStore
 
-        from radius_worker.verdict_v2.intent_refresh import refresh_stage_a_intent
+        from radius_worker.verdict_v2.intent_refresh import (
+            confirm_policy_for,
+            refresh_stage_a_intent,
+        )
         from radius_worker.verdict_v2.sources import outcomes_from_uploads
 
         stage_a = self.store.latest_stage_a(organization_id, analysis_id)
@@ -1455,7 +1283,11 @@ class StageBRecomputer:
             return False
         criteria, actors, pr_author = _intent_context(session, organization_id, analysis_id)
         stage_a = refresh_stage_a_intent(
-            stage_a, criteria, actors=actors, pr_author=pr_author
+            stage_a,
+            criteria,
+            actors=actors,
+            pr_author=pr_author,
+            confirm_policy=confirm_policy_for(self.confirm_policy),
         )
         facts = outcomes_from_uploads(
             SqlAlchemyTestStore(session).list_result_uploads(analysis_id), stage_a
@@ -1496,4 +1328,9 @@ def create_recomputer(
                 suggesters[key] = make_suggester(True, key)
             return suggesters[key]
 
-    return StageBRecomputer(store=store, mode=mode, suggester_for=suggester_for)
+    return StageBRecomputer(
+        store=store,
+        mode=mode,
+        suggester_for=suggester_for,
+        confirm_policy=str(getattr(settings, "verdict_v2_confirm_policy", "allow_unverified")),
+    )

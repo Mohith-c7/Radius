@@ -624,7 +624,7 @@
           },
           "confirmed_by": {
             "type": "string",
-            "description": "B-07 (optional): unverified label of the actor who confirmed or edited the criterion; may carry a suffix when the confirmation was not counted (self-confirmation by the PR author). UNTRUSTED."
+            "description": "B-07 (optional, DEC-040): who confirmed or edited the criterion, taken from the authenticated principal (a GitHub login when the signed-in user is linked to one, else a user or API key handle). A suffix says '(unverified confirmer)' when the GitHub link is unknown, or why the confirmation was not counted. Render as text only."
           }
         }
       }

@@ -107,6 +107,13 @@ class CriterionView(BaseModel):
     testability_rationale: str | None = None
     state: str
     hints: HintsView
+    source_quote: str | None = Field(
+        default=None,
+        description="B-11: for an LLM-proposed criterion, the verbatim text of the source at "
+        "`span` (the quote the model had to cite), at most 500 characters. Untrusted source "
+        "text: render as text only. Null for other origins or when the source text is gone.",
+    )
+    source_quote_truncated: bool = False
 
 
 class SourceSummaryView(BaseModel):
