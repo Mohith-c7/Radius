@@ -1,0 +1,91 @@
+name: DAST
+
+# Weekly + manual OWASP ZAP *baseline* (passive spider scan) against the Docker Compose
+# stack started inside the job (same approach as stack.yml). Not run on pull requests.
+# It targets only the local containers on the runner. No secrets: .env is generated
+# with random local-dev values. Fails only on unignored HIGH alerts
+# (scripts/ci/zap_gate.py, .zap/rules.tsv). See docs/security/CI_CHECKS.md ("DAST").
+on:
+  schedule:
+    - cron: "37 3 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dast-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Override with a repository variable pinned by digest (ghcr.io/zaproxy/zaproxy@sha256:...).
+  # The fallback tag is NOT digest-pinned; the job prints a warning when it is used.
+  ZAP_IMAGE: ${{ vars.RADIUS_ZAP_IMAGE || 'ghcr.io/zaproxy/zaproxy:stable' }}
+  COMPOSE_FILE: docker-compose.yml:docker-compose.dev.yml
+
+jobs:
+  zap-baseline:
+    name: ZAP baseline (API + dashboard)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Warn when the ZAP image is not digest-pinned
+        run: |
+          case "$ZAP_IMAGE" in
+            *@sha256:*) ;;
+            *) echo "::warning::ZAP image $ZAP_IMAGE is not pinned by digest; set repository variable RADIUS_ZAP_IMAGE" ;;
+          esac
+
+      - name: Generate .env with random local-dev secrets
+        run: python3 scripts/gen_dev_env.py
+
+      - name: Build images
+        timeout-minutes: 15
+        run: docker compose build
+
+      - name: Start the stack and wait until it is healthy
+        run: docker compose up -d --wait --wait-timeout 300
+
+      - name: Check services and endpoints (no stability window)
+        run: python3 scripts/ci/check_stack.py --stability-seconds 5
+
+      - name: ZAP baseline scans
+        run: |
+          mkdir -p zap-out
+          chmod 777 zap-out
+          cp .zap/rules.tsv zap-out/rules.tsv
+          for target in "api|http://127.0.0.1:8000/" "dashboard|http://127.0.0.1:3000/"; do
+            name="${target%%|*}"; url="${target#*|}"
+            # Exit codes 1/2 mean FAIL/WARN findings; the gate below decides on HIGH only.
+            docker run --rm --network host -v "$PWD/zap-out:/zap/wrk:rw" "$ZAP_IMAGE" \
+              zap-baseline.py -t "$url" -c rules.tsv -I -j \
+              -r "zap-$name.html" -J "zap-$name.json" || test "$?" -le 2
+          done
+
+      - name: Gate on HIGH alerts
+        run: |
+          for name in api dashboard; do
+            python3 scripts/ci/zap_gate.py "zap-out/zap-$name.json" --rules .zap/rules.tsv
+          done
+
+      - name: Upload ZAP reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: zap-reports
+          path: zap-out
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Dump container logs
+        if: ${{ failure() }}
+        run: docker compose logs --no-color --tail 200
+
+      - name: Tear down
+        if: ${{ always() }}
+        run: docker compose down -v --remove-orphans
