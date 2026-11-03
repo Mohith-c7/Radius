@@ -152,7 +152,8 @@ def create_action_token(
     return raw_token
 
 
-def consume_action_token(db: Session, raw_token: str, purpose: str) -> User:
+def _usable_token(db: Session, raw_token: str, purpose: str) -> AuthToken:
+    """The live (unused, unexpired) token row, or the generic 400."""
     token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
     token = db.scalar(
         select(AuthToken).where(
@@ -173,6 +174,23 @@ def consume_action_token(db: Session, raw_token: str, purpose: str) -> User:
         raise HTTPException(
             status_code=400, detail="This link is invalid or has expired."
         )
+    return token
+
+
+def peek_action_token(db: Session, raw_token: str, purpose: str) -> User:
+    """The user a live token belongs to, WITHOUT using the token up (A-07: the verify page
+    asks whether a password is needed before the one-time token is spent)."""
+    token = _usable_token(db, raw_token, purpose)
+    user = db.get(User, token.user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=400, detail="This link is invalid or has expired."
+        )
+    return user
+
+
+def consume_action_token(db: Session, raw_token: str, purpose: str) -> User:
+    token = _usable_token(db, raw_token, purpose)
     # Atomic single use (A-14): only the request whose UPDATE flips used_at from
     # NULL wins; a concurrent request with the same token matches no row.
     claimed = db.execute(
@@ -265,6 +283,7 @@ def user_from_provider(
     name: str,
     *,
     email_verified: bool = False,
+    login: str | None = None,
 ) -> User:
     """Resolve the local user for an OAuth identity.
 
@@ -288,6 +307,9 @@ def user_from_provider(
     if account:
         user = db.get(User, account.user_id)
         if user:
+            if login is not None and account.provider_login != login:
+                account.provider_login = login
+                db.commit()
             provision_domain_user_and_org(db, user, github_user_id=github_id)
             return user
     if not email_verified:
@@ -300,7 +322,14 @@ def user_from_provider(
         user = User(name=name[:120] or email.split("@")[0], email=email, email_verified=True)
         db.add(user)
         db.flush()
-    db.add(AuthAccount(user_id=user.id, provider=provider, provider_account_id=provider_id))
+    db.add(
+        AuthAccount(
+            user_id=user.id,
+            provider=provider,
+            provider_account_id=provider_id,
+            provider_login=login,
+        )
+    )
     try:
         db.commit()
     except IntegrityError as exc:

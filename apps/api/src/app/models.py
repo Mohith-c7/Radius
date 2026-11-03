@@ -44,6 +44,9 @@ class AuthAccount(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("auth_users.id"), index=True)
     provider: Mapped[str] = mapped_column(String(24))
     provider_account_id: Mapped[str] = mapped_column(String(255))
+    #: B-07: the provider's login at the last sign-in (GitHub ``login``). Informational and
+    #: refreshed on every OAuth sign-in; it lets a confirmation be compared with a PR author.
+    provider_login: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
     user: Mapped[User] = relationship(back_populates="accounts")
 

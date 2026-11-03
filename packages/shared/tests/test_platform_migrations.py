@@ -164,3 +164,28 @@ def test_github_user_id_values_survive_the_nullable_migration(db) -> None:
         assert conn.execute(text("SELECT github_user_id FROM users")).scalar() == 77
         _insert(conn, "users", id="u2", organization_id="o1", github_user_id=None, email="b@example.test", role="developer")
         _insert(conn, "users", id="u3", organization_id="o1", github_user_id=None, email="c@example.test", role="developer")
+
+
+def test_provider_login_column_is_added_keeps_rows_and_is_idempotent(db) -> None:
+    config, engine = db
+    command.upgrade(config, "20261103_0020")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO auth_users (id, name, email, email_verified, role, created_at, updated_at) "
+                "VALUES ('u1','A','a@example.test',1,'developer','2026-01-01','2026-01-01')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO auth_accounts (id, user_id, provider, provider_account_id, created_at) "
+                "VALUES ('a1','u1','github','5','2026-01-01')"
+            )
+        )
+    command.upgrade(config, "head")
+    with engine.connect() as conn:
+        row = conn.execute(text("SELECT provider_account_id, provider_login FROM auth_accounts")).one()
+    assert tuple(row) == ("5", None)  # existing links stay, login unknown until the next sign-in
+    command.downgrade(config, "20261103_0020")
+    command.upgrade(config, "head")  # idempotent after a downgrade
+    assert "provider_login" in {c["name"] for c in inspect(engine).get_columns("auth_accounts")}

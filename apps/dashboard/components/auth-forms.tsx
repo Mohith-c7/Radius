@@ -6,6 +6,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Check, Eye, EyeOff, Github, LoaderCircle } from "lucide-react";
 import { authRequest, oauthUrl, type AuthUser } from "../lib/auth";
 import { postSignupPath } from "../lib/post-signup";
+import { isVerifyCheck, validateNewPassword, verifyEmailBody } from "../lib/verify-email";
 import { useAuth } from "./auth-provider";
 
 function GoogleIcon() {
@@ -511,23 +512,61 @@ export function VerifyEmailPage() {
     "ready"
   );
   const token = query.get("token");
+  // A-07: null while the API is asked, then whether a password must be chosen here.
+  const [passwordRequired, setPasswordRequired] = useState<boolean | null>(null);
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [formError, setFormError] = useState("");
 
   // A signed-in, already verified account has nothing to check: go to the dashboard.
   useEffect(() => {
     if (!token && user?.email_verified) router.replace(postSignupPath(user));
   }, [router, token, user]);
 
-  async function verify() {
+  // Ask whether a password is needed; this does not use the one-time link up.
+  useEffect(() => {
     if (!token) return;
+    let active = true;
+    authRequest<unknown>("/auth/verify-email/check", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    })
+      .then((answer) => {
+        if (!active) return;
+        if (isVerifyCheck(answer)) setPasswordRequired(answer.password_required);
+        else setStatus("error");
+      })
+      .catch(() => {
+        if (active) setStatus("error");
+      });
+    return () => {
+      active = false;
+    };
+  }, [token]);
+
+  async function verify(event?: FormEvent) {
+    event?.preventDefault();
+    if (!token || passwordRequired === null) return;
+    if (passwordRequired) {
+      const problem = validateNewPassword(password, confirm);
+      if (problem) return setFormError(problem);
+    }
+    setFormError("");
     setStatus("loading");
     try {
       await authRequest("/auth/verify-email", {
         method: "POST",
-        body: JSON.stringify({ token }),
+        body: verifyEmailBody(token, passwordRequired, password),
       });
       setStatus("done");
-    } catch {
-      setStatus("error");
+    } catch (reason) {
+      if (passwordRequired && reason instanceof Error && reason.message) {
+        // the link is still usable after a rejected password: show why and let them retry
+        setFormError(reason.message);
+        setStatus("ready");
+      } else {
+        setStatus("error");
+      }
     }
   }
 
@@ -548,20 +587,51 @@ export function VerifyEmailPage() {
         subtitle={
           status === "done"
             ? "Your email is verified. You can continue to Radius."
+            : passwordRequired
+            ? "Confirm your email address and choose the password for your Radius account."
             : "Confirm your email address to secure your Radius account."
         }
       >
-        <button
-          className="auth-submit"
-          onClick={verify}
-          disabled={status === "loading" || status === "done"}
-        >
-          {status === "done"
-            ? "Email verified"
-            : status === "loading"
-            ? "Verifying…"
-            : "Verify email"}
-        </button>
+        <form className="auth-form" onSubmit={verify}>
+          {passwordRequired && status !== "done" && (
+            <>
+              <PasswordField
+                label="Choose a password"
+                value={password}
+                onChange={setPassword}
+                id="new-password"
+              />
+              <PasswordField
+                label="Confirm password"
+                value={confirm}
+                onChange={setConfirm}
+                id="confirm-password"
+              />
+            </>
+          )}
+          <ErrorMessage error={formError} />
+          <button
+            className="auth-submit"
+            type="submit"
+            disabled={
+              status === "loading" ||
+              status === "done" ||
+              status === "error" ||
+              passwordRequired === null
+            }
+          >
+            {status === "done"
+              ? "Email verified"
+              : status === "loading"
+              ? "Verifying…"
+              : "Verify email"}
+          </button>
+        </form>
+        {status === "error" && (
+          <p className="auth-error" role="alert">
+            This verification link is invalid or has expired. Sign in and request a new one.
+          </p>
+        )}
         <AuthFooter
           prompt="Ready to continue?"
           href="/"
