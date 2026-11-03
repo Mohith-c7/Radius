@@ -22,7 +22,7 @@ How to read it.
   (`RADIUS_LLM_*`) silently fall back to their default on a bad number.
 
 
-Variables documented: **137** (14 secret, 10 feature flags).
+Variables documented: **140** (14 secret, 10 feature flags).
 
 ## Core, API, GitHub and observability
 
