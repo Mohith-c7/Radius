@@ -1014,12 +1014,27 @@ def _sql_store(session_factory: Callable[[], Any], mode: VerdictV2Mode) -> Any |
     return SqlVerdictStore(session_factory, mode)
 
 
+def _current_criteria(session: Any, organization_id: UUID, analysis_id: UUID) -> tuple[Any, ...]:
+    """Criteria of the latest intent snapshot (organization-scoped, read-only)."""
+
+    from radius_intent.infrastructure.sqlalchemy_repository import (
+        SqlAlchemyIntentRepository,
+    )
+
+    snapshot = SqlAlchemyIntentRepository(session).get_latest_snapshot(
+        organization_id, str(analysis_id)
+    )
+    return tuple(snapshot.criteria) if snapshot else ()
+
+
 @dataclass(slots=True)
 class StageBRecomputer:
-    """``requests.Recomputer``: re-run Stage B from the stored Stage A after CI results.
+    """``requests.Recomputer``: re-run Stage B from the stored Stage A (no clone).
 
-    No clone and no producers: ``store.latest_stage_a`` plus the CI uploads read with
-    the caller's session. Returns True when the newest stored revision changed.
+    Inputs: ``store.latest_stage_a``, refreshed with the current criterion states
+    (human confirm / edit / reject, DEC-033), plus the CI uploads, both read with the
+    caller's session. Returns True when the newest stored revision changed. A failure
+    to read the criteria raises, so the outbox retries instead of scoring stale intent.
     """
 
     store: Any
@@ -1032,11 +1047,15 @@ class StageBRecomputer:
     ) -> bool:
         from radius_testing.infrastructure.sqlalchemy_store import SqlAlchemyTestStore
 
+        from radius_worker.verdict_v2.intent_refresh import refresh_stage_a_intent
         from radius_worker.verdict_v2.sources import outcomes_from_uploads
 
         stage_a = self.store.latest_stage_a(organization_id, analysis_id)
         if stage_a is None:
             return False
+        stage_a = refresh_stage_a_intent(
+            stage_a, _current_criteria(session, organization_id, analysis_id)
+        )
         facts = outcomes_from_uploads(
             SqlAlchemyTestStore(session).list_result_uploads(analysis_id), stage_a
         )

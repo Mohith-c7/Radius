@@ -90,6 +90,31 @@ def _matches(if_none_match: str | None, etag: str) -> bool:
     return "*" in tags or etag in tags
 
 
+def _refresh_meta(
+    verdicts: VerdictV2Repository, organization_id: UUID, analysis_id: UUID
+) -> dict[str, object]:
+    """``meta`` that marks the stored verdict as stale while a refresh is queued.
+
+    A row in the republish outbox means a human decision or CI results are not yet
+    reflected in the stored revision. ``refresh_attempts`` rising to the worker's cap
+    with ``refresh_failed`` true means the recompute keeps failing (stale for good
+    until it is retried). Lookup errors are ignored: the verdict is still served.
+    """
+
+    try:
+        pending = verdicts.get_request(organization_id, analysis_id)
+    except Exception:
+        return {}
+    if pending is None:
+        return {}
+    return {
+        "refresh_pending": True,
+        "refresh_reason": pending.reason,
+        "refresh_attempts": pending.attempts,
+        "refresh_failed": pending.last_error is not None,
+    }
+
+
 def get_verdict_v2(
     analysis_id: UUID,
     request: Request,
@@ -121,7 +146,9 @@ def get_verdict_v2(
     if stored is None:
         return _not_available("not_computed")
     payload = build_payload(stored, v1=_v1_block(confidence_service, analysis_id))
-    etag = _etag(payload)
+    meta = _refresh_meta(verdicts, principal.organization_id, analysis_id)
+    # The refresh marker is part of the entity: a 304 must not hide it.
+    etag = _etag({"payload": payload, "meta": meta} if meta else payload)
     headers = {
         "ETag": etag,
         "Cache-Control": "private, no-cache",
@@ -129,7 +156,7 @@ def get_verdict_v2(
     }
     if _matches(if_none_match, etag):
         return Response(status_code=304, headers=headers)
-    body = success_response(payload).model_dump(mode="json")
+    body = success_response(payload, meta=meta).model_dump(mode="json")
     return JSONResponse(content=body, headers=headers)
 
 

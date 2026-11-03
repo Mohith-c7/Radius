@@ -49,7 +49,7 @@ MAX_BUNDLE_BYTES = 2 * 1024 * 1024
 MAX_ERROR_CHARS = 2000
 VALID_STATUS = ("ok", "error", "skipped")
 VALID_MODES = ("shadow", "on")
-REQUEST_REASONS = ("ci_results", "manual")
+REQUEST_REASONS = ("ci_results", "manual", "intent_changed")
 _SHA = re.compile(r"^[0-9a-f]{40}$")
 _DIGEST = re.compile(r"^[0-9a-f]{64}$|^sha256:[0-9a-f]{64}$")
 
@@ -135,6 +135,7 @@ class VerdictV2Repository(Protocol):
         reason: str = "ci_results",
         *,
         now: datetime | None = None,
+        delay_seconds: float = 0.0,
     ) -> None: ...
 
     def get_request(
@@ -482,13 +483,15 @@ class SqlVerdictV2Repository:
         reason: str = "ci_results",
         *,
         now: datetime | None = None,
+        delay_seconds: float = 0.0,
     ) -> None:
         _check_reason(reason)
         now = now or _now()
+        available = now + timedelta(seconds=max(0.0, delay_seconds))
         values = {
             "reason": reason,
             "requested_at": now,
-            "available_at": now,
+            "available_at": available,
             "claimed_at": None,
             "claim_token": None,
             "attempts": 0,
@@ -779,6 +782,7 @@ class InMemoryVerdictV2Repository:
         reason: str = "ci_results",
         *,
         now: datetime | None = None,
+        delay_seconds: float = 0.0,
     ) -> None:
         _check_reason(reason)
         now = now or _now()
@@ -786,7 +790,7 @@ class InMemoryVerdictV2Repository:
             if request.organization_id == organization_id and request.analysis_id == analysis_id:
                 request.reason = reason
                 request.requested_at = now
-                request.available_at = now
+                request.available_at = now + timedelta(seconds=max(0.0, delay_seconds))
                 request.claimed_at = None
                 request.claim_token = None
                 request.attempts = 0
@@ -794,7 +798,12 @@ class InMemoryVerdictV2Repository:
                 return
         request_id = uuid4()
         self._requests[request_id] = _MemRequest(
-            request_id, organization_id, analysis_id, reason, now, now
+            request_id,
+            organization_id,
+            analysis_id,
+            reason,
+            now,
+            now + timedelta(seconds=max(0.0, delay_seconds)),
         )
 
     def get_request(

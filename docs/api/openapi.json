@@ -3406,7 +3406,7 @@
     },
     "/api/v1/analyses/{analysis_id}/intent/criteria/{criterion_id}": {
       "patch": {
-        "description": "Apply a human decision through the domain state machine (audited).\n\nIllegal moves (for example confirming a rejected criterion) return 409\n`ILLEGAL_STATE_TRANSITION`. Weight edits are not supported yet.",
+        "description": "Apply a human decision through the domain state machine (audited).\n\nIllegal moves (for example confirming a rejected criterion) return 409\n`ILLEGAL_STATE_TRANSITION`. Weight edits are not supported yet. With\nVerdict v2 enabled, a successful change also asks the worker to refresh the\nstored verdict (debounced; a failure to ask never fails this call).",
         "operationId": "update_criterion",
         "parameters": [
           {

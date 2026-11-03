@@ -23,6 +23,7 @@ Before the DEC-030 hardening, a `tests:` hint gave link strength 0.95 to 1.0, so
 
 1. **Provenance on every criterion and hint.** Each criterion and each `tests:` / `paths:` hint carries one of `author_pr_body`, `author_head_spec`, `base_spec`, `human_confirmed`, `llm_proposed` in the Stage A input, the bundle, the API payload and the dashboard.
    * a criterion in state `confirmed` or `edited` is `human_confirmed` (the only way to reach those states is the authenticated intent API; Radius itself never confirms);
+     the stored verdict picks the decision up through the republish outbox (DEC-033): the request carries no provenance, the worker derives `human_confirmed` only from the stored criterion state, and the API schema rejects extra body fields;
    * a spec-file criterion is `base_spec` only if `.radius/intent.yml` exists on the **base ref** and is byte-identical (ignoring line endings) to the head file, read from the local checkout with `git show <base>:.radius/intent.yml`; if the base ref is unknown, the file is absent from the base, or it differs in any way, it is `author_head_spec`;
    * everything from the PR text, commits, comments and linked issues is `author_pr_body`, because the author may control it (an issue written by someone else is not distinguished yet; see limits);
    * LLM proposals are `llm_proposed`.

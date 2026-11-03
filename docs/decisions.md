@@ -384,3 +384,23 @@ Decision:
 | **Opt-in `summary` plus a verified block** | Modest recall, higher precision, cannot inflate a verdict; cost: summary mode yields no `verified` without human confirmation. |
 
 Consequences: no migration and no contract field (the marker is an existing-format degraded string). Default off. Revisit after IN-09/IN-10 gold data exists.
+
+## DEC-033: A human decision on a criterion recomputes the stored verdict (Stage A refresh from criterion state, via the outbox)
+
+Context: a browser test showed that Confirm in the intent panel changed the criterion state but not the stored verdict. The Stage A bundle (criteria with lifecycle and provenance, hint edges, degraded markers) is frozen at analysis time, so the author-hint cap (DEC-030) and the `unconfirmed_inferred_intent` block (DEC-032) stayed, although `docs/verdict-v2.md` says confirming lifts them.
+
+Decision:
+
+1. **Trigger.** A successful confirm, edit, reject or reopen through the intent API (same auth and `write` scope as before) upserts one row in `verdict_v2_requests` (reason `intent_changed`, `available_at` 3 s ahead: trailing debounce; the row is keyed by analysis, so bursts and CI uploads coalesce). No-op with the flag `off`. Any failure to enqueue is logged and swallowed; the criterion change is never rolled back or failed. Adding a criterion, submitting a source and rebuilding are not triggers (they change the criterion set, which needs a new analysis).
+2. **Recompute.** `StageBRecomputer` (the existing outbox consumer path) now refreshes the stored Stage A with the current criterion states (`intent_refresh.refresh_stage_a_intent`) before scoring: confirmed/edited become provenance `human_confirmed` for the criterion and its hint edges, rejected criteria and their edges are removed, reopened ones lose `human_confirmed` (back to `author_pr_body`, capped), and the blocking marker is recomputed with the DEC-032 rule. The result goes through the normal store (identical inputs, no new revision) and the normal publish (comment and Check Run edited in place, stale heads never published). If the criteria cannot be read the recompute raises and the outbox retries with backoff.
+3. **Provenance integrity.** The request carries no provenance and the body schema forbids extra fields. `human_confirmed` is derived only from the stored lifecycle `confirmed` or `edited`, which only the authenticated API can set. Attributes on the stored criteria objects are not trusted for provenance.
+4. **Staleness is visible.** While a row is queued, `GET .../verdict-v2` adds `meta.refresh_pending` (and reason, attempts, `refresh_failed`) and the ETag covers it; the dashboard shows an out-of-date notice and, after its own confirm, polls a bounded number of times (about 30 s, 1.5 s to 10 s apart).
+
+| Option | Trade-off |
+| --- | --- |
+| API recomputes inline | Needs the checkout and GitHub credentials in the API; slows and can fail the confirm. |
+| Worker re-runs Stage A from scratch | Correct for new links, but clones the repository per click. |
+| **Outbox + Stage A refresh from state** | Cheap, safe, reuses republish; cost: links are not recomputed (documented). |
+
+Consequences: no migration (reason column is `String(16)`, `intent_changed` fits; no constraint). A verdict can lag a confirm by the debounce plus one worker poll. The API and worker share the database, so the worker needs no new credentials. Revisit if manual criteria or hint edits need to be scored without a new analysis.
+
