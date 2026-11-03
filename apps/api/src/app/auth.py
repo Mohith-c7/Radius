@@ -15,10 +15,12 @@ from radius_shared.database.enums import UserRole
 from radius_shared.database.models import Organization
 from radius_shared.database.models import User as DomainUser
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .models import AuthAccount, AuthSession, AuthToken, User
+from .oauth import OAuthError
 
 password_hasher = PasswordHasher()
 SESSION_TTL = timedelta(days=14)
@@ -205,40 +207,54 @@ def provision_domain_user_and_org(
 
 
 def user_from_provider(
-    db: Session, provider: str, provider_id: str, email: str, name: str
+    db: Session,
+    provider: str,
+    provider_id: str,
+    email: str,
+    name: str,
+    *,
+    email_verified: bool = False,
 ) -> User:
+    """Resolve the local user for an OAuth identity.
+
+    Policy (docs/security/SSO_DESIGN.md):
+
+    1. ``(provider, provider_id)`` (the stable ``sub``) is the identity key and is looked up
+       first; the email is never consulted for a known identity.
+    2. An unknown identity is only trusted with an email the provider asserts is verified.
+    3. An existing local account with the same email is linked only when its own email was
+       verified too. Otherwise the link is refused (``oauth_link_refused``): linking an
+       unverified local account would hand it to whoever registered that email first.
+    4. No account: a new passwordless, verified user is created.
+    """
     account = db.scalar(
         select(AuthAccount).where(
             AuthAccount.provider == provider,
             AuthAccount.provider_account_id == provider_id,
         )
     )
+    github_id = int(provider_id) if provider == "github" and provider_id.isdigit() else None
     if account:
         user = db.get(User, account.user_id)
         if user:
-            github_id = (
-                int(provider_id)
-                if provider == "github" and provider_id.isdigit()
-                else None
-            )
             provision_domain_user_and_org(db, user, github_user_id=github_id)
             return user
-    user = db.scalar(select(User).where(User.email == email.lower()))
+    if not email_verified:
+        raise OAuthError("email_unverified", public="oauth_email_unverified")
+    email = email.strip().lower()
+    user = db.scalar(select(User).where(User.email == email))
+    if user is not None and not user.email_verified:
+        raise OAuthError("link_refused_local_unverified", public="oauth_link_refused")
     if user is None:
-        user = User(
-            name=name[:120] or email.split("@")[0],
-            email=email.lower(),
-            email_verified=True,
-        )
+        user = User(name=name[:120] or email.split("@")[0], email=email, email_verified=True)
         db.add(user)
         db.flush()
-    db.add(
-        AuthAccount(user_id=user.id, provider=provider, provider_account_id=provider_id)
-    )
-    db.commit()
+    db.add(AuthAccount(user_id=user.id, provider=provider, provider_account_id=provider_id))
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise OAuthError("account_conflict") from exc
     db.refresh(user)
-    github_id = (
-        int(provider_id) if provider == "github" and provider_id.isdigit() else None
-    )
     provision_domain_user_and_org(db, user, github_user_id=github_id)
     return user
