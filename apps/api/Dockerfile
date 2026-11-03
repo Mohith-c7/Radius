@@ -45,7 +45,7 @@ ENV PATH=/opt/venv/bin:$PATH \
     HOME=/home/radius \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app/apps/api/src:/app/apps/worker/src:/app/packages/analysis/src:/app/packages/confidence/src:/app/packages/github/src:/app/packages/graph/src:/app/packages/intent/src:/app/packages/parser/src:/app/packages/repository/src:/app/packages/shared/src:/app/packages/testing/src
+    PYTHONPATH=/app/apps/api/src:/app/apps/worker/src:/app/packages/analysis/src:/app/packages/confidence/src:/app/packages/evidence/src:/app/packages/github/src:/app/packages/graph/src:/app/packages/intent/src:/app/packages/linking/src:/app/packages/parser/src:/app/packages/repository/src:/app/packages/shared/src:/app/packages/testing/src
 
 # git is used by the diff provider. Fixed uid/gid so volume ownership is predictable.
 RUN apt-get update \
