@@ -222,3 +222,24 @@ def test_redact_removes_tokens_and_keys() -> None:
     text = "token ghs_abcdef123456 Bearer abc.def-ghi -----BEGIN RSA PRIVATE KEY-----\nxx\n-----END RSA PRIVATE KEY-----"
     cleaned = live_check.redact(text)
     assert "ghs_abc" not in cleaned and "abc.def" not in cleaned and "xx" not in cleaned
+
+
+def test_env_line_round_trips_through_the_key_normalizer(keys, tmp_path) -> None:
+    from radius_github.client import normalize_private_key
+
+    newline, carriage_return = chr(10), chr(13)
+    pem_file = tmp_path / "windows.pem"
+    pem_file.write_bytes(keys[0].replace(newline, carriage_return + newline).encode())
+    lines: list[str] = []
+
+    assert live_check.main(["--env-line", str(pem_file)], env={}, out=lines.append) == 0
+
+    assert len(lines) == 1
+    assert newline not in lines[0] and carriage_return not in lines[0]
+    assert lines[0].startswith("GITHUB_APP_PRIVATE_KEY='-----BEGIN")
+    value = lines[0].split("=", 1)[1]
+    assert normalize_private_key(value) == keys[0].strip()
+
+    bad = tmp_path / "x.txt"
+    bad.write_text("nope", encoding="utf-8")
+    assert live_check.main(["--env-line", str(bad)], env={}, out=lines.append) == 1

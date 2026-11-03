@@ -21,6 +21,10 @@ It never creates a check run, comment, branch or file. "Check-run write" is judg
 from the permissions GitHub grants the installation token, which is what GitHub
 itself checks. Nothing secret is printed: not the key, the JWT or the token.
 
+To put the key into a ``.env`` file as one line, run
+``python scripts/live_check.py --env-line path/to/app.private-key.pem`` and paste its
+output (it is a secret: do not share it).
+
 Inputs (environment):
     GITHUB_APP_ID                  numeric App id (or client id)
     GITHUB_APP_PRIVATE_KEY         PEM text (newlines may be written as \\n), or
@@ -212,7 +216,12 @@ def _check_clock(client: GitHubAppClient, report: Report, local_now: float) -> N
 
 
 def _permission_check(
-    report: Report, name: str, have: Mapping[str, str] | None, *, source: str
+    report: Report,
+    name: str,
+    have: Mapping[str, str] | None,
+    *,
+    source: str,
+    fail_status: str = FAIL,
 ) -> None:
     missing = _missing(have, REQUIRED_PERMISSIONS)
     if not missing:
@@ -220,7 +229,7 @@ def _permission_check(
             f"{k}:{v}" for k, v in REQUIRED_PERMISSIONS.items()) + " (or higher).")
         return
     report.add(
-        FAIL,
+        fail_status,
         name,
         f"{source} lacks: " + ", ".join(missing) + ".",
         "App settings > Permissions & events: set Pull requests = Read & write, "
@@ -303,7 +312,11 @@ def run_checks(
     slug = app.get("slug") or app.get("name") or "?"
     report.add(PASS, "app jwt", f"GitHub accepted the App JWT (app: {slug}).")
     _check_clock(client, report, clock())
-    _permission_check(report, "app permissions", app.get("permissions"), source="the App")
+    # The installation's permissions are what GitHub enforces; the App-level list is
+    # only a hint (an owner may not have accepted a permission change yet).
+    _permission_check(
+        report, "app permissions", app.get("permissions"), source="the App", fail_status=WARN
+    )
 
     # 2. installation
     try:
@@ -344,7 +357,11 @@ def run_checks(
         return
     report.add(PASS, "installation token", "minted a short-lived installation token (not printed).")
     if token.permissions is not None:
-        _permission_check(report, "token permissions", token.permissions, source="the token")
+        others = {k: v for k, v in REQUIRED_PERMISSIONS.items() if k != "checks"}
+        if _missing(token.permissions, others):
+            _permission_check(report, "token permissions", token.permissions, source="the token")
+        else:
+            report.add(PASS, "token permissions", "the token grants metadata, contents and pull_requests as needed.")
         checks_level = token.permissions.get("checks", "none")
         if checks_level == "write":
             report.add(PASS, "check-run write", "checks:write is present, so Radius can publish its Check Run.")
@@ -412,7 +429,23 @@ def main(
 ) -> int:
     parser = argparse.ArgumentParser(description="Read-only preflight of a GitHub App installation.")
     parser.add_argument("repo", nargs="?", help="owner/name (default: $RADIUS_LIVE_REPO)")
+    parser.add_argument(
+        "--env-line",
+        metavar="PEM_FILE",
+        help="print GITHUB_APP_PRIVATE_KEY='...' (one line, \\n escapes) for a .env file and exit",
+    )
     args = parser.parse_args(argv)
+    if args.env_line:
+        try:
+            pem = Path(args.env_line).expanduser().read_text(encoding="utf-8")
+        except OSError as exc:
+            out(f"cannot read {args.env_line}: {type(exc).__name__}")
+            return 1
+        if "PRIVATE KEY" not in pem:
+            out("that file does not look like a PEM private key")
+            return 1
+        out("GITHUB_APP_PRIVATE_KEY='" + "\\n".join(pem.strip().splitlines()) + "'")
+        return 0
     environ = dict(os.environ if env is None else env)
     repo = args.repo or environ.get("RADIUS_LIVE_REPO", "")
     out(f"Radius live GitHub preflight for {repo or '(no repository given)'}")
