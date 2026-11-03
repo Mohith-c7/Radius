@@ -637,6 +637,7 @@ def _github_settings(settings: WorkerSettings) -> GitHubAppSettings:
         RADIUS_LOG_LEVEL=settings.log_level,
         GITHUB_APP_ID=settings.github_app_id,
         GITHUB_APP_PRIVATE_KEY=settings.github_app_private_key,
+        GITHUB_APP_PRIVATE_KEY_PATH=settings.github_app_private_key_path,
         GITHUB_INSTALLATION_ID=settings.github_installation_id,
         GITHUB_API_BASE_URL=settings.github_api_base_url,
         GITHUB_API_VERSION=settings.github_api_version,

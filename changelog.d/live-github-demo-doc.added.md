@@ -1,0 +1,1 @@
+Added `docs/operations/LIVE_GITHUB_DEMO.md`: a step-by-step guide to run Radius against a real GitHub repository with a webhook-less GitHub App, plus `scripts/live_check.py --env-line` to turn the downloaded key into a one-line `.env` value.

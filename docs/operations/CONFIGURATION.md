@@ -22,7 +22,7 @@ How to read it.
   (`RADIUS_LLM_*`) silently fall back to their default on a bad number.
 
 
-Variables documented: **126** (13 secret, 10 feature flags).
+Variables documented: **127** (14 secret, 10 feature flags).
 
 ## Core, API, GitHub and observability
 
@@ -41,6 +41,7 @@ Variables documented: **126** (13 secret, 10 feature flags).
 | `GITHUB_API_VERSION` | str | `2026-03-10` | api, worker | no | - | Value of the `X-GitHub-Api-Version` header sent to GitHub. |
 | `GITHUB_APP_ID` | str | `empty` | api, worker | no | - | GitHub App id. The worker publishes results only when both this and the private key are set. |
 | `GITHUB_APP_PRIVATE_KEY` | str | `(secret, no default)` | api, worker | yes | - | GitHub App private key (PEM). Newlines may be written as ` `. |
+| `GITHUB_APP_PRIVATE_KEY_PATH` | str | `(secret, no default)` | api, worker | yes | - | Path to the GitHub App private key (.pem). Used when `GITHUB_APP_PRIVATE_KEY` is empty, so the key never has to be pasted into an environment variable or committed. |
 | `GITHUB_CLIENT_ID` | str \| None | `unset` | api | no | - | Auth module: GitHub OAuth sign-in client id (optional). |
 | `GITHUB_CLIENT_SECRET` | str \| None | `(secret, no default)` | api | yes | - | Auth module: GitHub OAuth sign-in client secret (optional). |
 | `GITHUB_DEFAULT_ORGANIZATION_ID` | uuid.UUID \| None | `unset` | api | no | - | Organization UUID used for webhook-created analyses when `GITHUB_SINGLE_TENANT` is true. |
