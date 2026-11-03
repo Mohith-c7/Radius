@@ -6,6 +6,10 @@ Every confidence output must be explainable and evidence-backed.
 
 The 0-100 `confidence_score` is an uncalibrated heuristic built from fixed penalties, not a probability. Reports carry `score_kind` (`ScoreKind`, currently `heuristic_uncalibrated`); `CURRENT_SCORE_KIND` in `radius_confidence.domain.enums` is the single place to change once calibration (CA-*) ships behind the VD-07 flag.
 
+## Calibration toolkit (groundwork, not wired)
+
+`radius_confidence.calibration` is a stdlib-only library of calibration metrics, isotonic and Platt fitting, intervals, abstention thresholds and minimum-N guards, plus the `Calibrator` hook interface. Nothing in the verdict imports it (import-linter contract in `.importlinter`); the score stays uncalibrated. See [`docs/research/evaluation/CALIBRATION_TOOLKIT.md`](../../docs/research/evaluation/CALIBRATION_TOOLKIT.md).
+
 ## Verdict v2 rules (VD-03)
 
 `radius_confidence.verdict_v2` turns per-criterion results and analysis facts into the PR-level verdict of the Verdict v2 alpha. It is pure and deterministic (no clock, no I/O) and imports only the standard library and `radius_evidence.domain`; v1 modules never import it.

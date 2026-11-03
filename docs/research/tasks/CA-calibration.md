@@ -29,7 +29,7 @@ Goal: make "87% confident" mean that about 87% of such PRs really are correct, a
 - Goal: one row per PR assessment with features: support distribution (min, mean, quantiles), UIM, counts of states, `d_mut` summary, tamper counts by severity, process signals, change size, blast-radius size, language, provenance, intent quality (testability mix), policy mode.
 - Acceptance: features reproducible for any historical assessment; versioned feature set; no future information used (tested with time-travel tests).
 
-### CA-03 Baseline and calibration models   [ ]
+### CA-03 Baseline and calibration models   [~] isotonic and Platt fitters ready; no model, no data
 - Owner type: agent-ok
 - Depends on: CA-01, CA-02
 - Branch: `feature/calibration-models`
@@ -37,8 +37,9 @@ Goal: make "87% confident" mean that about 87% of such PRs really are correct, a
 - Goal: logistic regression baseline; isotonic and Platt calibration; optional gradient-boosted model for comparison; strict train/validation/test splits by time and by repository.
 - Acceptance: pipeline script trains, calibrates, evaluates; reports ECE, Brier, AUROC, reliability curves with bootstrap CIs; models serializable and versioned (CA-07).
 - Research hook: baselines (CI-pass only, coverage, v1 score) trained on the same labels for fair comparison (EP-06).
+- Status (2026-11-03): **partial, library only.** Delivered: isotonic (PAV) and Platt fitters, the `Calibrator` hook interface and a minimum-N guard in `packages/confidence/src/radius_confidence/calibration/` (`../evaluation/CALIBRATION_TOOLKIT.md`). Not delivered: the logistic baseline, the feature pipeline, time/repo splits, AUROC, serialization/versioning; nothing is fitted on real labels and nothing is wired into the verdict.
 
-### CA-04 Conformal risk control and abstention   [ ]
+### CA-04 Conformal risk control and abstention   [~] procedures implemented and simulated; open loss question; no real data
 - Owner type: pair
 - Depends on: CA-03
 - Branch: `feature/calibration-conformal`
@@ -47,16 +48,18 @@ Goal: make "87% confident" mean that about 87% of such PRs really are correct, a
 - Steps: split-conformal procedure on a held-out calibration set; per-segment thresholds (language, size) when enough data; clear statement of assumptions and what breaks under distribution shift; selective accuracy vs coverage curve.
 - Acceptance: empirical error among accepted <= alpha (within CI) on held-out data; behavior when calibration set is small is "abstain more", never "accept more".
 - Research hook: likely a main novelty claim (conformal risk control applied to PR verification). Confirm novelty in EP-01.
+- Status (2026-11-03): **partial, library only.** Delivered: `ltt_threshold` (accepted-set error, exact binomial, Bonferroni grid), `crc_threshold` (joint false-accept rate), risk-coverage curve and a small-N rule that abstains on everything, with seeded simulations of the finite-sample statements on synthetic data. **Open finding:** the shifted loss in PREREGISTRATION 7.1 is not non-increasing in the threshold per item, so the CRC theorem does not apply to it unmodified (`CALIBRATION_TOOLKIT.md`); the owner/implementer must decide the formulation before freeze. Not delivered: per-segment thresholds, the `needs_review` integration, any run on real labels.
 
-### CA-05 Metrics and reporting   [ ]
+### CA-05 Metrics and reporting   [~] metrics and report script ready; no real data
 - Owner type: agent-ok
 - Depends on: CA-03
 - Branch: `feature/calibration-metrics`
 - Size: M
 - Goal: standard report generator (ECE with fixed bins and adaptive bins, Brier decomposition, reliability diagram data, AUROC/PR-AUC, selective risk-coverage), per segment.
 - Acceptance: unit-tested metric functions against known values; report reproducible.
+- Status (2026-11-03): **partial.** Delivered: ECE (equal-width and equal-mass), MCE, Brier with decomposition, log loss, reliability-curve data, risk-coverage, bootstrap (optionally clustered) and Clopper-Pearson intervals, unit-tested against hand-computed values; `scripts/calibration_report.py` writes a deterministic markdown + JSON report (synthetic example in `../examples/`). Not delivered: AUROC/PR-AUC, DeLong and paired tests, per-segment reports on real data, the noise-floor recomputation (PREREGISTRATION 7.5).
 
-### CA-06 Cold start, online updates, drift   [ ]
+### CA-06 Cold start, online updates, drift   [ ] (only the N-guard and the "uncalibrated prior" state exist, as library code)
 - Owner type: pair
 - Depends on: CA-03
 - Branch: `feature/calibration-lifecycle`

@@ -42,6 +42,8 @@ benchmarks/gold/intent/<pr-id>/        pr-id = <owner>__<repo>__pr<number>
 | `scripts/gold_annotate.py` | local web UI (127.0.0.1, blinded), `status`, `add`; adjudication mode with optional `--prefill-from-radius` (off by default, adjudication only) |
 | `scripts/gold_agreement.py` | `compare` (IoU matching, kappa, alpha, F1, per source kind, bootstrap CIs, disagreement list), `skeleton` |
 | `scripts/gold_validate.py` | `check`, `export-public` |
+| `scripts/gold_pack.py` | `export` a blinded offline kit for one annotator, `import` the completed annotations (all-or-nothing validation) |
+| `scripts/gold_to_eval.py` | adapter from adjudicated files to the IN-10 harness (`adapt_dev`, `adapt_test`) |
 | `scripts/gold_synthetic.py` | synthetic data for tests only |
 
 Tests: `python -m pytest tests/test_gold_*.py` (offline).

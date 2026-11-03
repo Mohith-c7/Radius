@@ -303,6 +303,10 @@ def bootstrap_ci(
     return [lo, hi]
 
 
+def _ws_pairs(comps: list[dict]) -> list[tuple]:
+    return [c["well_specified"] for c in comps if None not in c["well_specified"]]
+
+
 def build_report(
     comps: list[dict],
     *,
@@ -320,6 +324,12 @@ def build_report(
         ),
         "testability_kappa": bootstrap_ci(
             comps, lambda cs: cohen_kappa(_test_pairs(cs))["kappa"], n_boot, seed
+        ),
+        "presence_agreement": bootstrap_ci(
+            comps, lambda cs: cohen_kappa(_unit_pairs(cs))["po"], n_boot, seed
+        ),
+        "testability_agreement": bootstrap_ci(
+            comps, lambda cs: cohen_kappa(_test_pairs(cs))["po"], n_boot, seed
         ),
     }
     ws_pairs = [c["well_specified"] for c in comps if None not in c["well_specified"]]
@@ -347,7 +357,13 @@ def build_report(
             for t in sorted({c["author_type"] for c in comps})
             for sub in [[c for c in comps if c["author_type"] == t]]
         },
-        "well_specified": cohen_kappa(ws_pairs),
+        "well_specified": {
+            **cohen_kappa(ws_pairs),
+            "ci95": {
+                "kappa": bootstrap_ci(comps, lambda cs: cohen_kappa(_ws_pairs(cs))["kappa"], n_boot, seed),
+                "agreement": bootstrap_ci(comps, lambda cs: cohen_kappa(_ws_pairs(cs))["po"], n_boot, seed),
+            },
+        },
         "timing_seconds_per_pr": {
             aid: {
                 "n": len(v),
@@ -421,6 +437,10 @@ def _fmt(x, nd=3):
     return "n/a" if x is None else f"{x:.{nd}f}"
 
 
+def _ci_txt(c) -> str:
+    return f" (95% CI {_fmt(c[0])} to {_fmt(c[1])})" if c else ""
+
+
 def report_markdown(rep: dict) -> str:
     o = rep["overall"]
     ci = o["ci95"]
@@ -444,7 +464,11 @@ def report_markdown(rep: dict) -> str:
         f"- Testability kappa (matched pairs, n={o['testability_kappa']['n']}): "
         f"{with_ci(o['testability_kappa']['kappa'], 'testability_kappa')}; "
         f"Krippendorff alpha (nominal): {_fmt(o['testability_alpha']['alpha'])}",
-        f"- well-specified flag kappa: {_fmt(rep['well_specified']['kappa'])} "
+        f"- Percent agreement: presence {with_ci(o['presence_kappa']['po'], 'presence_agreement')}; "
+        f"testability {with_ci(o['testability_kappa']['po'], 'testability_agreement')}",
+        f"- well-specified flag: kappa {_fmt(rep['well_specified']['kappa'])}"
+        f"{_ci_txt(rep['well_specified'].get('ci95', {}).get('kappa'))}, percent agreement "
+        f"{_fmt(rep['well_specified']['po'])}{_ci_txt(rep['well_specified'].get('ci95', {}).get('agreement'))} "
         f"(n={rep['well_specified']['n']})",
         "",
         "## Gate (preregistered kappa >= 0.60)",
