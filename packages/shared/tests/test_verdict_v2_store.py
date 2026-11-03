@@ -28,6 +28,7 @@ from radius_shared.verdict_v2_payload import build_payload
 from radius_shared.verdict_v2_repository import (
     InMemoryVerdictV2Repository,
     SqlVerdictV2Repository,
+    StageAUnavailableError,
     backoff_seconds,
     cap_bundle,
 )
@@ -242,6 +243,51 @@ def test_oversize_bundle_is_truncated_not_rejected(env: Env) -> None:
     assert stored.bundle["verdict"]["uim"] == 0.5
 
 
+def test_b04_big_stage_a_is_kept_whole_so_ci_results_can_still_rescore(env: Env) -> None:
+    bundle = make_bundle(str(env.an_a))
+    bundle["stage_a"]["symbols"] = [{"symbol_id": f"s{i}", "blob": "x" * 500} for i in range(5000)]
+    bundle["evidence_items"] = [{"evidence_id": f"ev_{i}", "blob": "x" * 500} for i in range(3000)]
+
+    env.repo.save(env.org_a, env.an_a, bundle, mode="on")
+
+    stored = env.repo.latest(env.org_a, env.an_a)
+    assert stored.bundle["truncated"] is True
+    assert "evidence_items" not in stored.bundle
+    stage_a = env.repo.latest_stage_a(env.org_a, env.an_a)
+    assert stage_a is not None and len(stage_a["symbols"]) == 5000  # never half a Stage A
+
+
+def test_b04_huge_stage_a_is_dropped_whole_and_marked_never_stale_fallback(env: Env) -> None:
+    env.repo.save(env.org_a, env.an_a, make_bundle(str(env.an_a), variant="small"), mode="on")
+    big = make_bundle(str(env.an_a), variant="big")
+    big["stage_a"]["symbols"] = [{"blob": "x" * 1000} for _ in range(9000)]  # > 8 MB
+    env.repo.save(env.org_a, env.an_a, big, mode="on")
+
+    stored = env.repo.latest(env.org_a, env.an_a)
+    assert stored.bundle["truncated"] is True
+    assert stored.bundle["stage_a_dropped"] is True
+    assert "stage_a" not in stored.bundle
+    with pytest.raises(StageAUnavailableError):
+        env.repo.latest_stage_a(env.org_a, env.an_a)  # not the older revision's stale intent
+
+
+def test_b18_same_digest_save_updates_the_mode_and_bundle_revision_matches(env: Env) -> None:
+    env.repo.save(env.org_a, env.an_a, make_bundle(str(env.an_a)), mode="shadow")
+    out = env.repo.save(env.org_a, env.an_a, make_bundle(str(env.an_a)), mode="on")
+    assert out.changed is False
+    assert env.repo.latest(env.org_a, env.an_a).mode == "on"
+
+    env.repo.save(env.org_a, env.an_a, make_bundle(str(env.an_a), variant="b"), mode="on")
+    stored = env.repo.latest(env.org_a, env.an_a)
+    assert stored.revision == 2
+    assert stored.bundle["verdict"]["revision"] == 2
+
+    env.repo.save(env.org_a, env.an_a, make_bundle(str(env.an_a)), mode="on")  # back on top
+    stored = env.repo.latest(env.org_a, env.an_a)
+    assert stored.revision == 3
+    assert stored.bundle["verdict"]["revision"] == 3
+
+
 def test_cap_bundle_leaves_small_bundles_alone() -> None:
     bundle = make_bundle("a")
     assert cap_bundle(bundle) is bundle
@@ -277,6 +323,30 @@ def test_request_arriving_during_work_survives_completion(env: Env) -> None:
     assert again is not None
     assert again.attempts == 1  # a fresh request resets the attempt counter
     assert env.repo.complete_request(again) is True
+
+
+def test_b16_re_request_while_running_keeps_the_claim_so_no_second_worker_starts(env: Env) -> None:
+    env.repo.enqueue_request(env.org_a, env.an_a, now=T0)
+    claim = env.repo.claim_request(now=T0 + timedelta(seconds=1))
+    env.repo.enqueue_request(env.org_a, env.an_a, now=T0 + timedelta(seconds=2))
+
+    # the first worker is still running: nobody else may claim the analysis
+    assert env.repo.claim_request(now=T0 + timedelta(seconds=3)) is None
+    assert env.repo.get_request(env.org_a, env.an_a).claimed is True
+
+    # it finishes, notices the newer request and releases the claim for exactly one more pass
+    assert env.repo.complete_request(claim) is False
+    again = env.repo.claim_request(now=T0 + timedelta(seconds=4))
+    assert again is not None and again.claim_token != claim.claim_token
+    assert env.repo.complete_request(again) is True
+
+
+def test_b16_a_dead_workers_claim_still_expires_with_the_lease(env: Env) -> None:
+    env.repo.enqueue_request(env.org_a, env.an_a, now=T0)
+    env.repo.claim_request(now=T0 + timedelta(seconds=1), lease_seconds=60)
+    env.repo.enqueue_request(env.org_a, env.an_a, now=T0 + timedelta(seconds=2))
+    assert env.repo.claim_request(now=T0 + timedelta(seconds=30), lease_seconds=60) is None
+    assert env.repo.claim_request(now=T0 + timedelta(seconds=90), lease_seconds=60) is not None
 
 
 def test_failure_releases_with_backoff_and_redacted_error(env: Env) -> None:
@@ -334,3 +404,28 @@ def test_invalid_reason_is_rejected(env: Env) -> None:
 def test_backoff_grows_and_is_capped() -> None:
     assert [backoff_seconds(n) for n in (1, 2, 3)] == [2.0, 4.0, 8.0]
     assert backoff_seconds(50) == 300.0
+
+
+def test_b17_outcomes_survive_a_truncated_bundle_through_the_quality_row_status() -> None:
+    from radius_shared.verdict_v2_payload import _outcome_from_status
+
+    for status, outcome in [
+        ("counted", "passed"),
+        ("gated:outcome_failed", "failed"),
+        ("gated:outcome_error", "error"),
+        ("gated:outcome_skipped", "skipped"),
+        ("gated:zero_quality", "not_run"),
+        (None, "not_run"),
+    ]:
+        assert _outcome_from_status(status) == outcome
+
+    bundle = make_bundle("an-1")
+    item = bundle["verdict"]["criteria"][0]["items"][0]
+    item["status"] = "gated:outcome_failed"
+    item["outcome"] = None
+    bundle["evidence_items"] = []  # as after the size cap
+    repo = InMemoryVerdictV2Repository()
+    org, an = uuid4(), uuid4()
+    repo.save(org, an, bundle, mode="on")
+    payload = build_payload(repo.latest(org, an))
+    assert payload["criteria"][0]["items"][0]["outcome"] == "failed"

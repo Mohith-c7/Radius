@@ -1,0 +1,1 @@
+Verdict v2: two or more failing tests on one criterion no longer crash the verdict (it is `failed`, as intended), and a failed recompute now shows "verdict unavailable" instead of leaving an older, possibly `verified`, verdict published.

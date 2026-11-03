@@ -147,6 +147,23 @@ _ITEM_KEYS = (
 )
 
 
+def _outcome_from_status(status: Any) -> str:
+    """Outcome implied by a quality row status when ``evidence_items`` were dropped (B-17).
+
+    ``gated:outcome_failed`` / ``gated:outcome_error`` / ``gated:outcome_skipped`` name the
+    outcome; ``counted`` means the test ran and passed. Anything else is ``not_run``.
+    """
+
+    if isinstance(status, str):
+        if status == "counted":
+            return "passed"
+        if status.startswith("gated:outcome_"):
+            tail = status.removeprefix("gated:outcome_")
+            if tail in ("failed", "error", "skipped", "flaky"):
+                return tail
+    return "not_run"
+
+
 def _criterion(
     raw: Mapping[str, Any], outcomes: Mapping[str, Mapping[str, Any]]
 ) -> dict[str, Any]:
@@ -161,7 +178,9 @@ def _criterion(
             or ""
         )
         data["test_id"] = test_id
-        data["outcome"] = evidence.get("outcome") or data.get("outcome") or "not_run"
+        data["outcome"] = (
+            evidence.get("outcome") or data.get("outcome") or _outcome_from_status(data.get("status"))
+        )
         row = {k: data[k] for k in _ITEM_KEYS if k in data}
         if data.get("mutation_n") is None:  # contract 5: only mutation-measured rows carry these
             for key in _MUTATION_ITEM_KEYS:
@@ -175,6 +194,9 @@ def _criterion(
             "evidence_basis": str(mutation.get("basis") or "static_only"),
             "mutation": dict(mutation),
         }
+    confirmed_by = raw.get("confirmed_by")
+    if isinstance(confirmed_by, str) and confirmed_by:  # B-07, optional
+        extra = {**extra, "confirmed_by": confirmed_by[:160]}
     return {
         **extra,
         "criterion_id": raw.get("criterion_id", ""),
@@ -365,6 +387,13 @@ def build_payload(
     if ok and isinstance(verdict.get("waivers"), Mapping) and verdict["waivers"]:
         payload["waivers"] = dict(verdict["waivers"])
     if ok:
+        degraded = [
+            d[:120]
+            for d in (bundle.get("degraded") if isinstance(bundle.get("degraded"), list) else [])
+            if isinstance(d, str)
+        ][:50]
+        if degraded:  # B-20: the analysis degradation markers, blocking ones included
+            payload["degraded"] = degraded
         suggestions = suggested_tests(bundle.get("suggested_tests"))
         if suggestions:
             payload["suggested_tests"] = suggestions

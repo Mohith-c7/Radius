@@ -66,8 +66,11 @@ TIER_A = ("ROR", "AOR", "BOOL", "CRM", "EXC", "RET", "NEG")
 TIER_B = ("CON", "CALL")
 
 _MAX_SOURCE_BYTES = 512 * 1024
-_CONTEXT_FILE_LIMIT = 4000
+_CONTEXT_FILE_LIMIT = 20000
 _CONTEXT_BYTES_LIMIT = 40 * 1024 * 1024
+#: Kept for callers that import it; since B-14 the context hash covers EVERY file outside the
+#: skipped directories (test data such as .csv / .sql / .xml / binary fixtures decides a test's
+#: outcome as much as code does).
 _CONTEXT_SUFFIXES = (".py", ".toml", ".ini", ".cfg", ".txt", ".yml", ".yaml", ".json")
 
 KILLED = "killed"
@@ -233,16 +236,21 @@ def collapse_results(results: dict[str, str], tests: Sequence[str]) -> dict[str,
 
 
 def context_hash(root: Path) -> str | None:
-    """Hash of the repository's Python and configuration files (conservative cache scope).
+    """Hash of every file in the repository tree (conservative cache scope, B-14).
 
     ``None`` when the tree is too large to hash cheaply: the cache is then disabled.
-    Any edit to any covered file changes the hash, so a cached result can never outlive
-    a change to a test body, a helper, ``conftest.py`` or the pytest configuration.
+    Any edit to any file outside the skipped tool directories changes the hash, so a cached
+    result can never outlive a change to a test body, a helper, ``conftest.py``, the pytest
+    configuration or a data file a test reads (``.csv``, ``.sql``, ``.xml``, ``.md``, binary
+    fixtures, lockfiles).
     """
 
     entries: list[tuple[str, str]] = []
     total = 0
-    skip = {".git", "__pycache__", "node_modules", ".venv", ".mypy_cache", ".pytest_cache"}
+    skip = {
+        ".git", "__pycache__", "node_modules", ".venv", ".mypy_cache", ".pytest_cache",
+        ".ruff_cache", ".tox", ".nox", ".eggs",
+    }
     stack = [root]
     while stack:
         cur = stack.pop()
@@ -255,7 +263,7 @@ def context_hash(root: Path) -> str | None:
                 continue
             if child.is_dir():
                 stack.append(child)
-            elif child.suffix in _CONTEXT_SUFFIXES:
+            elif child.is_file():
                 try:
                     data = child.read_bytes()
                 except OSError:

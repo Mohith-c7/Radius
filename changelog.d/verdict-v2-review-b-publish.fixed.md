@@ -1,0 +1,1 @@
+Verdict v2: an unreadable base-branch policy gives `action_required` instead of a silent pass, a lost republish after a CI upload is recovered by a periodic sweep, a manual criterion triggers a recompute, and the live-head check works for pull requests beyond the first 100.

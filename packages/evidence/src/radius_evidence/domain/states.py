@@ -150,7 +150,8 @@ def evaluate_criterion(
             Reason(
                 "failing_linked_test",
                 f"{len(failing)} linked test(s) failed",
-                ",".join(failing),
+                failing[0],
+                refs=tuple(failing) if len(failing) > 1 else None,
             )
         )
     elif criterion.testability in NON_FUNCTIONAL_TESTABILITY:

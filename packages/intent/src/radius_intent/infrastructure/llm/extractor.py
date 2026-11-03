@@ -93,6 +93,22 @@ _ITEM_LEVEL = frozenset(
     }
 )  # fmt: skip
 _WORD = re.compile(r"\w+", re.UNICODE)
+#: Words that flip or restrict the meaning of a requirement (modals such as must/can are
+#: deliberately not included: a paraphrase may change them); they must agree between a
+#: proposed criterion and its quote (B-11). ``n't`` forms tokenise as ``don`` + ``t`` and are
+#: covered by the contraction stems below.
+_POLARITY_WORDS = frozenset(
+    {
+        "not", "no", "never", "cannot", "without", "none", "neither", "nor", "nothing",
+        "only", "unless", "except", "won", "don", "doesn", "didn", "isn", "aren", "wasn", "weren", "shouldn", "mustn",
+        "couldn", "wouldn", "hasn", "haven",
+    }
+)
+
+
+def _polarity(tokens: list[str]) -> frozenset[str]:
+    return frozenset(t for t in tokens if t in _POLARITY_WORDS)
+
 
 
 @dataclass(frozen=True)
@@ -520,13 +536,34 @@ class LlmCriterionExtractor:
         return tuple(out.values())
 
     def _grounded(self, text: str, quote: str) -> bool:
-        """At least ``min_grounding`` of the text's distinct words occur in the quote."""
+        """The criterion text must be a faithful restatement of its quote (B-11).
 
-        words = {w.casefold() for w in _WORD.findall(text)}
+        Three checks, all deterministic: (1) at least ``min_grounding`` of the text's distinct
+        words occur in the quote; (2) the negations and limiters agree both ways (a
+        criterion may not drop or add ``not``/``never``/``no``/``cannot``/``without``/``only``
+        ...); (3) the text's words that occur in the quote keep the quote's order, so a swap
+        such as "admin can delete user" for "user can delete admin" is not grounded. A
+        stricter paraphrase is simply dropped: LLM criteria are proposals anyway.
+        """
+
+        seq = [w.casefold() for w in _WORD.findall(text)]
+        words = set(seq)
         if not words:
             return False
-        quoted = {w.casefold() for w in _WORD.findall(quote)}
-        return len(words & quoted) / len(words) >= self._cfg.min_grounding
+        quote_seq = [w.casefold() for w in _WORD.findall(quote)]
+        quoted = set(quote_seq)
+        if len(words & quoted) / len(words) < self._cfg.min_grounding:
+            return False
+        if _polarity(seq) != _polarity(quote_seq):
+            return False
+        # greedy ordered match of the shared words
+        pos = 0
+        for word in (w for w in seq if w in quoted):
+            try:
+                pos = quote_seq.index(word, pos) + 1
+            except ValueError:
+                return False
+        return True
 
     def _prompt_hash(self, system: str, user: str, nonce: str) -> str:
         """Hash of the prompt with the per-call nonce masked, so it is cacheable."""

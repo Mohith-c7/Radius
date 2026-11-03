@@ -491,15 +491,37 @@ def test_r2a_beats_r2e_when_behavioral_code_changed() -> None:
     [
         ("README.md", True), ("docs/guide.md", True), ("LICENSE", True), ("docs/img/a.png", True),
         (".gitignore", True), ("changelog.d/123.md", True),
-        (".github/workflows/ci.yml", False), ("pyproject.toml", False), ("uv.lock", False),
+        (".github/workflows/ci.yml", False), ("pyproject.toml", False), ("uv.lock", True),
         ("requirements.txt", False), ("Dockerfile", False), ("src/app.py", False),
         ("tests/test_a.py", False), ("docs/conf.py", False), (".github/README.md", False),
+        # B-12: names that only look inert
+        ("src/changelog.py", False), ("tools/changelog_gen.sh", False), ("licence_check.py", False),
+        ("docs/build.mjs", False), ("docs/gen.go", False), ("doc/Makefile", False),
+        ("CMakeLists.txt", False), ("requirements-dev.txt", False), ("constraints-dev.txt", False),
+        ("requirements/prod.txt", False), ("docs/deploy.ps1", False), ("docs/Dockerfile", False),
+        ("src/LICENSE.py", False), ("src/app.svg", False),
+        ("CHANGELOG", True), ("changelog.d/.gitkeep", True), ("package-lock.json", True),
     ],
 )
 def test_is_inert_path(path: str, inert: bool) -> None:
     from radius_confidence.verdict_v2.domain.rules import is_inert_path
 
     assert is_inert_path(path) is inert
+
+
+def test_b02_r2e_is_not_applicable_only_without_blocking_degraded_markers() -> None:
+    v = run([], behavioral_symbols=0, inert_changes_only=True, degraded=("unanalyzed_files:2",))
+    r2e = next(r for r in v.justification["rules"] if r["id"] == "R2e")
+    assert r2e["fired"] is True and r2e["inputs"]["not_applicable"] is False
+    assert "R2d" in fired(v)
+    assert v.verdict == Verdict.INSUFFICIENT_EVIDENCE
+
+
+@pytest.mark.parametrize("marker", ["unanalyzed_files:1", "tamper_unanalyzed:files=3", "tamper_unanalyzed:context_error"])
+def test_b02_b03_markers_block_verified(marker: str) -> None:
+    assert run([PROVEN()]).verdict == Verdict.VERIFIED
+    v = run([PROVEN()], degraded=(marker,))
+    assert v.verdict == Verdict.INSUFFICIENT_EVIDENCE and "R2d" in fired(v)
 
 
 def test_r2a_legacy_testability_string_counts_as_behavioral() -> None:

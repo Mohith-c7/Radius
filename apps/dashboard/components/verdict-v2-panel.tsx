@@ -311,6 +311,9 @@ function VerdictView({ verdict }: { verdict: VerdictV2 }) {
           <div><dt>Computed</dt><dd>{verdict.computed_at ?? "-"}</dd></div>
           <div><dt>Config digest</dt><dd className="vv2-mono">{verdict.justification?.config_digest || "-"}</dd></div>
           <div><dt>Inputs digest</dt><dd className="vv2-mono">{verdict.justification?.inputs_digest || "-"}</dd></div>
+          {verdict.degraded && verdict.degraded.length > 0 ? (
+            <div data-testid="degraded-markers"><dt>Degraded</dt><dd className="vv2-mono">{verdict.degraded.join(", ")}</dd></div>
+          ) : null}
         </dl>
       </footer>
     </>
@@ -486,6 +489,7 @@ function CriterionDetails({ criterion }: { criterion: Criterion }) {
       ) : null}
       <p className="vv2-small">
         Criterion source: {provenanceLabel(criterion.provenance)}
+        {criterion.confirmed_by ? `. Confirmed by: ${criterion.confirmed_by}` : ""}
         {criterion.hints.length > 0
           ? `. Hints: ${criterion.hints
               .map((h) => `${h.kind} ${h.value} (${provenanceLabel(h.provenance)})`)

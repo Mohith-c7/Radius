@@ -85,6 +85,126 @@ _FORBIDDEN_NAMES = frozenset(
 
 # ---------------------------------------------------------------------- the gate
 
+#: Builtins a suggested test may call (pure, no I/O, no reflection). B-08: everything else,
+#: ``getattr``, ``type``, ``vars``, ``dir``, ``open``, ``__import__`` ..., is rejected.
+_ALLOWED_BUILTINS = frozenset(
+    {
+        "len", "sorted", "list", "tuple", "set", "frozenset", "dict", "str", "int", "float",
+        "bool", "abs", "min", "max", "sum", "range", "round", "repr", "isinstance", "any",
+        "all", "enumerate", "zip", "reversed", "bytes", "True", "False", "None",
+        "ValueError", "TypeError", "KeyError", "IndexError", "ZeroDivisionError",
+        "AttributeError", "RuntimeError", "OverflowError", "LookupError", "Exception",
+        "AssertionError", "StopIteration",
+    }
+)
+#: Attribute calls on values (methods of str / list / dict / tuple); nothing that can reach
+#: modules, frames, classes or the interpreter.
+_ALLOWED_METHODS = frozenset(
+    {
+        "lower", "upper", "strip", "lstrip", "rstrip", "split", "rsplit", "join", "startswith",
+        "endswith", "replace", "title", "capitalize", "casefold", "isdigit", "isalpha",
+        "isalnum", "isupper", "islower", "items", "keys", "values", "get", "count", "index",
+        "find", "splitlines", "zfill", "encode", "decode", "copy", "append", "extend",
+    }
+)
+_PYTEST_CALLS = frozenset({"raises", "approx"})
+_PYTEST_MARKS = frozenset({"parametrize"})
+_ALLOWED_NODES = (
+    ast.Constant, ast.Name, ast.Load, ast.Store, ast.Tuple, ast.List, ast.Dict, ast.Set,
+    ast.BinOp, ast.UnaryOp, ast.BoolOp, ast.Compare, ast.IfExp, ast.Subscript, ast.Slice,
+    ast.Starred, ast.JoinedStr, ast.FormattedValue, ast.keyword, ast.comprehension,
+    ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp, ast.operator, ast.unaryop,
+    ast.boolop, ast.cmpop, ast.expr_context, ast.Call, ast.Attribute,
+)
+
+
+class _Reject(Exception):  # noqa: N818
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+
+
+def _allowlist_check(tree: ast.Module, imported: set[str]) -> None:
+    """Raise ``_Reject`` unless every node and call is on the allowlist (B-08).
+
+    This is a deny-by-default filter, not a sandbox: an accepted snippet is still code a
+    model wrote from author-controlled text. It is only ever shown, never executed here.
+    """
+
+    local: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            local.update(a.arg for a in (*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs))
+        elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+            local.add(node.id)
+        elif isinstance(node, ast.comprehension):
+            for t in ast.walk(node.target):
+                if isinstance(t, ast.Name):
+                    local.add(t.id)
+    names = imported | local | _ALLOWED_BUILTINS | {"pytest"}
+
+    def check_call(call: ast.Call) -> None:
+        f = call.func
+        if isinstance(f, ast.Name):
+            if f.id in imported or f.id in _ALLOWED_BUILTINS:
+                return
+            raise _Reject("forbidden_call")
+        if isinstance(f, ast.Attribute):
+            base = f.value
+            if isinstance(base, ast.Name) and base.id == "pytest" and f.attr in _PYTEST_CALLS:
+                return
+            if isinstance(base, ast.Attribute) and isinstance(base.value, ast.Name)                     and base.value.id == "pytest" and base.attr == "mark" and f.attr in _PYTEST_MARKS:
+                return
+            if f.attr in _ALLOWED_METHODS and not (isinstance(base, ast.Name) and base.id == "pytest"):
+                return
+        raise _Reject("forbidden_call")  # includes any call whose target is itself a call
+
+    def check_node(n: ast.AST) -> None:
+        if isinstance(n, ast.stmt):
+            if not isinstance(
+                n, (ast.FunctionDef, ast.Assert, ast.Assign, ast.Expr, ast.Pass, ast.With, ast.Return)
+            ):
+                raise _Reject("forbidden_syntax")
+            return
+        if isinstance(n, (ast.arguments, ast.arg, ast.withitem)):
+            return
+        if not isinstance(n, _ALLOWED_NODES):
+            raise _Reject("forbidden_syntax")
+        if isinstance(n, ast.Name) and n.id not in names:
+            raise _Reject("forbidden_call")
+        if isinstance(n, ast.Attribute) and (n.attr.startswith("_") or n.attr == "mro"):
+            raise _Reject("forbidden_call")
+        if isinstance(n, ast.Call):
+            check_call(n)
+        if isinstance(n, ast.Constant) and isinstance(n.value, str) and "__" in n.value:
+            # string-built dunder names (``"__glob" + "als__"``) and dunder lookups
+            raise _Reject("forbidden_call")
+
+    for stmt in tree.body:
+        if isinstance(stmt, (ast.Import, ast.ImportFrom)):
+            continue  # validated by the import rules
+        if not isinstance(stmt, ast.FunctionDef):
+            raise _Reject("forbidden_syntax")
+        for dec in stmt.decorator_list:
+            if not (
+                isinstance(dec, ast.Call)
+                and isinstance(dec.func, ast.Attribute)
+                and dec.func.attr in _PYTEST_MARKS
+            ):
+                raise _Reject("forbidden_syntax")
+        for n in ast.walk(stmt):
+            check_node(n)
+            if isinstance(n, ast.With):
+                for item in n.items:
+                    c = item.context_expr
+                    if not (
+                        isinstance(c, ast.Call)
+                        and isinstance(c.func, ast.Attribute)
+                        and isinstance(c.func.value, ast.Name)
+                        and c.func.value.id == "pytest"
+                        and c.func.attr == "raises"
+                    ):
+                        raise _Reject("forbidden_call")
+
 
 @dataclass(frozen=True)
 class GateResult:
@@ -157,6 +277,11 @@ def gate_suggestion(
         return GateResult(False, "changed_symbol_not_called")
 
     try:
+        _allowlist_check(tree, imported)
+    except _Reject as exc:
+        return GateResult(False, exc.reason)
+
+    try:
         aset = extract_assertions([TEST_FILE], {TEST_FILE: code}).to_dict()
         conv = features_from_assertion_set(aset)
     except Exception:  # noqa: BLE001 - a broken extractor must reject, never raise
@@ -199,7 +324,8 @@ def changed_module_symbols(symbols: Sequence[Any]) -> dict[str, frozenset[str]]:
             or getattr(s, "is_test", False)
             or getattr(s, "is_pseudo", False)
             or not getattr(s, "is_behavioral", False)
-            or getattr(s, "change_kind", "") == "deleted"
+            or str(getattr(getattr(s, "change_kind", ""), "value", getattr(s, "change_kind", "")))
+            == "removed"  # B-13: the enum value is "removed" ("deleted" never existed)
         ):
             continue
         mod = module_name(str(getattr(s, "path", "")))

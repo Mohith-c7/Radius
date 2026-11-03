@@ -374,6 +374,8 @@ def add_criterion(
     principal: Principal,
     service: Service,
     response: Response,
+    request: Request,
+    verdicts: Annotated[VerdictV2Repository, Depends(get_verdict_v2_repository)],
     if_match: IfMatch = None,
     actor_label: ActorLabel = None,
 ):
@@ -390,6 +392,11 @@ def add_criterion(
         actor=_actor(principal, actor_label),
         reason=body.reason,
         if_match=if_match,
+    )
+    # B-09: a manual criterion is not in the stored Stage A; the recompute marks the verdict
+    # "intent not in analysis" (blocking) instead of leaving it silently unchanged
+    request_verdict_v2_recompute(
+        request, verdicts, principal.organization_id, analysis_id
     )
     response.status_code = (
         status.HTTP_201_CREATED if outcome.created else status.HTTP_200_OK

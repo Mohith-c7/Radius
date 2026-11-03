@@ -27,6 +27,9 @@ class CriterionInput(Serializable):
     #: Contract 3: who supplied the criterion text / its hints (see ``enums.Provenance``).
     provenance: str = "author_pr_body"
     hints_provenance: str = "author_pr_body"
+    #: B-07 (optional): label of the actor who confirmed or edited the criterion (shown in the
+    #: verdict). ``None`` for criteria nobody confirmed; never trusted as an identity.
+    confirmed_by: str | None = field(default=None, metadata={"omit_none": True})
 
 
 @dataclass(frozen=True, slots=True)

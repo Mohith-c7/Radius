@@ -327,6 +327,8 @@ def _evidence_cell(c: CriterionView, tau: float | None) -> str:
 
 def _tags(c: CriterionView) -> str:
     tags = [FLAG_TAGS[f] for f in c.flags if f in FLAG_TAGS]
+    if c.confirmed_by:  # B-07: who confirmed it (an unverified label), never an identity claim
+        tags.append(f"confirmed by {escape.token(c.confirmed_by, 60, fallback='unknown')}")
     return f" ({', '.join(sorted(set(tags)))})" if tags else ""
 
 
@@ -975,28 +977,72 @@ class CheckRunPayload:
     details_url: str | None
 
 
+#: Error codes of an ``error`` row written because a recompute failed (see worker publish):
+#: a previously published verdict could not be refreshed.
+STALE_ERROR_PREFIXES = ("recompute_failed", "stage_a_not_stored")
+
+
+def _policy_unusable(view: VerdictV2View) -> bool:
+    """True when the repository HAS a base-branch policy file that could not be applied.
+
+    ``mode`` is then unknown (B-10): falling back to advisory would let a repository that
+    asked for a blocking check pass on a transient read error."""
+
+    pol = view.policy or {}
+    if not pol or pol.get("mode"):
+        return False
+    return pol.get("status") not in (None, "ok") or bool(pol.get("errors"))
+
+
+def _not_applicable(view: VerdictV2View) -> bool:
+    """R2e decided and said ``not_applicable`` (only documentation / inert files changed)."""
+
+    if _decided_by(view) != "R2e":
+        return False
+    for rule in view.justification.get("rules") or []:
+        if isinstance(rule, dict) and rule.get("id") == "R2e":
+            inputs = rule.get("inputs")
+            return isinstance(inputs, dict) and inputs.get("not_applicable") is True
+    return False
+
+
 def check_conclusion(view: VerdictV2View, *, mode: str = "advisory") -> str:
     """Check Run conclusion (alpha: advisory, never green by default).
 
     ``advisory`` (default): ``neutral`` for every verdict including ``verified``;
     ``failure`` only for ``failed`` decided by R1a/R1b/R1c (a failing linked test,
     failing CI cases, a high-severity tamper finding). ``strict``: ``verified`` is
-    ``success``. Unavailable and pending results are always ``neutral``.
+    ``success``. Unavailable and pending results are always ``neutral``, except an
+    unavailable verdict that replaced a published one after a failed recompute
+    (``action_required``).
 
     A policy with ``mode: blocking`` (``view.policy``, from the base branch) overrides
-    both: ``verified`` (not pending) is ``success`` and every other result, pending
-    included, is ``failure``. Policy ``mode: advisory`` never fails (``failed`` is
-    ``neutral``) and does not turn ``verified`` green by itself (DEC-030): that needs the
-    ``strict`` knob or ``blocking``.
+    both: ``verified`` (not pending) is ``success``, a docs-only / inert-only change
+    (R2e ``not_applicable``) is ``neutral`` (nothing to verify, so it must not be red) and
+    every other result, pending included, is ``failure``. Policy ``mode: advisory`` never
+    fails (``failed`` is ``neutral``) and does not turn ``verified`` green by itself
+    (DEC-030): that needs the ``strict`` knob or ``blocking``.
+
+    A base-branch policy file that exists but could not be applied (unreadable, too large,
+    invalid; B-10) is never a silent pass: hard failures (R1a/R1b/R1c) stay ``failure``,
+    everything else is ``action_required``, which a required check does not accept.
     """
 
     if not _ok(view):
+        error = (view.error or {}).get("code")
+        if isinstance(error, str) and error.startswith(STALE_ERROR_PREFIXES):
+            return "action_required"
         return "neutral"
+    if _policy_unusable(view):
+        hard = view.verdict == "failed" and _decided_by(view) in FAILURE_RULES
+        return "failure" if hard else "action_required"
     policy_mode = view.policy.get("mode") if view.policy else None
     if policy_mode == "blocking":
         # The repository opted into a required check (policy read from the base branch):
         # a required check passes on neutral, so everything unverified, including a pending
         # run, fails (the run is republished when CI results arrive).
+        if _not_applicable(view) and not view.pending:
+            return "neutral"
         return "success" if view.verdict == "verified" and not view.pending else "failure"
     if view.pending:
         return "neutral"

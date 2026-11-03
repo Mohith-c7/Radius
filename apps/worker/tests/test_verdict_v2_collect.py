@@ -346,6 +346,28 @@ def test_tamper_truncation_and_unsupported_language_are_blocking_markers() -> No
     assert {"truncated", "unsupported_language:typescript"} <= set(sa.degraded)
 
 
+def test_b02_unknown_language_and_ignored_files_become_blocking_markers_in_stage_a() -> None:
+    files = (
+        NS(path="src/a.py", old_path=None, language="python", level=NS(value="symbol")),
+        NS(path="deploy.sh", old_path=None, language="unknown", level=NS(value="file")),
+        NS(path="vendor/x.py", old_path=None, language="python", level=NS(value="ignored")),
+        NS(path="README.md", old_path=None, language="unknown", level=NS(value="file")),
+    )
+    cs = NS(symbols=(changed(),), files=files, truncated=False,
+            algo_version="symbol-changes-v1", to_json=lambda: "{}")
+    sa = collect_once(producers=good_producers(symbol_changes=lambda c: cs))
+    assert {"unsupported_language:unknown", "unanalyzed_files:2"} <= set(sa.degraded)
+
+
+def test_b03_unanalyzable_test_file_and_context_error_are_blocking_markers_in_stage_a() -> None:
+    report = tamper_report(
+        unanalyzable=(NS(path="tests/test_big.py", side="base", reason="file_too_large"),),
+        notes=("context_error:RuntimeError",),
+    )
+    sa = collect_once(producers=good_producers(tamper=lambda c, cmd: report))
+    assert {"tamper_unanalyzed:files=1", "tamper_unanalyzed:context_error"} <= set(sa.degraded)
+
+
 def test_tamper_findings_and_waived_counts_are_carried() -> None:
     finding = NS(to_dict=lambda: {
         "finding_id": "tf_1", "rule_id": "T001", "check": "c", "severity": "high",

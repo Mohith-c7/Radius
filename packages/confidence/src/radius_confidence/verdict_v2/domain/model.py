@@ -101,6 +101,8 @@ class CriterionVerdict(Serializable):
     #: Contract 5: mutation facts of the criterion (basis, sample size, union detection,
     #: survivors); empty when the mutation flag was off.
     mutation: dict[str, Any] = field(default_factory=dict)
+    #: B-07 (optional): who confirmed or edited the criterion; ``None`` when nobody did.
+    confirmed_by: str | None = field(default=None, metadata={"omit_none": True})
 
 
 @dataclass(frozen=True, slots=True)

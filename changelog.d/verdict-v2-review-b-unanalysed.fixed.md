@@ -1,0 +1,1 @@
+Verdict v2: changed files that are neither documentation nor analysable (shell, Dockerfile, SQL, YAML, vendored or generated paths) and incomplete tamper analyses (large, binary or unparsable test files) now block `verified` with visible markers (`unanalyzed_files`, `tamper_unanalyzed`). Docs-only pull requests are `not applicable` and no longer red in blocking mode.

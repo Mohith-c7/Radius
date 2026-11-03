@@ -600,3 +600,24 @@ def test_only_the_adapter_module_may_import_a_provider_sdk():
             assert "anthropic" not in top_level
         else:
             assert not (mods & banned), path.name
+
+
+# --- B-11: grounding is not a bag of words --------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "quote", "grounded"),
+    [
+        ("Users can export CSV", Q1, True),  # a paraphrase that keeps order and polarity
+        ("must reject expired tokens", "The API must not reject expired tokens", False),  # dropped not
+        ("must not reject expired tokens", "The API must reject expired tokens", False),  # added not
+        ("admin can delete user", "A user can delete admin accounts, never the other way", False),
+        ("user can delete admin", "admin can delete user", False),  # swapped roles
+        ("only admins can delete users", "admins can delete users", False),  # added limiter
+        ("tokens never expire", "tokens never expire", True),
+        ("the export finishes within five seconds", Q2, True),
+    ],
+)
+def test_b11_grounding_checks_polarity_and_word_order(text, quote, grounded):
+    ex, _ = make(lambda r: reply())
+    assert ex._grounded(text, quote) is grounded

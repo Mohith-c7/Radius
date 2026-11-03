@@ -333,3 +333,21 @@ def test_context_hash_changes_with_any_covered_file(repo: Path) -> None:
     h2 = context_hash(repo)
     (repo / "src" / "helper.py").write_text("X = 2\n")
     assert len({h1, h2, context_hash(repo)}) == 3
+
+
+@pytest.mark.parametrize("name", ["data.csv", "q.sql", "fixture.xml", "NOTES.md", "blob.bin", "uv.lock"])
+def test_b14_context_hash_covers_data_and_binary_files_not_only_code(repo: Path, name: str) -> None:
+    before = context_hash(repo)
+    (repo / "tests").mkdir(exist_ok=True)
+    (repo / "tests" / name).write_bytes(b"1\n")
+    added = context_hash(repo)
+    (repo / "tests" / name).write_bytes(b"2\x00\n")
+    changed = context_hash(repo)
+    assert len({before, added, changed}) == 3
+
+
+def test_b14_tool_directories_do_not_change_the_hash(repo: Path) -> None:
+    before = context_hash(repo)
+    (repo / ".pytest_cache").mkdir()
+    (repo / ".pytest_cache" / "x").write_text("1")
+    assert context_hash(repo) == before
