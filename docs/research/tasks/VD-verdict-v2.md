@@ -54,7 +54,7 @@ Goal: compute and publish a deterministic, explainable, per-criterion verdict. S
 - Goal: a human with the right role can waive a criterion or rule with a reason and expiry; waivers appear in the PR comment and in reports; expired waivers stop applying.
 - Acceptance: waiver requires role + reason; expiry enforced; audit log entries; cannot waive `contradicted` evidence without a higher role (policy).
 
-### VD-06 PR comment and Check Run v2, republish after CI   [x] (renderer and in-place upsert plan; worker publish wiring is VS-08)
+### VD-06 PR comment and Check Run v2, republish after CI   [x] (2026-11-03: the dashboard panel was verified in Chrome and republish after CI is covered by the CI smoke test against a fake GitHub; real GitHub not verified; renderer and in-place upsert plan; worker publish wiring is VS-08)
 - Owner type: agent-ok
 - Depends on: VD-03, IN-12
 - Branch: `feature/github-publish-v2`
