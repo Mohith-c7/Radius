@@ -74,8 +74,10 @@ in `.env` rebuild with `make dev`. For illustrative data in that organization ru
 (opt-in, demo only).
 
 **Verified (2026-11-03):** a full-stack run of this profile (build, services healthy, sign-up in a
-browser, dashboard pages, demo data via `make seed-demo`) was done in Chrome. Not covered: other
-browsers, other host operating systems than the one used, and timing or sizing figures.
+browser, dashboard pages, demo data) was done in Chrome. The demo data was loaded by running
+`scripts/seed_demo.py --yes` directly, which is the command `make seed-demo` wraps; the make target
+itself was not run. Not covered: other browsers, other host operating systems than the one used, and
+timing or sizing figures.
 `scripts/check_compose.py` additionally checks the Compose files statically.
 
 ## Steps: production-like Compose
