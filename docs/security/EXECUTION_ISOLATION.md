@@ -58,6 +58,46 @@ daemon/image unavailable, runtime vanishing after build, configurability) and
 `packages/testing/tests/test_sandbox_runner.py` (readiness, signal exit codes, output
 flood, ulimit and seccomp flags).
 
+## Mutation evidence runs mutants only in the sandbox (DEC-034)
+
+`RADIUS_FEATURE_MUTATION` (default off) makes the Verdict v2 Stage A `mutation` producer
+run many **generated variants** of the pull request's own code. A mutant is as untrusted as the
+code it came from, and it is executed together with the PR's tests, so the same rule applies:
+
+* Only `SandboxMutantRunner` (an adapter over `ContainerSandboxRunner`) is used in the worker.
+  Every run is one throw-away container with the F-07 limits: `--network none`, read-only root,
+  `--cap-drop ALL`, `no-new-privileges`, nobody uid, pids/memory/cpu/ulimit caps, `--pull never`,
+  a fixed environment allowlist, output watchdog and wall-clock kill. The producer builds the
+  runner without F-11 failure reruns (a failing mutant is a kill).
+* The mutant is written into a **fresh copy** of the checkout (`.git` excluded, symlinks kept as
+  links, path-escape checked); the checkout the worker holds is never modified, and the sandbox
+  takes one more snapshot of the copy. The generator itself is pure `ast`: it never imports or
+  executes repository code on the worker.
+* `WORKER_TEST_EXECUTION_MODE` must be `sandbox`. With `disabled` or `unsafe_in_process` the
+  producer does not execute anything and the analysis records `mutation unmeasured
+  (sandbox_disabled)`; `unsafe_in_process` is never used for mutants, even when
+  `RADIUS_ALLOW_UNSAFE_EXECUTION=true`.
+* `SubprocessLocalRunner` (a plain child process) exists for development and for the F-14
+  fixtures, which are our own code. It is refused unless `RADIUS_MUTATION_ALLOW_LOCAL=1`, and
+  `measure_mutation` refuses it again unless the caller passes `allow_local_runner=True`; the
+  worker never does. Do not set `RADIUS_MUTATION_ALLOW_LOCAL` on a worker.
+* Test ids reach the command line only after validation (no leading `-`, no `..`, no absolute
+  or drive path), so a test id cannot become a pytest option.
+* The JUnit report written by the container is evidence from untrusted code with the same trust
+  as any CI result: mutation output only changes support and can never create a pass from a
+  failing test. A test that reads the source of the code it covers can fake kills (candidate
+  tamper rule D9, not built).
+
+**Docker access.** Mutation needs exactly what `sandbox` mode needs, nothing more: a container
+runtime reachable from the worker (the `sandbox` target of `apps/worker/Dockerfile` adds the
+`docker` CLI; the daemon is the host's, through a mounted socket or `DOCKER_HOST`) and the image
+`WORKER_SANDBOX_IMAGE` already present locally with pytest and the project's dependencies.
+The default `docker-compose.yml` worker has **no** docker socket and the `runtime` image has no
+CLI, so under the default compose mutation reports `sandbox_disabled` and the static result is
+used. This change does not widen any container privilege and adds no socket mount; a worker
+with a socket is host-root-equivalent (see the residual risks below), so use it only on a
+dedicated host, ideally with the gVisor/Firecracker recommendation at the end of this page.
+
 ## Findings: what the in-process path exposes
 
 Investigated on 2026-11-01 (Linux, worker running as uid 0 in the dev container).
