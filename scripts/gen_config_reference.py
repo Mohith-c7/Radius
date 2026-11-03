@@ -45,6 +45,7 @@ for _src in (
     "apps/worker/src",
     "packages/shared/src",
     "packages/github/src",
+    "packages/repository/src",
     "packages/analysis/src",
     "packages/intent/src",
     "packages/linking/src",
@@ -69,6 +70,8 @@ NOT_ENV = {
     "GITHUB_APP_NOT_CONFIGURED",
     "GITHUB_APP_NOT_INSTALLED",
     "GITHUB_INSTALLATION_MISMATCH",
+    "GITHUB_INSTALLATION_NOT_LINKED",
+    "REPOSITORY_ALREADY_CONNECTED",
     "GITHUB_REPOSITORY_NOT_ACCESSIBLE",
     "REPOSITORY_DISCONNECTED",
 }
@@ -210,11 +213,11 @@ def _default_text(value: Any) -> str:
 
 def pydantic_entries() -> dict[str, Entry]:
     from app.config import Settings as AuthSettings
+    from pydantic_core import PydanticUndefined
     from radius_api.config import ApiSettings
     from radius_github.client import GitHubAppSettings
     from radius_shared.observability.settings import ObservabilitySettings
     from radius_worker.config import WorkerSettings
-    from pydantic_core import PydanticUndefined
 
     classes: list[tuple[type, str, str]] = [
         (ApiSettings, "api", "apps/api/src/radius_api/config.py"),

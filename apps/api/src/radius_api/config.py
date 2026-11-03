@@ -6,6 +6,7 @@ from functools import lru_cache
 from uuid import UUID
 
 from pydantic import Field, field_validator, model_validator
+from radius_repository.domain.clone_url import GitUrlPolicy, parse_allowed_hosts
 from radius_shared.config import RuntimeEnvironment
 from radius_shared.database.session import DatabaseSettings
 from radius_shared.verdict_v2_flag import VerdictV2Mode, parse_verdict_v2_mode
@@ -58,6 +59,29 @@ class ApiSettings(DatabaseSettings):
     (default), deliveries from installations not linked to an organization are
     rejected instead of being filed under the default organization.
     """
+    git_allowed_hosts: str = Field(
+        default="github.com",
+        alias="RADIUS_GIT_ALLOWED_HOSTS",
+        description=(
+            "Comma separated hosts a repository clone URL may name (https only, "
+            "`https://<host>/<owner>/<repo>[.git]`). Default `github.com`; set your "
+            "GitHub Enterprise Server host to use it instead. Clone URLs on any other "
+            "host are refused at the API and again by the worker, and the GitHub "
+            "installation token is never sent to a host that is not listed."
+        ),
+    )
+    github_dev_single_tenant: bool | None = Field(
+        default=None,
+        alias="RADIUS_GITHUB_DEV_SINGLE_TENANT",
+        description=(
+            "Single-tenant development mode for `POST /repositories/connect-github`: "
+            "when true an organization with no GitHub installation may adopt the "
+            "installation the App has on the requested repository. Default: true when "
+            "`RADIUS_ENV=development`, false otherwise. Never enable it on a deployment "
+            "where more than one organization uses the App: any caller could then attach "
+            "another customer's installation."
+        ),
+    )
     intent_ingestion_enabled: bool = Field(
         default=False, alias="RADIUS_FEATURE_INTENT_INGESTION"
     )
@@ -97,7 +121,7 @@ class ApiSettings(DatabaseSettings):
         default=1024 * 1024, ge=1024, alias="RADIUS_MAX_BODY_BYTES"
     )
     webhook_max_body_bytes: int = Field(
-        default=25 * 1024 * 1024, ge=1024, alias="RADIUS_WEBHOOK_MAX_BODY_BYTES"
+        default=5 * 1024 * 1024, ge=1024, alias="RADIUS_WEBHOOK_MAX_BODY_BYTES"
     )
     upload_max_body_bytes: int = Field(
         default=20 * 1024 * 1024, ge=1024, alias="RADIUS_UPLOAD_MAX_BODY_BYTES"
@@ -141,12 +165,47 @@ class ApiSettings(DatabaseSettings):
             raise ValueError(msg)
         return value
 
+    @field_validator("git_allowed_hosts")
+    @classmethod
+    def _valid_git_hosts(cls, value: str) -> str:
+        parse_allowed_hosts(value)
+        return value
+
     @field_validator("trusted_proxies")
     @classmethod
     def _valid_proxies(cls, value: str) -> str:
         for item in split_csv(value):
             ipaddress.ip_network(item, strict=False)
         return value
+
+    @model_validator(mode="after")
+    def _resolve_dev_single_tenant(self) -> "ApiSettings":
+        if self.github_dev_single_tenant is None:
+            self.github_dev_single_tenant = (
+                self.environment == RuntimeEnvironment.DEVELOPMENT
+            )
+        return self
+
+    @property
+    def git_url_policy(self) -> GitUrlPolicy:
+        """Clone URL policy built from ``RADIUS_GIT_ALLOWED_HOSTS``."""
+
+        return GitUrlPolicy(allowed_hosts=parse_allowed_hosts(self.git_allowed_hosts))
+
+    @model_validator(mode="after")
+    def _require_api_credentials(self) -> "ApiSettings":
+        """A-09: uat/production needs some way to authenticate API callers."""
+
+        if self.environment in {RuntimeEnvironment.PRODUCTION, RuntimeEnvironment.UAT} and (
+            not self.api_key_pepper and not split_csv(self.api_keys)
+        ):
+            msg = (
+                "Set RADIUS_API_KEY_PEPPER (managed API keys, preferred) or API_KEYS "
+                "(deprecated static keys) when RADIUS_ENV is uat or production: "
+                "otherwise no API caller can authenticate."
+            )
+            raise ValueError(msg)
+        return self
 
     @model_validator(mode="after")
     def _validate_http_hardening(self) -> "ApiSettings":

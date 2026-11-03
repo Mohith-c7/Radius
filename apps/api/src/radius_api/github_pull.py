@@ -22,6 +22,7 @@ from uuid import UUID
 from fastapi import Request
 from radius_github import GitHubAppClient, GitHubHTTPError
 from radius_github.pull_sync import pull_request_status  # noqa: F401  (re-export)
+from radius_repository.domain.clone_url import GitUrlPolicy
 from radius_shared.database import enums as db_enums
 from radius_shared.database import models as db_models
 from radius_shared.errors import (
@@ -63,11 +64,31 @@ def parse_owner_repo(value: str) -> tuple[str, str]:
         msg = "repository must look like owner/name."
         raise ValidationError(msg)
     owner, name = parts
+    if owner in {".", ".."} or name in {".", ".."}:
+        # Dot segments would be collapsed by URL joining and steer the request
+        # to another GitHub API path.
+        msg = "repository must look like owner/name."
+        raise ValidationError(msg)
     allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.")
     if not (set(owner) <= allowed and set(name) <= allowed):
         msg = "repository contains characters GitHub does not allow."
         raise ValidationError(msg)
     return owner, name
+
+
+def clone_policy(request: Request) -> GitUrlPolicy:
+    """Clone URL policy from the API settings (default: github.com over https)."""
+
+    settings = getattr(request.app.state, "settings", None)
+    policy = getattr(settings, "git_url_policy", None)
+    return policy if isinstance(policy, GitUrlPolicy) else GitUrlPolicy()
+
+
+def dev_single_tenant(request: Request) -> bool:
+    """Whether ``RADIUS_GITHUB_DEV_SINGLE_TENANT`` lets an org adopt the App's installation."""
+
+    settings = getattr(request.app.state, "settings", None)
+    return bool(getattr(settings, "github_dev_single_tenant", False))
 
 
 def require_configured(client: GitHubAppClient) -> None:
@@ -135,8 +156,30 @@ def resolve_installation_id(
         return int(configured)
     organization = _organization(request, organization_id)
     stored = organization.github_installation_id if organization else None
+    if (
+        stored
+        and organization is not None
+        and organization.github_installation_status
+        == db_enums.GitHubInstallationStatus.DELETED.value
+    ):
+        stored = None  # a removed installation is no link at all
     if stored and not discover:
         return int(stored)
+    if organization is not None and not stored and not dev_single_tenant(request):
+        # A-03: the organization is not linked to any installation. GitHub
+        # answers an installation lookup for ANY repository the (shared) App
+        # covers, so adopting the result would let a caller attach another
+        # customer's installation by naming their repository. Refuse before
+        # asking GitHub, which also keeps this route from acting as an oracle
+        # for which private repositories have the App installed.
+        raise AccessDeniedError(
+            "This organization is not linked to a GitHub App installation, and "
+            "installations are not attached on the strength of a repository name. "
+            "Have the installation linked to the organization first (see "
+            "docs/security/INSTALLATION_BINDING.md); for a single-tenant "
+            "development stack set RADIUS_GITHUB_DEV_SINGLE_TENANT=true.",
+            code="GITHUB_INSTALLATION_NOT_LINKED",
+        )
     try:
         found = client.get_repository_installation(owner, repo)
     except Exception as exc:  # noqa: BLE001 - translated to an actionable error
@@ -153,29 +196,44 @@ def resolve_installation_id(
     discovered = int(discovered)
     if organization is None:
         return discovered
-    if stored in (None, 0):
+    if not stored:
+        # Single-tenant development mode only (checked above). Even then an
+        # installation that belongs to another organization is never taken.
+        if _organization_with_installation(request, discovered, organization_id):
+            raise ConflictError(
+                f"{owner}/{repo} is covered by a GitHub installation that is linked to "
+                "a different organization.",
+                code="GITHUB_INSTALLATION_MISMATCH",
+            )
         organization.github_installation_id = discovered
         organization.github_installation_status = (
             db_enums.GitHubInstallationStatus.ACTIVE.value
         )
     elif int(stored) != discovered:
-        if (
-            organization.github_installation_status
-            == db_enums.GitHubInstallationStatus.DELETED.value
-        ):
-            organization.github_installation_id = discovered
-            organization.github_installation_status = (
-                db_enums.GitHubInstallationStatus.ACTIVE.value
-            )
-        else:
-            raise ConflictError(
-                f"{owner}/{repo} is covered by GitHub installation {discovered}, but "
-                f"this organization is linked to installation {stored}. One Radius "
-                "organization uses one installation; install the App on this "
-                "repository under the same account.",
-                code="GITHUB_INSTALLATION_MISMATCH",
-            )
+        raise ConflictError(
+            f"{owner}/{repo} is covered by GitHub installation {discovered}, but "
+            f"this organization is linked to installation {stored}. One Radius "
+            "organization uses one installation; install the App on this "
+            "repository under the same account.",
+            code="GITHUB_INSTALLATION_MISMATCH",
+        )
     return discovered
+
+
+def _organization_with_installation(
+    request: Request, installation_id: int, except_organization_id: UUID
+):
+    session = getattr(request.state, "radius_db_session", None)
+    if session is None:
+        return None
+    return (
+        session.query(db_models.Organization)
+        .filter(
+            db_models.Organization.github_installation_id == installation_id,
+            db_models.Organization.id != except_organization_id,
+        )
+        .first()
+    )
 
 
 def _is_not_found(exc: Exception) -> bool:

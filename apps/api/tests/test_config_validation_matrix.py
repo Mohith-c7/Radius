@@ -21,6 +21,8 @@ from radius_api.middleware.hardening import (
 def api_settings(monkeypatch: pytest.MonkeyPatch, env: str, cors: str = "") -> ApiSettings:
     monkeypatch.setenv("RADIUS_ENV", env)
     monkeypatch.setenv("CORS_ORIGINS", cors)
+    # uat/production also require some API credential (A-09); built at run time.
+    monkeypatch.setenv("RADIUS_API_KEY_PEPPER", secrets.token_urlsafe(40))
     return ApiSettings(_env_file=None)
 
 
@@ -28,6 +30,8 @@ def auth_settings(monkeypatch: pytest.MonkeyPatch, env: str, **values: str) -> S
     monkeypatch.setenv("RADIUS_ENV", env)
     for key in ("SESSION_SECRET", "EMAIL_DELIVERY_MODE"):
         monkeypatch.delenv(key, raising=False)
+    # uat/production refuse insecure session cookies (A-09).
+    monkeypatch.setenv("SESSION_COOKIE_SECURE", "true")
     for key, value in values.items():
         monkeypatch.setenv(key.upper(), value)
     return Settings(_env_file=None)

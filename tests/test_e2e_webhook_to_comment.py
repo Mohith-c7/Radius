@@ -314,7 +314,7 @@ def test_e2e_webhook_to_worker_to_pr_comment(tmp_path: Path) -> None:
             "name": "payment-api",
             "private": False,
             "default_branch": "main",
-            "clone_url": str(repo_path),
+            "clone_url": "https://github.com/alpha-org/payment-api.git",
             "owner": {"login": "alpha-org"},
         },
         "pull_request": {
@@ -367,12 +367,12 @@ def test_e2e_webhook_to_worker_to_pr_comment(tmp_path: Path) -> None:
     )
 
     class CustomGitClient:
-        """Git client that works against local file repos."""
+        """Git client that serves every clone from a local file repo (production clients refuse those)."""
         def clone_or_fetch(self, clone_url: str, destination: Path, *, extra_headers=()):
             if destination.exists():
                 return destination
             destination.parent.mkdir(parents=True, exist_ok=True)
-            subprocess.run(["git", "clone", clone_url, str(destination)], check=True, capture_output=True)
+            subprocess.run(["git", "clone", str(repo_path), str(destination)], check=True, capture_output=True)
             return destination
 
         def fetch_pull_request(self, repository_path: Path, pr_number: int, *, extra_headers=()):

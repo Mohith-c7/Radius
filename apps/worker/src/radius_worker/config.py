@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Self
 
 from pydantic import Field, field_validator, model_validator
+from radius_repository.domain.clone_url import parse_allowed_hosts
 from radius_shared.database.session import DatabaseSettings
 from radius_shared.verdict_v2_flag import VerdictV2Mode, parse_verdict_v2_mode
 
@@ -259,6 +260,23 @@ class WorkerSettings(DatabaseSettings):
         if v is None or v == "" or v == 0 or v == "0":
             return None
         return int(v)
+
+    git_allowed_hosts: str = Field(
+        default="github.com",
+        alias="RADIUS_GIT_ALLOWED_HOSTS",
+        description=(
+            "Comma separated hosts the worker may clone from (https only). Default "
+            "`github.com`; set your GitHub Enterprise Server host to use it instead. "
+            "A stored clone URL on any other host is refused, and the installation "
+            "token is never sent to a host that is not listed."
+        ),
+    )
+
+    @field_validator("git_allowed_hosts")
+    @classmethod
+    def _valid_git_hosts(cls, value: str) -> str:
+        parse_allowed_hosts(value)
+        return value
 
     github_api_base_url: str = Field(
         default="https://api.github.com",

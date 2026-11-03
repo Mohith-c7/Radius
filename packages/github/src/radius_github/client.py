@@ -32,6 +32,20 @@ from radius_github.rate_limit import (
 )
 
 
+def _seg(value: object) -> str:
+    """One URL path segment from caller data: percent-encoded, never ``.``/``..``.
+
+    ``urllib.parse.urljoin`` collapses dot segments, so an owner or repository of
+    ``..`` would steer the request to a different GitHub API path (A-13).
+    """
+
+    text = str(value)
+    if not text or text in {".", ".."}:
+        msg = f"Invalid GitHub path segment: {text!r}."
+        raise ValueError(msg)
+    return urllib.parse.quote(text, safe="")
+
+
 class GitHubAppSettings(RadiusBaseSettings):
     """Runtime settings required for GitHub App operations."""
 
@@ -216,14 +230,14 @@ class GitHubAppClient:
         """
 
         response = self._request(
-            "GET", f"/repos/{owner}/{repo}/installation", token=self._jwt()
+            "GET", f"/repos/{_seg(owner)}/{_seg(repo)}/installation", token=self._jwt()
         )
         return response if isinstance(response, dict) else {}
 
     def get_repository(self, *, token: str, owner: str, repo: str) -> dict[str, Any]:
         """Return repository metadata (id, default branch, clone URL, visibility)."""
 
-        response = self._request("GET", f"/repos/{owner}/{repo}", token=token)
+        response = self._request("GET", f"/repos/{_seg(owner)}/{_seg(repo)}", token=token)
         return response if isinstance(response, dict) else {}
 
     def get_pull_request(
@@ -232,7 +246,7 @@ class GitHubAppClient:
         """Return one pull request (head sha, title, body, author, state)."""
 
         response = self._request(
-            "GET", f"/repos/{owner}/{repo}/pulls/{int(number)}", token=token
+            "GET", f"/repos/{_seg(owner)}/{_seg(repo)}/pulls/{int(number)}", token=token
         )
         return response if isinstance(response, dict) else {}
 
@@ -255,7 +269,7 @@ class GitHubAppClient:
 
         return self._request(
             "POST",
-            f"/repos/{owner}/{repo}/check-runs",
+            f"/repos/{_seg(owner)}/{_seg(repo)}/check-runs",
             token=token,
             body=_check_run_payload(
                 name=name,
@@ -289,7 +303,7 @@ class GitHubAppClient:
 
         return self._request(
             "PATCH",
-            f"/repos/{owner}/{repo}/check-runs/{check_run_id}",
+            f"/repos/{_seg(owner)}/{_seg(repo)}/check-runs/{check_run_id}",
             token=token,
             body=_check_run_payload(
                 name=name,
@@ -317,7 +331,7 @@ class GitHubAppClient:
         query = urllib.parse.urlencode({"check_name": check_name, "per_page": 100})
         response = self._request(
             "GET",
-            f"/repos/{owner}/{repo}/commits/{ref}/check-runs?{query}",
+            f"/repos/{_seg(owner)}/{_seg(repo)}/commits/{_seg(ref)}/check-runs?{query}",
             token=token,
         )
         if not isinstance(response, dict):
@@ -338,7 +352,7 @@ class GitHubAppClient:
 
         return self._request(
             "POST",
-            f"/repos/{owner}/{repo}/issues/{issue_number}/comments",
+            f"/repos/{_seg(owner)}/{_seg(repo)}/issues/{issue_number}/comments",
             token=token,
             body={"body": body},
         )
@@ -356,7 +370,7 @@ class GitHubAppClient:
 
         return self._request(
             "PATCH",
-            f"/repos/{owner}/{repo}/issues/comments/{comment_id}",
+            f"/repos/{_seg(owner)}/{_seg(repo)}/issues/comments/{comment_id}",
             token=token,
             body={"body": body},
         )
@@ -373,7 +387,7 @@ class GitHubAppClient:
 
         response = self._request(
             "GET",
-            f"/repos/{owner}/{repo}/issues/{issue_number}/comments?per_page=100",
+            f"/repos/{_seg(owner)}/{_seg(repo)}/issues/{issue_number}/comments?per_page=100",
             token=token,
         )
         return response if isinstance(response, list) else []
@@ -391,7 +405,7 @@ class GitHubAppClient:
         query = urllib.parse.urlencode({"state": state, "per_page": 100})
         response = self._request(
             "GET",
-            f"/repos/{owner}/{repo}/pulls?{query}",
+            f"/repos/{_seg(owner)}/{_seg(repo)}/pulls?{query}",
             token=token,
         )
         return response if isinstance(response, list) else []

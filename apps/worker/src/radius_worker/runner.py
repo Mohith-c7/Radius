@@ -35,6 +35,7 @@ from radius_parser.infrastructure import (
     FilesystemSourceDiscovery,
     default_language_parser_registry,
 )
+from radius_repository.domain.clone_url import GitUrlPolicy, parse_allowed_hosts
 from radius_repository.infrastructure import LocalGitRepositoryClient
 from radius_shared.database import enums as db_enums
 from radius_shared.database import models as db_models
@@ -525,7 +526,9 @@ def create_sql_worker_runtime(settings: WorkerSettings) -> SqlAlchemyWorkerRunti
     return SqlAlchemyWorkerRuntime(
         session_factory=session_factory,
         repository_cache_dir=settings.repository_cache_dir,
-        git_client=LocalGitRepositoryClient(),
+        git_client=LocalGitRepositoryClient(
+            GitUrlPolicy(allowed_hosts=parse_allowed_hosts(settings.git_allowed_hosts))
+        ),
         settings=settings,
         github_client=GitHubAppClient(_github_settings(settings)),
         verdict_v2_recomputer=verdict_v2_recomputer,
@@ -638,6 +641,9 @@ def load_persisted_analysis_command(
         raise NotFoundError(msg)
 
     destination = _repository_cache_path(repository_cache_dir, repository)
+    # The stored URL is untrusted data (A-01/A-02): LocalGitRepositoryClient
+    # re-validates it (https, allow-listed host, owner/repo shape) before git runs
+    # and never sends the installation token to another host.
     repository_path = git_client.clone_or_fetch(
         repository.clone_url,
         destination,
@@ -708,15 +714,29 @@ def _repository_cache_path(
     repository_cache_dir: Path,
     repository: db_models.Repository,
 ) -> Path:
+    """Cache directory for one repository, scoped by organization (A-02).
+
+    The organization id is a path segment, so one tenant's checkout can never be
+    the destination (or the stale cache) of another tenant's repository row.
+    """
+
+    organization = _safe_path_segment(str(repository.organization_id))
     owner = _safe_path_segment(repository.owner)
     name = _safe_path_segment(repository.name)
-    return repository_cache_dir / owner / f"{name}-{repository.github_repository_id}"
+    return (
+        repository_cache_dir
+        / organization
+        / owner
+        / f"{name}-{repository.github_repository_id}"
+    )
 
 
 def _safe_path_segment(value: str) -> str:
-    return "".join(
+    cleaned = "".join(
         char if char.isalnum() or char in {"-", "_", "."} else "-" for char in value
     )
+    # '.', '..' and dot-only names must never act as path traversal.
+    return cleaned if cleaned.strip(".") else "-" * max(len(cleaned), 1)
 
 
 def _github_settings(settings: WorkerSettings) -> GitHubAppSettings:

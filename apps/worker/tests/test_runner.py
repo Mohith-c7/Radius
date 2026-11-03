@@ -287,6 +287,8 @@ class FakeGitClient:
 
 
 class RealGitClient:
+    """Clones a LOCAL source repository (production clients refuse local paths)."""
+
     def clone_or_fetch(
         self,
         clone_url: str,
@@ -294,13 +296,15 @@ class RealGitClient:
         *,
         extra_headers: tuple[str, ...] = (),
     ) -> Path:
-        from radius_repository.infrastructure import LocalGitRepositoryClient
-
-        return LocalGitRepositoryClient().clone_or_fetch(
-            clone_url,
-            destination,
-            extra_headers=extra_headers,
+        if destination.exists():
+            return destination
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            ("git", "clone", "-q", clone_url, str(destination)),
+            check=True,
+            capture_output=True,
         )
+        return destination
 
     def checkout(self, repository_path: Path, branch_name: str) -> None:
         from radius_repository.infrastructure import LocalGitRepositoryClient

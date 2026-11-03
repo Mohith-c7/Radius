@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from radius_shared.errors import NotFoundError, ValidationError
+from radius_shared.errors import ConflictError, NotFoundError, ValidationError
 
 from radius_repository.domain.entities import Branch, PullRequest, Repository
 from radius_repository.domain.enums import (
@@ -42,6 +42,12 @@ class RepositoryApplicationService:
             command.github_repository_id
         )
         if existing is not None:
+            if existing.organization_id != command.organization_id:
+                # Never hand another tenant's repository (or its identifiers)
+                # to the caller, and never take it over: the id is already
+                # claimed. The message deliberately says nothing about who.
+                msg = "This repository cannot be connected."
+                raise ConflictError(msg, code="REPOSITORY_ALREADY_CONNECTED")
             return RepositoryDetailResponse.from_entity(existing)
 
         repository = Repository(
@@ -206,6 +212,12 @@ class RepositoryApplicationService:
             )
             raise NotFoundError(msg)
         return PullRequestResponse.from_entity(pull_request)
+
+    def pull_request_repository_id(self, pull_request_id: UUID) -> UUID | None:
+        """Return the repository a pull request belongs to, or ``None`` if unknown."""
+
+        pull_request = self._store.get_pull_request_by_id(pull_request_id)
+        return pull_request.repository_id if pull_request is not None else None
 
     def list_pull_requests(
         self,

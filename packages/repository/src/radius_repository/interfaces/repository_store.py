@@ -54,6 +54,9 @@ class RepositoryStore(Protocol):
     ) -> PullRequest | None:
         """Return one pull request by repository and provider number."""
 
+    def get_pull_request_by_id(self, pull_request_id: UUID) -> PullRequest | None:
+        """Return one pull request by its Radius id (any repository)."""
+
     def list_pull_requests(
         self,
         repository_id: UUID,
