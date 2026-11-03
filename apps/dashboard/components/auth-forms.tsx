@@ -120,6 +120,18 @@ function passwordIsValid(value: string) {
   return /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(value);
 }
 
+const OAUTH_ERRORS: Record<string, string> = {
+  oauth: "We couldn't complete sign in with this provider. Please try again.",
+  oauth_denied: "Sign in with the provider was cancelled or denied.",
+  oauth_email_unverified: "The provider has not verified your email address. Verify it with the provider and try again.",
+  oauth_link_refused:
+    "This email already has a Radius account that is not verified, so the provider cannot be linked automatically. Sign in with your password or verify your email first."
+};
+
+function oauthErrorMessage(code: string | null): string {
+  return code && Object.hasOwn(OAUTH_ERRORS, code) ? OAUTH_ERRORS[code] : "";
+}
+
 export function LoginForm() {
   const router = useRouter();
   const query = useSearchParams();
@@ -127,11 +139,7 @@ export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
-  const [error, setError] = useState(
-    query.get("error") === "oauth"
-      ? "We couldn't complete sign in with this provider. Please try again."
-      : ""
-  );
+  const [error, setError] = useState(oauthErrorMessage(query.get("error")));
   const [loading, setLoading] = useState(false);
 
   async function submit(event: FormEvent) {

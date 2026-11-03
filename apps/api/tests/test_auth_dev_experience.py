@@ -331,6 +331,7 @@ def test_user_from_provider_provisions_domain_models(test_db):
         provider_id="12345678",
         email="oauthdev@example.com",
         name="GitHub Developer",
+        email_verified=True,
     )
     assert auth_user is not None
     assert auth_user.organization_id is not None
@@ -354,6 +355,7 @@ def test_user_from_provider_provisions_domain_models(test_db):
         provider_id="12345678",
         email="oauthdev@example.com",
         name="GitHub Developer",
+        email_verified=True,
     )
     assert re_auth_user.id == auth_user.id
 
