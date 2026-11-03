@@ -39,6 +39,7 @@ if _SRC not in sys.path:
 
 from radius_confidence.calibration import (  # noqa: E402
     CalibrationPolicy,
+    ece_noise_floor,
     evaluate_calibration,
     evaluate_threshold,
     fit_calibrator,
@@ -208,6 +209,10 @@ def build_report(rows: list[dict], args: argparse.Namespace, input_sha256: str) 
 
     ps, ys, clusters = _cols(eval_rows)
     report["raw"] = evaluate_calibration(ps, ys, policy, clusters=clusters, **kw)
+    if report["raw"]["metrics"] is not None and args.noise_floor_draws > 0:
+        report["raw"]["ece_noise_floor"] = ece_noise_floor(
+            ps, seed=args.seed, n_draws=args.noise_floor_draws, n_bins=args.n_bins
+        )
     curve = [p.to_dict() for p in risk_coverage_curve(ps, ys)] if len(ps) >= args.min_n_report else None
     report["risk_coverage"] = None if curve is None else _subsample(curve, 51)
     report["risk_coverage_total_points"] = None if curve is None else len(curve)
@@ -312,6 +317,11 @@ def render_markdown(rep: dict) -> str:
                   f"Seeded split by {s['unit']}: {s['n_calibration']} rows to calibrate/select, "
                   f"{s['n_evaluation']} held out. Everything below is measured on the held-out part.", ""]
     lines += ["## Metrics", ""] + _metrics_md(rep["raw"], "Raw scores")
+    nf = rep["raw"].get("ece_noise_floor")
+    if nf:
+        lines += [f"ECE noise floor at N = {nf['n']} ({nf['strategy']} bins, {nf['n_draws']} simulations, "
+                  f"{nf['assumption']}): mean {_f(nf['mean'])}, {nf['quantile']:.0%} quantile {_f(nf['quantile_value'])}. "
+                  "An observed ECE near this floor is not evidence of miscalibration.", ""]
     if rep.get("risk_coverage"):
         lines += ["### Selective risk vs coverage (raw scores, held-out)", "",
                   "| Threshold | Coverage | Accepted | Errors | Error rate among accepted |", "|---|---|---|---|---|"]
@@ -385,6 +395,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--n-bins", type=int, default=10)
     ap.add_argument("--resamples", type=int, default=1000)
     ap.add_argument("--confidence", type=float, default=0.95)
+    ap.add_argument("--noise-floor-draws", type=int, default=200,
+                    help="simulations for the ECE noise floor of a perfectly calibrated model (0 = off)")
     ap.add_argument("--split", type=float, default=None, help="fraction of rows (or clusters) for fitting/selection")
     ap.add_argument("--recalibrate", choices=["auto", "isotonic", "platt"], default=None)
     ap.add_argument("--alpha", type=float, default=None, help="target error among accepted; needs --split")

@@ -70,6 +70,17 @@
   },
   "raw": {
     "base_rate": 0.5905118601747815,
+    "ece_noise_floor": {
+      "assumption": "scores are treated as the true probabilities (perfect calibration by construction)",
+      "mean": 0.036249947353308366,
+      "n": 801,
+      "n_bins": 10,
+      "n_draws": 200,
+      "quantile": 0.95,
+      "quantile_value": 0.05125736029962546,
+      "seed": 20261102,
+      "strategy": "mass"
+    },
     "metrics": {
       "brier": {
         "ci": {

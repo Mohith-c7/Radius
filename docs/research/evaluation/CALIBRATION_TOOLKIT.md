@@ -16,7 +16,7 @@ What it is for: when real outcome labels exist (CA-01, `L_ABS`, a second annotat
 
 ## Contents of the library
 
-* `metrics`: reliability bins (equal-width, equal-mass), ECE, MCE, Brier score and its binned decomposition, log loss, reliability-curve data.
+* `metrics`: reliability bins (equal-width, equal-mass), ECE, MCE, Brier score and its binned decomposition, log loss, reliability-curve data, and `ece_noise_floor` (the ECE a perfectly calibrated predictor still shows at a given N and score distribution; the 7.5 recomputation step, run on supplied scores).
 * `calibrators`: `IsotonicCalibrator` (pool-adjacent-violators, ties pooled), `PlattCalibrator` (Newton, Platt target smoothing), `UncalibratedPrior` (identity, labelled).
 * `intervals`: Clopper-Pearson (exact), seeded percentile bootstrap with optional cluster resampling.
 * `risk_control`: risk-coverage curve, `ltt_threshold`, `crc_threshold`, `evaluate_threshold`, and `find_nonincreasing_violation` (see the finding below).

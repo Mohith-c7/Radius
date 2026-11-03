@@ -10,6 +10,7 @@ from radius_confidence.calibration import (
     brier_decomposition,
     brier_score,
     ece,
+    ece_noise_floor,
     expected_calibration_error,
     log_loss,
     max_calibration_error,
@@ -108,6 +109,21 @@ def test_unknown_strategy_and_bad_bin_count():
         reliability_bins(S, Y, 10, "nope")  # type: ignore[arg-type]
     with pytest.raises(CalibrationInputError):
         reliability_bins(S, Y, 0)
+
+
+def test_noise_floor_function_is_deterministic_and_shrinks_with_n():
+    rng = random.Random(1)
+    pool = [rng.betavariate(1.2, 2.8) for _ in range(500)]
+    a = ece_noise_floor(pool, seed=3, n=250, n_draws=40)
+    assert a == ece_noise_floor(pool, seed=3, n=250, n_draws=40)
+    big = ece_noise_floor(pool, seed=3, n=2000, n_draws=40)
+    assert a["mean"] > big["mean"] > 0 and a["quantile_value"] >= a["mean"] * 0.8
+    assert a["n"] == 250 and a["strategy"] == "mass"
+    # degenerate scores: outcomes are deterministic, so no sampling noise at all
+    zero = ece_noise_floor([0.0, 1.0] * 20, seed=1, n=100, n_draws=10)
+    assert zero["mean"] == 0.0
+    with pytest.raises(CalibrationInputError):
+        ece_noise_floor(pool, seed=1, n_draws=0)
 
 
 def test_ece_noise_floor_is_positive_for_calibrated_simulation():

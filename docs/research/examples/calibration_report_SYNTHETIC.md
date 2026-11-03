@@ -49,6 +49,8 @@ Reliability curve (equal-mass bins):
 
 - Warning: width-bin ECE: bins [0] hold fewer than 10 items
 
+ECE noise floor at N = 801 (mass bins, 200 simulations, scores are treated as the true probabilities (perfect calibration by construction)): mean 0.0362, 95% quantile 0.0513. An observed ECE near this floor is not evidence of miscalibration.
+
 ### Selective risk vs coverage (raw scores, held-out)
 
 | Threshold | Coverage | Accepted | Errors | Error rate among accepted |

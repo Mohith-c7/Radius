@@ -11,6 +11,7 @@ callers that report numbers should go through ``evaluate_calibration`` in
 from __future__ import annotations
 
 import math
+import random
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
@@ -238,6 +239,56 @@ def brier_decomposition(
         uncertainty=base * (1 - base),
         within_bin=within / n,
     )
+
+
+def ece_noise_floor(
+    scores: Sequence[float],
+    *,
+    seed: int,
+    n: int | None = None,
+    n_draws: int = 200,
+    n_bins: int = 10,
+    strategy: BinStrategy = "mass",
+    quantile: float = 0.95,
+) -> dict:
+    """ECE a perfectly calibrated predictor would still show at sample size ``n``.
+
+    Simulation: draw ``n`` scores with replacement from ``scores`` (default
+    ``n = len(scores)``), draw each outcome as Bernoulli(score) so that the
+    scores are the true probabilities by construction, compute ECE, repeat
+    ``n_draws`` times. Returns the mean and the ``quantile`` of those ECE values.
+    It depends on the supplied score distribution only (this is the "recompute the
+    floor with the real dev score distribution" step of PREREGISTRATION 7.5), and
+    it is a property of the sample size, not of any model.
+    """
+
+    if n_draws < 1 or not 0.0 < quantile < 1.0:
+        raise CalibrationInputError("n_draws must be >= 1 and quantile in (0, 1)")
+    pool, _ = check_scores_labels(scores, [0] * len(scores))
+    size = len(pool) if n is None else n
+    if size < 1:
+        raise CalibrationInputError("n must be >= 1")
+    rng = random.Random(seed)
+    values = []
+    for _ in range(n_draws):
+        draw = [pool[rng.randrange(len(pool))] for _ in range(size)]
+        outcome = [int(rng.random() < p) for p in draw]
+        values.append(ece(draw, outcome, n_bins, strategy))
+    values.sort()
+    pos = quantile * (len(values) - 1)
+    lo = int(math.floor(pos))
+    hi = min(lo + 1, len(values) - 1)
+    return {
+        "mean": math.fsum(values) / len(values),
+        "quantile": quantile,
+        "quantile_value": values[lo] + (values[hi] - values[lo]) * (pos - lo),
+        "n": size,
+        "n_draws": n_draws,
+        "n_bins": n_bins,
+        "strategy": strategy,
+        "seed": seed,
+        "assumption": "scores are treated as the true probabilities (perfect calibration by construction)",
+    }
 
 
 def reliability_curve(

@@ -73,7 +73,7 @@ Fair comparison: same inputs, same splits, tuned with the same budget, report se
 | ID | Task | Needs |
 |---|---|---|
 | EP-01 [x] DONE 2026-11-02 (outputs in `literature/`) | Literature review (traceability, mutation testing for AI code, PR verification tools, calibration/conformal, process mining of agents). Confirm or narrow the novelty claim. Maintain a reading list and a table of related work with dates and artifacts. | none (start now) |
-| EP-02 [~] DRAFT 2026-11-02 (not frozen; `preregistration/`) | Pre-registration: RQs, hypotheses, metrics, analysis plan, stopping rules, exclusion criteria. Freeze before running. | EP-01 |
+| EP-02 [~] DRAFT 2026-11-02 (not frozen; `preregistration/`; freeze checklist and `scripts/prereg_check.py` added 2026-11-03, 7 of 51 items pass) | Pre-registration: RQs, hypotheses, metrics, analysis plan, stopping rules, exclusion criteria. Freeze before running. | EP-01 |
 | EP-03 [x] DONE 2026-11-02 (outputs: `datasets/`, `benchmarks/datasets/`, `scripts/datasets.py`) | Dataset assembly, licensing check, splits. | F-14 |
 | EP-04 [~] TOOLING READY 2026-11-02; annotation pending (human work; `annotation/GUIDELINES.md`, `annotation/RUNBOOK.md`, `scripts/gold_*.py`, `benchmarks/gold/`) | Gold annotation (IN-09, LK-07), agreement study. | EP-03 |
 | EP-05 [~] RQ1 extraction part: harness ready 2026-11-02, real numbers pending IN-09 (`evaluation/INTENT_EVAL.md`, `scripts/intent_eval.py`); other RQs pending | Experiment harness that calls the production pipeline, takes a dataset manifest + config, writes results with `algo_version`, seed, commit hash. One command reproduces any table. | M3 |
