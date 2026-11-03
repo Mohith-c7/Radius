@@ -134,6 +134,8 @@ def derive_next_actions(criteria: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 _RULE_ID = re.compile(r"^[RP]\d[a-z]?$")
 
+_MUTATION_ITEM_KEYS = ("basis", "d_mut", "d_mut_lcb", "mutation_n", "mutation_killed")
+
 #: The documented per-item keys (``verdict_v2.schema.json``); bundle rows may carry more
 #: (``criterion_id``, ``lambda_kind``, ``cap_static`` ...) that are not part of the contract.
 _ITEM_KEYS = (
@@ -160,7 +162,11 @@ def _criterion(
         )
         data["test_id"] = test_id
         data["outcome"] = evidence.get("outcome") or data.get("outcome") or "not_run"
-        items.append({k: data[k] for k in _ITEM_KEYS if k in data})
+        row = {k: data[k] for k in _ITEM_KEYS if k in data}
+        if data.get("mutation_n") is None:  # contract 5: only mutation-measured rows carry these
+            for key in _MUTATION_ITEM_KEYS:
+                row.pop(key, None)
+        items.append(row)
     best = raw.get("best_link")
     mutation = raw.get("mutation")
     extra: dict[str, Any] = {}
