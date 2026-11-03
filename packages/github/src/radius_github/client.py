@@ -10,10 +10,11 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import jwt
-from pydantic import Field
+from pydantic import Field, field_validator, model_validator
 from radius_shared.config import RadiusBaseSettings
 from radius_shared.errors import AccessDeniedError, ValidationError
 
@@ -36,6 +37,15 @@ class GitHubAppSettings(RadiusBaseSettings):
 
     github_app_id: str = Field(default="", alias="GITHUB_APP_ID")
     github_app_private_key: str = Field(default="", alias="GITHUB_APP_PRIVATE_KEY")
+    github_app_private_key_path: str = Field(
+        default="",
+        alias="GITHUB_APP_PRIVATE_KEY_PATH",
+        description=(
+            "Path to the GitHub App private key (.pem). Used when "
+            "`GITHUB_APP_PRIVATE_KEY` is empty, so the key never has to be pasted "
+            "into an environment variable or committed."
+        ),
+    )
     github_installation_id: int | None = Field(
         default=None,
         alias="GITHUB_INSTALLATION_ID",
@@ -53,11 +63,60 @@ class GitHubAppSettings(RadiusBaseSettings):
         alias="GITHUB_TIMEOUT_SECONDS",
     )
 
+    @field_validator("github_installation_id", mode="before")
+    @classmethod
+    def _blank_installation_id(cls, value):
+        if value is None or value in ("", 0, "0"):
+            return None
+        return value
+
+    @model_validator(mode="after")
+    def _load_private_key_file(self) -> GitHubAppSettings:
+        if not self.github_app_private_key and self.github_app_private_key_path:
+            self.github_app_private_key = read_private_key_file(
+                self.github_app_private_key_path
+            )
+        return self
+
     @property
     def enabled(self) -> bool:
         """Return whether enough app credentials are configured."""
 
         return bool(self.github_app_id and self.github_app_private_key)
+
+
+def read_private_key_file(path: str) -> str:
+    """Read a PEM private key file; the error never contains key material."""
+
+    try:
+        return Path(path).expanduser().read_text(encoding="utf-8")
+    except OSError as exc:
+        msg = (
+            f"GITHUB_APP_PRIVATE_KEY_PATH ({path}) cannot be read: "
+            f"{type(exc).__name__}."
+        )
+        raise ValueError(msg) from exc
+
+
+def normalize_private_key(raw: str) -> str:
+    """Return a PEM string from an env-style value.
+
+    Accepts a real multi-line PEM, a single line with literal backslash-n
+    escapes (the usual ``.env`` form) and either of them wrapped in quotes.
+    """
+
+    key = raw.strip()
+    if len(key) >= 2 and key[0] == key[-1] and key[0] in {"'", '"'}:
+        key = key[1:-1].strip()
+    return key.replace("\\n", "\n")
+
+
+class GitHubHTTPError(AccessDeniedError):
+    """A GitHub API error response; ``status`` is the HTTP status code."""
+
+    def __init__(self, message: str, *, status: int) -> None:
+        super().__init__(message)
+        self.status = status
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +125,9 @@ class InstallationToken:
 
     token: str
     expires_at: datetime | None = None
+    #: Permissions GitHub granted the token (``{"checks": "write", ...}``).
+    permissions: dict[str, str] | None = None
+    repository_selection: str | None = None
 
 
 class GitHubAppClient:
@@ -89,6 +151,14 @@ class GitHubAppClient:
         self._rng = rng
         #: Rate-limit headers of the most recent response that carried them.
         self.last_rate_limit: RateLimitInfo | None = None
+        #: ``Date`` header of the most recent response (clock-skew diagnostics).
+        self.last_server_date: str | None = None
+
+    @property
+    def settings(self) -> GitHubAppSettings:
+        """The settings this client signs and addresses requests with."""
+
+        return self._settings
 
     def create_installation_token(
         self,
@@ -120,7 +190,51 @@ class GitHubAppClient:
                 if expires_at
                 else None
             ),
+            permissions=(
+                {str(k): str(v) for k, v in response["permissions"].items()}
+                if isinstance(response.get("permissions"), dict)
+                else None
+            ),
+            repository_selection=(
+                str(response["repository_selection"])
+                if response.get("repository_selection")
+                else None
+            ),
         )
+
+    def get_app(self) -> dict[str, Any]:
+        """Return the authenticated App (``GET /app``); proves the JWT is valid."""
+
+        response = self._request("GET", "/app", token=self._jwt())
+        return response if isinstance(response, dict) else {}
+
+    def get_repository_installation(self, owner: str, repo: str) -> dict[str, Any]:
+        """Return the App installation covering a repository (App JWT auth).
+
+        Lets a pull-only deployment discover the installation id without any
+        ``installation`` webhook.
+        """
+
+        response = self._request(
+            "GET", f"/repos/{owner}/{repo}/installation", token=self._jwt()
+        )
+        return response if isinstance(response, dict) else {}
+
+    def get_repository(self, *, token: str, owner: str, repo: str) -> dict[str, Any]:
+        """Return repository metadata (id, default branch, clone URL, visibility)."""
+
+        response = self._request("GET", f"/repos/{owner}/{repo}", token=token)
+        return response if isinstance(response, dict) else {}
+
+    def get_pull_request(
+        self, *, token: str, owner: str, repo: str, number: int
+    ) -> dict[str, Any]:
+        """Return one pull request (head sha, title, body, author, state)."""
+
+        response = self._request(
+            "GET", f"/repos/{owner}/{repo}/pulls/{int(number)}", token=token
+        )
+        return response if isinstance(response, dict) else {}
 
     def create_check_run(
         self,
@@ -285,7 +399,7 @@ class GitHubAppClient:
     def _jwt(self) -> str:
         issued_at = int(self._clock()) - 60
         expires_at = issued_at + 9 * 60
-        private_key = self._settings.github_app_private_key.replace("\\n", "\n")
+        private_key = normalize_private_key(self._settings.github_app_private_key)
         return jwt.encode(
             {
                 "iat": issued_at,
@@ -351,9 +465,20 @@ class GitHubAppClient:
             self._sleep(delay)
 
     def _note_rate_limit(self, headers) -> None:
+        self._note_date(headers)
         info = parse_rate_limit(headers)
         if info.remaining is not None or info.retry_after is not None:
             self.last_rate_limit = info
+
+    def _note_date(self, headers) -> None:
+        if headers is None:
+            return
+        try:
+            value = headers.get("Date") or headers.get("date")
+        except AttributeError:
+            return
+        if value:
+            self.last_server_date = str(value)
 
     def _jittered(self, seconds: float) -> float:
         return seconds + seconds * self._retry.jitter_fraction * self._rng()
@@ -418,7 +543,11 @@ class GitHubAppClient:
     ) -> AccessDeniedError:
         kind = classify_rate_limit(exc.code, exc.headers, body)
         if kind is None:
-            return AccessDeniedError(f"GitHub API request failed: {body or exc}")
+            return GitHubHTTPError(
+                f"GitHub API request failed (HTTP {exc.code}) on "
+                f"{method} {path.split('?', 1)[0]}: {short_message(body) or exc}",
+                status=exc.code,
+            )
         info = parse_rate_limit(exc.headers)
         wanted = wait_for_rate_limit(kind, info, self._clock(), attempt)
         return GitHubRateLimitError(

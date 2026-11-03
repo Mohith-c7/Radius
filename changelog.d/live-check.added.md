@@ -1,0 +1,1 @@
+Added `scripts/live_check.py`, a read-only preflight for a real GitHub App installation (App JWT, installation, repository, pull request list, check-run write permission, clock skew) that prints PASS/WARN/FAIL without secrets. See `docs/operations/LIVE_GITHUB_DEMO.md`.

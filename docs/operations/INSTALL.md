@@ -132,6 +132,9 @@ Compose forwards only the variables listed in `docker-compose.yml`. Anything els
 
 ## Connect GitHub
 
+No public URL? For a local demo against real GitHub use the pull-based path, which needs no webhook:
+[LIVE_GITHUB_DEMO.md](LIVE_GITHUB_DEMO.md). The webhook setup follows.
+
 Create a GitHub App, set `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET` (and
 `GITHUB_INSTALLATION_ID` or `GITHUB_SINGLE_TENANT=true` plus `GITHUB_DEFAULT_ORGANIZATION_ID` for a single
 organization), expose the API over HTTPS and point the App webhook at

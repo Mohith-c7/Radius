@@ -348,6 +348,21 @@ export function syncPullRequests(repositoryId: UUID, autoAnalyze = true) {
   );
 }
 
+/** Connect a repository by "owner/name" through the GitHub App (no webhook needed). */
+export function connectGitHubRepository(repository: string) {
+  return radiusFetch<Repository>("/repositories/connect-github", {
+    method: "POST",
+    body: JSON.stringify({ repository }),
+  });
+}
+
+/** Fetch one pull request from GitHub by number and queue an analysis for its head commit. */
+export function analyzePullRequest(repositoryId: UUID, prNumber: number) {
+  return radiusFetch<Analysis>(`/repositories/${repositoryId}/pull-requests/${prNumber}/analyze`, {
+    method: "POST",
+  });
+}
+
 export function disconnectRepository(repositoryId: UUID) {
   return radiusFetch<Repository>(`/repositories/${repositoryId}`, {
     method: "DELETE",

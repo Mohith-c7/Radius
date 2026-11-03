@@ -74,6 +74,11 @@ DEFAULT_FIXTURES = ("01", "04")
 OWNER, REPO = "smoke-org", "pricing-service"
 INSTALLATION_ID = 424242
 GITHUB_REPO_ID = 777001
+# The pull-based stage uses its own repository, installation and organization:
+# nothing about it is delivered by a webhook or preconfigured on the organization.
+PULL_REPO = "pull-demo"
+PULL_INSTALLATION_ID = 515151
+PULL_GITHUB_REPO_ID = 777002
 PR_NUMBER = 7
 STEPS: list[str] = []
 
@@ -265,7 +270,24 @@ class FakeGitHub:
     is the ``HttpTransport`` of the intent reader. Both go through :meth:`handle`.
     """
 
-    def __init__(self, *, public_key_pem: str, head_sha: str, spec: str) -> None:
+    def __init__(
+        self,
+        *,
+        public_key_pem: str,
+        head_sha: str,
+        spec: str,
+        owner: str = OWNER,
+        repo: str = REPO,
+        installation_id: int = INSTALLATION_ID,
+        github_repo_id: int = GITHUB_REPO_ID,
+        clone_url: str = "",
+    ) -> None:
+        self.owner, self.repo = owner, repo
+        self.installation_id = installation_id
+        self.github_repo_id = github_repo_id
+        self.clone_url = clone_url
+        #: Other repositories served by the same fake GitHub (same App, own installation).
+        self.others: list[FakeGitHub] = []
         self.public_key_pem = public_key_pem
         self.head_sha = head_sha
         self.spec = spec
@@ -305,12 +327,27 @@ class FakeGitHub:
     ) -> tuple[int, Any]:
         parts = urlsplit(url)
         path, query = unquote(parts.path), parse_qs(parts.query)
+        for other in self.others:
+            if other.serves(path):
+                return other.handle(method, url, headers, body)
         self.requests.append((method, path))
         auth = {k.lower(): v for k, v in headers.items()}.get("authorization", "")
         token = auth.removeprefix("Bearer ").strip()
-        slug = f"/repos/{OWNER}/{REPO}"
+        slug = f"/repos/{self.owner}/{self.repo}"
 
-        if method == "POST" and path == f"/app/installations/{INSTALLATION_ID}/access_tokens":
+        if method == "GET" and path == f"{slug}/installation":
+            import jwt
+
+            jwt.decode(token, self.public_key_pem, algorithms=["RS256"])
+            self.jwt_verified += 1
+            return 200, {"id": self.installation_id, "suspended_at": None}
+        if method == "GET" and path == slug and token.startswith("ghs_"):
+            return 200, {
+                "id": self.github_repo_id, "name": self.repo, "private": True,
+                "default_branch": "main", "clone_url": self.clone_url,
+                "owner": {"login": self.owner},
+            }
+        if method == "POST" and path == f"/app/installations/{self.installation_id}/access_tokens":
             import jwt
 
             claims = jwt.decode(token, self.public_key_pem, algorithms=["RS256"])
@@ -378,6 +415,16 @@ class FakeGitHub:
         self.unhandled.append((method, path))
         return 404, {"message": "Not Found"}
 
+    def serves(self, path: str) -> bool:
+        """Whether ``path`` belongs to this repository (or its installation token)."""
+
+        slug = f"/repos/{self.owner}/{self.repo}"
+        return (
+            path == slug
+            or path.startswith(slug + "/")
+            or path == f"/app/installations/{self.installation_id}/access_tokens"
+        )
+
     @staticmethod
     def _by_id(items: list[dict[str, Any]], raw_id: str) -> dict[str, Any] | None:
         return next((i for i in items if str(i["id"]) == raw_id), None)
@@ -389,7 +436,12 @@ class FakeGitHub:
             "body": self.pr_body,
             "state": "open",
             "head": {"sha": self.head_sha, "ref": "feature"},
-            "base": {"ref": "main"},
+            "base": {"ref": "main", "sha": "0" * 40},
+            "draft": False,
+            "merged": False,
+            "merged_at": None,
+            "user": {"login": "dev"},
+            "created_at": "2026-11-02T10:00:00Z",
         }
 
 
@@ -449,6 +501,8 @@ class Smoke:
         # RADIUS_SMOKE_ORG_ID lets a developer reuse the local-dev organization when inspecting a kept database.
         self.org_id = uuid.UUID(os.environ["RADIUS_SMOKE_ORG_ID"]) if os.environ.get("RADIUS_SMOKE_ORG_ID") else uuid.uuid4()
         self.other_org_id = uuid.uuid4()
+        self.pull_org_id = uuid.uuid4()
+        self.pull_key = "pull-" + secrets.token_hex(16)
         self.expected = json.loads((self.fixture_dir / "expected.json").read_text(encoding="utf-8"))
         self.headers: dict[str, str] = {}
         self.client: Any = None
@@ -456,6 +510,7 @@ class Smoke:
         self.github: FakeGitHub
         self.base_sha = self.head_sha = ""
         self.analysis_id = ""
+        self.webhook_calls = 0
         self.blocked_payload: dict[str, Any] = {}
         self.blocked_comment = ""
 
@@ -466,6 +521,7 @@ class Smoke:
 
     def webhook(self, payload: dict[str, Any], *, delivery: str, event: str = "pull_request",
                 secret: str | None = None, sign: bool = True):
+        self.webhook_calls += 1
         body = json.dumps(payload).encode()
         headers = {"X-GitHub-Event": event, "X-GitHub-Delivery": delivery,
                    "Content-Type": "application/json"}
@@ -530,7 +586,7 @@ class Smoke:
             "DATABASE_URL": self.database_url,
             "STORAGE_BACKEND": "sql",
             "GITHUB_WEBHOOK_SECRET": self.webhook_secret,
-            "API_KEYS": f"{self.org_id}:{self.legacy_key}",
+            "API_KEYS": f"{self.org_id}:{self.legacy_key},{self.pull_org_id}:{self.pull_key}",
             "RADIUS_API_KEY_PEPPER": self.pepper,
             "RADIUS_FEATURE_VERDICT_V2": "on",
             "RADIUS_FEATURE_INTENT_INGESTION": "true",
@@ -566,6 +622,8 @@ class Smoke:
                                        github_installation_id=INSTALLATION_ID),
                 db_models.Organization(id=self.other_org_id, name="Other Org",
                                        github_installation_id=INSTALLATION_ID + 1),
+                # No installation id: the pull stage must discover and store it.
+                db_models.Organization(id=self.pull_org_id, name="Pull Org"),
             ])
             session.commit()
         engine.dispose()
@@ -575,6 +633,13 @@ class Smoke:
 
         self.app = create_app()
         self.client = TestClient(self.app)
+        self.pull_github = FakeGitHub(
+            public_key_pem=public_pem, head_sha=self.head_sha, spec=spec,
+            repo=PULL_REPO, installation_id=PULL_INSTALLATION_ID,
+            github_repo_id=PULL_GITHUB_REPO_ID, clone_url=str(self.origin),
+        )
+        self.pull_github.pr_body = self.github.pr_body
+        self.github.others.append(self.pull_github)
         self.client.__enter__()  # runs the app lifespan
 
         from radius_github import GitHubAppClient
@@ -588,6 +653,14 @@ class Smoke:
             _github_settings(settings), opener=self.github.opener, sleep=lambda _s: None
         )
         self.runtime.intent_transport = self.github.transport
+        # The API's pull-based routes talk to the same fake GitHub through the real
+        # GitHubAppClient (the only override: its network opener).
+        from radius_api.dependencies import get_github_client
+
+        api_github = GitHubAppClient(
+            _github_settings(settings), opener=self.github.opener, sleep=lambda _s: None
+        )
+        self.app.dependency_overrides[get_github_client] = lambda: api_github
         check(self.runtime.verdict_v2_recomputer is not None, "worker wired the Stage B recomputer")
 
     def health_and_auth(self) -> None:
@@ -694,28 +767,37 @@ class Smoke:
 
         self.assert_published(expected_verdict_label="insufficient", expect_rev=1)
 
-    def assert_published(self, *, expected_verdict_label: str, expect_rev: int) -> None:
+    def assert_published(
+        self,
+        *,
+        expected_verdict_label: str,
+        expect_rev: int,
+        github: FakeGitHub | None = None,
+        analysis_id: str | None = None,
+    ) -> None:
         from radius_github.verdict_v2.markdown import (
             DISCLAIMER,
             V2_MARKER_PREFIX,
             parse_v2_marker,
         )
 
-        check(len(self.github.check_runs) == 1, "exactly one Check Run exists")
-        run = self.github.check_runs[0]
+        github = github or self.github
+        analysis_id = analysis_id or self.analysis_id
+        check(len(github.check_runs) == 1, "exactly one Check Run exists")
+        run = github.check_runs[0]
         check(run["status"] == "completed" and run["head_sha"] == self.head_sha,
               "Check Run is completed on the PR head commit")
         check("v2 alpha" in run["output"]["title"], "Check Run title is the v2 alpha title")
         check(DISCLAIMER in run["output"]["summary"], "Check Run summary has the alpha disclaimer")
-        check(len(self.github.comments) == 1, "exactly one PR comment exists")
-        body = self.github.comments[0]["body"]
+        check(len(github.comments) == 1, "exactly one PR comment exists")
+        body = github.comments[0]["body"]
         check(DISCLAIMER in body, "PR comment has the alpha disclaimer")
         check(V2_MARKER_PREFIX in body, "PR comment carries the v2 marker")
         marker = parse_v2_marker(body)
         check(marker is not None and marker[0] == expect_rev,
               f"v2 marker revision is {expect_rev} (got {marker})")
         check(expected_verdict_label in body.lower(), f"PR comment shows the '{expected_verdict_label}' verdict")
-        check(f"https://dashboard.smoke.invalid/analyses/{self.analysis_id}" in json.dumps(run),
+        check(f"https://dashboard.smoke.invalid/analyses/{analysis_id}" in json.dumps(run),
               "Check Run links to the dashboard analysis page")
 
     def ci_stage(self) -> None:
@@ -890,6 +972,100 @@ class Smoke:
         run = self.github.check_runs[0]
         check(run["conclusion"] != "success", f"Check Run conclusion is not success ({run['conclusion']})")
 
+    def pull_stage(self) -> None:
+        section("pull-based GitHub (no webhook): connect -> sync -> analyze -> worker -> publish")
+        from radius_shared.database import models as db_models
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+
+        gh = self.pull_github
+        headers = {"X-Radius-Organization-Id": str(self.pull_org_id),
+                   "X-Radius-API-Key": self.pull_key}
+
+        def api(method: str, path: str, **kwargs: Any):
+            return self.client.request(method, f"/api/v1{path}", headers=headers, **kwargs)
+
+        def stored_installation() -> int | None:
+            engine = create_engine(self.database_url)
+            try:
+                with sessionmaker(bind=engine)() as session:
+                    return session.get(db_models.Organization, self.pull_org_id).github_installation_id
+            finally:
+                engine.dispose()
+
+        webhook_calls_before = self.webhook_calls
+        check(stored_installation() is None, "the organization starts with no GitHub installation id")
+        check(not os.environ.get("GITHUB_INSTALLATION_ID"), "no GITHUB_INSTALLATION_ID is configured")
+
+        r = api("POST", "/repositories/connect-github", json={"repository": "not a repo"})
+        check(r.status_code == 422, f"a malformed repository name is refused ({r.status_code})")
+        r = api("POST", "/repositories/connect-github", json={"repository": f"{OWNER}/{PULL_REPO}"})
+        check(r.status_code == 201, f"connect by owner/name works (got {r.status_code}: {r.text[:200]})")
+        repo = r.json()["data"]
+        repository_id = repo["id"]
+        check(repo["full_name"] == f"{OWNER}/{PULL_REPO}" and repo["default_branch"] == "main",
+              "repository metadata (name, default branch) came from GitHub")
+        check(r.json()["meta"]["installationId"] == PULL_INSTALLATION_ID,
+              "the installation was discovered through the App JWT")
+        check(stored_installation() == PULL_INSTALLATION_ID,
+              "the discovered installation id is stored on the organization (the worker reads it there)")
+        r = api("POST", "/repositories/connect-github", json={"repository": f"{OWNER}/{PULL_REPO}"})
+        check(r.status_code == 200 and r.json()["data"]["id"] == repository_id,
+              "connecting again returns the same repository")
+        r = self.client.post("/api/v1/repositories/connect-github", headers=self.headers,
+                             json={"repository": f"{OWNER}/{PULL_REPO}"})
+        # 409: that organization is linked to another installation; 403: same installation, repo owned elsewhere.
+        check(r.status_code in (403, 409), f"another organization cannot claim the repository ({r.status_code})")
+        check(api("GET", f"/repositories/{repository_id}").json()["data"]["organization_id"] == str(self.pull_org_id),
+              "the repository still belongs to the pull organization")
+
+        r = api("POST", f"/repositories/{repository_id}/sync-pull-requests",
+                params={"auto_analyze": "false"})
+        check(r.status_code == 200 and [p["github_pr_number"] for p in r.json()["data"]] == [PR_NUMBER],
+              f"sync pulled the open pull request without analyzing it ({r.status_code}: {r.text[:400]})")
+        check(r.json()["meta"]["analysisIds"] == [], "auto_analyze=false queued nothing")
+
+        r = api("POST", f"/repositories/{repository_id}/pull-requests/{PR_NUMBER}/analyze")
+        check(r.status_code == 202, f"analyze-by-number accepted (got {r.status_code}: {r.text[:200]})")
+        analysis_id = r.json()["data"]["id"]
+        check(r.json()["data"]["commit_sha"] == self.head_sha and r.json()["data"]["status"] == "pending",
+              "the head commit was read from GitHub and the analysis is pending")
+        r = api("POST", f"/repositories/{repository_id}/sync-pull-requests")
+        check(r.status_code == 200 and r.json()["meta"]["analysisIds"] == [],
+              "a sync during a pending analysis queues no duplicate")
+        r = api("POST", "/analyses", json={"repositoryId": repository_id,
+                                            "pullRequestId": api("GET", f"/repositories/{repository_id}/pull-requests/{PR_NUMBER}").json()["data"]["id"],
+                                            "commitSha": self.head_sha})
+        check(r.status_code == 202 and r.json()["data"]["id"] == analysis_id,
+              "POST /analyses (start_analysis) reuses the same pending analysis")
+
+        self.run_worker()
+        r = api("GET", f"/analyses/{analysis_id}")
+        status = r.json()["data"]["status"]
+        check(status == "completed", f"worker completed the analysis cloned with the stored installation (status={status})")
+        check(not gh.unhandled and not self.github.unhandled,
+              f"no unexpected GitHub API calls {gh.unhandled + self.github.unhandled}")
+        r = api("GET", f"/analyses/{analysis_id}/verdict-v2")
+        check(r.status_code == 200, f"verdict-v2 is available (got {r.status_code}: {r.text[:200]})")
+        verdict = r.json()["data"]["verdict"]
+        check(verdict == "insufficient_evidence",
+              f"verdict is insufficient_evidence before CI results and confirmations (got {verdict})")
+        self.assert_published(expected_verdict_label="insufficient", expect_rev=r.json()["data"]["revision"],
+                              github=gh, analysis_id=analysis_id)
+        check(len(gh.check_runs) == 1 and len(gh.comments) == 1,
+              "one Check Run and one PR comment on the pull-demo repository")
+
+        r = api("POST", f"/repositories/{repository_id}/sync-pull-requests")
+        check(r.status_code == 200 and r.json()["meta"]["analysisIds"] == [],
+              "a later sync does not re-analyze an already analyzed head commit")
+        writes = len(gh.requests)
+        self.run_worker()
+        check(len(gh.requests) == writes, "an idle worker makes no GitHub calls")
+        check(len(gh.check_runs) == 1 and len(gh.comments) == 1,
+              "still exactly one Check Run and one comment after the repeat sync")
+        check(self.webhook_calls == webhook_calls_before,
+              "no webhook delivery was sent during the whole stage")
+
     # -- verdict flow (fixtures 02..08): webhook -> worker -> CI upload -> worker -> compare
 
     def verdict_flow(self) -> None:
@@ -1051,6 +1227,7 @@ def run_fixture(base_url: str, selector: str, *, keep_db: bool) -> tuple[bool, d
             smoke.ci_stage()
             smoke.confirm_stage()
             smoke.regression_stage()
+            smoke.pull_stage()
         else:
             smoke.verdict_flow()
         ok = True
