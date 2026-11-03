@@ -144,7 +144,7 @@ UNCONFIRMED_INFERRED_MARKER = "unconfirmed_inferred_intent"
 
 
 def has_unconfirmed_inferred_intent(criteria: Iterable[Any]) -> bool:
-    """True when a live criterion came from summary-mode extraction and is not confirmed.
+    """True when a live criterion was inferred (summary mode or an LLM) and is not confirmed.
 
     Such criteria are the PR author's own words, read heuristically. While one is present
     the verdict cannot be ``verified`` (the marker is a blocking degraded reason, R2d);
@@ -155,8 +155,12 @@ def has_unconfirmed_inferred_intent(criteria: Iterable[Any]) -> bool:
         life = _enum_value(getattr(c, "state", "proposed"))
         if life in DROPPED_LIFECYCLE or life in _CONFIRMED_LIFECYCLE:
             continue
-        version = str(getattr(getattr(c, "origin", None), "extractor_version", "") or "")
+        origin = getattr(c, "origin", None)
+        version = str(getattr(origin, "extractor_version", "") or "")
         if version.startswith(INFERRED_EXTRACTOR_PREFIX):
+            return True
+        # DEC-034: a model-proposed criterion is never trusted until a human confirms it.
+        if _enum_value(getattr(origin, "extraction_method", "")) == "llm":
             return True
     return False
 

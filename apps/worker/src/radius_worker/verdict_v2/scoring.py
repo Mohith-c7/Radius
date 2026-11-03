@@ -94,6 +94,7 @@ from radius_shared.verdict_v2_flag import VerdictV2Mode
 from radius_shared.verdict_v2_wording import presentation
 
 from radius_worker.verdict_v2.adapters import behavioral_symbols, failed_case_count
+from radius_worker.verdict_v2.suggested_tests import make_suggester
 
 LOGGER = get_logger(__name__)
 
@@ -826,6 +827,9 @@ class ScoringPipeline:
     clock: Callable[[], datetime] = lambda: datetime.now(UTC)  # noqa: E731
     v1: Mapping[str, Any] | None = None
     dashboard_url: str | None = None
+    #: Optional "suggested tests (not run, not evidence)" generator (DEC-034). Called AFTER
+    #: scoring, never an input of it: the verdict is identical with or without it.
+    suggester: Callable[[PipelineResult, StageBInput], Any] | None = None
 
     def score_full(self, stage_b: StageBInput) -> Scored:
         computed_at = self.clock().strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -835,18 +839,45 @@ class ScoringPipeline:
             revision=self.revision,
             collected_at=computed_at,
         )
-        return Scored(
+        bundle = build_bundle(result, stage_b, max_bytes=self.config.rules.max_bundle_bytes)
+        payload = build_payload(
             result,
-            build_bundle(result, stage_b, max_bytes=self.config.rules.max_bundle_bytes),
-            build_payload(
-                result,
-                stage_b,
-                mode=self.mode,
-                computed_at=computed_at,
-                v1=self.v1,
-                dashboard_url=self.dashboard_url,
-            ),
+            stage_b,
+            mode=self.mode,
+            computed_at=computed_at,
+            v1=self.v1,
+            dashboard_url=self.dashboard_url,
         )
+        suggested = self._suggest(result, stage_b)
+        if suggested:
+            bundle["suggested_tests"] = suggested
+            payload["suggested_tests"] = [dict(s) for s in suggested]
+        return Scored(result, bundle, payload)
+
+    def _suggest(self, result: PipelineResult, stage_b: StageBInput) -> list[dict[str, Any]]:
+        """Gated suggestions or ``[]``; any failure is swallowed (never affects scoring)."""
+
+        if self.suggester is None:
+            return []
+        try:
+            report = self.suggester(result, stage_b)
+            items = [dict(i) for i in getattr(report, "items", ())]
+            LOGGER.info(
+                "Suggested tests",
+                extra={
+                    "suggested": len(items),
+                    "rejected": len(getattr(report, "rejected", ())),
+                    "calls": getattr(report, "calls", 0),
+                    "usage_in": getattr(report, "input_tokens", 0),
+                    "usage_out": getattr(report, "output_tokens", 0),
+                    "latency_ms": getattr(report, "latency_ms", 0.0),
+                    "skipped_reason": getattr(report, "skipped_reason", None),
+                },
+            )
+            return items
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.warning("Suggested tests failed", extra={"reason_code": type(exc).__name__})
+            return []
 
     def score(self, stage_b: StageBInput) -> dict[str, Any]:
         return self.score_full(stage_b).bundle
@@ -881,6 +912,7 @@ def run_verdict_v2_best_effort(
     revision: int = 1,
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     v1: Mapping[str, Any] | None = None,
+    suggester: Callable[[PipelineResult, StageBInput], Any] | None = None,
 ) -> RunReport:
     """Collect (Stage A), score (Stage B) and persist; never raises.
 
@@ -910,7 +942,12 @@ def run_verdict_v2_best_effort(
             flaky_scores=facts.flaky_scores,
         )
         scored = ScoringPipeline(
-            config=cfg, mode=mode.value, revision=revision, clock=clock, v1=v1
+            config=cfg,
+            mode=mode.value,
+            revision=revision,
+            clock=clock,
+            v1=v1,
+            suggester=suggester,
         ).score_full(stage_b)
         status, code = STATUS_OK, None
         bundle: dict[str, Any] | None = scored.bundle
@@ -988,6 +1025,11 @@ def run_verdict_v2_for_analysis(
 
         intent = SqlIntentSource(session_factory)
         store = _sql_store(session_factory, mode)
+        org_id = intent.organization_id(analysis_id) if store else None
+        suggester = make_suggester(
+            bool(getattr(settings, "suggest_tests_enabled", False)),
+            str(org_id) if org_id else None,
+        )
         return run_verdict_v2_best_effort(
             mode=mode,
             analysis_id=analysis_id,
@@ -995,8 +1037,9 @@ def run_verdict_v2_for_analysis(
             collector=VerdictStageACollector(intent),
             outcomes=SqlOutcomeSource(session_factory),
             store=store,
-            organization_id=intent.organization_id(analysis_id) if store else None,
+            organization_id=org_id,
             clock=clock,
+            suggester=suggester,
         )
     except Exception as exc:  # noqa: BLE001
         LOGGER.warning(
@@ -1041,6 +1084,8 @@ class StageBRecomputer:
     mode: VerdictV2Mode
     config: VerdictV2Config = field(default_factory=VerdictV2Config)
     clock: Callable[[], datetime] = lambda: datetime.now(UTC)  # noqa: E731
+    #: ``organization_id -> suggester | None`` (DEC-034); ``None`` = feature off.
+    suggester_for: Callable[[UUID], Any] | None = None
 
     def recompute(
         self, session: Any, organization_id: UUID, analysis_id: UUID
@@ -1067,13 +1112,16 @@ class StageBRecomputer:
             flaky_scores=facts.flaky_scores,
         )
         bundle = ScoringPipeline(
-            config=self.config, mode=self.mode.value, clock=self.clock
+            config=self.config,
+            mode=self.mode.value,
+            clock=self.clock,
+            suggester=self.suggester_for(organization_id) if self.suggester_for else None,
         ).score(stage_b)
         return bool(self.store.save(organization_id, analysis_id, bundle))
 
 
 def create_recomputer(
-    session_factory: Callable[[], Any], mode: VerdictV2Mode
+    session_factory: Callable[[], Any], mode: VerdictV2Mode, settings: Any = None
 ) -> StageBRecomputer | None:
     """The outbox consumer's Stage B recomputer for the runtime (``None`` when off)."""
 
@@ -1082,4 +1130,14 @@ def create_recomputer(
     store = _sql_store(session_factory, mode)
     if store is None:
         return None
-    return StageBRecomputer(store=store, mode=mode)
+    suggester_for: Callable[[UUID], Any] | None = None
+    if bool(getattr(settings, "suggest_tests_enabled", False)):
+        suggesters: dict[str, Any] = {}
+
+        def suggester_for(org: UUID) -> Any:
+            key = str(org)
+            if key not in suggesters:  # one instance per org keeps its response cache
+                suggesters[key] = make_suggester(True, key)
+            return suggesters[key]
+
+    return StageBRecomputer(store=store, mode=mode, suggester_for=suggester_for)

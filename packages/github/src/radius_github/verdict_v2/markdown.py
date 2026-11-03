@@ -22,6 +22,7 @@ import hashlib
 import json
 import math
 import re
+import unicodedata
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -512,6 +513,58 @@ def _tamper_section(view: VerdictV2View) -> str:
     return _details(f"Tamper findings ({len(findings)})", lines)
 
 
+MAX_SUGGESTED_TESTS = 5
+MAX_SUGGESTED_LINES = 60
+MAX_SUGGESTED_CHARS = 2500
+SUGGESTED_TITLE = "Suggested tests (not run, not evidence)"
+
+
+def _safe_code_block(code: object) -> str | None:
+    """A fenced block for LLM-written code, or ``None`` when it cannot be shown safely."""
+
+    if not isinstance(code, str):
+        return None
+    kept = "".join(
+        ch
+        for ch in code.replace("\r\n", "\n").replace("\r", "\n")
+        if ch in "\n\t" or unicodedata.category(ch) not in {"Cc", "Cf", "Cs", "Co", "Cn"}
+    ).strip("\n")
+    lines = kept.split("\n")
+    if (
+        not kept.strip()
+        or len(kept) > MAX_SUGGESTED_CHARS
+        or len(lines) > MAX_SUGGESTED_LINES
+        or "```" in kept
+        or "~~~" in kept
+        or "</" in kept
+        or "<!--" in kept
+    ):
+        return None
+    return "````python\n" + kept + "\n````"
+
+
+def _suggested_section(view: VerdictV2View, labels: Mapping[str, str]) -> str:
+    """Separate block: the suggestions are LLM proposals that were never executed."""
+
+    blocks: list[str] = []
+    for item in view.suggested_tests[:MAX_SUGGESTED_TESTS]:
+        block = _safe_code_block(item.get("test_code"))
+        if block is None:
+            continue
+        cid = item.get("criterion_id")
+        who = labels.get(cid, "") if isinstance(cid, str) else ""
+        blocks.append((f"**{who}**\n\n" if who else "") + block)
+    if not blocks:
+        return ""
+    lines = [
+        "_LLM-proposed and never executed: not evidence, and the verdict above does not "
+        "depend on them. Review, adapt and run them yourself before relying on them._",
+        "",
+        *("\n\n".join(blocks).split("\n")),
+    ]
+    return _details(f"{SUGGESTED_TITLE} ({len(blocks)})", lines)
+
+
 def _as_list(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
 
@@ -760,6 +813,7 @@ def render_comment(view: VerdictV2View) -> str:
         _policy_section(view) if _ok(view) else "",
         _unlinked_section(view) if _ok(view) else "",
         _evidence_section(view) if _ok(view) else "",
+        _suggested_section(view, labels) if _ok(view) else "",
         _v1_section(view),
     ]
     body = _assemble(view, core, optional, _footer(view))

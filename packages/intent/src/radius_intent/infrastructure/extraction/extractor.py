@@ -146,7 +146,7 @@ class DeterministicCriterionExtractor:
             extract_spec(lines, source.source_id, collector)
         else:
             MarkdownScanner(lines, self.config, self._compiled, collector).scan(masked)
-            if self.config.mode == "summary" and source.kind in (
+            if self.config.mode in ("summary", "llm") and source.kind in (
                 IntentSourceKind.PR_BODY,
                 IntentSourceKind.PR_TITLE,
             ):

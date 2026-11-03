@@ -338,6 +338,8 @@ class VerdictV2View:
     #: Contract 3: resolved repository policy and waiver audit (empty when none).
     policy: dict[str, Any] = field(default_factory=dict)
     waivers: dict[str, Any] = field(default_factory=dict)
+    #: DEC-034: LLM-proposed, gated, never executed, never evidence (rendered apart).
+    suggested_tests: tuple[Mapping[str, Any], ...] = ()
 
     @classmethod
     def from_payload(cls, payload: Mapping[str, Any]) -> VerdictV2View:
@@ -374,6 +376,7 @@ class VerdictV2View:
             computed_at=_opt_str(payload.get("computed_at")),
             policy=_dict(payload.get("policy")),
             waivers=_dict(payload.get("waivers")),
+            suggested_tests=_maps(payload.get("suggested_tests")),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -382,6 +385,8 @@ class VerdictV2View:
             out["policy"] = dict(self.policy)
         if self.waivers:
             out["waivers"] = dict(self.waivers)
+        if self.suggested_tests:
+            out["suggested_tests"] = [dict(s) for s in self.suggested_tests]
         return out
 
     def _base_dict(self) -> dict[str, Any]:
