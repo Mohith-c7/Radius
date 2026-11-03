@@ -1,0 +1,1 @@
+After sign-up the dashboard now goes straight to the home page when the account is already verified and signed in (local development with auto-verified e-mail). The "Check your email" page is shown only when verification is actually required.
