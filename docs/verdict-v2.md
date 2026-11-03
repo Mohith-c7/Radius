@@ -32,7 +32,7 @@ Rules are checked in this order. Every rule is evaluated and recorded; the first
 | --- | --- | --- | --- |
 | 1 | R1a | a criterion is contradicted (a linked test failed) | Failed |
 | 2 | R1b | any CI test case failed for this commit | Failed |
-| 3 | R1c | an unwaived tamper finding at severity high or above | Failed |
+| 3 | R1c | an unwaived tamper finding at severity high or above (severities are assumed, not calibrated: see the note below) | Failed |
 | 4 | R2p | no CI test results received yet for this commit | Insufficient evidence, shown as "Awaiting CI test results" |
 | 5 | R2a | no behavioral, testable criterion exists while behavioral code changed | Insufficient evidence |
 | 5b | R2e | no in-scope criterion exists (none, or all excluded) and no behavioral code changed: reason `no_intent_criteria` ("no intent criteria were extracted; add a spec or confirm criteria"), or `not_applicable` when only documentation or inert files changed | Insufficient evidence (never `verified`; see DEC-031) |
@@ -45,6 +45,8 @@ Rules are checked in this order. Every rule is evaluated and recorded; the first
 | 12 | R4 | none of the above | Supported by static evidence (alpha) (`verified`) |
 
 With a repository policy that has `require` or `evidence` entries, two more rules sit between R2d and R3a: **P1** (a criterion or changed code under a required path is below the required state) and **P2** (a criterion has no counted test that is not agent-authored). Both give `Not verified - insufficient evidence`. Without such a policy the list is exactly the rules above (R2e included). See [Repository policy and waivers](policy.md).
+
+> **Caution on R1c.** The tamper severities are assumptions that have not been calibrated. In the 2026-11 replay on this repository's merged PRs, every `failed` verdict came from a single high-severity tamper finding and at least 3 of 7 looked wrong on manual reading (`docs/research/evaluation/REPLAY_2026-11.md`, F3; still open: F-T4, F-T5, T010/T017). Treat a tamper-only `failed` as a prompt to look, not as a finding, and use waivers or the advisory conclusions mapping.
 
 Because failures come first, a tamper finding fails the verdict immediately, without waiting for CI. A pending PR (R2p) is published as a completed, neutral check, never left "in progress"; the comment updates itself when results arrive.
 

@@ -84,8 +84,8 @@ code-egress switch). What the code does today (checked by grep):
 - It is active only when `RADIUS_FEATURE_GEMINI_PRUNER=true` **and** `GEMINI_API_KEY` is set (`gemini_api_key_from_env`).
   Before this flag existed the key alone enabled it. With the flag off the key is ignored and no network call is made.
 - Its output cannot remove tests from a selection or influence a verdict.
-- The `google-genai` and `google-generativeai` packages remain core dependencies of the project; they are imported by
-  this module. Moving them to an optional extra, or deleting the module, is an open follow-up (DEC-021 "known gap").
+- The `google-genai` and `google-generativeai` packages are an optional extra (`gemini`), not core dependencies; the module
+  imports without them and degrades to "impacted". Deleting the module is still an open follow-up (DEC-021 "known gap").
 
 Operator guidance: leave `GEMINI_API_KEY` and `RADIUS_FEATURE_GEMINI_PRUNER` unset in every shared or customer
 deployment. Treat code sent to Gemini as disclosed to Google; check Google's terms for the key you use before enabling it

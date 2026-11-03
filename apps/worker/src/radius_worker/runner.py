@@ -74,6 +74,7 @@ from radius_worker.execution_mode import (
     resolve_test_execution_mode,
 )
 from radius_worker.intent_ingestion import ingest_intent_best_effort
+from radius_worker.maintenance import run_retention
 from radius_worker.orchestrator import (
     ExecuteAnalysisCommand,
     Phase1AnalysisOrchestrator,
@@ -88,6 +89,9 @@ from radius_worker.verdict_v2.requests import (
 )
 
 LOGGER = get_logger(__name__)
+
+#: Seconds between opt-in retention passes.
+RETENTION_INTERVAL_SECONDS = 3600.0
 
 
 class AnalysisStuckError(RuntimeError):
@@ -395,6 +399,10 @@ class SqlAlchemyWorkerRuntime:
 
         idle_cycles = 0
         next_reap = 0.0
+        # Retention is opt-in; the first pass runs a minute after start, then hourly.
+        next_retention = (
+            time.monotonic() + 60.0 if self.settings.retention_days > 0 else None
+        )
         next_poll = (
             time.monotonic() + self.poller.first_delay() if self.poller is not None else None
         )
@@ -428,6 +436,9 @@ class SqlAlchemyWorkerRuntime:
                         "Stuck-analysis reaper failed",
                         extra={"outcome": "reaper_error", "error": redact_secrets(exc)},
                     )
+            if next_retention is not None and time.monotonic() >= next_retention:
+                next_retention = time.monotonic() + RETENTION_INTERVAL_SECONDS
+                self.run_retention()  # never raises
             try:
                 processed = self.run_once()
             except Exception as exc:
@@ -448,6 +459,21 @@ class SqlAlchemyWorkerRuntime:
             ):
                 return
             self.stop_event.wait(poll_interval_seconds)
+
+    def run_retention(self) -> None:
+        """One opt-in retention pass (``RADIUS_RETENTION_DAYS``); never raises."""
+
+        try:
+            run_retention(
+                self.session_factory,
+                retention_days=self.settings.retention_days,
+                dry_run=self.settings.retention_dry_run,
+            )
+        except Exception as exc:
+            LOGGER.warning(
+                "Retention pass failed; continuing",
+                extra={"outcome": "retention_error", "error": redact_secrets(exc)},
+            )
 
     def _process_verdict_v2_requests(self) -> None:
         """VS-07: republish after CI. No-op with the flag off; never raises."""

@@ -162,7 +162,7 @@ test("uploadTestResults posts JUnit XML report payload", async () => {
   globalThis.fetch = async (input, init) => {
     assert.equal(
       String(input),
-      "http://dashboard.test/api/radius/analyses/analysis-1/tests/results",
+      "http://dashboard.test/api/radius/analyses/analysis-1/tests/results?commit_sha=abc123def456",
     );
     assert.equal(init?.method, "POST");
     const headers = new Headers(init?.headers);
@@ -185,8 +185,25 @@ test("uploadTestResults posts JUnit XML report payload", async () => {
     });
   };
 
-  const res = await api.uploadTestResults("analysis-1", "<testsuite></testsuite>", true);
+  const res = await api.uploadTestResults("analysis-1", "<testsuite></testsuite>", true, "abc123def456");
   assert.equal(res.status, "PASSED");
   assert.equal(res.total_tests, 1);
 });
 
+
+test("uploadTestResults refuses to upload without a commit to bind the results to", async () => {
+  let called = false;
+  globalThis.fetch = async () => {
+    called = true;
+    return envelope({ success: true, data: {} });
+  };
+  await assert.rejects(() => api.uploadTestResults("analysis-1", "<x/>", true, "  "), /no commit/);
+  assert.equal(called, false);
+});
+
+test("testResultsUploadPath encodes the commit and trims it", () => {
+  assert.equal(
+    api.testResultsUploadPath("analysis-1", " abc&x=1 "),
+    "/analyses/analysis-1/tests/results?commit_sha=abc%26x%3D1",
+  );
+});

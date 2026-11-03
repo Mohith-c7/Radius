@@ -473,12 +473,23 @@ export async function getTestRunResult(analysisId: UUID): Promise<TestRunResult 
   }
 }
 
+/** Path of the results upload. The API binds results to a revision, so it requires the head commit. */
+export function testResultsUploadPath(analysisId: UUID, commitSha: string): string {
+  return `/analyses/${analysisId}/tests/results?commit_sha=${encodeURIComponent(commitSha.trim())}`;
+}
+
 export function uploadTestResults(
   analysisId: UUID,
   payload: string,
   isXml = true,
+  commitSha = "",
 ): Promise<TestRunResult> {
-  return radiusFetch<TestRunResult>(`/analyses/${analysisId}/tests/results`, {
+  if (!commitSha.trim()) {
+    return Promise.reject(
+      new Error("The analysis has no commit to bind the results to; re-run the analysis and try again."),
+    );
+  }
+  return radiusFetch<TestRunResult>(testResultsUploadPath(analysisId, commitSha), {
     method: "POST",
     headers: {
       "Content-Type": isXml ? "application/xml" : "application/json",

@@ -116,8 +116,8 @@ capacity.
 Per-request CSP is built in `middleware.ts` with a fresh nonce:
 
     default-src 'self'; script-src 'self' 'nonce-<n>' 'strict-dynamic';
-    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-    font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:;
+    style-src 'self' 'unsafe-inline';
+    font-src 'self'; img-src 'self' data: blob:;
     connect-src 'self' <NEXT_PUBLIC_RADIUS_API_BASE_URL origin>; object-src 'none';
     base-uri 'self'; form-action 'self'; frame-ancestors 'none'
 
@@ -133,8 +133,11 @@ Trade-offs:
   static prerendering cannot carry a per-request nonce. The app is an
   authenticated client-rendered dashboard, so little is lost.
 * `style-src 'unsafe-inline'` remains because React renders `style=""`
-  attributes widely. Script execution is unaffected. Fonts load from Google via a CSS
-  `@import`; self-hosting them (`next/font`) would let both Google origins go (follow-up).
+  attributes widely. Script execution is unaffected. The dashboard
+  uses a system font stack (`--font-sans`, `--font-mono` in `globals.css`); it fetches no web fonts and
+  no external host appears in `style-src` or `font-src`. Manrope and DM Mono are named first in the stack
+  but are only used if installed on the viewer's machine. Self-hosting them with `next/font/local` needs the
+  OFL font files committed to the repo, which was not possible offline.
 * Development mode adds `'unsafe-eval'` and `ws:` for React refresh only.
 * `connect-src` includes the API origin because the sign-in forms call the API
   directly with cookies (`lib/auth.ts`); the `/api/radius` proxy is same-origin.
@@ -163,7 +166,7 @@ handlers. Run the PRD-22 browser e2e (or open each page with devtools) before re
 
 * Shared rate-limit store (Redis-compatible or PostgreSQL) and per-installation
   webhook bucket after signature verification (IN-02 files).
-* CSP `report-to`/report-only rollout; self-hosted fonts; drop style `'unsafe-inline'`.
+* CSP `report-to`/report-only rollout; drop style `'unsafe-inline'`.
 * Application-level request timeout; align intent `422 PAYLOAD_TOO_LARGE` with 413 in a
   contract-versioned change.
 * Disable `/docs` in production or put it behind auth.

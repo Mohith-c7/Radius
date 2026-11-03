@@ -1,18 +1,18 @@
 """HTTP boundary for Radius authentication. Sessions are HTTP-only cookies."""
 
-import secrets
+import logging
 import smtplib
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from urllib.parse import urlencode
 
-import httpx
-import jwt
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from . import oauth
 from .auth import (
     consume_action_token,
     create_action_token,
@@ -36,9 +36,9 @@ from .schemas import (
     VerifyToken,
 )
 
+LOGGER = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 SESSION_COOKIE = "radius_session"
-OAUTH_STATE_COOKIE = "radius_oauth_state"
 
 
 def send_email_message(
@@ -321,165 +321,159 @@ def resend_verification(
     }
 
 
-def oauth_config(provider: str) -> tuple[str, str, str, str, str, str]:
+def _log_label(value: str) -> str:
+    """A provider label for log lines taken from our own table, never from the request string."""
+    known = oauth.PROVIDERS.get(value)
+    return known.name if known is not None else "unknown"
+
+
+def oauth_config(provider: str) -> tuple[str, str, str]:
+    """Return ``(client_id, client_secret, redirect_uri)`` or raise 503 when not configured.
+
+    The redirect URI comes only from settings and must match the strict callback shape; it is
+    never read from a request.
+    """
     settings = get_settings()
-    if (
-        provider == "google"
-        and settings.google_client_id
-        and settings.google_client_secret
-        and settings.google_redirect_uri
-    ):
-        return (
+    values = {
+        "google": (
             settings.google_client_id,
             settings.google_client_secret,
             settings.google_redirect_uri,
-            "https://accounts.google.com/o/oauth2/v2/auth",
-            "https://oauth2.googleapis.com/token",
-            "https://openidconnect.googleapis.com/v1/userinfo",
-        )
-    if (
-        provider == "github"
-        and settings.github_client_id
-        and settings.github_client_secret
-        and settings.github_redirect_uri
-    ):
-        return (
+        ),
+        "github": (
             settings.github_client_id,
             settings.github_client_secret,
             settings.github_redirect_uri,
-            "https://github.com/login/oauth/authorize",
-            "https://github.com/login/oauth/access_token",
-            "https://api.github.com/user",
+        ),
+    }.get(provider)
+    if values is None or not all(values):
+        raise HTTPException(
+            status_code=503, detail=f"{provider.title()} sign in is not configured."
         )
-    raise HTTPException(
-        status_code=503, detail=f"{provider.title()} sign in is not configured."
-    )
+    client_id, client_secret, redirect_uri = values
+    try:
+        oauth.validate_redirect_uri(
+            provider,
+            str(redirect_uri),
+            production=settings.runtime_env.strip().lower() == "production",
+        )
+    except oauth.OAuthError as exc:
+        LOGGER.error("oauth provider=%s misconfigured: %s", _log_label(provider), exc.code)
+        raise HTTPException(
+            status_code=503, detail=f"{provider.title()} sign in is not configured."
+        ) from exc
+    return str(client_id), str(client_secret), str(redirect_uri)
+
+
+def _redirect(location: str, status_code: int = status.HTTP_307_TEMPORARY_REDIRECT) -> RedirectResponse:
+    redirect = RedirectResponse(location, status_code=status_code)
+    redirect.headers["Cache-Control"] = "no-store"
+    return redirect
 
 
 @router.get("/oauth/{provider}")
-def oauth_start(provider: str, response: Response):
-    if provider not in {"google", "github"}:
+def oauth_start(provider: str, next: str | None = None, db: Session = Depends(get_db)):
+    oauth_provider = oauth.PROVIDERS.get(provider)
+    if oauth_provider is None:
         raise HTTPException(
             status_code=404, detail="Authentication provider not found."
         )
-    client_id, _, callback, authorization_url, _, _ = oauth_config(provider)
-    nonce = secrets.token_urlsafe(24)
-    state = jwt.encode(
-        {
-            "provider": provider,
-            "nonce": nonce,
-            "exp": datetime.now(UTC) + timedelta(minutes=10),
-        },
-        get_settings().session_secret,
-        algorithm="HS256",
-    )
+    client_id, _, redirect_uri = oauth_config(provider)
+    flow_id, state, nonce, verifier = oauth.start_flow(db, oauth_provider, next or "/")
     params = {
         "client_id": client_id,
-        "redirect_uri": callback,
+        "redirect_uri": redirect_uri,
         "response_type": "code",
+        "scope": oauth_provider.scope,
         "state": state,
     }
-    if provider == "google":
-        params.update({"scope": "openid email profile", "nonce": nonce})
-    else:
-        params.update({"scope": "read:user user:email"})
-    response.status_code = status.HTTP_307_TEMPORARY_REDIRECT
-    response.headers["Location"] = f"{authorization_url}?{urlencode(params)}"
-    response.set_cookie(
-        OAUTH_STATE_COOKIE,
-        nonce,
+    if oauth_provider.pkce:
+        params["code_challenge"] = oauth.pkce_challenge(verifier)
+        params["code_challenge_method"] = "S256"
+    if oauth_provider.oidc:
+        params["nonce"] = nonce
+    redirect = _redirect(f"{oauth_provider.authorize_url}?{urlencode(params)}")
+    redirect.set_cookie(
+        oauth.FLOW_COOKIE,
+        flow_id,
         httponly=True,
         secure=get_settings().session_cookie_secure,
         samesite="lax",
-        max_age=600,
-        path="/",
+        max_age=int(oauth.FLOW_TTL.total_seconds()),
+        path=oauth.FLOW_COOKIE_PATH,
     )
-    return response
+    return redirect
+
+
+def _login_error(code: str) -> RedirectResponse:
+    redirect = _redirect(f"{get_settings().frontend_origin}/login?error={code}")
+    redirect.delete_cookie(oauth.FLOW_COOKIE, path=oauth.FLOW_COOKIE_PATH)
+    return redirect
 
 
 @router.get("/oauth/{provider}/callback")
 async def oauth_callback(
     provider: str,
-    code: str,
-    state: str,
-    response: Response,
-    radius_oauth_state: str | None = Cookie(default=None),
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    radius_oauth_flow: str | None = Cookie(default=None),
     db: Session = Depends(get_db),
 ):
+    oauth_provider = oauth.PROVIDERS.get(provider)
+    if oauth_provider is None:
+        raise HTTPException(
+            status_code=404, detail="Authentication provider not found."
+        )
     try:
-        saved = jwt.decode(state, get_settings().session_secret, algorithms=["HS256"])
-        if (
-            saved.get("provider") != provider
-            or not radius_oauth_state
-            or not secrets.compare_digest(saved["nonce"], radius_oauth_state)
-        ):
-            raise ValueError("Invalid OAuth state")
-        client_id, client_secret, callback, _, token_url, profile_url = oauth_config(
-            provider
-        )
-        async with httpx.AsyncClient(timeout=10) as client:
-            token_response = await client.post(
-                token_url,
-                data={
-                    "client_id": client_id,
-                    "client_secret": client_secret,
-                    "code": code,
-                    "redirect_uri": callback,
-                    "grant_type": "authorization_code",
-                },
-                headers={"Accept": "application/json"},
+        # The flow row is consumed first, so any failure below also burns this attempt.
+        flow = oauth.consume_flow(db, provider, radius_oauth_flow, state)
+        if error:
+            raise oauth.OAuthError("provider_denied", public="oauth_denied")
+        if not code:
+            raise oauth.OAuthError("code_missing")
+        client_id, client_secret, redirect_uri = oauth_config(provider)
+        async with oauth.make_http_client() as client:
+            token_body = await oauth.exchange_code(
+                client,
+                oauth_provider,
+                client_id=client_id,
+                client_secret=client_secret,
+                redirect_uri=redirect_uri,
+                code=code,
+                code_verifier=flow.code_verifier,
             )
-            token_response.raise_for_status()
-            access_token = token_response.json()["access_token"]
-            profile = (
-                await client.get(
-                    profile_url,
-                    headers={
-                        "Authorization": f"Bearer {access_token}",
-                        "Accept": "application/json",
-                    },
-                )
-            ).json()
-            if provider == "github" and not profile.get("email"):
-                emails = (
-                    await client.get(
-                        "https://api.github.com/user/emails",
-                        headers={
-                            "Authorization": f"Bearer {access_token}",
-                            "Accept": "application/json",
-                        },
-                    )
-                ).json()
-                profile["email"] = next(
-                    (
-                        item["email"]
-                        for item in emails
-                        if item.get("primary") and item.get("verified")
-                    ),
-                    None,
-                )
-        provider_id = str(
-            profile.get("sub") if provider == "google" else profile.get("id")
-        )
-        email = profile.get("email")
-        if not provider_id or not email:
-            raise ValueError("Provider did not supply a verified identity")
+            identity = await oauth.fetch_identity(
+                client, oauth_provider, token_body, client_id=client_id, nonce=flow.nonce
+            )
         user = user_from_provider(
             db,
-            provider,
-            provider_id,
-            email,
-            profile.get("name") or profile.get("login") or email,
+            identity.provider,
+            identity.subject,
+            identity.email,
+            identity.name,
+            email_verified=True,  # fetch_identity only returns provider-verified emails
         )
-        set_session(response, db, user)
-        response.delete_cookie(OAUTH_STATE_COOKIE, path="/")
-        response.status_code = status.HTTP_307_TEMPORARY_REDIRECT
-        response.headers["Location"] = f"{get_settings().frontend_origin}/"
-        return response
-    except Exception:
-        response.delete_cookie(OAUTH_STATE_COOKIE, path="/")
-        response.status_code = status.HTTP_307_TEMPORARY_REDIRECT
-        response.headers["Location"] = (
-            f"{get_settings().frontend_origin}/login?error=oauth"
+        redirect = _redirect(
+            f"{get_settings().frontend_origin}{oauth.sanitize_next(flow.next_path)}"
         )
-        return response
+        redirect.delete_cookie(oauth.FLOW_COOKIE, path=oauth.FLOW_COOKIE_PATH)
+        set_session(redirect, db, user)
+        LOGGER.info("oauth provider=%s outcome=success", _log_label(provider))
+        return redirect
+    except oauth.OAuthError as exc:
+        # Log the failure class only: never codes, tokens, secrets or provider bodies.
+        LOGGER.warning("oauth provider=%s outcome=failure reason=%s", _log_label(provider), exc.code)
+        return _login_error(exc.public)
+    except HTTPException as exc:
+        LOGGER.warning(
+            "oauth provider=%s outcome=failure reason=http_%s", _log_label(provider), exc.status_code
+        )
+        return _login_error("oauth")
+    except Exception as exc:
+        LOGGER.warning(
+            "oauth provider=%s outcome=failure reason=unexpected:%s",
+            _log_label(provider),
+            type(exc).__name__,
+        )
+        return _login_error("oauth")

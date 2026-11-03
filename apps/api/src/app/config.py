@@ -1,5 +1,6 @@
 """Runtime configuration loaded from environment variables."""
 from functools import lru_cache
+from urllib.parse import urlsplit
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -20,7 +21,6 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./radius.db"
     session_secret: str = Field(default="super_secret_radius_session_key_32bytes_min", min_length=32)
     frontend_origin: str = "http://127.0.0.1:3000"
-    api_base_url: str = "http://localhost:8000"
     session_cookie_secure: bool = False
     google_client_id: str | None = None
     google_client_secret: str | None = None
@@ -56,6 +56,13 @@ class Settings(BaseSettings):
         if self.email_delivery_mode == "log":
             msg = "EMAIL_DELIVERY_MODE=log writes sign-in links to the logs and is not allowed in production."
             raise ValueError(msg)
+        for name, uri in (
+            ("GOOGLE_REDIRECT_URI", self.google_redirect_uri),
+            ("GITHUB_REDIRECT_URI", self.github_redirect_uri),
+        ):
+            if uri and urlsplit(uri).scheme != "https":
+                msg = f"{name} must be an https URL in production."
+                raise ValueError(msg)
         return self
 
 

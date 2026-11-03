@@ -38,12 +38,17 @@ test("sign up, browse the dashboard, sign out and sign in", async ({ page }) => 
       problems.push(`HTTP ${status} ${method} ${response.url().slice(0, 200)}`);
     }
   });
-  // The stylesheet @imports Google Fonts. Serve an empty sheet so the test does not depend on
-  // (or wait for) an external network.
+  // The dashboard uses a system font stack and must not contact any font host. Abort such
+  // requests (so the test never waits on the network) and record them; the end of the test
+  // asserts there were none.
   const FONT_HOSTS = new Set(["fonts.googleapis.com", "fonts.gstatic.com"]);
+  const fontRequests = [];
   await page.route(
-    (url) => url.protocol === "https:" && FONT_HOSTS.has(url.hostname),
-    (route) => route.fulfill({ status: 200, contentType: "text/css", body: "" }),
+    (url) => FONT_HOSTS.has(url.hostname),
+    (route) => {
+      fontRequests.push(route.request().url());
+      return route.abort();
+    },
   );
   const shot = (name) => page.screenshot({ path: `${SHOTS}/${name}.png`, fullPage: true });
   const heading = (name) => expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
@@ -92,5 +97,6 @@ test("sign up, browse the dashboard, sign out and sign in", async ({ page }) => 
   await heading("Engineering workspace");
   await shot("04-signed-in-again");
 
+  expect(fontRequests, "no request may go to a font host").toEqual([]);
   expect(problems, problems.join("\n")).toEqual([]);
 });

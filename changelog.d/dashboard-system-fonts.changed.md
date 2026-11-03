@@ -1,0 +1,1 @@
+The dashboard no longer loads Google Fonts: it uses a system font stack, makes no request to `fonts.googleapis.com` or `fonts.gstatic.com`, and its Content-Security-Policy no longer allows those hosts. Manrope and DM Mono are used only if installed on the viewer's machine.

@@ -61,7 +61,7 @@ fresh copy of the checkout (.git excluded, symlinks kept as links)  <- the mutat
      output watchdog, wall-clock kill. One container per mutant run; results via /results/junit.xml
 ```
 
-- The spike's `SandboxMutantRunner` builds a plain `TestRunPlan` (`python -m pytest -q [-x] <test ids>`) and calls `ContainerSandboxRunner.run_collecting(plan, copy, artifacts=("junit.xml",))`. It reuses all F-07 isolation unchanged; timeouts map to `SandboxConfig.timeout_seconds` (a derived config per run). Command construction is unit-tested with fakes; it has not been exercised against Docker in this spike.
+- The spike's `SandboxMutantRunner` builds a plain `TestRunPlan` (`python -m pytest -q [-x] <test ids>`) and calls `ContainerSandboxRunner.run_collecting(plan, copy, artifacts=("junit.xml",))`. It reuses all F-07 isolation unchanged; timeouts map to `SandboxConfig.timeout_seconds` (a derived config per run). Command construction is unit-tested with fakes, and the adapter was exercised against Docker Desktop on 2026-11-03 (fixture 08: kill matrix identical to the local runner; `docs/security/EXECUTION_ISOLATION.md`).
 - **Test ids are validated** before they reach the command line (no leading `-`, no `..`, no absolute or drive paths), so a test id can never become a pytest option.
 - **Dev-only backend.** `SubprocessLocalRunner` runs pytest as a child process of the caller. It is refused unless `RADIUS_MUTATION_ALLOW_LOCAL=1`, works on a temp copy, uses a minimal environment, and is documented as unsafe for untrusted code. Production code must not construct it.
 - **Image.** The sandbox image must already contain the repository's test dependencies (no network). Its digest (`image@sha256:...`) is part of every cache key.

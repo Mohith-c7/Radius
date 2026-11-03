@@ -61,6 +61,28 @@ class AuthToken(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
 
+class AuthOAuthFlow(Base):
+    """One in-flight OAuth/OIDC sign-in. Single use: the row is deleted when the callback consumes it.
+
+    Only SHA-256 hashes of the browser flow id (cookie) and of ``state`` are stored. The PKCE
+    verifier and the OIDC nonce are needed again at the callback, so they are stored in the
+    clear for at most ten minutes (they are useless without the one-time authorization code).
+    """
+
+    __tablename__ = "auth_oauth_flows"
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid4())
+    )
+    flow_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    state_hash: Mapped[str] = mapped_column(String(64))
+    provider: Mapped[str] = mapped_column(String(24))
+    nonce: Mapped[str] = mapped_column(String(128))
+    code_verifier: Mapped[str] = mapped_column(String(128))
+    next_path: Mapped[str] = mapped_column(String(512), default="/")
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+
+
 class AuthSession(Base):
     __tablename__ = "auth_sessions"
     id: Mapped[str] = mapped_column(

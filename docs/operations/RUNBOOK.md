@@ -126,7 +126,8 @@ docker compose exec worker du -sh /var/lib/radius/repositories
   recreated on demand.
 - PostgreSQL: no automatic retention exists ([BACKUP_RESTORE.md](BACKUP_RESTORE.md)); the largest tables are the
   graph and test tables (`graph_nodes`, `graph_edges`, `test_cases`, uploads). Deleting rows by hand risks
-  referential damage: back up first. A pruning job is not implemented.
+  referential damage: back up first. The opt-in `RADIUS_RETENTION_DAYS` task prunes only `idempotency_keys`, exhausted `verdict_v2_requests` and
+  `mutation_result_cache`; no job prunes the graph, test, analysis or verdict tables.
 - Container logs: configure the Docker logging driver size limits; the default json-file driver is unbounded.
 - A full PostgreSQL volume makes `/api/v1/ready` return 503 and jobs fail; free space, then restart.
 

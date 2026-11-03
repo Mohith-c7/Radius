@@ -17,7 +17,7 @@
 .intent-alert.ok { background: var(--green-soft); border: 1px solid #bfe3d1; color: #115c42; }
 .intent-source-flags { list-style: none; display: grid; margin: 0; }
 .intent-filters { display: flex; flex-wrap: wrap; gap: 6px; }
-.intent-filters button { background: #fff; border: 1px solid var(--line); border-radius: 20px; color: var(--ink); cursor: pointer; font: 600 12px Manrope, Arial, sans-serif; padding: 6px 12px; }
+.intent-filters button { background: #fff; border: 1px solid var(--line); border-radius: 20px; color: var(--ink); cursor: pointer; font: 600 12px var(--font-sans); padding: 6px 12px; }
 .intent-filters button[aria-pressed="true"] { background: var(--ink); color: #fff; }
 .intent-list { display: grid; gap: 10px; list-style: none; margin: 0; padding: 0; }
 .intent-row { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: 10px; display: grid; gap: 8px; padding: 12px 14px; }
@@ -32,11 +32,11 @@
 .intent-guidance { align-items: center; color: var(--amber); display: flex; font-size: 12px; gap: 6px; margin: 0; }
 .intent-details summary { cursor: pointer; font-size: 12px; font-weight: 600; }
 .intent-details p { font-size: 12px; margin: 6px 0 0; overflow-wrap: anywhere; }
-.intent-link-btn { align-items: center; background: none; border: 0; color: var(--blue); cursor: pointer; display: inline-flex; font: 600 12px Manrope, Arial, sans-serif; gap: 5px; margin-left: 6px; padding: 4px 2px; }
+.intent-link-btn { align-items: center; background: none; border: 0; color: var(--blue); cursor: pointer; display: inline-flex; font: 600 12px var(--font-sans); gap: 5px; margin-left: 6px; padding: 4px 2px; }
 .intent-icon-btn { background: none; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; padding: 6px; }
 .intent-form { display: grid; gap: 8px; }
 .intent-field { display: grid; font-size: 12px; font-weight: 700; gap: 4px; }
-.intent-field select, .intent-field textarea { border: 1px solid var(--line); border-radius: 8px; font: 13px Manrope, Arial, sans-serif; padding: 8px 10px; width: 100%; }
+.intent-field select, .intent-field textarea { border: 1px solid var(--line); border-radius: 8px; font: 13px var(--font-sans); padding: 8px 10px; width: 100%; }
 .intent-field textarea { font-family: ui-monospace, Menlo, Consolas, monospace; resize: vertical; }
 .intent-field textarea[aria-invalid="true"] { border-color: #c93c3c; }
 .intent-count { color: var(--muted); font-size: 12px; margin: 0; }

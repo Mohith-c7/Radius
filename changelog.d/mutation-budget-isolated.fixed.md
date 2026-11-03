@@ -1,0 +1,1 @@
+Verdict v2 Stage A: the time spent in the mutation stage no longer consumes the shared 120 s producer budget, which made the assertions and relevance producers time out and set the blocking `truncated` marker whenever mutants really ran (found on fixture 08).

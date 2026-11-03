@@ -210,6 +210,32 @@ class WorkerSettings(DatabaseSettings):
         ),
     )
 
+    retention_days: int = Field(
+        default=0,
+        alias="RADIUS_RETENTION_DAYS",
+        description=(
+            "Opt-in data retention: every hour the worker deletes rows older than this many "
+            "days from idempotency_keys, exhausted verdict_v2_requests outbox rows and "
+            "mutation_result_cache. Never touches analyses, verdicts, evidence or audit "
+            "rows. 0 (default) = off; values from 1 to 6 are raised to 7."
+        ),
+    )
+    retention_dry_run: bool = Field(
+        default=False,
+        alias="RADIUS_RETENTION_DRY_RUN",
+        description=(
+            "With RADIUS_RETENTION_DAYS set: only log how many rows each retention pass "
+            "would delete, delete nothing."
+        ),
+    )
+
+    @field_validator("retention_days", mode="before")
+    @classmethod
+    def _normalise_retention_days(cls, value: object) -> int:
+        from radius_worker.maintenance import normalise_retention_days
+
+        return normalise_retention_days(value)
+
     @field_validator("github_poll_interval_seconds", mode="after")
     @classmethod
     def _clamp_poll_interval(cls, value: float) -> float:

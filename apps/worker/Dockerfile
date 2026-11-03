@@ -25,7 +25,8 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
 WORKDIR /build
 COPY pyproject.toml uv.lock ./
 
-# Pass RADIUS_EXTRAS="[observability]" to bundle OpenTelemetry/Prometheus.
+# Pass RADIUS_EXTRAS="[observability]" to bundle OpenTelemetry/Prometheus. Other extras:
+# "llm" (Anthropic intent extraction), "gemini" (legacy experimental pruner). Comma separated.
 ARG RADIUS_EXTRAS=""
 RUN --mount=from=uv,source=/uv,target=/usr/local/bin/uv \
     set -eu; \

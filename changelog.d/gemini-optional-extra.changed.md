@@ -1,0 +1,1 @@
+`google-genai` and `google-generativeai` (used only by the experimental, off-by-default Gemini pruner) are now the optional `gemini` extra instead of core dependencies, and the pruner module imports without them. Build images with `RADIUS_EXTRAS=[gemini]` if you enable that feature; `uv.lock` is regenerated. The unused `API_BASE_URL` auth setting was removed.

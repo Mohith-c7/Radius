@@ -87,7 +87,6 @@ STATUS_OVERRIDE = {
 #: line was checked against the code that reads the setting. Prefer adding a
 #: ``description=`` to the field; the code text always wins over this table.
 DESCRIPTIONS = {
-    "API_BASE_URL": "Auth module: public API base URL. Declared in the auth settings; no other code reads it (verified by grep).",
     "API_KEYS": "Comma-separated `org_id:key` pairs accepted in `X-Radius-API-Key` / Bearer auth. With none configured the API rejects requests unless `RADIUS_ALLOW_INSECURE_DEV` applies (development/test only).",
     "DASHBOARD_BASE_URL": "Canonical public dashboard URL; the worker uses it to build the analysis link in the check run and PR comment.",
     "DATABASE_URL": "PostgreSQL URL for the API, worker and migrations. `postgres://` and `postgresql://` are normalised to `postgresql+psycopg://`. The auth module (sign-in tables) reads the same variable, but its own default is `sqlite:///./radius.db`, so when the variable is unset the auth tables go to a local SQLite file while the main settings default to the local PostgreSQL URL. Always set it explicitly.",
@@ -102,12 +101,12 @@ DESCRIPTIONS = {
     "GITHUB_DEFAULT_ORGANIZATION_ID": "Organization UUID used for webhook-created analyses when `GITHUB_SINGLE_TENANT` is true.",
     "GITHUB_INSTALLATION_ID": "Fixed GitHub App installation id for the worker. When unset (empty or 0) the worker uses the organization's stored `github_installation_id` and fails the publish if neither exists.",
     "GITHUB_PUBLISH_RESULTS": "Worker: publish check runs and PR comments to GitHub. Also requires GitHub App credentials.",
-    "GITHUB_REDIRECT_URI": "Auth module: GitHub OAuth redirect URI (optional).",
+    "GITHUB_REDIRECT_URI": "Auth module: GitHub OAuth redirect URI (optional). Must be exactly `<api origin>/api/v1/auth/oauth/github/callback` and registered with GitHub; it is never taken from a request. `https` is required (plain `http` only for localhost outside production; the API refuses to start in production with a non-https value). Sign-in uses PKCE (S256), a single-use `state` bound to a cookie, and, for Google, ID-token validation with `nonce`.",
     "GITHUB_TIMEOUT_SECONDS": "Timeout in seconds for GitHub REST calls.",
     "GITHUB_WEBHOOK_SECRET": "HMAC secret that signs GitHub webhooks. Unsigned webhooks are rejected unless `RADIUS_ALLOW_INSECURE_DEV` applies.",
     "GOOGLE_CLIENT_ID": "Auth module: Google OAuth sign-in client id (optional).",
     "GOOGLE_CLIENT_SECRET": "Auth module: Google OAuth sign-in client secret (optional).",
-    "GOOGLE_REDIRECT_URI": "Auth module: Google OAuth redirect URI (optional).",
+    "GOOGLE_REDIRECT_URI": "Auth module: Google OAuth redirect URI (optional). Must be exactly `<api origin>/api/v1/auth/oauth/google/callback` and registered with Google; it is never taken from a request. `https` is required (plain `http` only for localhost outside production; the API refuses to start in production with a non-https value). Sign-in uses PKCE (S256), a single-use `state` bound to a cookie, and, for Google, ID-token validation with `nonce`.",
     "RADIUS_CORS_ALLOW_CREDENTIALS": "Send `Access-Control-Allow-Credentials`. Never combined with `*`.",
     "RADIUS_ENV": "Runtime environment: `development`, `test`, `uat` or `production`. Production tightens CORS validation (https origins only, no wildcard, no automatic localhost), ignores demo seeding, refuses the public session secret and `EMAIL_DELIVERY_MODE=log`. `docker-compose.yml` pins `production`; `docker-compose.dev.yml` (used by `make dev`) sets `development` for the api.",
     "RADIUS_HSTS_MAX_AGE": "`max-age` in seconds of the Strict-Transport-Security header when HSTS is enabled.",
@@ -318,7 +317,7 @@ def extra_entries() -> list[Entry]:
         e("RADIUS_DASHBOARD_INTERNAL_URL", "str", "http://localhost:3000", "Dashboard origin used for server-side calls to its own proxy.", {"dashboard"}, "apps/dashboard/lib/api.ts"),
         e("RADIUS_HSTS_ENABLED", "bool", "false", "Dashboard side of the flag defined for the API: send Strict-Transport-Security and CSP `upgrade-insecure-requests`. Enable only behind TLS.", {"dashboard"}, "apps/dashboard/middleware.ts"),
         e("PORT", "int", "8000 (api), 3000 (dashboard)", "Listen port in the API and dashboard images (`uvicorn --port ${PORT:-8000}`; dashboard `PORT=3000`).", {"api", "dashboard"}, "apps/api/Dockerfile"),
-        e("RADIUS_EXTRAS", "str", "empty", "Compose build argument: extra Python dependency groups to install in the api and worker images (for example `llm`, `observability`).", {"compose build"}, "docker-compose.yml"),
+        e("RADIUS_EXTRAS", "str", "empty", "Compose build argument: extra Python dependency groups to install in the api and worker images (for example `llm`, `gemini`, `observability`).", {"compose build"}, "docker-compose.yml"),
         e("POSTGRES_HOST_PORT", "int", "5432", "Compose: host port published for the bundled PostgreSQL.", {"compose"}, "docker-compose.yml"),
     ]
     return [*items, *_llm_entries()]
