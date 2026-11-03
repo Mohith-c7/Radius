@@ -97,6 +97,9 @@ jobs:
       - name: Import contracts (evidence domain purity, verdict v2 boundaries)
         run: lint-imports --config packages/evidence/.importlinter
 
+      - name: Import contracts (calibration toolkit purity, not wired into the verdict)
+        run: lint-imports --config packages/confidence/.importlinter
+
       - name: Typecheck
         run: pnpm typecheck
 

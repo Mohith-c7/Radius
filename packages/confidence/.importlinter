@@ -1,0 +1,50 @@
+[importlinter]
+root_packages =
+    radius_confidence
+    radius_evidence
+    radius_github
+    radius_analysis
+    radius_intent
+    radius_linking
+    radius_testing
+    radius_graph
+    radius_shared
+include_external_packages = True
+
+[importlinter:contract:calibration-is-pure-stdlib]
+name = Calibration toolkit imports only the standard library and itself
+type = forbidden
+source_modules =
+    radius_confidence.calibration
+forbidden_modules =
+    radius_confidence.application
+    radius_confidence.domain
+    radius_confidence.dto
+    radius_confidence.infrastructure
+    radius_confidence.interfaces
+    radius_confidence.verdict_v2
+    radius_evidence
+    radius_github
+    radius_analysis
+    radius_intent
+    radius_linking
+    radius_testing
+    radius_graph
+    radius_shared
+    numpy
+    scipy
+    sklearn
+    sqlalchemy
+    pydantic
+    fastapi
+
+[importlinter:contract:verdict-does-not-use-calibration]
+name = Nothing in the verdict path imports the calibration toolkit (Verdict v2 stays uncalibrated)
+type = forbidden
+source_modules =
+    radius_confidence.verdict_v2
+    radius_confidence.application
+    radius_confidence.domain
+    radius_confidence.infrastructure
+forbidden_modules =
+    radius_confidence.calibration
