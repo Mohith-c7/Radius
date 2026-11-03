@@ -53,14 +53,17 @@ export function ConfidenceRing({
   score,
   size = "large",
   scoreKind,
+  muted = false,
 }: {
   score: number;
   size?: "large" | "small";
   scoreKind?: string | null;
+  /** Demoted (legacy v1) styling: grey, never green. */
+  muted?: boolean;
 }) {
   return (
     <div
-      className={`confidence-ring ${size}`}
+      className={`confidence-ring ${size}${muted ? " muted" : ""}`}
       title={scoreKindLabel(scoreKind).tooltip}
       style={{ "--score": `${score * 3.6}deg` } as React.CSSProperties}
     >

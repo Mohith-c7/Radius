@@ -102,7 +102,14 @@ type Load =
   | { status: "error"; message: string }
   | { status: "ready"; verdict: VerdictV2; refresh: RefreshState };
 
-export function VerdictV2Panel({ analysisId }: { analysisId: string }) {
+export function VerdictV2Panel({
+  analysisId,
+  onVerdict,
+}: {
+  analysisId: string;
+  /** Reports the current result (null when off / not computed / failed / unavailable) so the page header can agree with this panel. */
+  onVerdict?: (verdict: VerdictV2 | null) => void;
+}) {
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [reloading, setReloading] = useState(false);
   const latest = useRef(0);
@@ -161,6 +168,13 @@ export function VerdictV2Panel({ analysisId }: { analysisId: string }) {
       latest.current += 1; // ignore a response that arrives after unmount / id change
     };
   }, [refresh]);
+
+  const onVerdictRef = useRef(onVerdict);
+  onVerdictRef.current = onVerdict;
+  useEffect(() => {
+    if (load.status === "loading") return;
+    onVerdictRef.current?.(load.status === "ready" ? load.verdict : null);
+  }, [load]);
 
   // Flag off (404 disabled): the feature does not exist for this deployment.
   if (load.status === "disabled") return null;

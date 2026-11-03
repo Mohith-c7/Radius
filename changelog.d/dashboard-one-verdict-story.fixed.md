@@ -1,0 +1,1 @@
+The analysis page now shows one verdict story: when a Verdict v2 result exists, the header pill, headline and Recommendation card show the v2 verdict (alpha wording, criteria count, "What to do next") and the v1 0-100 heuristic and its "Verified" sentence move into a muted "Legacy v1 result" block instead of contradicting v2.

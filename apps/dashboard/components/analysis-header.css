@@ -1,0 +1,14 @@
+/* One-verdict-story header: v2 verdict on top, v1 demoted. Uses globals.css tokens. */
+.ah-hero { align-items: flex-start; flex-direction: column; gap: 16px; }
+.ah-main { display: grid; gap: 6px; min-width: 0; width: 100%; }
+.ah-pill { font-weight: 700; }
+.ah-summary { font-size: 13px; font-weight: 600; margin: 0; overflow-wrap: anywhere; }
+.ah-reason { font-size: 12px; margin: 0; overflow-wrap: anywhere; }
+.ah-legacy { align-items: center; background: #f6f8f7; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); display: flex; gap: 14px; padding: 12px 14px; width: 100%; }
+.ah-legacy h3 { color: var(--muted); font-size: 12px; letter-spacing: 0; margin: 0 0 4px; }
+.ah-legacy p { font-size: 12px; margin: 2px 0 0; overflow-wrap: anywhere; }
+.ah-legacy-body { min-width: 0; }
+.confidence-ring.muted { background: conic-gradient(#9aa7a1 var(--score), #e3e9e6 0); }
+.ah-rec-warning { color: var(--amber); font-weight: 700; margin: 0 0 8px; overflow-wrap: anywhere; }
+.ah-rec-actions { margin: 8px 0 0; padding-left: 18px; }
+.ah-rec-actions li { margin: 4px 0; overflow-wrap: anywhere; }

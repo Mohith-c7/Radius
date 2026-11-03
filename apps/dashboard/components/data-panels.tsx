@@ -63,6 +63,13 @@ import { ConfidenceRing, OpenLink, PageHeading, Status } from "./ui";
 import { InteractiveGraphViewer } from "./interactive-graph";
 import { IntentPanel } from "./intent-panel";
 import { VerdictV2Panel } from "./verdict-v2-panel";
+import {
+  buildHeaderModel,
+  toneColor,
+  v1Presentation,
+  type V2Input,
+} from "../lib/analysis-header-model";
+import "./analysis-header.css";
 
 type LoadState<T> =
   | { status: "loading" }
@@ -1314,6 +1321,9 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
   } | null>(null);
   const [rerunning, setRerunning] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  // The Verdict v2 panel reports its result here so the header agrees with it.
+  const [v2, setV2] = useState<V2Input>("loading");
+  useEffect(() => setV2("loading"), [analysisId]);
   const state = useRadiusData(async () => {
     const [analysis, repositories] = await Promise.all([
       getAnalysis(analysisId),
@@ -1361,6 +1371,19 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
 
   const { analysis, repositories, blast, confidence, tests, graph, testResult } = state.data;
   const repo = repositoryName(repositories, analysis.repository_id);
+  const header = buildHeaderModel(
+    confidence
+      ? {
+          verificationStatus: confidence.verification_status,
+          summary: confidence.summary,
+          score: score(confidence),
+          scoreKind: confidence.score_kind,
+          recommendations: confidence.recommendations,
+          analysisCompleteness: confidence.analysis_completeness,
+        }
+      : null,
+    v2,
+  );
 
   return (
     <>
@@ -1395,42 +1418,66 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
           )}
         </p>
       )}
-      <section className="analysis-hero">
-        <div>
+      <section className={`analysis-hero${header.source === "v2" ? " ah-hero" : ""}`}>
+        <div className="ah-main">
           <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap", marginBottom: "8px" }}>
             <Status status={analysis.status} />
-            {confidence && (
+            {header.pill && (
               <span
-                className="pr-chip"
-                style={{ color: verdictPresentation(confidence.verification_status).color, fontWeight: 600 }}
+                className="pr-chip ah-pill"
+                data-testid="verdict-pill"
+                style={{ color: toneColor(header.pill.tone), fontWeight: 600 }}
               >
-                {verdictPresentation(confidence.verification_status).label}
+                {header.pill.label}
               </span>
             )}
             {confidence?.change_risk && (
               <span className="pr-chip">Change size risk: {confidence.change_risk.toLowerCase()}</span>
             )}
-            {confidence?.analysis_completeness !== undefined && confidence?.analysis_completeness !== null && (
-              <span className="pr-chip">
-                Changed files with test evidence: {Math.round(confidence.analysis_completeness)}%
-              </span>
-            )}
+            {header.source === "v1" &&
+              confidence?.analysis_completeness !== undefined &&
+              confidence?.analysis_completeness !== null && (
+                <span className="pr-chip">
+                  Changed files with test evidence: {Math.round(confidence.analysis_completeness)}%
+                </span>
+              )}
           </div>
-          <h2>{confidence?.summary ?? "Analysis artifacts are being prepared"}</h2>
+          <h2>{header.headline}</h2>
+          {header.summaryLine && <p className="ah-summary">{header.summaryLine}</p>}
+          {header.reasonLine && <p className="muted ah-reason">{header.reasonLine}</p>}
           <p className="muted">
             Started {formatDate(analysis.started_at)} / completed{" "}
             {formatDate(analysis.completed_at)}
           </p>
         </div>
-        <div style={{ textAlign: "center" }}>
-          <ConfidenceRing
-            score={score(confidence)}
-            scoreKind={confidence?.score_kind}
-          />
-          <p className="muted" style={{ fontSize: "12px", marginTop: "6px" }}>
-            {scoreKindLabel(confidence?.score_kind).short} score (not a probability)
-          </p>
-        </div>
+        {header.showPrimaryRing && (
+          <div style={{ textAlign: "center" }}>
+            <ConfidenceRing
+              score={score(confidence)}
+              scoreKind={confidence?.score_kind}
+            />
+            <p className="muted" style={{ fontSize: "12px", marginTop: "6px" }}>
+              {scoreKindLabel(confidence?.score_kind).short} score (not a probability)
+            </p>
+          </div>
+        )}
+        {header.legacy && (
+          <aside className="ah-legacy" aria-label={header.legacy.title} data-testid="legacy-v1">
+            <ConfidenceRing
+              score={header.legacy.score}
+              scoreKind={header.legacy.scoreKind}
+              size="small"
+              muted
+            />
+            <div className="ah-legacy-body">
+              <h3>{header.legacy.title}</h3>
+              <p>{header.legacy.statusText}</p>
+              {header.legacy.sentence && <p>{header.legacy.sentence}</p>}
+              <p>{header.legacy.scoreText}</p>
+              {header.legacy.evidenceText && <p>{header.legacy.evidenceText}</p>}
+            </div>
+          </aside>
+        )}
       </section>
       <VerdictGapsCard confidence={confidence} />
       <nav className="analysis-tabs">
@@ -1440,18 +1487,38 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
         <a href="#tests">Tests & CI</a>
       </nav>
       <div className="detail-grid" id="summary">
-        <ConfidenceEvidenceCard confidence={confidence} />
+        <ConfidenceEvidenceCard confidence={confidence} legacy={header.source === "v2"} />
         <aside className="card detail-card">
           <h2>Recommendation</h2>
-          <p className="muted">
-            {confidence?.recommendations.join(" ") ||
-              "Radius has not generated recommendations for this analysis yet."}
-          </p>
+          {header.recommendation.warning ? (
+            <p className="ah-rec-warning" data-testid="recommendation-lead">
+              {header.recommendation.lead}
+            </p>
+          ) : (
+            <p className="muted" data-testid="recommendation-lead">
+              {header.recommendation.lead}
+            </p>
+          )}
+          {header.recommendation.actions.length > 0 && (
+            <>
+              <h3 style={{ fontSize: "13px", margin: "12px 0 0" }}>What to do next</h3>
+              <ol className="ah-rec-actions">
+                {header.recommendation.actions.map((text, index) => (
+                  <li key={`rec-action-${index}`}>{text}</li>
+                ))}
+              </ol>
+              {header.recommendation.hiddenActions > 0 && (
+                <p className="muted">
+                  {header.recommendation.hiddenActions} more in the Verdict panel below.
+                </p>
+              )}
+            </>
+          )}
         </aside>
       </div>
 
       <IntentPanel analysisId={analysisId} />
-      <VerdictV2Panel analysisId={analysisId} />
+      <VerdictV2Panel analysisId={analysisId} onVerdict={setV2} />
 
       <div id="impact" style={{ marginTop: "24px", display: "grid", gap: "20px" }}>
         <BlastRadiusVisualizerCard blast={blast} graph={graph} analysisId={analysisId} />
@@ -1487,14 +1554,8 @@ const GAP_FILE_LABELS: Record<string, string> = {
 };
 
 export function verdictPresentation(status?: string | null): { label: string; color: string } {
-  switch ((status ?? "").toLowerCase()) {
-    case "verified":
-      return { label: "Verified", color: "#64C89D" };
-    case "failed":
-      return { label: "Failed", color: "#F87171" };
-    default:
-      return { label: "Not verified (insufficient evidence)", color: "#FBBF24" };
-  }
+  const { label, tone } = v1Presentation(status);
+  return { label, color: toneColor(tone) };
 }
 
 function VerdictGapsCard({ confidence }: { confidence: ConfidenceReport | null }) {
@@ -1537,8 +1598,11 @@ function VerdictGapsCard({ confidence }: { confidence: ConfidenceReport | null }
 
 function ConfidenceEvidenceCard({
   confidence,
+  legacy = false,
 }: {
   confidence: ConfidenceReport | null;
+  /** A Verdict v2 result owns the verdict: this card is the v1 heuristic's evidence. */
+  legacy?: boolean;
 }) {
   return (
     <section className="card">
@@ -1546,11 +1610,11 @@ function ConfidenceEvidenceCard({
         <div>
           <h2>
             <Sparkles size={16} className="inline-icon" />
-            Confidence evidence
+            {legacy ? "Legacy v1 confidence evidence" : "Confidence evidence"}
           </h2>
           <p>
             {confidence
-              ? `Evidence behind the heuristic score of ${score(confidence)}/100`
+              ? `Evidence behind the ${legacy ? "legacy v1 " : ""}heuristic score of ${score(confidence)}/100`
               : "No confidence report is available yet"}
           </p>
         </div>
