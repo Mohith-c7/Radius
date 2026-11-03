@@ -584,6 +584,7 @@ class VerdictStageACollector:
             request = request_from_stage_a(
                 Path(command.repository_path), changeset, sym_items, crit_sym.items, edges_st
             )
+            mutation_started = time.monotonic()
             mutation_input = run.step(
                 "mutation",
                 lambda: prod.mutation(request),
@@ -591,6 +592,11 @@ class VerdictStageACollector:
                 timeout_s=self._limits.mutation_timeout_s,
                 blocking_timeout=False,
             )
+            # The mutation stage has its own wall clock (``mutation_timeout_s``). Its time
+            # must not eat the shared Stage A budget, or every later producer (assertions,
+            # relevance) times out, the blocking ``truncated`` marker is set and the whole
+            # verdict degrades whenever mutants actually ran (found on fixture 08).
+            run.started += time.monotonic() - mutation_started
             if mutation_input is None:
                 mutation_input = unmeasured_input("producer_failed")
             elif getattr(mutation_input, "status", "") != "measured":

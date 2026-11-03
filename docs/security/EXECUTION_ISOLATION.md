@@ -98,6 +98,43 @@ used. This change does not widen any container privilege and adds no socket moun
 with a socket is host-root-equivalent (see the residual risks below), so use it only on a
 dedicated host, ideally with the gVisor/Firecracker recommendation at the end of this page.
 
+### Measured: sandbox adapter versus local runner (2026-11-03)
+
+`scripts/mutation_sandbox_compare.py 08` ran fixture 08 (gold mode, one target symbol,
+23 generated and decided mutants) end to end twice with identical targets, budget and
+seed: through the dev-only `SubprocessLocalRunner` and through `SandboxMutantRunner` over
+`ContainerSandboxRunner` (image `radius-sandbox-test:latest` = `python:3.12-slim` + pytest,
+Docker Desktop 29.7.2 on Windows 11, own `radius-sbx-*` containers only, none left over).
+
+| | local runner | sandbox adapter |
+| --- | --- | --- |
+| Status | measured | measured |
+| Kill matrix (status and killers of each of the 23 mutants, baseline failed/flaky) | reference | **identical, 0 differences** (18 killed, 5 survived) |
+| Wall time for the whole measurement | 109.4 s | 116.9 s |
+| Resource use | not sampled | at most 85 % of one CPU and 25.1 MiB RSS, from only 4 `docker stats` samples (each call takes about 2 s, so short runs are under-sampled); limits were the defaults 1 CPU, 1 GiB, 256 pids |
+
+About 31 pytest invocations were made per runner (2 baseline, 1 control, 23 mutants, 5
+survivor reruns), so roughly 3.5 s (local) and 3.8 s (container) per invocation on a loaded
+machine; the container start was therefore not the dominant cost here. One sample on one
+fixture; no generalisation to Linux hosts. No adapter defect was found: the command line,
+the Windows bind-mount paths, the JUnit path (`/results/junit.xml`, key `0/junit.xml`) and
+the per-run timeout all worked. A real timeout (a test sleeping 60 s, mutant timeout 4 s)
+returned `timeout` after 8.0 s and left no container. The defect this exercise did find is
+not in the adapter but in the Stage A budget (see `MUTATION_WIRED.md`).
+
+**Can the default compose worker run mutation safely?** No. Running mutants needs a
+container runtime reachable from the worker, that is a docker/podman CLI in the worker
+image and either `/var/run/docker.sock` mounted or `DOCKER_HOST` pointing at a daemon,
+plus `WORKER_TEST_EXECUTION_MODE=sandbox`, `RADIUS_FEATURE_MUTATION=true` and the image
+`WORKER_SANDBOX_IMAGE` present on that daemon. The default compose `worker` has none of
+these, so it reports `mutation unmeasured (sandbox_disabled)`. We found no way to add them
+without widening privileges: mounting the socket (or a socket proxy that filters by API
+endpoint, which cannot inspect the bind mounts and privileges inside a `containers/create`
+body) lets whoever controls the worker start a privileged container with the host root
+mounted. The only options that do not widen the default worker are a separate runner host,
+a rootless podman socket for a dedicated user, or a Kubernetes Job, all operational
+choices, none implemented here. The default stays as it is.
+
 ## Findings: what the in-process path exposes
 
 Investigated on 2026-11-01 (Linux, worker running as uid 0 in the dev container).
