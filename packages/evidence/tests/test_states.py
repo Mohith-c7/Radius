@@ -116,7 +116,8 @@ def test_row2_lists_all_failing_ids_sorted() -> None:
             row("m", status="gated:outcome_error"),
         ]
     )
-    assert res.reasons[0].ref == "m,z"
+    assert res.reasons[0].ref == "m"
+    assert res.reasons[0].refs == ("m", "z")  # B-01: a tuple, never a comma-joined string
 
 
 def test_row2_failure_beats_non_functional() -> None:

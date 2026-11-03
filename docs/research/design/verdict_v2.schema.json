@@ -267,6 +267,13 @@
                     "string",
                     "null"
                   ]
+                },
+                "refs": {
+                  "type": "array",
+                  "description": "B-01: every reference (one id per element) when a reason concerns several, e.g. all failing evidence ids; absent for a single reference.",
+                  "items": {
+                    "type": "string"
+                  }
                 }
               }
             }
@@ -571,6 +578,10 @@
                 "type": "string"
               }
             }
+          },
+          "confirmed_by": {
+            "type": "string",
+            "description": "B-07 (optional): unverified label of the actor who confirmed or edited the criterion; may carry a suffix when the confirmation was not counted (self-confirmation by the PR author). UNTRUSTED."
           }
         }
       }
@@ -1090,6 +1101,61 @@
         },
         "baseline_flaky": {
           "type": "integer"
+        }
+      }
+    },
+    "degraded": {
+      "type": "array",
+      "description": "B-20 (optional): analysis degradation markers (blocking ones such as truncated, unsupported_language:<lang>, unanalyzed_files:<n>, tamper_unanalyzed:<what>, unconfirmed_inferred_intent, policy_*; non-blocking ones such as adapter_dropped:<what>).",
+      "items": {
+        "type": "string"
+      }
+    },
+    "suggested_tests": {
+      "type": "array",
+      "description": "DEC-034 (optional): LLM-proposed test snippets. Never run, never evidence (executed and evidence are always false).",
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "required": [
+          "criterion_id",
+          "test_code",
+          "provenance",
+          "executed",
+          "evidence"
+        ],
+        "properties": {
+          "criterion_id": {
+            "type": "string"
+          },
+          "test_code": {
+            "type": "string",
+            "description": "UNTRUSTED. Render as text only."
+          },
+          "a_static": {
+            "type": "number"
+          },
+          "imports": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "model": {
+            "type": "string"
+          },
+          "provenance": {
+            "const": "llm_proposed"
+          },
+          "executed": {
+            "const": false
+          },
+          "evidence": {
+            "const": false
+          }
         }
       }
     }

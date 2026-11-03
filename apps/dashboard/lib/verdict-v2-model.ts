@@ -132,6 +132,8 @@ export type Criterion = {
   /** Contract 5 (optional): "" when the mutation flag was off. */
   evidence_basis: string;
   mutation: CriterionMutation | null;
+  /** B-07 (optional): unverified label of who confirmed or edited the criterion. UNTRUSTED text. */
+  confirmed_by?: string;
 };
 
 export type TamperFinding = {
@@ -225,6 +227,8 @@ export type VerdictV2 = {
   policy: PolicyView | null;
   waivers: WaiversView | null;
   mutation: MutationRun | null;
+  /** B-20 (optional): analysis degradation markers (blocking ones make "verified" unreachable). */
+  degraded?: string[];
 };
 
 /** Contract 4 wording (alpha). All strings are text only. */
@@ -440,6 +444,7 @@ function parseCriterion(raw: unknown): Criterion | null {
     itemsTruncated: rawItems.length > MAX_ITEMS_PER_CRITERION,
     evidence_basis: str(raw.evidence_basis),
     mutation: parseCriterionMutation(raw.mutation),
+    confirmed_by: truncateText(str(raw.confirmed_by), 160),
   };
 }
 
@@ -744,6 +749,9 @@ export function parseVerdictV2(raw: unknown): ParseResult {
       policy: parsePolicy(raw.policy),
       waivers: parseWaivers(raw.waivers),
       mutation: parseMutationRun(raw.mutation),
+      degraded: strs(raw.degraded)
+        .slice(0, MAX_LIST)
+        .map((d) => truncateText(d, 120)),
     },
   };
 }

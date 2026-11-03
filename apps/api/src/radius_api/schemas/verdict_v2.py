@@ -42,6 +42,7 @@ class ReasonOut(_Out):
     detail: str
     rule_id: str | None = None
     ref: str | None = None
+    refs: list[str] = Field(default_factory=list, description="All references (B-01), one id each.")
 
 
 class SummaryOut(_Out):
@@ -170,6 +171,11 @@ class CriterionOut(_Out):
         default=None, description="Contract 5, optional: present when mutation was enabled."
     )
     mutation: CriterionMutationOut | None = None
+    confirmed_by: str | None = Field(
+        default=None,
+        description="Optional (B-07). Unverified label of the actor who confirmed or edited the "
+        "criterion; may carry a suffix when the confirmation was not counted. UNTRUSTED.",
+    )
 
 
 class TamperFindingOut(_Out):
@@ -320,6 +326,12 @@ class VerdictV2Out(_Out):
     )
     waivers: WaiversOut | None = Field(
         default=None, description="Present when the base branch has a .radius/waivers.yml."
+    )
+    degraded: list[str] = Field(
+        default_factory=list,
+        description="Optional (B-20): analysis degradation markers. The blocking ones "
+        "(truncated, unsupported_language:*, unanalyzed_files:*, tamper_unanalyzed:*, "
+        "unconfirmed_inferred_intent, policy_*) make verified unreachable.",
     )
     suggested_tests: list[SuggestedTestOut] = Field(
         default_factory=list,
