@@ -52,7 +52,13 @@ Loaders: `native` (a JSON file, or a directory of case files plus an optional `d
 
 ### Plugging in the real gold (IN-09)
 
-IN-09 owns the annotation format (`benchmarks/gold/`, `scripts/gold_*.py`). When it lands, write a small adapter that maps its files to the dict above and select it by import path (`module:function`; `scripts/` is on `sys.path` when the CLI is started as `python scripts/intent_eval.py`); nothing else changes:
+IN-09 owns the annotation format (`benchmarks/gold/`, `scripts/gold_*.py`). **An adapter now exists: `scripts/gold_to_eval.py`** (`adapt_dev`, `adapt_test`; one role per dataset, adjudicated explicit criteria only, refuses unfinished adjudication, tested on the synthetic fixture only):
+
+```bash
+python scripts/intent_eval.py run --config exp.json --gold benchmarks/gold/intent --adapter gold_to_eval:adapt_test
+```
+
+The sketch below shows the shape of an adapter for anyone who needs a different mapping (its field names are illustrative, not the IN-09 file format); select an adapter by import path (`module:function`; `scripts/` is on `sys.path` when the CLI is started as `python scripts/intent_eval.py`); nothing else changes:
 
 ```python
 # scripts/in09_adapter.py (example; any importable module works)

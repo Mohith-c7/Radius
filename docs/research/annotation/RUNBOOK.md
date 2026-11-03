@@ -103,6 +103,16 @@ python scripts/gold_annotate.py status --annotator alice
 
 The server listens only on 127.0.0.1 with a per-run token in the URL; stop it with Ctrl+C. It is blinded: it never reads other annotators' files or any Radius output. Keyboard shortcuts: press `?`. Files are saved after every change and resumed on restart.
 
+### 4.5b Second annotator without the repository (offline kit)
+
+```
+python scripts/gold_pack.py export --annotator bob --seed 20261102 --out kit-bob/ --first calib.txt
+# hand kit-bob/ to the annotator; they follow kit-bob/README.txt and docs/ANNOTATION_GUIDE.md
+python scripts/gold_pack.py import --kit kit-bob/
+```
+
+The kit holds the tool, schema, guidelines, a seeded annotator-specific `queue.txt` and the `sources.json` of the assigned PRs only (no other annotator's file, no Radius output, no candidate list). Export skips PRs the annotator has declared a conflict on. Import is all-or-nothing and re-validates against the repository's own sources (schema, spans, digests, tamper check, ownership of the file); it never overwrites without `--force`. Short practical guide for annotators and the adjudicator: `../datasets/ANNOTATION_GUIDE.md`. Tested on the synthetic fixture only.
+
 ### 4.6 Calibration, pilot gate
 
 ```
