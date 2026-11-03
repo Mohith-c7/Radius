@@ -522,3 +522,114 @@ Researcher or reviewer:
 
 Branch `feature/verdict-v2-honesty-author-trust` (DEC-030, `docs/security/VERDICT_V2_THREAT_MODEL.md`): the Check Run title carries "alpha - static evidence only - uncalibrated"; the Check Run is `neutral` for every verdict unless `RADIUS_VERDICT_V2_CHECK_CONCLUSIONS=strict` (`failure` only for R1a/R1b/R1c); `PROVEN` is shown as `SUPPORTED` and `verified` as "Supported by static evidence (alpha)", with a disclaimer on the first line of the comment; criteria and hints carry provenance tags and author-only `tests:` hints are capped at 0.7 (flag and reason `author_supplied_hint`). Not done: no calibration or held-out set (finding 3 stands), no per-criterion base-spec comparison, no third-party issue trust, no recorded confirming actor. The thresholds are still the ones fitted to the 8 fixtures.
 
+
+---
+
+## Entry 2026-11-03 (third): third independent review, one day left
+
+Reviewer stance: independent. Read `origin/develop` at `5ded2a0` (merge of PR #123) and the docs named in the request; the pull-based live-GitHub work was read from `origin/feature/pull-based-live-github` (3 commits ahead of develop, `LIVE_GITHUB_DEMO.md`, `scripts/live_check.py`; **not merged**). Owner question: "are we going in the correct direction?" with about one day left and a wish for a product that works end to end, beats market tools and has AI workflows that stand out.
+
+**What I ran:** `git fetch`, file reads, `git log`/`diff`, `grep`. I tried `scripts/verdict_v2_run.py --mode auto` and it failed on a missing `tree_sitter` module in this environment, so I did not reproduce any number. **Everything below about runtime behaviour is taken from the repository's own result documents (REPLAY_2026-11, FIXTURE_E2E, MUTATION_FIXTURES, EXTRACTION_SUMMARY_MODE, README status) and from the facts the owner's lead reported; I could not verify them independently.** No Docker, no browser, no real GitHub, no LLM call.
+
+### 1. Direction verdict, per axis
+
+| Axis | Verdict | Reason |
+| --- | --- | --- |
+| Engineering health (works, not just builds) | **On track, best axis** | Since entry 2 the project went from "unit tests on SQLite" to "real API + worker + PostgreSQL + fake GitHub smoke, all 8 fixtures through the real services (`docs/research/evaluation/FIXTURE_E2E.md`), Compose stack boot and a Playwright run in CI (`.github/workflows/stack.yml`, `smoke.yml`)". The one thing still faked is the thing the product is for: GitHub. The browser suite is a single spec (`e2e/tests/dashboard.spec.mjs`: sign-up, browse, sign-out/in); the buttons that matter for a demo (re-run, upload) are not covered. |
+| Product usefulness today | **Partly** | A maintainer of a real repo gets a comment that (a) needs a hand-made GitHub App and a local stack, (b) with default extraction finds **zero criteria on ordinary PR text** (replay: 0 of 29; opt-in summary mode: 12 of 29 PRs, 19 criteria, one-rater precision 63-84%), so the common outcome is `insufficient_evidence` ("no intent criteria were extracted") or `not_applicable`, (c) says "Awaiting CI test results" until someone uploads per-case JUnit, and a CI runner cannot reach a laptop API (section 5, risk 1). The tamper findings (deleted, skipped, weakened tests, hallucinated imports) are the one part a maintainer could value at once, but their false-positive rate on real code is only an eyeballed 3-of-7 failed verdicts on 29 own-repo PRs (REPLAY F3), partly patched and not re-measured. It would be read once, not trusted. |
+| Differentiation vs TestSprite / CodeRabbit / Qodo style tools | **Partly: the thesis is distinctive, the demonstrable part is thin** | Section 2. |
+| AI-workflow story | **Off track for the stated goal** | "LLM proposes, evidence disposes" is sound and honest, but the product has **no LLM workflow a user can see**. The verdict path has no LLM (by design). An Anthropic extractor exists in `packages/intent/src/radius_intent/infrastructure/llm/` and is constructed by the API (`apps/api/src/radius_api/dependencies.py`), off by default (`RADIUS_LLM_INTENT_ENABLED=false`). My grep of `apps/worker/src/radius_worker/intent_ingestion.py` found no use of it, so the PR path the live demo takes appears to use only the deterministic and summary extractors (inferred from grep, not run). The other LLM code is the legacy Gemini pruner, not on the pipeline. Competing tools lead with an AI that does something for you (reviews, writes tests); Radius's AI does nothing visible. |
+| Research validity | **Partly: honestly labelled, still unsupported** | Documents call themselves exploratory and make no research claim. But thresholds were fitted to 8 fixtures and checked on the same 8; in FIXTURE_E2E the gold links are fed as `.radius/intent.yml` hints, so "7/8 match" tests code against spec, not linking quality; mutation shows the shipped strength proxy does not track fault detection well (`MUTATION_FIXTURES.md`: `a_static` agrees with the label on 26 of 33 tests, `d_reach` 13 of 26, AUC of `d_mut` for strong-vs-rest 0.55, n tiny); no gold set beyond one annotator; no calibration. The `alpha-static` pre-registration amendment (D17, raised in entry 2) is not written as far as I can see. |
+| Honesty | **On track, with a few stale or generous labels** | Strongest property of the repo. README status and KNOWN_LIMITATIONS are specific. Exceptions in section 4. |
+
+### 2. Differentiation: demonstrable in 5 minutes vs only claimed
+
+Competitor facts are from general knowledge and the repo's own market notes, unverified here: I did not install or test CodeRabbit, Qodo or TestSprite. As I understand them, CodeRabbit-style bots comment on the diff with an LLM, Qodo generates tests and reviews, TestSprite-style tools generate and run tests against an app. I know of none that gives a per-criterion "is the stated intent backed by trustworthy evidence" verdict, but `docs/research/PRODUCT_AND_GTM.md` itself lists AgentProof, ScopeProof, Verik and SlopGate as overlapping.
+
+| Thing | Demonstrable now (rehearsed, recorded) | Only claimed |
+| --- | --- | --- |
+| Verdict that abstains instead of passing when evidence is missing; failures first | yes | |
+| Tamper detection on a PR that deletes or skips a test (fixture 04: `failed` by R1c before any CI result) | yes, the strongest 60-second moment | low false-positive rate on real code |
+| Per-criterion table (state, support x/0.50, linked tests, "what to do next"), one comment edited in place after CI upload or confirm | yes against the fake GitHub; **never seen on a real GitHub page** | that the table is right on a real PR |
+| Human confirm of a criterion recomputes the verdict | yes (Chrome, per README) | |
+| Fixture ladder: strong tests `Supported`, weak tests `Not verified`, tampered `Failed` | yes, **with gold hints** | that it happens on unseen PRs without hints |
+| "Evidence strength" (pitch differentiators 1 and 2) | static assertion shape only; mutation is a prototype (about 6 minutes for 8 tiny fixtures), not wired | mutation-weighted strength, calibration, process verification, manager layer |
+| Self-hostable, deterministic, no LLM in the verdict | yes | |
+
+Plain reading: what exists is "a deterministic, honest PR gate that explains itself and catches test tampering". That is a coherent governance story with no AI in it. An audience comparing against tools that write tests or review code will ask "what did it do for me?", and today the answer is "it declined to say verified".
+
+### 3. AI-workflow story: where LLMs are, where they should be, smallest high-impact addition
+
+Today: nowhere visible. The expensive guard rails exist (egress policy, 98-case prompt-injection corpus against stub models, `llm_guard`, token caps, provenance `llm_proposed`, DEC-032 rule that proposed criteria block `verified` until a human confirms). The feature does not.
+
+Where an LLM adds the most, consistent with "LLM proposes, evidence disposes":
+
+1. **Intent clarification / criterion drafting.** Extraction recall of 0 on ordinary PRs is the largest hole. An LLM reading title, body, linked issue and diff proposes 2-5 testable criteria, shown as `llm_proposed`, unconfirmed, blocking `verified`. Provenance, caps and the confirm UI already exist.
+2. **Test-gap suggestions.** For each `unevidenced` or `weak` criterion the comment already says what is missing; add "Suggested test (not run, review before use)".
+3. **Deterministic gate on the suggestion.** Parse it with `ast`, run the existing assertion extractor (`radius_testing.assertions`) and strength rating on it, require that it references the changed symbol and has a non-trivial assertion, mark it "proposed, not evidence", never feed the verdict. This is the honest version of "AI writes tests", and it uses the product's own machinery as the checker (a generated test that asserts nothing is rejected), which is something the competitors do not obviously do.
+
+**Smallest high-impact addition (about 4-5 hours): item 1 wired into worker ingestion behind the existing flags, plus item 2 as a text-only block for unevidenced criteria guarded by item 3.** No LLM output may change a verdict state. If only one fits, do item 1: it makes every other demo non-empty. Cost, latency and quality are unmeasured; measure on the 29-PR replay set and label it one rater, exploratory, before claiming anything.
+
+### 4. Overclaims and stale text, with quotes (as of `5ded2a0`)
+
+1. `README.md`, capability table: **"GitHub App: check run, PR comment | beta"**, while the same README says "Anything against real GitHub ... Only a fake GitHub has been exercised." By the README's own definition ("beta = works, covered by tests") that is generous; it should read experimental or "alpha, never run live" until `live_check.py` has passed against GitHub.
+2. `README.md`: **"Dashboard (graph, test hub, report ingestion) | beta | Next.js. No browser end-to-end or accessibility audit yet."** and `docs/KNOWN_LIMITATIONS.md` section 2: **"Dashboard has no browser e2e or accessibility CI."** Stale the other way: PR #121 added a CI Playwright run (`e2e/`, `.github/workflows/stack.yml`). Say "one browser spec (sign-up and browse); upload and re-run buttons untested".
+3. `README.md`, intent row: **"Intent layer (M1) | beta | Criteria extraction (deterministic; optional guarded LLM, off by default) ..."**. The README does not say extraction finds nothing on ordinary PR text; that is only in KNOWN_LIMITATIONS section 1. Put "0 of 29 own-repo PRs" next to the row.
+4. `README.md` Verified list: "The end-to-end smoke test ... passes". True, but `docs/research/evaluation/FIXTURE_E2E.md` shows the fixtures run with gold links given as hints; "7/8 match" is not accuracy. The doc says so; repeat the caveat wherever the number is quoted.
+5. `docs/research/evaluation/REPLAY_2026-11.md` sections 2-3 report `verified 11 of 29` and `failed 7`; its section 9 says causes were fixed and "The replay numbers in section 2 were not recomputed." The headline table describes pre-fix behaviour.
+6. Tamper severities remain "assumed" (entry 2, 4.1.6). README and `docs/verdict-v2.md` present tamper rules as deciding `failed`; REPLAY F3 judged 3 of 7 such decisions wrong; F-T4, F-T5 and the T010/T017 severity question are open. A live `failed` on a good PR is the most damaging possible demo outcome.
+7. `docs/operations/LIVE_GITHUB_DEMO.md` (unmerged) is honest ("Status: unverified against real GitHub"), but its section 7 "What you should see" is written from the fake. Do not hand it out as a record of real behaviour.
+8. Carried over from entry 2 and re-checked at `5ded2a0`: root `Radius_Capstone_Project_Diary_FALL_2026.docx` and `docs/capstone/` still present; `SECURITY.md` line 13 still `security@<owner-configures-domain>`; `pyproject.toml` line 32 still lists `google-genai`; the `CHANGELOG.md` flaky wording is unchanged. RELEASE_CHECKLIST files the first two as OWNER no-go items, which is the right place.
+
+### 5. Biggest risks of a failed live demo with real GitHub, and de-risking
+
+Inferred from docs and code; none was exercised against `api.github.com`.
+
+| # | Risk | Why | De-risk |
+| --- | --- | --- | --- |
+| 0 | The pull-based path (PR #122) has never touched real GitHub and is **not merged**. | `LIVE_GITHUB_DEMO.md` status line; real JSON shapes, permission acceptance, JWT and clock skew, installation discovery are unproven. | Merge #122 first (note the branch merged develop at `4277562`, not `5ded2a0`; re-check). Run `python scripts/live_check.py` with a throwaway App and repo tonight; it is read-only and prints PASS/WARN/FAIL. Then run connect, analyze, comment, Check Run once for real, on the demo machine and network. |
+| 1 | CI results cannot reach the API. | No public URL and no tunnels; a GitHub Actions runner cannot call `localhost:8000`. Without per-case results the comment stays "Awaiting CI test results" (R2p). | Upload from the laptop: pytest with JUnit locally, `scripts/radius_ci.py` to the local API, bound to the PR head SHA. Rehearse; say so in the demo. |
+| 2 | Empty or anti-climactic first comment. | Default extraction returns zero criteria on ordinary text; the demo page itself expects `insufficient evidence`. | Demo PR bodies with an `Acceptance criteria` section, or `RADIUS_INTENT_EXTRACTION_MODE=summary`; `RADIUS_FEATURE_INTENT_INGESTION=true`; `RADIUS_FEATURE_VERDICT_V2=on` on **both** api and worker (use the `exec` checks in demo step 4). |
+| 3 | A false `failed` from a tamper rule on a good PR in front of an audience. | REPLAY F3; assumed severities. | Only scripted PRs whose real-GitHub result you have already seen; keep the tamper PR deliberately tampered; do not improvise on "our real PR". |
+| 4 | Latency and degraded runs. | REPLAY: median 20 s, p95 68 s, max 103 s per PR on Windows; Stage A budgets 60/120 s; same PR gave different tamper findings under load (F4); low memory stopped a replay run. | Small demo repo, memory headroom, a warm pre-run, and the live step being a re-run or confirm that edits in place. |
+| 5 | Nothing triggers on push. | Pull flow analyzes only when `analyze` or `sync-pull-requests` is called (demo page section 9). | Show an explicit sync step, or build the poller (action 7). |
+| 6 | Markdown and links on real GitHub. | Escaping tested on strings only; Check Run link goes to `localhost:3000`. | Look at the real comment once; keep the dashboard tab beside the PR; set `DASHBOARD_BASE_URL` if showing another machine. |
+| 7 | Credential handling. | Key quoting (`\n` on one line), key inside the checkout, variables missing in one container. | `live_check.py --env-line`; `.pem` outside the repo; never screen-share `.env`. |
+| 8 | Windows drift. | CI is Linux; several issues so far were environment-specific. | Rehearse on the demo OS; keep a screen recording of one full successful run and screenshots of the real comment as fallback. |
+
+### 6. Next 8-10 hours, ranked by (impact on demo or real use) / effort
+
+Items 1-3 are required, 4-6 are the differentiation work, the rest only after those are green. Hours are my estimates, not measurements. One small PR or commit each.
+
+1. **Merge PR #122 and run the real-GitHub loop once, tonight (1.5-2 h).** Files: `scripts/live_check.py`, `docs/operations/LIVE_GITHUB_DEMO.md`, `packages/github/src/radius_github/client.py`. Done when a real PR shows one comment and one Check Run and a second analyze or CI upload edits them in place. Fix only what differed from the fake. If this fails the rest of the plan changes.
+2. **Scripted demo repo with 3 PRs, run live (2 h).** Fixtures 01 (strong tests), 02 or 03 (weak tests) and 04 (deleted or skipped test) as real branches and PRs on the throwaway repo, PR bodies with an `Acceptance criteria` section, `.radius/intent.yml` only where needed. Add a script or doc section that creates them (`scripts/`, `docs/operations/LIVE_GITHUB_DEMO.md`). Capture screenshots of the real comments. This is the demo.
+3. **Local CI upload in the demo (45 min).** `scripts/radius_ci.py` against the local API with the PR head SHA, one command per PR; verify R2p becomes a real verdict on GitHub.
+4. **LLM criterion drafting in worker ingestion (2-2.5 h).** Wire `LlmCriterionExtractor` into `apps/worker/src/radius_worker/intent_ingestion.py` behind `RADIUS_LLM_INTENT_ENABLED` and the egress policy; proposals `llm_proposed`, unconfirmed, capped, low weight. Measure on the 29 replay PRs with `scripts/intent_summary_eval.py`, criteria per PR and a one-rater precision, labelled exploratory. If worse than summary mode, say so.
+5. **"Suggested test (not run)" block for unevidenced criteria (2 h, after 4).** LLM draft, `ast` plus `radius_testing.assertions` gate (assertion present, references the changed symbol), rendered in `packages/github/src/radius_github/verdict_v2/markdown.py` with escaping and a size cap, never counted as evidence. If no key or budget, ship a deterministic template ("add a test that asserts X for symbol Y") and keep the LLM version behind the flag.
+6. **Dashboard connect, analyze and re-run buttons (1.5-2 h).** The demo page says "no connect or analyze button yet"; `apps/dashboard/lib/api.ts` already has `connectGitHubRepository` and `analyzePullRequest`. A demo driven by `curl` reads as a prototype. Put the buttons on `apps/dashboard/app/repositories`; add one Playwright assertion if cheap.
+7. **60-second PR poller (1-1.5 h).** Reuse the `sync-pull-requests` logic from #122 so a new commit updates the comment without a manual call (`apps/api` routes, `apps/worker/src/radius_worker/runner.py`). Off by default, on for the demo; respect the 100-PR cap and rate limits.
+8. **Re-run the replay with the fixed rules and correct REPLAY section 2 (45-60 min).** `scripts/verdict_v2_replay.py` on the cached metadata, dated addendum. Tells you whether tamper false positives still decide verdicts on real PRs before you show one.
+9. **Docs truth pass for section 4 items 1-3 and 5 (30-45 min).** `README.md`, `docs/KNOWN_LIMITATIONS.md`, `docs/RELEASE_CHECKLIST.md`.
+10. **Rehearsal, fallback recording, one-page demo script (1-1.5 h).** Time every step on the demo machine; record one full run; keep three screenshots; open with "alpha, static evidence, uncalibrated, first live GitHub run this week".
+
+**STOP / do not start today.**
+
+- All hardening, scanners, Dependabot and community-health work.
+- Wiring mutation into the worker (about 6 minutes for 8 tiny fixtures; `d_mut` and `a_static` disagree, which needs analysis, not integration). It may appear only as a clearly labelled offline script result.
+- Tuning thresholds or adding linkers, relevance rules or states; each knob fits more to 8 fixtures.
+- Calibration, process verification, triage, manager layer, CLI/MCP, non-Python evidence, SSO, Helm, pre-registration freeze.
+- More design or evaluation write-ups that are not a by-product of items 4 and 8.
+- Making v2 the default, or presenting `Supported` as `Verified`.
+- Claims about competitors you have not run.
+
+### 7. Are we going in the correct direction?
+
+Yes on engineering and honesty; **partly** on product; **no** on "AI workflows that stand out" as of today. The architecture (deterministic verdict, evidence-gated, LLM only proposes) is the right bet, and the latest work (stack in CI, e2e, the vacuous-verified fix, summary mode, pull-based path) is aimed at "works end to end". What is missing is not more verification machinery but (a) one real GitHub run, (b) a non-empty first comment on an ordinary PR, and (c) one visible LLM-assisted workflow whose output is checked by the deterministic machinery. If only three things happen in the next day: items 1-3, then 4.
+
+### 8. Not verified by me
+
+- Every behaviour claimed in the README status section and in the evaluation notes (taken as reported).
+- PR #122 beyond its docs and file list; whether it merges cleanly onto `5ded2a0`.
+- Any property of CodeRabbit, Qodo or TestSprite beyond general knowledge.
+- Whether the LLM extractor is reachable from the worker by a path I did not grep; LLM cost, quality and key availability.
+- Dashboard behaviour, Playwright results, CI run states.
