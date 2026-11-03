@@ -78,6 +78,21 @@ updates:
         patterns: ["*"]
         update-types: [minor, patch]
 
+  - package-ecosystem: npm # browser e2e tests (Playwright), own package-lock.json
+    directory: /e2e
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: "build(deps-dev)"
+    groups:
+      e2e-minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
   - package-ecosystem: docker
     directories:
       - /apps/api

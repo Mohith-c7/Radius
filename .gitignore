@@ -67,3 +67,4 @@ benchmarks/gold/intent/conflicts.json
 
 # IN-10 harness output (a SYNTHETIC example report is committed under docs/research/evaluation/)
 benchmarks/results/intent/
+!e2e/package-lock.json
