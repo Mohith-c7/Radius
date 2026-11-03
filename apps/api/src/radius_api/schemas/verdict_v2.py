@@ -42,6 +42,7 @@ class ReasonOut(_Out):
     detail: str
     rule_id: str | None = None
     ref: str | None = None
+    refs: list[str] = Field(default_factory=list, description="All references (B-01), one id each.")
 
 
 class SummaryOut(_Out):
@@ -108,6 +109,14 @@ class SurvivorOut(_Out):
     operator: str
 
 
+class LinkGapOut(_Out):
+    mutant_id: str
+    path: str = Field(description="UNTRUSTED. Render as text only.")
+    line: int
+    operator: str
+    tests: list[str] = Field(default_factory=list, description="UNTRUSTED. Render as text only.")
+
+
 class CriterionMutationOut(_Out):
     """Contract 5 (optional): what mutation measured for this criterion. Not a proof."""
 
@@ -125,6 +134,14 @@ class CriterionMutationOut(_Out):
     d_reach: float | None = Field(default=None, description="Not computed in this slice.")
     d_reach_reason: str = ""
     reason: str = ""
+    link_gaps: list[LinkGapOut] = Field(
+        default_factory=list,
+        description="Optional (DEC-036, stage 2): mutants killed only by tests not linked to the "
+        "criterion. Left out of n_mutants; the unlinked tests are not evidence.",
+    )
+    link_gap_tests: list[str] = Field(
+        default_factory=list, description="UNTRUSTED. Render as text only."
+    )
 
 
 class MutationRunOut(_Out):
@@ -145,6 +162,11 @@ class MutationRunOut(_Out):
     ladder: list[str] = Field(default_factory=list)
     baseline_failed: int = 0
     baseline_flaky: int = 0
+    stage2: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional (DEC-036): stage 2 summary (wider tests for survivors); "
+        "killed_outside_linked is the number of link-gap mutants.",
+    )
 
 
 class CriterionOut(_Out):
@@ -170,6 +192,11 @@ class CriterionOut(_Out):
         default=None, description="Contract 5, optional: present when mutation was enabled."
     )
     mutation: CriterionMutationOut | None = None
+    confirmed_by: str | None = Field(
+        default=None,
+        description="Optional (B-07). Unverified label of the actor who confirmed or edited the "
+        "criterion; may carry a suffix when the confirmation was not counted. UNTRUSTED.",
+    )
 
 
 class TamperFindingOut(_Out):
@@ -320,6 +347,12 @@ class VerdictV2Out(_Out):
     )
     waivers: WaiversOut | None = Field(
         default=None, description="Present when the base branch has a .radius/waivers.yml."
+    )
+    degraded: list[str] = Field(
+        default_factory=list,
+        description="Optional (B-20): analysis degradation markers. The blocking ones "
+        "(truncated, unsupported_language:*, unanalyzed_files:*, tamper_unanalyzed:*, "
+        "unconfirmed_inferred_intent, policy_*) make verified unreachable.",
     )
     suggested_tests: list[SuggestedTestOut] = Field(
         default_factory=list,

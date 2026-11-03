@@ -316,6 +316,115 @@ def unsupported_languages(symbols: Iterable[SymbolInput]) -> tuple[str, ...]:
     return tuple(f"unsupported_language:{lang}" for lang in sorted(langs))
 
 
+def _tamper_covered(path: str) -> bool:
+    """True for CI workflows, dependency manifests and build/test configuration.
+
+    Those are analysed by the tamper catalog (config weakening, dependencies), not by LK-01.
+    Dockerfiles, shell scripts, SQL, Go, Terraform, other YAML ... are not."""
+
+    try:
+        from radius_analysis.tamper.classify import Role, classify_path
+    except ImportError:  # pragma: no cover
+        return False
+    return bool(set(classify_path(path)) & {Role.MANIFEST, Role.CI_WORKFLOW, Role.BUILD_CONFIG})
+
+
+UNANALYZED_FILES_PREFIX = "unanalyzed_files:"
+TAMPER_UNANALYZED_PREFIX = "tamper_unanalyzed:"
+
+
+def unanalyzed_file_markers(changeset: Any, symbols: Iterable[SymbolInput] = ()) -> tuple[str, ...]:
+    """Blocking markers for changed files that are neither provably inert nor analysable (B-02).
+
+    A file is analysable when LK-01 produced symbols for it. Files LK-01 handled at file
+    level (unknown language, binary, over budget, parse failure) or ignored (vendor, dist,
+    generated ...) are invisible to the symbol-based rules, so each one that is not on the
+    inert allowlist (``rules.is_inert_path``) yields ``unanalyzed_files:<n>`` and, for a
+    language other than Python, ``unsupported_language:<lang>``. File-level pseudo symbols
+    are counted as well when a changeset carries no file list.
+    """
+
+    from radius_confidence.verdict_v2.domain.rules import is_inert_path
+
+    covered = _tamper_covered
+
+    paths: set[str] = set()
+    langs: set[str] = set()
+    for f in getattr(changeset, "files", ()) or ():
+        level = _enum_value(getattr(f, "level", ""))
+        if level not in ("file", "ignored"):
+            continue
+        path = str(getattr(f, "path", "") or "")
+        old = getattr(f, "old_path", None)
+        if is_inert_path(path) and (not old or is_inert_path(str(old))):
+            continue
+        if covered(path) and (not old or covered(str(old)) or is_inert_path(str(old))):
+            continue  # the tamper catalog inspects it (its failure is B-03's marker)
+        paths.add(path or str(old))
+        lang = str(getattr(f, "language", "") or "unknown")
+        if level == "file" and lang != "python":
+            langs.add(lang)
+    for s in symbols:
+        if (
+            s.is_pseudo
+            and s.kind == "file"
+            and s.is_behavioral
+            and not is_inert_path(s.path)
+            and not covered(s.path)
+        ):
+            paths.add(s.path)
+            if s.language != "python":
+                langs.add(s.language or "unknown")
+    out = [f"unsupported_language:{lang}" for lang in sorted(langs)]
+    if paths:
+        out.append(f"{UNANALYZED_FILES_PREFIX}{len(paths)}")
+    return tuple(out)
+
+
+#: Engine notes that mean the tamper analysis did not look at everything.
+_TAMPER_INCOMPLETE_NOTES = (
+    "context_error",
+    "context_time_budget_exceeded",
+    "max_files_exceeded",
+    "base_snapshot_unavailable",
+    "rule_time_budget_exceeded",
+)
+
+
+def tamper_unanalyzed_markers(report: Any) -> tuple[str, ...]:
+    """Blocking ``tamper_unanalyzed:*`` markers when tamper analysis could not complete (B-03).
+
+    ``unanalyzable`` files of a test, CI, build, manifest or snapshot role and incomplete
+    engine notes (``context_error:*``, a time budget, the file cap, no base snapshot) must
+    never read as "no findings".
+    """
+
+    try:
+        from radius_analysis.tamper.classify import Role, classify_path
+    except ImportError:  # pragma: no cover - the analysis package is a worker dependency
+        classify_path = None  # type: ignore[assignment]
+        Role = None  # type: ignore[assignment]  # noqa: N806
+    relevant = (
+        {Role.TEST, Role.CONFTEST, Role.CI_WORKFLOW, Role.BUILD_CONFIG, Role.MANIFEST, Role.SNAPSHOT}
+        if Role is not None
+        else set()
+    )
+    files: set[str] = set()
+    for u in getattr(report, "unanalyzable", ()) or ():
+        path = str(getattr(u, "path", "") or "")
+        if classify_path is None or (set(classify_path(path)) & relevant):
+            files.add(path)
+    out: list[str] = []
+    if files:
+        out.append(f"{TAMPER_UNANALYZED_PREFIX}files={len(files)}")
+    notes = {str(n) for n in getattr(report, "notes", ()) or ()}
+    for note in sorted(notes):
+        head = note.split(":", 1)[0]
+        if head in _TAMPER_INCOMPLETE_NOTES:
+            out.append(f"{TAMPER_UNANALYZED_PREFIX}{head}")
+    return tuple(out)
+
+
 # ----------------------------------------------------------------- links
 
 

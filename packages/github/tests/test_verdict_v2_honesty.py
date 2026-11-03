@@ -299,3 +299,62 @@ def test_r2e_check_run_is_neutral_and_never_success_even_when_strict() -> None:
         view = view_of(make_payload("insufficient_evidence", "R2e", [], rules_inputs=inputs))
         assert md.check_conclusion(view) == "neutral"
         assert md.check_conclusion(view, mode="strict") == "neutral"
+
+
+# ------------------------------------------------- B-10: blocking mode and unusable policy
+
+_NA = {"not_applicable": True}
+_POLICY_OK_BLOCKING = {"status": "ok", "mode": "blocking", "errors": []}
+
+
+def _view(verdict, rule, *, pending=False, policy=None, inputs=None, status="ok", error=None):
+    payload = make_payload(
+        verdict, rule, [("c1", "proven", 0.6)], pending=pending, status=status, rules_inputs=inputs
+    )
+    if policy is not None:
+        payload["policy"] = policy
+    if error is not None:
+        payload["error"] = error
+    return view_of(payload)
+
+
+#: (view kwargs, expected conclusion): the full documented table for policy modes.
+B10_TABLE = [
+    # no policy file: unchanged advisory behaviour
+    (dict(verdict="verified", rule="R4"), "neutral"),
+    (dict(verdict="failed", rule="R1a"), "failure"),
+    # blocking, readable
+    (dict(verdict="verified", rule="R4", policy=_POLICY_OK_BLOCKING), "success"),
+    (dict(verdict="verified", rule="R4", pending=True, policy=_POLICY_OK_BLOCKING), "failure"),
+    (dict(verdict="insufficient_evidence", rule="R2b", policy=_POLICY_OK_BLOCKING), "failure"),
+    (dict(verdict="needs_review", rule="R3a", policy=_POLICY_OK_BLOCKING), "failure"),
+    (dict(verdict="failed", rule="R1b", policy=_POLICY_OK_BLOCKING), "failure"),
+    # docs-only / inert-only: nothing to verify, never red in blocking mode
+    (dict(verdict="insufficient_evidence", rule="R2e", inputs=_NA, policy=_POLICY_OK_BLOCKING), "neutral"),
+    # R2e because there are NO criteria (not inert-only) stays red
+    (dict(verdict="insufficient_evidence", rule="R2e", inputs={"not_applicable": False},
+          policy=_POLICY_OK_BLOCKING), "failure"),
+    # advisory policy never fails
+    (dict(verdict="failed", rule="R1a", policy={"status": "ok", "mode": "advisory"}), "neutral"),
+    # an unusable base policy is never a silent pass
+    (dict(verdict="verified", rule="R4", policy={"status": "unreadable", "mode": None}), "action_required"),
+    (dict(verdict="insufficient_evidence", rule="R2b", policy={"status": "too_large", "mode": None}),
+     "action_required"),
+    (dict(verdict="needs_review", rule="R3a", policy={"status": "ok", "mode": None, "errors": ["x"]}),
+     "action_required"),
+    (dict(verdict="failed", rule="R1a", policy={"status": "unreadable", "mode": None}), "failure"),
+    # an unavailable verdict: neutral, except a refresh that failed after one was published
+    (dict(verdict=None, rule="R4", status="error"), "neutral"),
+    (dict(verdict=None, rule="R4", status="error", error={"code": "recompute_failed:ValueError"}),
+     "action_required"),
+    (dict(verdict=None, rule="R4", status="error", error={"code": "stage_a_not_stored"}),
+     "action_required"),
+]
+
+
+@pytest.mark.parametrize(("kwargs", "expected"), B10_TABLE)
+def test_b10_conclusion_table(kwargs, expected) -> None:
+    assert md.check_conclusion(_view(**kwargs)) == expected
+    # the strict knob never lowers any of these outcomes below the documented ones
+    if expected in ("failure", "action_required"):
+        assert md.check_conclusion(_view(**kwargs), mode="strict") == expected

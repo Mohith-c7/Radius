@@ -1,0 +1,1 @@
+Suggested tests: the static gate is now an allowlist (no dynamic attribute access, `importorskip`, `pytest.main` or other imports), removed symbols are no longer offered, and LLM-proposed criteria must keep the negation and word order of their quote.

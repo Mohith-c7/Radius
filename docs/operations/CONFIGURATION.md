@@ -22,7 +22,7 @@ How to read it.
   (`RADIUS_LLM_*`) silently fall back to their default on a bad number.
 
 
-Variables documented: **134** (14 secret, 10 feature flags).
+Variables documented: **140** (14 secret, 10 feature flags).
 
 ## Core, API, GitHub and observability
 
@@ -61,9 +61,11 @@ Variables documented: **134** (14 secret, 10 feature flags).
 | `RADIUS_ENV` | RuntimeEnvironment | `development` | api, worker | no | - | Runtime environment: `development`, `test`, `uat` or `production`. Production tightens CORS validation (https origins only, no wildcard, no automatic localhost), ignores demo seeding, refuses the public session secret and `EMAIL_DELIVERY_MODE=log`. `docker-compose.yml` pins `production`; `docker-compose.dev.yml` (used by `make dev`) sets `development` for the api. |
 | `RADIUS_EVAL_ALLOW_REAL_LLM` | str | `unset` | evaluation CLI | no | - | Intent evaluation CLI only: must be `1`, together with `--allow-real-llm`, before a real provider is used. Tests and CI never set it. |
 | `RADIUS_EXTRAS` | str | `empty` | compose build | no | - | Compose build argument: extra Python dependency groups to install in the api and worker images (for example `llm`, `gemini`, `observability`). |
+| `RADIUS_GITHUB_DEV_SINGLE_TENANT` | bool \| None | `unset` | api | no | - | Single-tenant development mode for `POST /repositories/connect-github`: when true an organization with no GitHub installation may adopt the installation the App has on the requested repository. Default: true when `RADIUS_ENV=development`, false otherwise. Never enable it on a deployment where more than one organization uses the App: any caller could then attach another customer's installation. |
 | `RADIUS_GITHUB_POLL_INTERVAL_SECONDS` | float | `0.0` | worker | no | - | Opt-in pull-based trigger (no webhook needed): every this many seconds (plus or minus 10 percent jitter) the worker lists the open, non-draft pull requests of connected repositories whose GitHub App installation it can reach and queues an analysis for every head commit that has none yet. 0 (default) = off. Values from 1 to 29 are raised to 30; negative = off. Needs GITHUB_APP_ID and a private key in the worker. |
 | `RADIUS_GITHUB_POLL_MAX_ANALYSES_PER_TICK` | int | `10` | worker | no | - | Upper bound of analyses one poll tick may queue; the rest wait for the next tick. |
 | `RADIUS_GITHUB_POLL_MAX_REPOSITORIES_PER_TICK` | int | `25` | worker | no | - | Upper bound of repositories one poll tick lists from GitHub (one API call each); repositories take turns so none starves. |
+| `RADIUS_GIT_ALLOWED_HOSTS` | str | `github.com` | api, worker | no | - | Comma separated hosts a repository clone URL may name (https only, `https://<host>/<owner>/<repo>[.git]`). Default `github.com`; set your GitHub Enterprise Server host to use it instead. Clone URLs on any other host are refused at the API and again by the worker, and the GitHub installation token is never sent to a host that is not listed. |
 | `RADIUS_HSTS_ENABLED` | bool | `false` | api | no | - | Send Strict-Transport-Security. Enable only when served over TLS. |
 | `RADIUS_HSTS_MAX_AGE` | int | `31536000` | api | no | - | `max-age` in seconds of the Strict-Transport-Security header when HSTS is enabled. |
 | `RADIUS_INTENT_ALLOW_CROSS_REPO` | bool | `false` | worker | no | - | Fetch issues named by closing references in OTHER repositories (owner/repo#n, issue URLs). Off by default: the installation token can read every repository of the installation, so honoring a link written by a PR author would expose that repository's issue text. Skipped links are recorded as absent (cross_repo_disabled). |
@@ -74,9 +76,13 @@ Variables documented: **134** (14 secret, 10 feature flags).
 | `RADIUS_LOG_LEVEL` | LogLevel | `INFO` | api, worker | no | - | Structured log level: DEBUG, INFO, WARNING, ERROR or CRITICAL. |
 | `RADIUS_MAX_BODY_BYTES` | int | `1048576` | api | no | - | Default request body cap in bytes; over it the API answers 413. |
 | `RADIUS_METRICS_ENABLED` | bool | `false` | api, worker | no | - | Expose Prometheus metrics (`/metrics` on the API, plus the worker port). Off by default. |
+| `RADIUS_METRICS_TOKEN` | str | `empty` | api, worker | no | - | Bearer token required to read the API `/metrics` endpoint. When unset, `/metrics` is served without authentication in development/test and is disabled (404) when `RADIUS_ENV` is uat or production. |
 | `RADIUS_MUTATION_ALLOW_LOCAL` | bool | `unset` | library | no | - | Dev/tests only: allows the mutation prototype's local subprocess runner, which executes code on the host and is unsafe for untrusted repositories. Never set in production. |
 | `RADIUS_MUTATION_MAX_MUTANTS` | int | `50` | worker | no | - | Mutation evidence: hard cap on mutants run per analysis (seeded, stratified sample when more exist). Each mutant costs about one sandbox container run. |
 | `RADIUS_MUTATION_MUTANT_TIMEOUT_SECONDS` | float | `60.0` | worker | no | - | Mutation evidence: upper bound of the per-mutant sandbox timeout (the effective timeout is 3x the median baseline run, clamped to 5-120 s and to this value). A timed-out mutant is excluded from the detection score. |
+| `RADIUS_MUTATION_STAGE2` | bool | `false` | worker | no | - | Mutation evidence stage 2 (default OFF; only used when RADIUS_FEATURE_MUTATION is on). Each mutant that survives the linked tests is also run, in the same hardened sandbox and with early exit, against the repository's other tests that import the mutated module. A mutant killed only by such an unlinked test is reported as a link gap (the criterion's links are incomplete) instead of counting as weak evidence. Unlinked tests never add support. |
+| `RADIUS_MUTATION_STAGE2_MAX_TESTS` | int | `60` | worker | no | - | Mutation stage 2: maximum wider tests run against one surviving mutant (deterministic order: sorted test ids). Tests beyond the cap are not tried. |
+| `RADIUS_MUTATION_STAGE2_WALL_CLOCK_SECONDS` | float | `300.0` | worker | no | - | Mutation stage 2: wall-clock budget for the whole stage (separate from the stage 1 budget; added latency). Survivors not reached keep their stage 1 result and are counted as skipped_for_budget. |
 | `RADIUS_MUTATION_WALL_CLOCK_SECONDS` | float | `600.0` | worker | no | - | Mutation evidence: wall-clock budget for the whole mutation stage of one analysis. The stage runs inside the analysis job, so this is added latency. When it is too small for the sampled mutants the stage degrades (fewer mutants, finally 'unmeasured, static cap'). |
 | `RADIUS_OTEL_SERVICE_NAME` | str | `radius` | api, worker | no | - | OpenTelemetry service name. |
 | `RADIUS_OTLP_ENDPOINT` | str | `empty` | api, worker | no | - | OTLP/HTTP traces endpoint, e.g. ``http://localhost:4318/v1/traces``. Empty means spans are created but not exported anywhere. |
@@ -93,7 +99,7 @@ Variables documented: **134** (14 secret, 10 feature flags).
 | `RADIUS_TRUSTED_PROXIES` | str | `empty` | api | no | - | Comma separated IPs/CIDRs of reverse proxies whose X-Forwarded-For is trusted. |
 | `RADIUS_UPLOAD_MAX_BODY_BYTES` | int | `20971520` | api | no | - | Body cap in bytes for CI test-report uploads. |
 | `RADIUS_VERDICT_V2_CHECK_CONCLUSIONS` | str | `advisory` | worker | no | - | Check Run conclusion mapping for Verdict v2 (alpha). advisory (default): never success; verified, insufficient_evidence and needs_review are neutral, failed is failure only when decided by R1a/R1b/R1c (failing linked test, failing CI, high-severity tamper). strict: verified is success. |
-| `RADIUS_WEBHOOK_MAX_BODY_BYTES` | int | `26214400` | api | no | - | Body cap in bytes for GitHub webhook deliveries. |
+| `RADIUS_WEBHOOK_MAX_BODY_BYTES` | int | `5242880` | api | no | - | Body cap in bytes for GitHub webhook deliveries. |
 | `RADIUS_WORKER_METRICS_PORT` | int | `0` | api, worker | no | - | Port for the worker's Prometheus endpoint; ``0`` disables it. |
 | `SERVICE_NAME` | str | `radius-api` | api, worker | no | - | Service name used in logs. Defaults differ per service (`radius-api`, `radius-worker`); normally left alone. |
 | `SESSION_COOKIE_SECURE` | bool | `false` | api | no | - | Auth module: set the Secure flag on the session cookie. Set true behind TLS. |

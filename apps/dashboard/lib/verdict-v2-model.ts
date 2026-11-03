@@ -84,6 +84,9 @@ export type EvidenceItem = {
 
 export type MutationSurvivor = { mutant_id: string; path: string; line: number; operator: string };
 
+/** Optional (DEC-036, stage 2): a mutant killed only by tests not linked to the criterion. */
+export type LinkGap = { mutant_id: string; path: string; line: number; operator: string; tests: string[] };
+
 /** Contract 5 (optional): what mutation measured for one criterion. */
 export type CriterionMutation = {
   basis: string;
@@ -96,6 +99,9 @@ export type CriterionMutation = {
   survivors: MutationSurvivor[];
   survivorsTruncated: boolean;
   reason: string;
+  /** Optional (DEC-036): empty unless stage 2 found mutants killed only by unlinked tests. */
+  link_gaps: LinkGap[];
+  link_gap_tests: string[];
 };
 
 /** Contract 5 (optional): the mutation run of the analysis. */
@@ -132,6 +138,8 @@ export type Criterion = {
   /** Contract 5 (optional): "" when the mutation flag was off. */
   evidence_basis: string;
   mutation: CriterionMutation | null;
+  /** B-07 (optional): unverified label of who confirmed or edited the criterion. UNTRUSTED text. */
+  confirmed_by?: string;
 };
 
 export type TamperFinding = {
@@ -225,6 +233,8 @@ export type VerdictV2 = {
   policy: PolicyView | null;
   waivers: WaiversView | null;
   mutation: MutationRun | null;
+  /** B-20 (optional): analysis degradation markers (blocking ones make "verified" unreachable). */
+  degraded?: string[];
 };
 
 /** Contract 4 wording (alpha). All strings are text only. */
@@ -375,6 +385,17 @@ function parseCriterionMutation(raw: unknown): CriterionMutation | null {
       })),
     survivorsTruncated: survivors.length > MAX_SURVIVORS,
     reason: truncateText(str(raw.reason), 80),
+    link_gaps: arr(raw.link_gaps)
+      .slice(0, MAX_SURVIVORS)
+      .filter(isObject)
+      .map((g) => ({
+        mutant_id: truncateText(str(g.mutant_id), 40),
+        path: truncateText(str(g.path), 300),
+        line: Math.max(0, Math.trunc(num(g.line))),
+        operator: truncateText(str(g.operator), 16),
+        tests: strs(g.tests).slice(0, 10).map((t) => truncateText(t, 300)),
+      })),
+    link_gap_tests: strs(raw.link_gap_tests).slice(0, 10).map((t) => truncateText(t, 300)),
   };
 }
 
@@ -440,6 +461,7 @@ function parseCriterion(raw: unknown): Criterion | null {
     itemsTruncated: rawItems.length > MAX_ITEMS_PER_CRITERION,
     evidence_basis: str(raw.evidence_basis),
     mutation: parseCriterionMutation(raw.mutation),
+    confirmed_by: truncateText(str(raw.confirmed_by), 160),
   };
 }
 
@@ -744,6 +766,9 @@ export function parseVerdictV2(raw: unknown): ParseResult {
       policy: parsePolicy(raw.policy),
       waivers: parseWaivers(raw.waivers),
       mutation: parseMutationRun(raw.mutation),
+      degraded: strs(raw.degraded)
+        .slice(0, MAX_LIST)
+        .map((d) => truncateText(d, 120)),
     },
   };
 }
@@ -1110,6 +1135,23 @@ export function criterionBasisText(c: Pick<Criterion, "evidence_basis" | "mutati
 /** One line per mutant no linked test killed: "path:line, operator" (text only). */
 export function mutationGaps(c: Pick<Criterion, "mutation">): string[] {
   return (c.mutation?.survivors ?? []).map((s) => `${s.path}:${s.line}, operator ${s.operator}`);
+}
+
+/** Fixed next action for link gaps (DEC-036); never interpolates untrusted text. */
+export const LINK_GAP_ACTION =
+  "Link these tests to the criterion, or add them as `tests:` hints in .radius/intent.yml.";
+
+/**
+ * Stage 2 wording: "Link gaps: N mutants killed only by tests not linked to this criterion: ...".
+ * "" when there is none. The unlinked tests are not counted as evidence.
+ */
+export function linkGapText(c: Pick<Criterion, "mutation">): string {
+  const gaps = c.mutation?.link_gaps ?? [];
+  if (gaps.length === 0) return "";
+  const tests = c.mutation?.link_gap_tests ?? [];
+  const noun = gaps.length === 1 ? "mutant" : "mutants";
+  const names = tests.length > 0 ? tests.join(", ") : "(names not available)";
+  return `Link gaps: ${gaps.length} ${noun} killed only by tests not linked to this criterion: ${names}.`;
 }
 
 /** Run-level mutation note for the header area ("" when the flag was off or measured). */

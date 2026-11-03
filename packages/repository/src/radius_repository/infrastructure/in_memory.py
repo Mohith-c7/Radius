@@ -121,6 +121,14 @@ class InMemoryRepositoryStore:
 
         return self._pull_requests.get((repository_id, github_pr_number))
 
+    def get_pull_request_by_id(self, pull_request_id: UUID) -> PullRequest | None:
+        """Return one pull request by its Radius id."""
+
+        for pull_request in self._pull_requests.values():
+            if pull_request.id == pull_request_id:
+                return pull_request
+        return None
+
     def list_pull_requests(self, repository_id: UUID) -> list[PullRequest]:
         """Return all pull requests for a repository."""
 

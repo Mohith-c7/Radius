@@ -41,7 +41,7 @@ EXEMPT_PATHS = frozenset(
     {"/health", "/ready", "/api/v1/health", "/api/v1/ready", "/metrics"}
 )
 _AUTH_PREFIX = "/api/v1/auth/"
-_AUTH_UNLIMITED = frozenset({"/api/v1/auth/logout", "/api/v1/auth/refresh"})
+_AUTH_UNLIMITED = frozenset({"/api/v1/auth/logout"})
 _EXPENSIVE = re.compile(
     r"^/api/v1/(analyses|coverage|"
     r"analyses/[^/]+/(rerun|intent/rebuild|intent/sources|tests/results)|"

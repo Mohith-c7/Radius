@@ -181,9 +181,13 @@ def test_refresh_is_idempotent_and_a_no_op_without_changes(capped_stage_a) -> No
     current = [db(cid, "confirmed") for cid in _ids(capped_stage_a)]
     once = refresh_stage_a_intent(capped_stage_a, current)
     assert refresh_stage_a_intent(once, current) == once
-    # unknown ids and an empty list change nothing
+    # an empty list and unknown dropped ids change nothing
     assert refresh_stage_a_intent(capped_stage_a, []) == capped_stage_a
-    assert refresh_stage_a_intent(capped_stage_a, [db("nope", "confirmed")]) == capped_stage_a
+    assert refresh_stage_a_intent(capped_stage_a, [db("nope", "rejected")]) == capped_stage_a
+    # B-09: an unknown LIVE criterion is not scored, but no longer silently: it is marked
+    marked = refresh_stage_a_intent(capped_stage_a, [db("nope", "confirmed")])
+    assert marked.degraded == (*capped_stage_a.degraded, "intent_not_in_analysis:1")
+    assert replace(marked, degraded=capped_stage_a.degraded) == capped_stage_a
 
 
 def test_reopening_demotes_human_confirmed_provenance_to_the_capped_default() -> None:
@@ -321,9 +325,13 @@ class MemoryStore:
         self._first = stage_a
 
     def latest_stage_a(self, organization_id, analysis_id):  # noqa: ARG002
-        if not self.bundles:
-            return self._first
-        return StageAInput.from_dict(self.bundles[-1]["stage_a"])
+        for bundle in reversed(self.bundles):  # error rows carry no Stage A (like the SQL repo)
+            if bundle.get("stage_a"):
+                return StageAInput.from_dict(bundle["stage_a"])
+        return self._first
+
+    def latest_head(self, organization_id, analysis_id):  # noqa: ARG002
+        return SHA
 
     def save(self, organization_id, analysis_id, bundle):  # noqa: ARG002
         if self.bundles and self.bundles[-1]["inputs_digest"] == bundle["inputs_digest"]:
@@ -392,5 +400,115 @@ def test_recomputer_fails_loudly_when_the_intent_cannot_be_read() -> None:
 
     with pytest.raises(RuntimeError):
         rec.recompute(Broken(), org_id, analysis_id)
-    # nothing was stored: the previous revision stays and the outbox retries
-    assert store.bundles == []
+    # B-01/B-04: the failure is recorded as the newest revision so an older (possibly
+    # verified) verdict is not current any more; the outbox still retries
+    assert [b["status"] for b in store.bundles] == ["error"]
+    assert store.bundles[0]["verdict"] is None
+    assert store.bundles[0]["reason_code"].startswith("recompute_failed:")
+
+
+def test_recompute_failure_after_a_stored_verdict_replaces_it_with_an_error_row() -> None:
+    from radius_worker.verdict_v2 import scoring
+
+    factory, (analysis_id, org_id) = _sql_env()
+    _, (first, second) = _summary_criteria()
+    store = MemoryStore(replace(_inferred_stage_a((first, second)), head_sha=SHA))
+    rec = StageBRecomputer(store, VerdictV2Mode.ON, clock=lambda: NOW)
+    with factory() as session:
+        assert rec.recompute(session, org_id, analysis_id) is True
+    assert store.bundles[-1]["status"] == "ok"
+
+    original = scoring.compute_pipeline
+
+    def boom(*args, **kwargs):
+        raise ValueError("invariant")
+
+    scoring.compute_pipeline = boom
+    try:
+        with factory() as session, pytest.raises(ValueError):
+            rec.recompute(session, org_id, analysis_id)
+    finally:
+        scoring.compute_pipeline = original
+    assert store.bundles[-1]["status"] == "error"
+    assert store.bundles[-1]["reason_code"] == "recompute_failed:ValueError"
+    # and the next successful run replaces the error row again
+    with factory() as session:
+        assert rec.recompute(session, org_id, analysis_id) is True
+    assert store.bundles[-1]["status"] == "ok"
+
+
+# ------------------------------------------------------- B-07 separation of duties
+
+
+def test_b07_confirmation_by_someone_else_lifts_the_cap_and_records_who(capped_stage_a) -> None:
+    current = [db(cid, "confirmed") for cid in _ids(capped_stage_a)]
+    actors = {cid: "org:1234/reviewer-bob" for cid in _ids(capped_stage_a)}
+
+    refreshed = refresh_stage_a_intent(capped_stage_a, current, actors=actors, pr_author="alice")
+    payload = _score(refreshed)
+
+    assert payload["verdict"] == "verified"
+    assert {c["confirmed_by"] for c in payload["criteria"]} == {"reviewer-bob"}
+
+
+def test_b07_the_pr_author_confirming_their_own_criteria_does_not_lift_anything(
+    capped_stage_a,
+) -> None:
+    current = [db(cid, "confirmed") for cid in _ids(capped_stage_a)]
+    actors = {cid: "org:1234/Alice" for cid in _ids(capped_stage_a)}  # case-insensitive
+
+    refreshed = refresh_stage_a_intent(capped_stage_a, current, actors=actors, pr_author="alice")
+    payload = _score(refreshed)
+
+    assert payload["verdict"] == "insufficient_evidence"
+    assert payload["summary"]["author_hint_criteria"] == 2  # the cap stays
+    assert all(c["provenance"] != "human_confirmed" for c in payload["criteria"])
+    assert all("not counted" in c["confirmed_by"] for c in payload["criteria"])
+
+
+def test_b07_self_confirmation_keeps_the_unconfirmed_inferred_block() -> None:
+    sa = _inferred_stage_a(_summary_criteria()[1])
+    current = [db("C1", "confirmed", version="det-extract-summary-1")]
+    me = refresh_stage_a_intent(sa, current, actors={"C1": "org:1/me"}, pr_author="me")
+    assert MARKER in me.degraded
+    other = refresh_stage_a_intent(sa, current, actors={"C1": "org:1/you"}, pr_author="me")
+    assert MARKER not in other.degraded
+
+
+def test_b07_unknown_author_or_missing_label_cannot_be_compared_and_confirms_as_before(
+    capped_stage_a,
+) -> None:
+    current = [db(cid, "confirmed") for cid in _ids(capped_stage_a)]
+    for actors, author in (({}, "alice"), ({c: "org:1/alice" for c in _ids(capped_stage_a)}, None)):
+        refreshed = refresh_stage_a_intent(capped_stage_a, current, actors=actors, pr_author=author)
+        assert _score(refreshed)["verdict"] == "verified"  # documented residual risk
+
+
+def test_b07_policy_hook_can_be_replaced() -> None:
+    sa = _stage_a_with_hint(provenance="author_pr_body", hint_provenance="author_pr_body")
+    refreshed = refresh_stage_a_intent(
+        sa, [db("C1", "confirmed")], actors={"C1": "org:1/anyone"}, pr_author="x",
+        confirm_policy=lambda label, author: True,  # "nobody may confirm" (strict deployments)
+    )
+    assert refreshed.criteria[0].provenance == "author_pr_body"
+    assert refreshed.criteria[0].lifecycle == "proposed"
+
+
+def test_b09_a_criterion_added_after_the_analysis_blocks_verified_visibly(capped_stage_a) -> None:
+    from radius_confidence.verdict_v2.domain.rules import is_blocking_degraded
+
+    current = [db(cid, "confirmed") for cid in _ids(capped_stage_a)]
+    assert not any(
+        d.startswith("intent_not_in_analysis:")
+        for d in refresh_stage_a_intent(capped_stage_a, current).degraded
+    )
+    manual = db("manual-1", "confirmed", text="a human added this")
+    refreshed = refresh_stage_a_intent(capped_stage_a, [*current, manual])
+    assert "intent_not_in_analysis:1" in refreshed.degraded
+    assert is_blocking_degraded("intent_not_in_analysis:1")
+    assert _score(refreshed)["verdict"] == "insufficient_evidence"
+    # rejected criteria the analysis never saw do not count; the marker is not duplicated
+    again = refresh_stage_a_intent(refreshed, [*current, manual, db("gone", "rejected")])
+    assert [d for d in again.degraded if d.startswith("intent_not_in_analysis:")] == [
+        "intent_not_in_analysis:1"
+    ]

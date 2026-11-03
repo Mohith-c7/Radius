@@ -84,6 +84,7 @@ def build_criterion_verdict(
         items=support.items,
         best_link=_best_link(support.items),
         mutation=dict(mutation or {}),
+        confirmed_by=criterion.confirmed_by,
         provenance=criterion.provenance,
         hints=tuple(
             sorted(

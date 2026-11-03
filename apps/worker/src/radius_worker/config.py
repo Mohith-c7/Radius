@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Self
 
 from pydantic import Field, field_validator, model_validator
+from radius_repository.domain.clone_url import parse_allowed_hosts
 from radius_shared.database.session import DatabaseSettings
 from radius_shared.verdict_v2_flag import VerdictV2Mode, parse_verdict_v2_mode
 
@@ -123,6 +124,39 @@ class WorkerSettings(DatabaseSettings):
             "Mutation evidence: upper bound of the per-mutant sandbox timeout (the "
             "effective timeout is 3x the median baseline run, clamped to 5-120 s and to "
             "this value). A timed-out mutant is excluded from the detection score."
+        ),
+    )
+    mutation_stage2_enabled: bool = Field(
+        default=False,
+        alias="RADIUS_MUTATION_STAGE2",
+        description=(
+            "Mutation evidence stage 2 (default OFF; only used when RADIUS_FEATURE_MUTATION "
+            "is on). Each mutant that survives the linked tests is also run, in the same "
+            "hardened sandbox and with early exit, against the repository's other tests "
+            "that import the mutated module. A mutant killed only by such an unlinked test "
+            "is reported as a link gap (the criterion's links are incomplete) instead of "
+            "counting as weak evidence. Unlinked tests never add support."
+        ),
+    )
+    mutation_stage2_max_tests: int = Field(
+        default=60,
+        ge=1,
+        le=500,
+        alias="RADIUS_MUTATION_STAGE2_MAX_TESTS",
+        description=(
+            "Mutation stage 2: maximum wider tests run against one surviving mutant "
+            "(deterministic order: sorted test ids). Tests beyond the cap are not tried."
+        ),
+    )
+    mutation_stage2_wall_clock_seconds: float = Field(
+        default=300.0,
+        ge=10.0,
+        le=3600.0,
+        alias="RADIUS_MUTATION_STAGE2_WALL_CLOCK_SECONDS",
+        description=(
+            "Mutation stage 2: wall-clock budget for the whole stage (separate from the "
+            "stage 1 budget; added latency). Survivors not reached keep their stage 1 "
+            "result and are counted as skipped_for_budget."
         ),
     )
     tamper_rules_enabled: bool = Field(
@@ -259,6 +293,23 @@ class WorkerSettings(DatabaseSettings):
         if v is None or v == "" or v == 0 or v == "0":
             return None
         return int(v)
+
+    git_allowed_hosts: str = Field(
+        default="github.com",
+        alias="RADIUS_GIT_ALLOWED_HOSTS",
+        description=(
+            "Comma separated hosts the worker may clone from (https only). Default "
+            "`github.com`; set your GitHub Enterprise Server host to use it instead. "
+            "A stored clone URL on any other host is refused, and the installation "
+            "token is never sent to a host that is not listed."
+        ),
+    )
+
+    @field_validator("git_allowed_hosts")
+    @classmethod
+    def _valid_git_hosts(cls, value: str) -> str:
+        parse_allowed_hosts(value)
+        return value
 
     github_api_base_url: str = Field(
         default="https://api.github.com",

@@ -12,12 +12,18 @@ credentials). ``process_pending`` runs inside the worker poll loop:
 4. delete the request only if it was not re-requested meanwhile; on any error
    release it with exponential backoff (``attempts`` is capped).
 
+A bounded sweep (``reconcile_stale``, B-09) re-queues analyses whose newest CI upload is
+newer than their newest verdict and that have no queued request: the API swallows enqueue
+failures after the upload is committed, so without the sweep a transient database error
+would leave the verdict on "awaiting CI results" while CI is red.
+
 Flag ``off``: nothing is claimed. ``shadow``: recompute and store, never publish.
 """
 
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Protocol
@@ -37,6 +43,9 @@ LOGGER = logging.getLogger(__name__)
 
 MAX_ATTEMPTS = 5
 LEASE_SECONDS = 300.0
+RECONCILE_INTERVAL_SECONDS = 60.0
+RECONCILE_LIMIT = 20
+_last_reconcile = 0.0  # monotonic seconds; one sweep per interval per process
 
 
 class Recomputer(Protocol):
@@ -63,6 +72,41 @@ class PendingSummary:
     results: list[RequestResult] = field(default_factory=list)
 
 
+def reconcile_stale(
+    session_factory: sessionmaker[Session],
+    *,
+    now: datetime | None = None,
+    limit: int = RECONCILE_LIMIT,
+    grace_seconds: float = 300.0,
+) -> int:
+    """Queue a recompute for analyses with CI uploads newer than their verdict; never raises."""
+
+    try:
+        with session_factory() as session:
+            repo = SqlVerdictV2Repository(session)
+            stale = repo.stale_analyses(now=now, grace_seconds=grace_seconds, limit=limit)
+            for org, analysis in stale:
+                repo.enqueue_request(org, analysis, "ci_results", now=now)
+            session.commit()
+            return len(stale)
+    except Exception as exc:
+        LOGGER.warning(
+            "Verdict v2 reconcile failed: %s",
+            redact_secrets(exc),
+            extra={"outcome": "verdict_v2_reconcile_error"},
+        )
+        return 0
+
+
+def _maybe_reconcile(session_factory: sessionmaker[Session], now: datetime | None) -> None:
+    global _last_reconcile  # noqa: PLW0603
+    tick = time.monotonic()
+    if now is None and tick - _last_reconcile < RECONCILE_INTERVAL_SECONDS:
+        return
+    _last_reconcile = tick
+    reconcile_stale(session_factory, now=now)
+
+
 def process_pending(
     *,
     session_factory: sessionmaker[Session],
@@ -78,6 +122,7 @@ def process_pending(
     summary = PendingSummary()
     if settings.verdict_v2_mode == VerdictV2Mode.OFF:
         return summary
+    _maybe_reconcile(session_factory, now)
     for _ in range(max_requests):
         try:
             with session_factory() as session:

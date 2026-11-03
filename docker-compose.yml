@@ -60,6 +60,12 @@ services:
       STORAGE_BACKEND: sql
       DATABASE_URL: postgresql+psycopg://radius:radius@postgres:5432/radius
       API_KEYS: ${API_KEYS:-}
+      # Managed API keys (docs/security/API_KEYS.md). Without a pepper (>= 32 random
+      # characters) managed keys are disabled and only the deprecated API_KEYS work.
+      RADIUS_API_KEY_PEPPER: ${RADIUS_API_KEY_PEPPER:-}
+      RADIUS_GIT_ALLOWED_HOSTS: ${RADIUS_GIT_ALLOWED_HOSTS:-github.com}
+      RADIUS_GITHUB_DEV_SINGLE_TENANT: ${RADIUS_GITHUB_DEV_SINGLE_TENANT:-}
+      RADIUS_METRICS_TOKEN: ${RADIUS_METRICS_TOKEN:-}
       GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-}
       GITHUB_DEFAULT_ORGANIZATION_ID: ${GITHUB_DEFAULT_ORGANIZATION_ID:-}
       GITHUB_SINGLE_TENANT: ${GITHUB_SINGLE_TENANT:-false}
@@ -83,7 +89,7 @@ services:
       # Sign-in module (app.config.Settings). Without these the container would use
       # the public placeholder session secret from the code and could not send mail.
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required (>= 32 random characters). For local dev run `make env` or `python scripts/gen_dev_env.py`, then use `make dev`. See docs/operations/INSTALL.md}
-      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://127.0.0.1:3000}
       DEV_AUTO_VERIFY_EMAIL: ${DEV_AUTO_VERIFY_EMAIL:-}
       EMAIL_DELIVERY_MODE: ${EMAIL_DELIVERY_MODE:-smtp}
@@ -127,6 +133,7 @@ services:
       GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
       GITHUB_INSTALLATION_ID: ${GITHUB_INSTALLATION_ID:-}
       GITHUB_PUBLISH_RESULTS: ${GITHUB_PUBLISH_RESULTS:-true}
+      RADIUS_GIT_ALLOWED_HOSTS: ${RADIUS_GIT_ALLOWED_HOSTS:-github.com}
       RADIUS_GITHUB_POLL_INTERVAL_SECONDS: ${RADIUS_GITHUB_POLL_INTERVAL_SECONDS:-0}
       RADIUS_GITHUB_POLL_MAX_ANALYSES_PER_TICK: ${RADIUS_GITHUB_POLL_MAX_ANALYSES_PER_TICK:-10}
       RADIUS_GITHUB_POLL_MAX_REPOSITORIES_PER_TICK: ${RADIUS_GITHUB_POLL_MAX_REPOSITORIES_PER_TICK:-25}

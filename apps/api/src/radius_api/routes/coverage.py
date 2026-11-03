@@ -1,9 +1,12 @@
 """Coverage ingestion and retrieval API routes."""
 
 from typing import Any
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Request, status
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
+from radius_analysis.application import AnalysisApplicationService
 from radius_confidence.application import CoverageApplicationService
 from radius_confidence.dto.commands import (
     GetCoverageForAnalysisCommand,
@@ -12,9 +15,16 @@ from radius_confidence.dto.commands import (
     IngestCoverageCommand,
 )
 from radius_confidence.interfaces.store import CoverageStore
+from radius_repository.application import RepositoryApplicationService
 
 from radius_api.auth import ApiPrincipal, ensure_same_organization, get_api_principal
-from radius_api.dependencies import get_coverage_service, get_coverage_store
+from radius_api.dependencies import (
+    get_analysis_service,
+    get_coverage_service,
+    get_coverage_store,
+    get_repository_service,
+)
+from radius_api.tenancy import OwnedAnalysisId, resolve_owned_analysis
 
 router = APIRouter(prefix="/coverage", tags=["coverage"])
 
@@ -25,15 +35,24 @@ async def ingest_coverage(
     service: CoverageApplicationService = Depends(get_coverage_service),
     store: CoverageStore = Depends(get_coverage_store),
     principal: ApiPrincipal = Depends(get_api_principal),
-    analysis_id: str = Header(..., alias="X-Analysis-Id"),
-    organization_id: str = Header(..., alias="X-Radius-Organization-Id"),
+    analysis_service: AnalysisApplicationService = Depends(get_analysis_service),
+    repository_service: RepositoryApplicationService = Depends(get_repository_service),
+    analysis_id: UUID = Header(..., alias="X-Analysis-Id"),
+    organization_id: UUID | None = Header(None, alias="X-Radius-Organization-Id"),
     payload: dict[str, Any] = None,
 ):
-    """Ingest normalized coverage artifacts produced by CI."""
+    """Ingest normalized coverage artifacts produced by CI.
 
-    ensure_same_organization(principal, __import__("uuid").UUID(organization_id))
+    The analysis must belong to the caller's organization (unknown and foreign
+    analyses are both 404). ``X-Radius-Organization-Id`` is optional and, when
+    sent, must be the caller's own organization.
+    """
 
-    analysis_id_uuid = __import__("uuid").UUID(analysis_id)
+    if organization_id is not None:
+        ensure_same_organization(principal, organization_id)
+    analysis_id_uuid = resolve_owned_analysis(
+        analysis_id, principal, analysis_service, repository_service
+    )
 
     files = payload.get("files", []) if payload else []
     symbols = payload.get("symbols", []) if payload else []
@@ -61,7 +80,7 @@ async def ingest_coverage(
         content={
             "success": True,
             "data": {
-                "analysis_id": analysis_id_uuid,
+                "analysis_id": str(analysis_id_uuid),
                 "coverage_percent": summary["coverage_percent"] if summary else None,
                 "artifact_count": summary["artifact_count"] if summary else 0,
             },
@@ -74,7 +93,7 @@ async def ingest_coverage(
     response_model=None,
 )
 def get_coverage_for_analysis(
-    analysis_id: str,
+    analysis_id: OwnedAnalysisId,
     service: CoverageApplicationService = Depends(get_coverage_service),
     principal: ApiPrincipal = Depends(get_api_principal),
 ) -> JSONResponse:
@@ -90,7 +109,7 @@ def get_coverage_for_analysis(
         )
     return JSONResponse(
         status_code=status.HTTP_200_OK,
-        content={"data": summary},
+        content={"data": jsonable_encoder(summary)},
     )
 
 
@@ -99,7 +118,7 @@ def get_coverage_for_analysis(
     response_model=None,
 )
 def get_coverage_report(
-    analysis_id: str,
+    analysis_id: OwnedAnalysisId,
     service: CoverageApplicationService = Depends(get_coverage_service),
     principal: ApiPrincipal = Depends(get_api_principal),
 ) -> JSONResponse:
@@ -115,7 +134,7 @@ def get_coverage_report(
         )
     return JSONResponse(
         status_code=status.HTTP_200_OK,
-        content={"data": report},
+        content={"data": jsonable_encoder(report)},
     )
 
 

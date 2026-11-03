@@ -166,34 +166,41 @@ def _canonical(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
+#: Stage A is what Stage B (CI results) is re-scored from, so it is never cut in pieces
+#: (B-04). It is kept whole up to this size; above it the whole of Stage A is dropped and
+#: ``stage_a_dropped`` is set, which makes a later recompute fail visibly (see
+#: ``StageAUnavailableError``) instead of raising on a half-empty dict.
+MAX_STAGE_A_BYTES = 8 * 1024 * 1024
+
+
+class StageAUnavailableError(RuntimeError):
+    """The newest stored bundle had its Stage A dropped by the size cap."""
+
+
 def cap_bundle(bundle: dict[str, Any], max_bytes: int = MAX_BUNDLE_BYTES) -> dict[str, Any]:
     """Return ``bundle`` or a copy with heavy lists dropped and ``truncated`` set.
 
-    Drop order: ``evidence_items``, ``stage_b``, assertion features and symbol
-    lists inside ``stage_a``, then all of ``stage_a``. The verdict itself and
-    the justification are never dropped.
+    Drop order: ``evidence_items``, ``stage_b`` (both are rebuilt from the uploads on a
+    recompute), then ``stage_a`` as a whole and only when it alone exceeds
+    ``MAX_STAGE_A_BYTES`` (``stage_a_dropped`` is set). Stage A is never cut in pieces.
+    The verdict itself and the justification are never dropped.
     """
 
     if len(_canonical(bundle).encode("utf-8")) <= max_bytes:
         return bundle
     capped = copy.deepcopy(bundle)
     capped["truncated"] = True
-    steps: list[tuple[str, ...]] = [
-        ("evidence_items",),
-        ("stage_b",),
-        ("stage_a", "assertions"),
-        ("stage_a", "symbols"),
-        ("stage_a", "symbol_test"),
-        ("stage_a",),
-    ]
-    for path in steps:
-        node: Any = capped
-        for key in path[:-1]:
-            node = node.get(key) if isinstance(node, dict) else None
-        if isinstance(node, dict) and path[-1] in node:
-            del node[path[-1]]
+    for key in ("evidence_items", "stage_b"):
+        if key in capped:
+            del capped[key]
             if len(_canonical(capped).encode("utf-8")) <= max_bytes:
                 return capped
+    stage_a = capped.get("stage_a")
+    if isinstance(stage_a, dict) and len(_canonical(stage_a).encode("utf-8")) <= MAX_STAGE_A_BYTES:
+        return capped  # re-scoring stays possible; only the stored size is above the soft cap
+    if "stage_a" in capped:
+        del capped["stage_a"]
+        capped["stage_a_dropped"] = True
     return capped
 
 
@@ -296,6 +303,16 @@ def extract_columns(bundle: dict[str, Any]) -> _Columns:
     )
 
 
+def _with_revision(bundle: Any, revision: int) -> Any:
+    """Copy of ``bundle`` whose ``verdict.revision`` is the row revision (B-18).
+
+    The inputs digest never covers the revision, so this cannot change idempotency."""
+
+    if not isinstance(bundle, dict) or not isinstance(bundle.get("verdict"), dict):
+        return bundle
+    return {**bundle, "verdict": {**bundle["verdict"], "revision": revision}}
+
+
 def _check_mode(mode: str) -> None:
     if mode not in VALID_MODES:
         msg = f"mode must be one of {VALID_MODES}, not {mode!r}"
@@ -370,8 +387,15 @@ class SqlVerdictV2Repository:
         top = self._max_revision(organization_id, analysis_id)
         if existing is not None:
             if existing.revision == top:
+                if existing.mode != mode:  # B-18: shadow -> on must not keep the old tag
+                    existing.mode = mode
+                # "inputs last checked": a recompute that found nothing new still counts, so the
+                # reconciler (B-09) does not queue the same analysis again
+                existing.computed_at = now
+                self._session.flush()
                 return SaveOutcome(existing.id, existing.revision, False, False)
             existing.revision = top + 1  # same inputs as an older run: newest again
+            existing.bundle = _with_revision(existing.bundle, existing.revision)
             existing.mode = mode
             existing.computed_at = now
             existing.published_at = None
@@ -401,7 +425,7 @@ class SqlVerdictV2Repository:
             criteria_excluded=cols.counts["excluded"],
             uim=cols.uim,
             intent_coverage=cols.intent_coverage,
-            bundle=capped,
+            bundle=_with_revision(capped, top + 1),
             justification=cols.justification,
             error_detail=cols.error_detail,
             fallback=cols.fallback,
@@ -443,10 +467,71 @@ class SqlVerdictV2Repository:
             .order_by(VerdictV2Row.revision.desc())
         )
         for row in rows:
-            stage_a = _stage_a(_to_stored(row))
+            stored = _to_stored(row)
+            stage_a = _stage_a(stored)
             if stage_a is not None:
                 return stage_a
+            if stored.bundle.get("stage_a_dropped") is True:
+                # the newest scored bundle lost its Stage A to the size cap: never fall
+                # back to an older revision's (stale) intent, fail visibly instead (B-04)
+                msg = "stage_a_dropped"
+                raise StageAUnavailableError(msg)
         return None
+
+    def stale_analyses(
+        self,
+        *,
+        now: datetime | None = None,
+        grace_seconds: float = 300.0,
+        max_age_days: float = 7.0,
+        limit: int = 20,
+    ) -> list[tuple[UUID, UUID]]:
+        """Analyses with a CI upload newer than their newest verdict and no request queued (B-09).
+
+        The API enqueues a recompute when an upload arrives and swallows enqueue failures; this
+        is the bounded sweep that catches those. Only recent uploads are considered
+        (``max_age_days``), at most ``limit`` analyses are returned, oldest upload first."""
+
+        from radius_shared.database.models import TestResultUpload
+
+        now = now or _now()
+        newest = (
+            select(
+                TestResultUpload.analysis_id.label("analysis_id"),
+                func.max(TestResultUpload.created_at).label("last_upload"),
+            )
+            .where(TestResultUpload.created_at >= now - timedelta(days=max_age_days))
+            .group_by(TestResultUpload.analysis_id)
+            .subquery()
+        )
+        top = (
+            select(
+                VerdictV2Row.analysis_id.label("analysis_id"),
+                func.max(VerdictV2Row.revision).label("rev"),
+            )
+            .group_by(VerdictV2Row.analysis_id)
+            .subquery()
+        )
+        rows = self._session.execute(
+            select(VerdictV2Row.organization_id, VerdictV2Row.analysis_id, VerdictV2Row.computed_at,
+                   newest.c.last_upload)
+            .join(top, (top.c.analysis_id == VerdictV2Row.analysis_id) & (top.c.rev == VerdictV2Row.revision))
+            .join(newest, newest.c.analysis_id == VerdictV2Row.analysis_id)
+            .order_by(newest.c.last_upload)
+            .limit(limit * 5)
+        ).all()
+        out: list[tuple[UUID, UUID]] = []
+        for org, analysis, computed_at, last_upload in rows:
+            computed = _aware(computed_at) or now
+            uploaded = _aware(last_upload) or now
+            if uploaded <= computed + timedelta(seconds=grace_seconds):
+                continue
+            if self._request_row(org, analysis) is not None:
+                continue
+            out.append((org, analysis))
+            if len(out) >= limit:
+                break
+        return out
 
     def mark_published(
         self, organization_id: UUID, row_id: UUID, digest: str, *, now: datetime | None = None
@@ -488,12 +573,13 @@ class SqlVerdictV2Repository:
         _check_reason(reason)
         now = now or _now()
         available = now + timedelta(seconds=max(0.0, delay_seconds))
+        # B-16: a claim that is running is KEPT. Clearing it let a second worker start on the
+        # same analysis while the first still ran (two comments). The worker that holds the
+        # claim notices the newer ``requested_at`` in ``complete_request`` and releases it.
         values = {
             "reason": reason,
             "requested_at": now,
             "available_at": available,
-            "claimed_at": None,
-            "claim_token": None,
             "attempts": 0,
             "last_error": None,
         }
@@ -573,11 +659,12 @@ class SqlVerdictV2Repository:
 
     def complete_request(self, claim: RequestClaim) -> bool:
         row = self._session.get(VerdictV2RequestRow, claim.request_id)
-        if (
-            row is None
-            or row.claim_token != claim.claim_token
-            or _aware(row.requested_at) != claim.requested_at
-        ):
+        if row is None or row.claim_token != claim.claim_token:
+            return False
+        if _aware(row.requested_at) != claim.requested_at:
+            row.claimed_at = None  # re-requested while running: release it for the next pass
+            row.claim_token = None
+            self._session.flush()
             return False
         self._session.execute(
             delete(VerdictV2RequestRow).where(
@@ -681,10 +768,12 @@ class InMemoryVerdictV2Repository:
         for index, row in enumerate(self._rows):
             if row in mine and row.inputs_digest == cols.inputs_digest:
                 if row.revision == top:
+                    self._rows[index] = replace(row, mode=mode, computed_at=now)
                     return SaveOutcome(UUID(row.row_id), row.revision, False, False)
                 self._rows[index] = replace(
                     row,
                     revision=top + 1,
+                    bundle=_with_revision(row.bundle, top + 1),
                     mode=mode,
                     computed_at=now,
                     published_at=None,
@@ -709,7 +798,7 @@ class InMemoryVerdictV2Repository:
                 algo_version=cols.algo_version,
                 profile=cols.profile,
                 config_digest=cols.config_digest,
-                bundle=copy.deepcopy(capped),
+                bundle=_with_revision(copy.deepcopy(capped), top + 1),
                 justification=copy.deepcopy(cols.justification),
                 error_detail=cols.error_detail,
                 fallback=cols.fallback,
@@ -746,7 +835,13 @@ class InMemoryVerdictV2Repository:
             stage_a = _stage_a(row)
             if stage_a is not None:
                 return stage_a
+            if row.bundle.get("stage_a_dropped") is True:
+                msg = "stage_a_dropped"
+                raise StageAUnavailableError(msg)
         return None
+
+    def stale_analyses(self, **_: Any) -> list[tuple[UUID, UUID]]:
+        return []  # uploads live in SQL only; the memory backend has nothing to sweep
 
     def _update(self, organization_id: UUID, row_id: UUID, **changes: Any) -> bool:
         for index, row in enumerate(self._rows):
@@ -791,9 +886,7 @@ class InMemoryVerdictV2Repository:
                 request.reason = reason
                 request.requested_at = now
                 request.available_at = now + timedelta(seconds=max(0.0, delay_seconds))
-                request.claimed_at = None
-                request.claim_token = None
-                request.attempts = 0
+                request.attempts = 0  # B-16: a running claim is kept (see the SQL version)
                 request.last_error = None
                 return
         request_id = uuid4()
@@ -858,11 +951,11 @@ class InMemoryVerdictV2Repository:
 
     def complete_request(self, claim: RequestClaim) -> bool:
         request = self._requests.get(claim.request_id)
-        if (
-            request is None
-            or request.claim_token != claim.claim_token
-            or request.requested_at != claim.requested_at
-        ):
+        if request is None or request.claim_token != claim.claim_token:
+            return False
+        if request.requested_at != claim.requested_at:
+            request.claimed_at = None  # re-requested while running: release for the next pass
+            request.claim_token = None
             return False
         del self._requests[claim.request_id]
         return True

@@ -115,7 +115,7 @@ Check them with `docker compose ps` (the STATUS column shows `healthy`) or
 | **`CORS_ORIGINS`** | API: comma separated browser origins allowed by CORS. In production every entry must be `https://host[:port]`; `*` is rejected at startup. Localhost dashboards are added automatically outside production. | `https://radius.yourcompany.com` |
 | **`RADIUS_CORS_ALLOW_CREDENTIALS`** | API: send `Access-Control-Allow-Credentials` (session cookies). Never combined with `*`. | `true` |
 | **`RADIUS_HSTS_ENABLED`** | API and dashboard: send `Strict-Transport-Security` (and CSP `upgrade-insecure-requests` on the dashboard). Enable only behind TLS. | `false` |
-| **`RADIUS_MAX_BODY_BYTES`** / **`RADIUS_WEBHOOK_MAX_BODY_BYTES`** / **`RADIUS_UPLOAD_MAX_BODY_BYTES`** | API request body caps: default, GitHub webhook, CI test-report upload. Over the cap: `413 PAYLOAD_TOO_LARGE`. | `1048576` / `26214400` / `20971520` |
+| **`RADIUS_MAX_BODY_BYTES`** / **`RADIUS_WEBHOOK_MAX_BODY_BYTES`** / **`RADIUS_UPLOAD_MAX_BODY_BYTES`** | API request body caps: default, GitHub webhook, CI test-report upload. Over the cap: `413 PAYLOAD_TOO_LARGE`. | `1048576` / `5242880` / `20971520` |
 | **`RADIUS_TRUSTED_PROXIES`** | API: IPs/CIDRs of reverse proxies whose `X-Forwarded-For` is trusted for client-IP rate limiting. Empty trusts none (every client appears as the proxy). | `10.0.0.0/8` |
 | **`RADIUS_RATE_LIMIT_ENABLED`** | API: master switch for the token-bucket limiter. | `true` |
 | **`RADIUS_RATE_LIMIT_AUTH`** / **`_WEBHOOK`** / **`_GENERAL`** / **`_EXPENSIVE`** | API: `<requests>/<window seconds>` per bucket. In-memory, per replica. | `10/60`, `600/60`, `600/60`, `20/60` |

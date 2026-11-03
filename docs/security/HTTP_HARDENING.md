@@ -48,8 +48,8 @@ carry CORS headers so a browser client can read them.
 
 ## Body limits, content types, timeouts
 
-* Default 1 MiB (`RADIUS_MAX_BODY_BYTES`); GitHub webhook 25 MiB (GitHub's
-  own maximum); test-report upload `.../tests/results` 20 MiB (the route's own
+* Default 1 MiB (`RADIUS_MAX_BODY_BYTES`); GitHub webhook 5 MiB (was 25 MiB, GitHub's own maximum; lowered because the body is buffered before the signature is verified, raise `RADIUS_WEBHOOK_MAX_BODY_BYTES` if a legitimate delivery gets 413; a delivery without a signature header is refused before its body is read);
+  test-report upload `.../tests/results` 20 MiB (the route's own
   existing cap). `Content-Length` is checked first; chunked or lying clients are
   counted while streamed and answered `413` (FastAPI would otherwise turn the
   read error into a 400).
@@ -71,7 +71,7 @@ capacity.
 
 | Bucket | Matches | Keyed by | Default |
 |---|---|---|---|
-| `auth` | `POST /api/v1/auth/*` except logout/refresh, `GET /api/v1/auth/oauth/*` | client IP | 10 / 60 s |
+| `auth` | `POST /api/v1/auth/*` except logout (refresh is limited too, A-15), `GET /api/v1/auth/oauth/*` | client IP | 10 / 60 s |
 | `webhook` | `POST /api/v1/webhooks/github` | client IP | 600 / 60 s |
 | `expensive` | `POST` analyses, rerun, intent rebuild/sources, tests/results, coverage, sync-pull-requests | API key and IP | 20 / 60 s |
 | `general` | everything else | API key and IP | 600 / 60 s |

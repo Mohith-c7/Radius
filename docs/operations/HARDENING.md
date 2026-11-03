@@ -68,7 +68,7 @@ dashboard.
 
 ## 6. HTTP limits
 
-- [ ] Defaults are sane: body caps `RADIUS_MAX_BODY_BYTES` 1 MiB, webhook 25 MiB, test-report upload 20 MiB;
+- [ ] Defaults are sane: body caps `RADIUS_MAX_BODY_BYTES` 1 MiB, webhook 5 MiB, test-report upload 20 MiB;
   rate limits auth 10/60, webhook 600/60, general 600/60, expensive 20/60
   ([HTTP_HARDENING.md](../security/HTTP_HARDENING.md)). The dashboard proxy uses one server-side key from one IP,
   so all dashboard users share the `general`/`expensive` buckets: raise `RADIUS_RATE_LIMIT_GENERAL` for your

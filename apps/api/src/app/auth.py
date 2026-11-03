@@ -8,17 +8,17 @@ from uuid import UUID, uuid4
 
 import jwt
 from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError
+from argon2.exceptions import InvalidHashError, VerifyMismatchError
 from fastapi import HTTPException, status
 from radius_shared.database.base import Base as DomainBase
 from radius_shared.database.enums import UserRole
 from radius_shared.database.models import Organization
 from radius_shared.database.models import User as DomainUser
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from .config import get_settings
+from .config import KNOWN_PUBLIC_SESSION_SECRETS, get_settings
 from .models import AuthAccount, AuthSession, AuthToken, User
 from .oauth import OAuthError
 
@@ -26,8 +26,22 @@ password_hasher = PasswordHasher()
 SESSION_TTL = timedelta(days=14)
 
 
+_PRODUCTION_LIKE = frozenset({"production", "uat"})
+
+
+def is_production_like() -> bool:
+    """True for ``RADIUS_ENV`` production/uat (the settings object, not the raw env)."""
+    return get_settings().runtime_env.strip().lower() in _PRODUCTION_LIKE
+
+
 def should_auto_verify_email() -> bool:
-    """Return True if email auto-verification is enabled for local dev."""
+    """Return True if email auto-verification is enabled for local dev.
+
+    Never in production/uat: there a verified address must really have been
+    proven (A-16). ``Settings`` additionally refuses to start with the switch set.
+    """
+    if is_production_like():
+        return False
     dev_auto_verify = os.environ.get("DEV_AUTO_VERIFY_EMAIL")
     if dev_auto_verify is not None:
         return dev_auto_verify.lower() in ("true", "1", "yes")
@@ -44,17 +58,48 @@ def _may_log_action_tokens() -> bool:
     """
     if get_settings().email_delivery_mode == "log":
         return True
-    return os.environ.get("RADIUS_ENV", "development").strip().lower() not in {"production", "uat"}
+    settings = get_settings()
+    declared = os.environ.get("RADIUS_ENV", "").strip().lower()
+    if declared:
+        return declared not in _PRODUCTION_LIKE
+    # RADIUS_ENV is not set at all (A-16). Treat that as development only while the
+    # published placeholder session secret is still in use; a deployment that
+    # configured a real secret but forgot RADIUS_ENV must not print login links.
+    return settings.session_secret in KNOWN_PUBLIC_SESSION_SECRETS
 
 
 def hash_password(password: str) -> str:
     return password_hasher.hash(password)
 
 
+_dummy_hash: str | None = None
+
+
+def burn_password_check(password: str) -> None:
+    """Spend the same argon2 time as a real check (unknown email, no password set).
+
+    Keeps the response time of ``login`` from revealing whether an account exists.
+    """
+    global _dummy_hash
+    if _dummy_hash is None:
+        _dummy_hash = password_hasher.hash(secrets.token_urlsafe(16))
+    verify_password(password, _dummy_hash)
+
+
+def revoke_user_sessions(db: Session, user_id: str) -> int:
+    """Revoke every live session of a user (call after a credential/ownership change)."""
+    result = db.execute(
+        update(AuthSession)
+        .where(AuthSession.user_id == user_id, AuthSession.revoked_at.is_(None))
+        .values(revoked_at=datetime.now(UTC))
+    )
+    return int(result.rowcount or 0)
+
+
 def verify_password(password: str, password_hash: str) -> bool:
     try:
         return password_hasher.verify(password_hash, password)
-    except VerifyMismatchError:
+    except (VerifyMismatchError, InvalidHashError):
         return False
 
 
@@ -128,7 +173,18 @@ def consume_action_token(db: Session, raw_token: str, purpose: str) -> User:
         raise HTTPException(
             status_code=400, detail="This link is invalid or has expired."
         )
-    token.used_at = datetime.now(UTC)
+    # Atomic single use (A-14): only the request whose UPDATE flips used_at from
+    # NULL wins; a concurrent request with the same token matches no row.
+    claimed = db.execute(
+        update(AuthToken)
+        .where(AuthToken.id == token.id, AuthToken.used_at.is_(None))
+        .values(used_at=datetime.now(UTC))
+    )
+    if claimed.rowcount != 1:
+        db.rollback()
+        raise HTTPException(
+            status_code=400, detail="This link is invalid or has expired."
+        )
     user = db.get(User, token.user_id)
     db.commit()
     if user is None:

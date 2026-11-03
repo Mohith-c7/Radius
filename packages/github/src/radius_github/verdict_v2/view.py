@@ -55,6 +55,8 @@ class ReasonView:
     detail: str
     rule_id: str | None = None
     ref: str | None = None
+    #: B-01 (optional): every reference, one id per element.
+    refs: tuple[str, ...] = ()
 
     @classmethod
     def from_payload(cls, data: Mapping[str, Any]) -> ReasonView:
@@ -63,15 +65,19 @@ class ReasonView:
             _str(data.get("detail")),
             _opt_str(data.get("rule_id")),
             _opt_str(data.get("ref")),
+            _strs(data.get("refs")),
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out: dict[str, Any] = {
             "code": self.code,
             "detail": self.detail,
             "rule_id": self.rule_id,
             "ref": self.ref,
         }
+        if self.refs:
+            out["refs"] = list(self.refs)
+        return out
 
 
 @dataclass(frozen=True, slots=True)
@@ -227,6 +233,8 @@ class CriterionView:
     #: (empty when the mutation flag was off) and the mutation facts of the criterion.
     evidence_basis: str = ""
     mutation: dict[str, Any] = field(default_factory=dict)
+    #: B-07 (optional): label of the actor who confirmed or edited the criterion.
+    confirmed_by: str = ""
 
     @classmethod
     def from_payload(cls, data: Mapping[str, Any]) -> CriterionView:
@@ -248,6 +256,7 @@ class CriterionView:
             tuple({str(k): str(v) for k, v in h.items()} for h in _maps(data.get("hints"))),
             _str(data.get("evidence_basis")),
             _dict(data.get("mutation")),
+            _str(data.get("confirmed_by")),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -255,6 +264,8 @@ class CriterionView:
         if self.mutation:
             out["evidence_basis"] = self.evidence_basis
             out["mutation"] = dict(self.mutation)
+        if self.confirmed_by:
+            out["confirmed_by"] = self.confirmed_by
         return out
 
     def _base_dict(self) -> dict[str, Any]:

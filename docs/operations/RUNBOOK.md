@@ -74,7 +74,7 @@ Find the delivery in the GitHub App settings (Advanced, Recent Deliveries); rede
 | 403 "Missing"/"Invalid GitHub webhook signature" | Secret differs from the GitHub App's, or a proxy altered the body | Make the secrets identical; the signature is HMAC-SHA256 over the raw bytes, so do not re-encode the body in a proxy |
 | 403 "Unknown GitHub installation" | Installation not linked to an organization and `GITHUB_SINGLE_TENANT` is false | Connect it to an organization, or for a single org set `GITHUB_SINGLE_TENANT=true` and `GITHUB_DEFAULT_ORGANIZATION_ID` |
 | 422 `VALIDATION_ERROR` "GITHUB_DEFAULT_ORGANIZATION_ID is required" | Single-tenant without a default org | Set `GITHUB_DEFAULT_ORGANIZATION_ID` |
-| 413 `PAYLOAD_TOO_LARGE` | Body over `RADIUS_WEBHOOK_MAX_BODY_BYTES` (25 MiB, GitHub's own maximum) | Normally cannot happen; check a proxy limit instead |
+| 413 `PAYLOAD_TOO_LARGE` | Body over `RADIUS_WEBHOOK_MAX_BODY_BYTES` (5 MiB default; GitHub allows up to 25 MiB) | Raise the cap only if a genuine delivery was refused; otherwise it is an unauthenticated caller |
 | 429 | Webhook bucket (`RADIUS_RATE_LIMIT_WEBHOOK`, 600/60 per client IP) exhausted, often because `RADIUS_TRUSTED_PROXIES` is unset so GitHub traffic shares the proxy IP | Set `RADIUS_TRUSTED_PROXIES`; raise the limit; `Retry-After` is returned |
 | 202 with `ignored: true` | Not an error: draft or non-analysed action, `installation_deleted`, `installation_suspended`, `repository_disconnected` | See the event table in [github-app-validation/RUNBOOK.md](../github-app-validation/RUNBOOK.md) section 0 |
 | 502/504 from your proxy | API down or slow | Check `api` health and logs |

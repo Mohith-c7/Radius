@@ -105,6 +105,7 @@ def test_one_analysis_produces_one_trace_and_correlated_logs(
         assert stored is not None
 
         runtime = create_sql_worker_runtime(WorkerSettings())
+        runtime.git_client = _LocalSourceGit(source_repo)
         assert runtime.run_once() is True
     finally:
         root.removeHandler(handler)
@@ -172,7 +173,7 @@ def _webhook_body(source_repo: Path, head_sha: str) -> bytes:
             "name": "radius",
             "private": True,
             "default_branch": "main",
-            "clone_url": str(source_repo),
+            "clone_url": "https://github.com/acme/radius.git",
             "owner": {"login": "acme"},
         },
         "pull_request": {
@@ -244,3 +245,32 @@ def _git(args: tuple[str, ...], *, cwd: Path) -> str:
         text=True,
     )
     return result.stdout.strip()
+
+
+class _LocalSourceGit:
+    """Test double: serves any clone request from a local source repository.
+
+    Production git clients refuse local paths and file:// (A-01/A-02), so the
+    end-to-end flows point the runtime at this double instead.
+    """
+
+    def __init__(self, source: Path) -> None:
+        self._source = source
+
+    def clone_or_fetch(self, clone_url, destination, *, extra_headers=()):
+        import subprocess
+
+        if destination.exists():
+            return destination
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            ("git", "clone", "-q", str(self._source), str(destination)),
+            check=True,
+            capture_output=True,
+        )
+        return destination
+
+    def checkout(self, repository_path, branch_name):
+        from radius_repository.infrastructure import LocalGitRepositoryClient
+
+        LocalGitRepositoryClient().checkout(repository_path, branch_name)

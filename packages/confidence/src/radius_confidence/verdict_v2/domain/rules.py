@@ -36,7 +36,15 @@ BEHAVIORAL_TESTABILITY: frozenset[str] = frozenset({"behavioral_testable", "test
 BLOCKING_DEGRADED_EXACT: frozenset[str] = frozenset(
     {"truncated", "policy_invalid", "policy_unreadable", "unconfirmed_inferred_intent"}
 )
-BLOCKING_DEGRADED_PREFIXES: tuple[str, ...] = ("unsupported_language:", "snapshot_missing:")
+BLOCKING_DEGRADED_PREFIXES: tuple[str, ...] = (
+    "unsupported_language:",
+    "snapshot_missing:",
+    # DEC-036 (B-02, B-03): changed files that were neither provably inert nor analysable,
+    # and tamper analyses that could not complete, never read as "nothing found"
+    "unanalyzed_files:",
+    "tamper_unanalyzed:",
+    "intent_not_in_analysis:",
+)
 
 #: rule id -> (verdict, reason code, label). Single source of the mapping.
 RULE_TABLE: dict[str, tuple[Verdict, str, str]] = {
@@ -81,29 +89,64 @@ _FLOAT_DIGITS = 6
 #: Reason code of R2e when nothing verifiable is in scope (documentation / inert files only).
 NOT_APPLICABLE = "not_applicable"
 
-#: Suffixes and names of files that carry no behaviour and no supply-chain risk (DEC-031).
-#: CI workflows, dependency manifests, lockfiles, Dockerfiles and tests are NOT inert.
-INERT_SUFFIXES: frozenset[str] = frozenset(
-    {".md", ".rst", ".txt", ".adoc", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico"}
+#: Explicit allowlist of paths that cannot change behaviour (DEC-031, tightened by DEC-036).
+#: Anything NOT matched here is either analysed or, when it cannot be analysed, blocks
+#: ``verified`` (R2d ``unanalyzed_files:*``). Dependency manifests (``requirements*.txt``,
+#: ``pyproject.toml``), CI workflows, Dockerfiles, scripts, SVG (can carry script) and code
+#: under a docs directory are NOT inert.
+DOC_SUFFIXES: frozenset[str] = frozenset({".md", ".rst", ".adoc"})
+IMAGE_SUFFIXES: frozenset[str] = frozenset({".png", ".jpg", ".jpeg", ".gif", ".ico", ".webp"})
+#: ``.txt`` is only inert for these well-known documentation stems (``CMakeLists.txt``,
+#: ``requirements-dev.txt`` and ``robots.txt`` are not).
+TXT_DOC_STEMS: frozenset[str] = frozenset(
+    {
+        "readme", "changelog", "changes", "history", "news", "license", "licence", "notice",
+        "authors", "contributors", "copying", "todo", "codeowners",
+    }
 )
 INERT_NAMES: frozenset[str] = frozenset(
-    {".gitignore", ".gitattributes", ".editorconfig", "license", "notice", "authors", "codeowners"}
+    {
+        ".gitignore", ".gitattributes", ".editorconfig", ".gitkeep", "codeowners",
+        "license", "licence", "copying", "notice", "authors", "contributors",
+        "changelog", "changes", "history", "news",
+    }
+)
+LOCKFILE_NAMES: frozenset[str] = frozenset(
+    {
+        "uv.lock", "poetry.lock", "pipfile.lock", "pdm.lock", "package-lock.json",
+        "pnpm-lock.yaml", "yarn.lock", "cargo.lock", "gemfile.lock", "composer.lock",
+        "go.sum",
+    }
 )
 INERT_DIR_PREFIXES: tuple[str, ...] = ("docs/", "changelog.d/", "doc/")
 
 
 def is_inert_path(path: str) -> bool:
-    """True for documentation / metadata files that cannot change behaviour."""
+    """True only for documentation, changelog fragments, images, lockfiles and licence files.
+
+    Conservative on purpose: matches exact basenames and suffix sets, never prefixes of a
+    file name (``changelog_gen.sh``, ``licence_check.py``) and never code under ``docs/``.
+    """
 
     p = path.replace("\\", "/").removeprefix("./").lstrip("/").lower()
-    name = p.rsplit("/", 1)[-1]
-    if p.startswith(".github/") or name in {"requirements.txt", "constraints.txt"}:
+    if not p or p.startswith(".github/"):
         return False
-    if name in INERT_NAMES or name.startswith(("license.", "licence", "changelog")):
+    name = p.rsplit("/", 1)[-1]
+    stem, dot, ext = name.rpartition(".")
+    suffix = f".{ext}" if dot else ""
+    if not dot:
+        stem = name
+    if name in LOCKFILE_NAMES:
         return True
-    if p.startswith(INERT_DIR_PREFIXES) and not name.endswith((".py", ".ts", ".js", ".yml", ".yaml", ".json", ".toml", ".sh")):
+    if name in INERT_NAMES:
         return True
-    return any(name.endswith(suffix) for suffix in INERT_SUFFIXES)
+    if suffix in DOC_SUFFIXES or suffix in IMAGE_SUFFIXES:
+        return True
+    if suffix == ".txt":
+        return stem in TXT_DOC_STEMS or (
+            p.startswith(INERT_DIR_PREFIXES) and stem not in {"requirements", "constraints"}
+        )
+    return False
 
 
 def reason_code_of(rule: RuleResult) -> str:
@@ -225,12 +268,14 @@ def evaluate_rules(
 
     # R1a: any criterion contradicted.
     contradicted = sorted(c.criterion_id for c in criteria if c.state == SupportState.CONTRADICTED)
+    # one element per evidence id (B-01): never a joined string
     failing_evidence = [
-        r.ref
+        ref
         for c in criteria
         if c.state == SupportState.CONTRADICTED
         for r in c.reasons
-        if r.code == "failing_linked_test" and r.ref
+        if r.code == "failing_linked_test"
+        for ref in (r.refs or ((r.ref,) if r.ref else ()))
     ]
     put(
         "R1a",
@@ -260,8 +305,20 @@ def evaluate_rules(
         _refs(finding_ids=high),
     )
 
-    # R2p: no CI upload yet for this head.
-    put("R2p", not facts.results_received, {"results_received": bool(facts.results_received)})
+    # R2p: no CI upload yet for this head, unless there is nothing to wait for: only
+    # documentation / inert files changed, no criterion, no blocking marker (B-10). Such a
+    # change is R2e ``not_applicable``; "awaiting CI results" would never resolve for it.
+    nothing_to_await = (
+        facts.inert_changes_only
+        and facts.behavioral_symbols == 0
+        and not any(c.state != SupportState.EXCLUDED for c in criteria)
+        and not any(is_blocking_degraded(d) for d in facts.degraded)
+    )
+    put(
+        "R2p",
+        not facts.results_received and not nothing_to_await,
+        {"results_received": bool(facts.results_received)},
+    )
 
     # R2a: no usable intent while behavioral code changed.
     non_excluded = [c for c in criteria if c.state != SupportState.EXCLUDED]
@@ -290,7 +347,9 @@ def evaluate_rules(
             "non_excluded_criteria": len(non_excluded),
             "behavioral_symbols": int(facts.behavioral_symbols),
             "not_applicable": bool(
-                facts.inert_changes_only and facts.behavioral_symbols == 0
+                facts.inert_changes_only
+                and facts.behavioral_symbols == 0
+                and not any(is_blocking_degraded(d) for d in facts.degraded)
             ),
         },
     )

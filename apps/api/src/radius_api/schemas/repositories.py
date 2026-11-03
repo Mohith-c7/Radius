@@ -10,10 +10,12 @@ class ConnectRepositoryRequest(BaseModel):
 
     organization_id: UUID = Field(alias="organizationId")
     github_repository_id: int = Field(alias="repositoryId")
-    name: str
-    owner: str
-    default_branch: str = Field(default="main", alias="defaultBranch")
-    clone_url: str = Field(alias="cloneUrl")
+    name: str = Field(min_length=1, max_length=100)
+    owner: str = Field(min_length=1, max_length=100)
+    default_branch: str = Field(
+        default="main", min_length=1, max_length=255, alias="defaultBranch"
+    )
+    clone_url: str = Field(alias="cloneUrl", min_length=1, max_length=300)
     visibility: str = "private"
 
     model_config = {"populate_by_name": True}

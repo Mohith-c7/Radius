@@ -499,6 +499,7 @@ class VerdictStageACollector:
             sym_items = sym_items[: self._limits.max_symbols]
             run.mark(TRUNCATED)
         run.mark(*adapters.unsupported_languages(sym_items))
+        run.mark(*adapters.unanalyzed_file_markers(changeset, sym_items))  # B-02
 
         report = run.critical("tamper", lambda: prod.tamper(changeset, command))
         tamper = adapters.tamper_inputs(report)
@@ -506,6 +507,7 @@ class VerdictStageACollector:
             run.mark(TRUNCATED)
         if tamper.rule_errors:
             raise StageAError("tamper_incomplete")
+        run.mark(*adapters.tamper_unanalyzed_markers(report))  # B-03
         run.mark(*(f"adapter_dropped:{k}" for k in sorted(tamper.dropped)))
         run.algo["tamper"] = getattr(report, "catalog_version", TAMPER_VERSION)
 

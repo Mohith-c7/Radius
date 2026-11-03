@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import re
 import time
 from uuid import uuid4
@@ -59,11 +60,28 @@ class CorrelationMiddleware(BaseHTTPMiddleware):
 
 
 @router.get("/metrics", include_in_schema=False)
-def get_metrics() -> Response:
-    """Prometheus exposition; 404 unless ``RADIUS_METRICS_ENABLED`` is set."""
+def get_metrics(request: Request) -> Response:
+    """Prometheus exposition; 404 unless ``RADIUS_METRICS_ENABLED`` is set.
+
+    With ``RADIUS_METRICS_TOKEN`` the caller must send ``Authorization: Bearer
+    <token>``. Without a token the endpoint is open only in development/test and
+    off in uat/production (A-16): metrics expose route names and traffic shape.
+    """
 
     if not obs_metrics.metrics_enabled():
         return Response(status_code=404)
+    token = getattr(request.app.state, "metrics_token", "")
+    if token:
+        presented = request.headers.get("Authorization", "")
+        scheme, _, credential = presented.partition(" ")
+        if scheme.lower() != "bearer" or not hmac.compare_digest(
+            credential.encode("utf-8"), token.encode("utf-8")
+        ):
+            return Response(status_code=401, headers={"WWW-Authenticate": "Bearer"})
+    else:
+        env = str(getattr(getattr(request.app.state, "settings", None), "environment", ""))
+        if env.rsplit(".", 1)[-1].lower() in {"production", "uat"}:
+            return Response(status_code=404)
     payload, content_type = obs_metrics.render_metrics()
     return Response(content=payload, media_type=content_type)
 
@@ -75,5 +93,6 @@ def configure_api_observability(app: FastAPI, settings: ObservabilitySettings) -
         settings = settings.model_copy(update={"service_name": "radius-api"})
     configure_tracing(settings)
     obs_metrics.configure_metrics(settings.metrics_enabled)
+    app.state.metrics_token = settings.metrics_token
     app.add_middleware(CorrelationMiddleware)
     app.include_router(router)

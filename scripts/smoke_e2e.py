@@ -263,6 +263,24 @@ class _Response(io.BytesIO):
         self.close()
 
 
+class _LocalOriginGit:
+    """Worker git client for the smoke: clones the local origin whatever URL is stored."""
+
+    def __init__(self, origin: Path) -> None:
+        self._origin = origin
+
+    def clone_or_fetch(self, clone_url, destination, *, extra_headers=()):
+        if destination.exists():
+            _git(["fetch", "--all", "--prune"], destination)
+            return destination
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        _git(["clone", "-q", str(self._origin), str(destination)], destination.parent)
+        return destination
+
+    def checkout(self, repository_path, branch_name):
+        _git(["checkout", "-q", "--detach", branch_name], repository_path)
+
+
 class FakeGitHub:
     """Stateful in-memory GitHub REST API (the only fake in the smoke).
 
@@ -541,7 +559,8 @@ class Smoke:
             "installation": {"id": INSTALLATION_ID},
             "repository": {
                 "id": GITHUB_REPO_ID, "name": REPO, "private": True,
-                "default_branch": "main", "clone_url": str(self.origin),
+                "default_branch": "main",
+                "clone_url": f"https://github.com/{OWNER}/{REPO}.git",
                 "owner": {"login": OWNER},
             },
             "pull_request": {
@@ -636,7 +655,8 @@ class Smoke:
         self.pull_github = FakeGitHub(
             public_key_pem=public_pem, head_sha=self.head_sha, spec=spec,
             repo=PULL_REPO, installation_id=PULL_INSTALLATION_ID,
-            github_repo_id=PULL_GITHUB_REPO_ID, clone_url=str(self.origin),
+            github_repo_id=PULL_GITHUB_REPO_ID,
+            clone_url=f"https://github.com/{OWNER}/{PULL_REPO}.git",
         )
         self.pull_github.pr_body = self.github.pr_body
         self.github.others.append(self.pull_github)
@@ -653,6 +673,9 @@ class Smoke:
             _github_settings(settings), opener=self.github.opener, sleep=lambda _s: None
         )
         self.runtime.intent_transport = self.github.transport
+        # Production git clients refuse local paths and file:// (security review A-01/A-02),
+        # so the smoke serves every clone from the local origin repository instead.
+        self.runtime.git_client = _LocalOriginGit(self.origin)
         # The API's pull-based routes talk to the same fake GitHub through the real
         # GitHubAppClient (the only override: its network opener).
         from radius_api.dependencies import get_github_client

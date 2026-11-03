@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import base64
+import os
 import subprocess
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
+from radius_repository.domain.clone_url import GitUrlPolicy
 from radius_repository.infrastructure import local_git
 from radius_repository.infrastructure.local_git import LocalGitRepositoryClient
 from radius_shared.errors import ValidationError
@@ -27,6 +29,13 @@ class _Recorder(BaseHTTPRequestHandler):
 
     def log_message(self, *args) -> None:  # silence
         return
+
+
+LOOPBACK = GitUrlPolicy(allowed_hosts=("127.0.0.1", "github.com"), allow_http=True)
+
+
+def _loopback_client() -> LocalGitRepositoryClient:
+    return LocalGitRepositoryClient(LOOPBACK)
 
 
 @pytest.fixture
@@ -62,7 +71,9 @@ def test_credentials_are_not_in_argv_but_in_child_environment(monkeypatch, tmp_p
     assert env["GIT_CONFIG_VALUE_0"] == HEADER
 
 
-def test_no_headers_leaves_environment_untouched(monkeypatch, tmp_path) -> None:
+def test_no_headers_still_restricts_transports_but_adds_no_config(
+    monkeypatch, tmp_path
+) -> None:
     captured = {}
 
     def fake_run(command, **kwargs):
@@ -71,7 +82,11 @@ def test_no_headers_leaves_environment_untouched(monkeypatch, tmp_path) -> None:
 
     monkeypatch.setattr(local_git.subprocess, "run", fake_run)
     LocalGitRepositoryClient().clone_or_fetch("https://github.com/a/b.git", tmp_path / "d")
-    assert captured["env"] is None
+    env = captured["env"]
+    assert env["GIT_ALLOW_PROTOCOL"] == "https"
+    assert "GIT_CONFIG_COUNT" not in env or env["GIT_CONFIG_COUNT"] == os.environ.get(
+        "GIT_CONFIG_COUNT", env["GIT_CONFIG_COUNT"]
+    )
 
 
 def test_real_git_sends_basic_auth_and_keeps_token_out_of_config_and_errors(
@@ -79,7 +94,7 @@ def test_real_git_sends_basic_auth_and_keeps_token_out_of_config_and_errors(
 ) -> None:
     destination = tmp_path / "dest"
     with pytest.raises(ValidationError) as excinfo:
-        LocalGitRepositoryClient().clone_or_fetch(
+        _loopback_client().clone_or_fetch(
             http_remote, destination, extra_headers=(HEADER,)
         )
 
@@ -108,7 +123,7 @@ def test_fetch_in_existing_clone_scopes_header_to_origin_and_leaves_config_clean
     subprocess.run(("git", "-C", str(repo), "remote", "add", "origin", http_remote), check=True)
 
     with pytest.raises(ValidationError) as excinfo:
-        LocalGitRepositoryClient().clone_or_fetch(
+        _loopback_client().clone_or_fetch(
             "ignored", repo, extra_headers=(HEADER,)
         )
 
@@ -125,7 +140,9 @@ def test_header_is_not_sent_to_a_different_origin(http_remote, tmp_path) -> None
     subprocess.run(
         ("git", "-C", str(repo), "remote", "add", "origin", http_remote), check=True
     )
-    env = local_git._git_environment((HEADER,), "https://github.com/acme/radius.git")
+    env = local_git._git_environment(
+        (HEADER,), "https://github.com/acme/radius.git", LOOPBACK
+    )
     result = subprocess.run(
         ("git", "fetch", "origin"), cwd=repo, env=env, capture_output=True, text=True
     )

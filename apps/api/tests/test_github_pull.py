@@ -141,7 +141,7 @@ def test_another_organization_cannot_take_over_a_connected_repository(env: Env) 
         json={"repository": "acme/widgets"},
     )
 
-    assert intruder.status_code == 403
+    assert intruder.status_code == 409
 
 
 def test_analyze_pull_request_by_number_reads_head_sha_from_github(env: Env) -> None:
@@ -189,7 +189,7 @@ def test_analyze_requires_a_connected_repository_of_the_same_organization(env: E
         f"/api/v1/repositories/{repository_id}/pull-requests/7/analyze",
         headers={"X-Radius-Organization-Id": str(uuid4())},
     )
-    assert other.status_code == 403
+    assert other.status_code == 404
 
     env.http.delete(f"/api/v1/repositories/{repository_id}", headers=env.headers)
     disconnected = env.post(f"/repositories/{repository_id}/pull-requests/7/analyze")

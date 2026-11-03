@@ -11,12 +11,13 @@ from radius_github import GitHubAppClient
 from radius_github.pull_sync import record_pull_request, sync_open_pull_requests
 from radius_repository.application import RepositoryApplicationService
 from radius_repository.domain import RepositoryVisibility
+from radius_repository.domain.clone_url import validate_clone_url
 from radius_repository.dto import (
     ConnectRepositoryCommand,
     RepositoryListQuery,
 )
 from radius_shared.dto import success_response
-from radius_shared.errors import AccessDeniedError, ConflictError
+from radius_shared.errors import ConflictError, NotFoundError
 
 from radius_api.auth import ApiPrincipal, ensure_same_organization, get_api_principal
 from radius_api.dependencies import (
@@ -27,6 +28,7 @@ from radius_api.dependencies import (
 )
 from radius_api.github_intent import record_pull_request_intent
 from radius_api.github_pull import (
+    clone_policy,
     open_access,
     parse_owner_repo,
     parse_pull_request,
@@ -47,6 +49,26 @@ from radius_api.schemas.repositories import (
 router = APIRouter(prefix="/repositories", tags=["repositories"])
 
 
+def _owned_repository(
+    service: RepositoryApplicationService,
+    principal: ApiPrincipal,
+    repository_id: UUID,
+):
+    """Return the repository when it belongs to the caller's organization.
+
+    An unknown id and another organization's repository are indistinguishable
+    (both 404), so repository ids cannot be probed across tenants.
+    """
+
+    try:
+        repository = service.get_repository(repository_id)
+    except NotFoundError:
+        raise NotFoundError(f"Repository {repository_id} was not found.") from None
+    if repository.organization_id != principal.organization_id:
+        raise NotFoundError(f"Repository {repository_id} was not found.")
+    return repository
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def connect_repository(
     http_request: Request,
@@ -65,6 +87,9 @@ async def connect_repository(
     """Connect a repository to Radius."""
 
     ensure_same_organization(principal, request.organization_id)
+    # A-01/A-02: the clone URL ends up as an argument of ``git``. Accept only
+    # https://<allowed host>/<owner>/<repo>[.git]; the stored value is canonical.
+    clone_url = validate_clone_url(request.clone_url, policy=clone_policy(http_request))
     body_hash = await request_hash(http_request)
     existing = replay_or_validate(
         idempotency_store,
@@ -86,7 +111,7 @@ async def connect_repository(
             name=request.name,
             owner=request.owner,
             default_branch=request.default_branch,
-            clone_url=request.clone_url,
+            clone_url=clone_url,
             visibility=RepositoryVisibility(request.visibility),
         )
     )
@@ -140,8 +165,7 @@ def get_repository(
 ):
     """Return one repository."""
 
-    repository = service.get_repository(repository_id)
-    ensure_same_organization(principal, repository.organization_id)
+    repository = _owned_repository(service, principal, repository_id)
     return success_response(repository)
 
 
@@ -156,8 +180,7 @@ def disconnect_repository(
 ):
     """Disconnect one repository."""
 
-    repository = service.get_repository(repository_id)
-    ensure_same_organization(principal, repository.organization_id)
+    _owned_repository(service, principal, repository_id)
     return success_response(service.disconnect_repository(repository_id))
 
 
@@ -173,8 +196,7 @@ def update_repository(
 ):
     """Update repository configuration such as default branch."""
 
-    repository = service.get_repository(repository_id)
-    ensure_same_organization(principal, repository.organization_id)
+    _owned_repository(service, principal, repository_id)
     updated = service.update_default_branch(repository_id, payload.default_branch)
     return success_response(updated)
 
@@ -191,8 +213,7 @@ def get_pull_request_by_number(
 ):
     """Return a pull request by repository ID and GitHub PR number."""
 
-    repository = service.get_repository(repository_id)
-    ensure_same_organization(principal, repository.organization_id)
+    _owned_repository(service, principal, repository_id)
     pull_request = service.get_pull_request_by_repository_and_number(
         repository_id, github_pr_number
     )
@@ -210,8 +231,7 @@ def list_pull_requests(
 ):
     """List all pull requests for one repository."""
 
-    repository = service.get_repository(repository_id)
-    ensure_same_organization(principal, repository.organization_id)
+    _owned_repository(service, principal, repository_id)
     pull_requests = service.list_pull_requests(repository_id)
     return success_response(pull_requests)
 
@@ -258,13 +278,17 @@ def connect_github_repository(
             f"GitHub returned incomplete metadata for {owner}/{name}.",
             code="GITHUB_API_ERROR",
         )
+    # GitHub's own metadata is still checked: the URL must be https on an
+    # allowed host and name the repository we were asked about.
+    clone_url = validate_clone_url(clone_url, policy=clone_policy(http_request))
     default_branch = str(info.get("default_branch") or "main")
     meta = {"installationId": access.installation_id}
     existing = service.get_by_github_repository_id(github_id)
     if existing is not None:
         if existing.organization_id != principal.organization_id:
-            raise AccessDeniedError(
-                "GitHub repository is already connected to another organization."
+            raise ConflictError(
+                "This repository cannot be connected.",
+                code="REPOSITORY_ALREADY_CONNECTED",
             )
         repository_id = UUID(str(existing.id))
         if existing.status == "disconnected":
@@ -287,7 +311,7 @@ def connect_github_repository(
             name=str(info.get("name") or name),
             owner=str((info.get("owner") or {}).get("login") or owner),
             default_branch=default_branch,
-            clone_url=str(clone_url),
+            clone_url=clone_url,
             visibility=(
                 RepositoryVisibility.PRIVATE
                 if info.get("private", True)
@@ -346,8 +370,7 @@ def _connected_repository(
     principal: ApiPrincipal,
     repository_id: UUID,
 ):
-    repository = service.get_repository(repository_id)
-    ensure_same_organization(principal, repository.organization_id)
+    repository = _owned_repository(service, principal, repository_id)
     if repository.status == "disconnected":
         raise ConflictError(
             "Repository is disconnected. Connect it again first.",

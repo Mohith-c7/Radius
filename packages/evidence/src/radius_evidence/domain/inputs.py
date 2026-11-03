@@ -27,6 +27,9 @@ class CriterionInput(Serializable):
     #: Contract 3: who supplied the criterion text / its hints (see ``enums.Provenance``).
     provenance: str = "author_pr_body"
     hints_provenance: str = "author_pr_body"
+    #: B-07 (optional): label of the actor who confirmed or edited the criterion (shown in the
+    #: verdict). ``None`` for criteria nobody confirmed; never trusted as an identity.
+    confirmed_by: str | None = field(default=None, metadata={"omit_none": True})
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,6 +117,12 @@ class MutantInput(Serializable):
     status: str
     killed_by: tuple[str, ...] = ()
     equivalent_suspect: bool = False
+    #: Stage 2 (DEC-036): tests OUTSIDE the linked set that killed this stage-1 survivor
+    #: (sorted, capped, confirmed). ``None`` = stage 2 did not run for it (omitted from
+    #: the serialization, so stage-1-only bundles are unchanged); ``()`` = it ran, no kill.
+    killed_outside_linked: tuple[str, ...] | None = field(
+        default=None, metadata={"omit_none": True}
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,6 +152,8 @@ class MutationInput(Serializable):
     engine: str = ""
     operators: tuple[str, ...] = ()
     image: str = ""
+    #: Stage 2 summary (counts, ladder); ``None`` when stage 2 was not enabled.
+    stage2: dict[str, Any] | None = field(default=None, metadata={"omit_none": True})
 
 
 @dataclass(frozen=True, slots=True)

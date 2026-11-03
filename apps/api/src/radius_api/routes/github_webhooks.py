@@ -16,6 +16,7 @@ from radius_analysis.application import AnalysisApplicationService
 from radius_analysis.dto import StartAnalysisCommand
 from radius_repository.application import RepositoryApplicationService
 from radius_repository.domain import RepositoryVisibility
+from radius_repository.domain.clone_url import validate_clone_url
 from radius_repository.dto import (
     ConnectRepositoryCommand,
     RepositoryListQuery,
@@ -39,6 +40,7 @@ from radius_api.github_intent import (
     record_pull_request_intent,
     refresh_issue_intent,
 )
+from radius_api.github_pull import clone_policy
 from radius_api.idempotency import IdempotencyStore, replay_or_validate
 from radius_api.schemas.github_webhooks import (
     GitHubPullRequestPayload,
@@ -78,6 +80,9 @@ async def handle_github_webhook(
     """Handle signed GitHub webhook deliveries."""
 
     update_correlation(delivery_id=delivery_id)
+    # Unauthenticated callers must not make us buffer a large body: a delivery
+    # without a signature header is refused before the body is read.
+    _require_signature_header(request, signature)
     body = await request.body()
     _validate_signature(request, body, signature)
     body_hash = hashlib.sha256(body).hexdigest()
@@ -384,7 +389,7 @@ def _handle_installation_sync(
             # unknown: a new row gets a provisional value and the first push or
             # pull_request delivery (which does carry it) corrects the row.
             "default_branch": repo.get("default_branch"),
-            "clone_url": f"https://github.com/{full_name}.git",
+            "clone_url": f"https://{clone_policy(request).allowed_hosts[0]}/{full_name}.git",
         }
         connected = _connect_repository(
             request,
@@ -574,6 +579,11 @@ def _connect_repository(
 ):
     existing = repository_service.get_by_github_repository_id(payload.id)
     if existing is not None:
+        if existing.organization_id != getattr(
+            request.state, "radius_webhook_org_id", existing.organization_id
+        ):
+            msg = "GitHub repository is already connected to another organization."
+            raise AccessDeniedError(msg)
         # An existing row is stale when a delivery that really carries the
         # default branch disagrees with it (e.g. the provisional value written
         # by the installation sync, or a rename on GitHub).
@@ -594,6 +604,9 @@ def _connect_repository(
             {"repository": {"id": payload.id}},
             repository_service,
         )
+    # The delivery is signed, but the URL still goes through the same check as
+    # an API-supplied one before it can reach git (A-01/A-02).
+    clone_url = validate_clone_url(payload.clone_url, policy=clone_policy(request))
     repository = repository_service.connect_repository(
         ConnectRepositoryCommand(
             organization_id=organization_id,
@@ -601,7 +614,7 @@ def _connect_repository(
             name=payload.name,
             owner=payload.owner.login,
             default_branch=payload.default_branch or _PROVISIONAL_DEFAULT_BRANCH,
-            clone_url=payload.clone_url,
+            clone_url=clone_url,
             visibility=(
                 RepositoryVisibility.PRIVATE
                 if payload.private
@@ -629,6 +642,13 @@ def _parse_payload(body: bytes) -> dict[str, Any]:
     return payload
 
 
+def _require_signature_header(request: Request, signature: str | None) -> None:
+    settings = request.app.state.settings
+    if getattr(settings, "github_webhook_secret", "") and signature is None:
+        msg = "Missing GitHub webhook signature."
+        raise AccessDeniedError(msg)
+
+
 def _validate_signature(
     request: Request,
     body: bytes,
@@ -654,7 +674,8 @@ def _validate_signature(
         body,
         hashlib.sha256,
     ).hexdigest()
-    if not hmac.compare_digest(signature, expected):
+    # Compare bytes: ``compare_digest`` raises TypeError (a 500) for non-ASCII str.
+    if not hmac.compare_digest(signature.encode("utf-8"), expected.encode("ascii")):
         msg = "Invalid GitHub webhook signature."
         raise AccessDeniedError(msg)
 
@@ -672,25 +693,53 @@ def _resolve_webhook_organization_id(
     mode; otherwise an unknown installation is rejected so one customer's
     repositories are never filed under another organization.
     """
-    if payload and repository_service:
-        repo_data = payload.get("repository")
-        if isinstance(repo_data, dict) and repo_data.get("id"):
-            existing = repository_service.get_by_github_repository_id(int(repo_data["id"]))
-            if existing is not None:
-                return existing.organization_id
+    settings = request.app.state.settings
+    owner_org: UUID | None = None
+    repo_data = payload.get("repository") if payload else None
+    if repository_service and isinstance(repo_data, dict) and repo_data.get("id"):
+        repo_id = _as_int(repo_data["id"])
+        if repo_id is None:
+            msg = "Webhook repository id must be an integer."
+            raise ValidationError(msg)
+        existing = repository_service.get_by_github_repository_id(repo_id)
+        if existing is not None:
+            owner_org = existing.organization_id
 
-    if payload:
-        installation = payload.get("installation")
-        if isinstance(installation, dict) and installation.get("id"):
-            session = getattr(request.state, "radius_db_session", None)
-            if session is not None:
-                org = (
-                    session.query(db_models.Organization)
-                    .filter_by(github_installation_id=int(installation["id"]))
-                    .first()
-                )
-                if org is not None:
-                    return org.id
+    installation_org: UUID | None = None
+    installation_id: int | None = None
+    installation = payload.get("installation") if payload else None
+    if isinstance(installation, dict) and installation.get("id"):
+        installation_id = _as_int(installation["id"])
+        if installation_id is None:
+            msg = "Webhook installation id must be an integer."
+            raise ValidationError(msg)
+        session = getattr(request.state, "radius_db_session", None)
+        if session is not None:
+            org = (
+                session.query(db_models.Organization)
+                .filter_by(github_installation_id=installation_id)
+                .first()
+            )
+            if org is not None:
+                installation_org = org.id
+
+    if installation_org is not None:
+        # The signed delivery names an installation that is linked to an
+        # organization: that organization is the tenant. A repository row held
+        # by a different organization is never served from here (A-05).
+        if owner_org is not None and owner_org != installation_org:
+            msg = "GitHub repository is already connected to another organization."
+            raise AccessDeniedError(msg)
+        return installation_org
+
+    if owner_org is not None:
+        if installation_id is not None and not _may_adopt_installation(settings):
+            # The delivery comes from an installation no organization is linked
+            # to. The repository row may have been registered by anyone who
+            # knew its numeric id, so it is not proof of ownership (A-05).
+            msg = "Unknown GitHub installation; connect it to an organization first."
+            raise AccessDeniedError(msg)
+        return owner_org
 
     settings = request.app.state.settings
     if getattr(settings, "github_single_tenant", False):
@@ -702,6 +751,25 @@ def _resolve_webhook_organization_id(
 
     msg = "Unknown GitHub installation; connect it to an organization first."
     raise AccessDeniedError(msg)
+
+
+def _as_int(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.isascii() and value.isdigit():
+        return int(value)
+    return None
+
+
+def _may_adopt_installation(settings: object) -> bool:
+    """Explicit single-tenant modes only: no proof of ownership exists otherwise."""
+
+    return bool(
+        getattr(settings, "github_single_tenant", False)
+        or getattr(settings, "github_dev_single_tenant", False)
+    )
 
 
 def _webhook_organization_id(request: Request) -> UUID:
@@ -738,8 +806,18 @@ def _record_installation_id(
     organization = session.get(db_models.Organization, org_id)
     if organization is None:
         return
-    installation_id = int(installation["id"])
+    installation_id = _as_int(installation["id"])
+    if installation_id is None:
+        return
     if organization.github_installation_id is None:
+        if not _may_adopt_installation(request.app.state.settings):
+            LOGGER.warning(
+                "Not linking GitHub installation %s to organization %s: no proof of "
+                "ownership (single-tenant mode is off)",
+                installation_id,
+                org_id,
+            )
+            return
         organization.github_installation_id = installation_id
     elif (
         organization.github_installation_id != installation_id

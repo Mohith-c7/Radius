@@ -17,6 +17,15 @@ class ObservabilitySettings(BaseSettings):
     """
     service_name: str = Field(default="radius", alias="RADIUS_OTEL_SERVICE_NAME")
     metrics_enabled: bool = Field(default=False, alias="RADIUS_METRICS_ENABLED")
+    metrics_token: str = Field(
+        default="",
+        alias="RADIUS_METRICS_TOKEN",
+        description=(
+            "Bearer token required to read the API `/metrics` endpoint. When unset, "
+            "`/metrics` is served without authentication in development/test and is "
+            "disabled (404) when `RADIUS_ENV` is uat or production."
+        ),
+    )
     worker_metrics_port: int = Field(default=0, alias="RADIUS_WORKER_METRICS_PORT")
     """Port for the worker's Prometheus endpoint; ``0`` disables it."""
 

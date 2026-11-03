@@ -62,10 +62,11 @@ class FakeGitHub:
     def create_installation_token(self, installation_id):
         return type("T", (), {"token": "ghs_x"})()
 
-    def list_pull_requests(self, **_):
-        if self.live_head is None:
-            return []
-        return [{"number": self.pr_number, "head": {"sha": self.live_head}}]
+    def get_pull_request(self, *, number, **_):
+        # GET /pulls/{number}: works for any PR, not only the first 100 open ones (B-15)
+        if self.live_head is None or number != self.pr_number:
+            return {}
+        return {"number": number, "head": {"sha": self.live_head}}
 
     def list_check_runs_for_ref(self, *, ref, check_name, **_):
         return [r for r in self.check_runs if r["head_sha"] == ref and r["name"] == check_name]
@@ -398,10 +399,14 @@ def test_stale_heads_are_never_published() -> None:
     assert env3.github.writes == 0
 
 
-def test_pr_missing_from_the_open_list_falls_back_to_the_database_check() -> None:
+def test_b15_unknown_live_head_fails_closed_and_old_prs_are_found_directly() -> None:
     env = Env()
     env.store()
-    env.github.live_head = None
+    env.github.live_head = None  # GitHub gave nothing usable: never write on an unknown head
+    outcome = env.publish()
+    assert (outcome.status, outcome.reason) == ("skipped", "live_head_unknown")
+    assert env.github.writes == 0
+    env.github.live_head = HEAD  # the PR is asked for directly, so its position in any list is moot
     assert env.publish().status == "published"
 
 
@@ -651,3 +656,98 @@ def test_job_publish_uses_v2_when_on_and_ok_and_v1_otherwise(monkeypatch) -> Non
 def test_ids_are_uuids() -> None:
     env = Env()
     assert isinstance(env.analysis, UUID)
+
+
+def test_recompute_failure_marker_replaces_a_published_verdict_with_unavailable() -> None:
+    from radius_worker.verdict_v2.scoring import build_error_bundle
+
+    env = Env()
+    env.store(make_bundle(str(env.analysis), verdict="verified"))
+    assert env.publish().status == "published"
+    before = env.github.comments[-1]["body"]
+
+    bundle = build_error_bundle(
+        analysis_id=str(env.analysis), head_sha=HEAD, code="recompute_failed:ValueError"
+    )
+    env.store(bundle)
+    outcome = env.publish()
+
+    assert outcome.status == "published"
+    body = env.github.comments[-1]["body"]
+    assert body != before
+    assert "unavailable" in body.lower()
+    assert env.github.check_runs[-1]["conclusion"] == "action_required"
+
+
+def test_ordinary_v2_error_row_is_still_not_published() -> None:
+    from radius_worker.verdict_v2.scoring import build_error_bundle
+
+    env = Env()
+    env.store(build_error_bundle(analysis_id=str(env.analysis), head_sha=HEAD, code="ValueError"))
+    assert env.publish().reason == "v2_not_ok"
+
+
+# -- B-09: the reconciler ----------------------------------------------------
+
+
+def _upload(env: Env, when: datetime, sha: str = "a1") -> None:
+    from radius_shared.database.models import TestResultUpload
+
+    with env.factory() as session:
+        session.add(
+            TestResultUpload(
+                analysis_id=env.analysis, commit_sha=HEAD, body_sha256=sha * 32, status="passed",
+                created_at=when,
+            )
+        )
+        session.commit()
+
+
+def test_b09_lost_enqueue_is_recovered_by_the_sweep_and_not_repeated() -> None:
+    from radius_worker.verdict_v2.requests import reconcile_stale
+
+    env = Env()
+    with env.factory() as session:
+        SqlVerdictV2Repository(session).save(
+            env.org_a, env.analysis, make_bundle(str(env.analysis)), mode="on", now=T0
+        )
+        session.commit()
+    _upload(env, T0 + timedelta(minutes=10))  # CI arrived, the enqueue was swallowed
+
+    # within the grace window (the normal debounced path may still be running): nothing
+    assert reconcile_stale(env.factory, now=T0 + timedelta(minutes=11), grace_seconds=3600) == 0
+    assert reconcile_stale(env.factory, now=T0 + timedelta(minutes=20)) == 1
+    with env.factory() as session:
+        assert SqlVerdictV2Repository(session).get_request(env.org_a, env.analysis) is not None
+    assert reconcile_stale(env.factory, now=T0 + timedelta(minutes=21)) == 0  # already queued
+
+
+def test_b09_a_recompute_that_changes_nothing_is_not_swept_again() -> None:
+    from radius_worker.verdict_v2.requests import reconcile_stale
+
+    env = Env()
+    with env.factory() as session:
+        repo = SqlVerdictV2Repository(session)
+        repo.save(env.org_a, env.analysis, make_bundle(str(env.analysis)), mode="on", now=T0)
+        session.commit()
+    _upload(env, T0 + timedelta(minutes=10))
+    assert reconcile_stale(env.factory, now=T0 + timedelta(minutes=20)) == 1
+    with env.factory() as session:  # the recompute ran, inputs identical: touch only
+        repo = SqlVerdictV2Repository(session)
+        claim = repo.claim_request(now=T0 + timedelta(minutes=21))
+        out = repo.save(
+            env.org_a, env.analysis, make_bundle(str(env.analysis)), mode="on",
+            now=T0 + timedelta(minutes=21),
+        )
+        assert out.changed is False
+        repo.complete_request(claim)
+        session.commit()
+    assert reconcile_stale(env.factory, now=T0 + timedelta(minutes=40)) == 0
+
+
+def test_b09_analyses_without_any_verdict_are_left_alone() -> None:
+    from radius_worker.verdict_v2.requests import reconcile_stale
+
+    env = Env()
+    _upload(env, T0)
+    assert reconcile_stale(env.factory, now=T0 + timedelta(hours=1)) == 0

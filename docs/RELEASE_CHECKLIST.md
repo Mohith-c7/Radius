@@ -31,6 +31,8 @@ Nothing here is ticked on trust.
 | 18 | Live GitHub validation run | OWNER | Requires 16 and 17. Until done, release notes must say live GitHub is untested. |
 | 19 | GitHub settings (branch protection, Discussions, labels) | OWNER | PRD-02, [branch protection](github-branch-protection.md). |
 | 20 | Pre-registration freeze / deposit | OWNER | Not needed for the code alpha; needed before any research claim. |
+| 21 | Security review A fixes verified on the release commit (A-01..A-17, [response](security/CODE_REVIEW_A_RESPONSE.md)): clone URL tests, tenant tests for coverage/repositories/webhooks, auth tests | TODO | `pytest packages/repository/tests apps/api/tests/test_security_review_a_routes.py apps/api/tests/test_security_review_a_auth.py`. Re-run the smoke (`scripts/smoke_e2e.py`, needs Docker/PostgreSQL) once: it was changed to use a local git double and was not run by the author of the fixes. |
+| 22 | Production profile starts: `RADIUS_API_KEY_PEPPER` (or `API_KEYS`), `SESSION_COOKIE_SECURE=true`, no `DEV_AUTO_VERIFY_EMAIL`, `RADIUS_METRICS_TOKEN` if `/metrics` is wanted, `RADIUS_GIT_ALLOWED_HOSTS` for GitHub Enterprise Server | TODO | The API now refuses to start in uat/production without them (A-09, A-16). Multi-tenant installation linking is an operator step until the OWNER decision in [INSTALLATION_BINDING](security/INSTALLATION_BINDING.md). |
 
 ## No-go (any one blocks the tag)
 

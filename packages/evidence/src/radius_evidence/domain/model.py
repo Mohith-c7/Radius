@@ -22,12 +22,15 @@ _SHA40 = re.compile(r"^[0-9a-f]{40}$")
 @dataclass(frozen=True, slots=True)
 class Reason(Serializable):
     """Why something happened. ``rule_id`` (contract 2) names the deciding verdict rule
-    (``R1c`` ...); ``ref`` stays the free reference (test id, path, finding id)."""
+    (``R1c`` ...); ``ref`` stays the free reference (test id, path, finding id), always ONE id.
+    ``refs`` (optional, B-01; None for a single reference) lists every reference when a
+    reason concerns several (all failing evidence ids of a criterion); consumers must never split ``ref`` on commas."""
 
     code: str
     detail: str
     ref: str | None = None
     rule_id: str | None = None
+    refs: tuple[str, ...] | None = field(default=None, metadata={"omit_none": True})
 
 
 @dataclass(frozen=True, slots=True)

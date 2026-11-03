@@ -218,6 +218,7 @@ def test_cors_headers_on_429_so_browser_can_read_it(monkeypatch) -> None:
 def test_production_origins_are_exact_and_exclude_localhost(monkeypatch) -> None:
     monkeypatch.setenv("RADIUS_ENV", "production")
     monkeypatch.setenv("CORS_ORIGINS", "https://app.example.com")
+    monkeypatch.setenv("RADIUS_API_KEY_PEPPER", "p" * 40)
     get_api_settings.cache_clear()
     origins = resolve_cors_origins(get_api_settings())
     assert origins == ["https://app.example.com"]
@@ -255,7 +256,9 @@ def test_allow_headers_cover_headers_the_api_reads() -> None:
 )
 def test_production_rejects_wildcard_and_plain_http_origins(origins: str) -> None:
     with pytest.raises(PydanticValidationError):
-        ApiSettings(RADIUS_ENV="production", CORS_ORIGINS=origins)
+        ApiSettings(
+            RADIUS_ENV="production", CORS_ORIGINS=origins, RADIUS_API_KEY_PEPPER="p" * 40
+        )
 
 
 def test_malformed_origin_rejected_everywhere() -> None:
@@ -266,7 +269,9 @@ def test_malformed_origin_rejected_everywhere() -> None:
 
 def test_production_accepts_https_origins() -> None:
     settings = ApiSettings(
-        RADIUS_ENV="production", CORS_ORIGINS="https://a.example.com, https://b.example.com:8443"
+        RADIUS_ENV="production",
+        CORS_ORIGINS="https://a.example.com, https://b.example.com:8443",
+        RADIUS_API_KEY_PEPPER="p" * 40,
     )
     assert resolve_cors_origins(settings) == [
         "https://a.example.com",
@@ -611,7 +616,7 @@ def test_metric_noop_when_disabled() -> None:
         ("POST", "/api/v1/auth/forgot-password", "auth"),
         ("GET", "/api/v1/auth/oauth/github", "auth"),
         ("GET", "/api/v1/auth/me", "general"),
-        ("POST", "/api/v1/auth/refresh", "general"),
+        ("POST", "/api/v1/auth/refresh", "auth"),
         ("POST", "/api/v1/auth/logout", "general"),
         ("POST", "/api/v1/webhooks/github", "webhook"),
         ("POST", "/api/v1/webhooks/github/", "webhook"),

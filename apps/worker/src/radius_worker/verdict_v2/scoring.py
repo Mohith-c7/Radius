@@ -147,6 +147,8 @@ def build_stage_b(
 
 #: ``CriterionTestEdgeInput.method`` of a ``tests:`` hint edge (adapters.hint_test_edges).
 HINT_METHOD = "intent_yml_hint"
+#: ``radius_linking.domain.model.LINKER_EXPLICIT`` (author hints and path mentions).
+EXPLICIT_LINKER = "explicit"
 
 
 def apply_author_hint_cap(
@@ -169,6 +171,63 @@ def apply_author_hint_cap(
                 e = replace(e, weight=cap)
         edges.append(e)
     return tuple(edges), frozenset(pairs)
+
+
+def effective_criteria(criteria: tuple[CriterionInput, ...]) -> tuple[CriterionInput, ...]:
+    """Author-set criterion weights only count when nobody the PR author controls set them (B-05).
+
+    A weight below 1.0 shrinks a criterion's share of the unproven intent mass, so an author
+    could hide unproven criteria from R2b with tiny weights. Only ``base_spec`` and
+    ``human_confirmed`` criteria keep their weight; every other criterion counts as 1.0.
+    """
+
+    return tuple(
+        c if c.weight == 1.0 or c.provenance in TRUSTED_HINT_PROVENANCE else replace(c, weight=1.0)
+        for c in criteria
+    )
+
+
+def apply_author_edge_cap(
+    stage_a: StageAInput, mapping: Any, cap: float
+) -> tuple[tuple[Any, ...], frozenset[tuple[str, str]], frozenset[tuple[str, str]]]:
+    """Cap criterion-to-symbol links that rest only on author text (B-06).
+
+    ``paths:`` hints and file paths written in the criterion text (the ``explicit`` linker)
+    are controlled by the PR author unless the criterion is ``base_spec`` or
+    ``human_confirmed``. An edge whose only support is the explicit linker (no other linker
+    reached ``link_min_cs``) gets its score capped so that ``l_cs`` is at most ``cap``
+    (score ``<= link_sat_cs * cap``), the same discount the ``tests:`` hints get. Returns
+    ``(edges, hint_only, no_coverage)``: the ``(criterion, symbol)`` pairs that are
+    hint-only, and those that must not count towards intent coverage because the hint
+    names no concrete symbol (a glob, a directory, a file mention).
+    """
+
+    by_id = {c.criterion_id: c for c in stage_a.criteria}
+    limit = mapping.link_sat_cs * cap
+    edges = []
+    hint_only: set[tuple[str, str]] = set()
+    no_cover: set[tuple[str, str]] = set()
+    for e in stage_a.criterion_symbol:
+        c = by_id.get(e.criterion_id)
+        explicit = e.by_linker.get(EXPLICIT_LINKER)
+        trusted = (
+            c is not None
+            and c.provenance in TRUSTED_HINT_PROVENANCE
+            and c.hints_provenance in TRUSTED_HINT_PROVENANCE
+        )
+        if c is None or trusted or explicit is None:
+            edges.append(e)
+            continue
+        independent = max((v for k, v in e.by_linker.items() if k != EXPLICIT_LINKER), default=0.0)
+        if independent >= mapping.link_min_cs - 1e-12:
+            edges.append(e)  # another linker corroborates it independently of the author text
+            continue
+        pair = (e.criterion_id, e.symbol_id)
+        hint_only.add(pair)
+        if not any(r.code == "path_symbol_hint" for r in e.reasons):
+            no_cover.add(pair)
+        edges.append(replace(e, score=min(e.score, limit)) if e.score > limit else e)
+    return tuple(edges), frozenset(hint_only), frozenset(no_cover)
 
 
 @dataclass(frozen=True, slots=True)
@@ -257,14 +316,23 @@ def _best_rows(
 
 
 def _covered_symbols(
-    stage_a: StageAInput, active: set[str], link_min_cs: float
+    stage_a: StageAInput,
+    active: set[str],
+    link_min_cs: float,
+    hint_only: frozenset[tuple[str, str]] = frozenset(),
+    no_coverage: frozenset[tuple[str, str]] = frozenset(),
 ) -> set[str]:
-    linked = {
-        e.symbol_id
+    live = [
+        e
         for e in stage_a.criterion_symbol
-        if e.criterion_id in active and e.score >= link_min_cs - 1e-12
-    }
-    files = {s.path for s in stage_a.symbols if s.symbol_id in linked and not s.is_pseudo}
+        if e.criterion_id in active
+        and e.score >= link_min_cs - 1e-12
+        and (e.criterion_id, e.symbol_id) not in no_coverage
+    ]
+    linked = {e.symbol_id for e in live}
+    # a linked symbol vouches for the rest of its file, except when only an author hint links it
+    spreading = {e.symbol_id for e in live if (e.criterion_id, e.symbol_id) not in hint_only}
+    files = {s.path for s in stage_a.symbols if s.symbol_id in spreading and not s.is_pseudo}
     return {
         s.symbol_id
         for s in behavioral_symbols(stage_a.symbols)
@@ -295,6 +363,11 @@ def compute_pipeline(
     tamper_policy = apply_tamper_policy(original_sa.tamper, repo.policy.tamper_rules)
     finding_waivers = apply_finding_waivers(tamper_policy.findings, repo.waivers.waivers)
     sa = replace(original_sa, tamper=finding_waivers.remaining)
+    sa = replace(sa, criteria=effective_criteria(sa.criteria))  # B-05
+    edges, hint_only, no_cover = apply_author_edge_cap(
+        sa, cfg.link, cfg.link.author_hint_cap
+    )  # B-06
+    sa = replace(sa, criterion_symbol=edges)
     stage_b = replace(stage_b, stage_a=sa)
     norm = normalize_evidence(stage_b, collected_at=collected_at, config=cfg.quality)
     criterion_test, author_pairs = apply_author_hint_cap(sa, cfg.link.author_hint_cap)
@@ -333,7 +406,9 @@ def compute_pipeline(
             items_by_test,
             severity,
             cfg,
-            lambda test_id, _syms=c_symbols: measure_test(sa.mutation, _syms, test_id),
+            lambda test_id, _syms=c_symbols, _cid=c.criterion_id: measure_test(
+                sa.mutation, _syms, test_id, index.tests_for_criterion(_cid)
+            ),
         )
         sup = compute_support(c.criterion_id, rows, cfg.support)
         supports[c.criterion_id] = sup
@@ -358,6 +433,7 @@ def compute_pipeline(
                 c_symbols,
                 [r.path.test_id for r in counted],
                 {r.path.test_id for r in counted if r.basis == "mutation"},
+                index.tests_for_criterion(c.criterion_id),
             )
             crit_mutation[c.criterion_id] = cm
             state = replace(state, flags=_mutation_flags(state.flags, cm))
@@ -408,7 +484,7 @@ def compute_pipeline(
         s for s in behavioral_symbols(sa.symbols) if not is_excluded_path(repo.policy, s.path)
     )
     b_ids = {s.symbol_id for s in b_symbols}
-    covered = _covered_symbols(sa, active, cfg.link.link_min_cs) & b_ids
+    covered = _covered_symbols(sa, active, cfg.link.link_min_cs, hint_only, no_cover) & b_ids
     coverage = len(covered) / len(b_symbols) if b_symbols else 1.0
     uim = compute_uim(sa.criteria, states, coverage, cfg)
 
@@ -439,7 +515,8 @@ def compute_pipeline(
                     "author_supplied_hint",
                     f"{len(reliant)} counted test(s) are linked only by a hint the PR author "
                     f"supplied; link strength is capped at {cfg.link.author_hint_cap:g}",
-                    ",".join(reliant),
+                    reliant[0],
+                    refs=tuple(reliant) if len(reliant) > 1 else None,
                 ),
             )
         cm = crit_mutation.get(c.criterion_id)
@@ -575,7 +652,7 @@ def _mutation_flags(flags: tuple[Flag, ...], cm: CriterionMutation) -> tuple[Fla
 def _criterion_block(cm: CriterionMutation) -> dict[str, Any]:
     """Plain-data mutation facts of one criterion (payload and ``CriterionVerdict.mutation``)."""
 
-    return {
+    out: dict[str, Any] = {
         "basis": cm.basis,
         "n_mutants": cm.n_mutants,
         "killed": cm.killed,
@@ -592,6 +669,21 @@ def _criterion_block(cm: CriterionMutation) -> dict[str, Any]:
         "d_reach_reason": cm.d_reach_reason,
         "reason": cm.reason,
     }
+    if cm.link_gaps:
+        # optional (DEC-036): only present when stage 2 found a link gap, so stage-1-only
+        # output is unchanged
+        out["link_gaps"] = [
+            {
+                "mutant_id": g.mutant_id,
+                "path": g.path,
+                "line": g.line,
+                "operator": g.operator,
+                "tests": list(g.tests),
+            }
+            for g in cm.link_gaps
+        ]
+        out["link_gap_tests"] = list(cm.link_gap_tests)
+    return out
 
 
 def _run_block(sa: StageAInput) -> dict[str, Any] | None:
@@ -619,6 +711,7 @@ def _run_block(sa: StageAInput) -> dict[str, Any] | None:
         "ladder": list(m.ladder),
         "baseline_failed": len(m.baseline_failed),
         "baseline_flaky": len(m.baseline_flaky),
+        **({"stage2": dict(m.stage2)} if m.stage2 is not None else {}),
     }
 
 
@@ -769,7 +862,9 @@ def build_payload(
             "provenance": c.provenance or "author_pr_body",
             "hints": [dict(h) for h in c.hints],
             "reasons": [
-                {"code": r.code, "detail": r.detail, "ref": r.ref} for r in c.reasons
+                {"code": r.code, "detail": r.detail, "ref": r.ref}
+                | ({"refs": list(r.refs)} if r.refs else {})
+                for r in c.reasons
             ],
             "best_link": (
                 {k: (_r(v) if isinstance(v, float) else v) for k, v in c.best_link.items()}
@@ -785,6 +880,7 @@ def build_payload(
             if c.mutation
             else {}
         )
+        | ({"confirmed_by": c.confirmed_by} if c.confirmed_by else {})
         for c in v.criteria
     ]
     reasons = [
@@ -1004,6 +1100,13 @@ class ScoringPipeline:
         if suggested:
             bundle["suggested_tests"] = suggested
             payload["suggested_tests"] = [dict(s) for s in suggested]
+            # B-19: the store keys on the bundle digest. Suggestions are not a scoring input
+            # (``verdict.inputs_digest`` is unchanged) but a different set must be stored as
+            # a new revision, not dropped as "identical inputs". Without suggestions the
+            # digest stays exactly the scoring digest.
+            bundle["inputs_digest"] = "sha256:" + sha256_hex(
+                canonical_json({"scoring": bundle["inputs_digest"], "suggested_tests": suggested})
+            )
         return Scored(result, bundle, payload)
 
     def _suggest(self, result: PipelineResult, stage_b: StageBInput) -> list[dict[str, Any]]:
@@ -1248,14 +1351,39 @@ def _sql_store(session_factory: Callable[[], Any], mode: VerdictV2Mode) -> Any |
 def _current_criteria(session: Any, organization_id: UUID, analysis_id: UUID) -> tuple[Any, ...]:
     """Criteria of the latest intent snapshot (organization-scoped, read-only)."""
 
+    return _intent_context(session, organization_id, analysis_id)[0]
+
+
+def _intent_context(
+    session: Any, organization_id: UUID, analysis_id: UUID
+) -> tuple[tuple[Any, ...], dict[str, str], str | None]:
+    """``(criteria, confirming actors, PR author login)`` for the Stage A refresh (B-07).
+
+    The criteria read must succeed (a failure raises, the outbox retries). The PR author
+    is best effort: ``None`` means self-confirmation cannot be checked."""
+
     from radius_intent.infrastructure.sqlalchemy_repository import (
         SqlAlchemyIntentRepository,
     )
 
-    snapshot = SqlAlchemyIntentRepository(session).get_latest_snapshot(
-        organization_id, str(analysis_id)
-    )
-    return tuple(snapshot.criteria) if snapshot else ()
+    from radius_worker.verdict_v2.intent_refresh import confirming_actors
+
+    repo = SqlAlchemyIntentRepository(session)
+    snapshot = repo.get_latest_snapshot(organization_id, str(analysis_id))
+    if snapshot is None:
+        return (), {}, None
+    actors = confirming_actors(repo.list_state_changes(organization_id, snapshot.snapshot_id))
+    author: str | None = None
+    try:
+        from radius_shared.database import models as db_models
+
+        analysis = session.get(db_models.Analysis, analysis_id)
+        pull = session.get(db_models.PullRequest, analysis.pull_request_id) if analysis else None
+        value = getattr(pull, "author", None)
+        author = value if isinstance(value, str) and value else None
+    except Exception:  # noqa: BLE001 - unknown author: no self-confirmation check
+        author = None
+    return tuple(snapshot.criteria), actors, author
 
 
 @dataclass(slots=True)
@@ -1278,6 +1406,45 @@ class StageBRecomputer:
     def recompute(
         self, session: Any, organization_id: UUID, analysis_id: UUID
     ) -> bool:
+        """Re-score from the stored Stage A; a failure never leaves the old verdict current.
+
+        Whatever goes wrong (a crash in a rule, an unreadable Stage A, a bundle whose
+        Stage A was dropped by the size cap), an explicit ``error`` row becomes the newest
+        revision before the exception propagates, so a previously stored (and published)
+        ``verified`` is no longer the current verdict (B-01, B-04). The outbox retries
+        and the next successful run replaces the error row."""
+
+        from radius_shared.verdict_v2_repository import StageAUnavailableError
+
+        try:
+            return self._recompute(session, organization_id, analysis_id)
+        except StageAUnavailableError:
+            # retrying cannot help: the stored bundle no longer holds Stage A
+            self._mark_unavailable(organization_id, analysis_id, "stage_a_not_stored")
+            return True
+        except Exception as exc:
+            self._mark_unavailable(
+                organization_id, analysis_id, f"recompute_failed:{type(exc).__name__}"
+            )
+            raise
+
+    def _mark_unavailable(self, organization_id: UUID, analysis_id: UUID, code: str) -> None:
+        try:
+            head = self.store.latest_head(organization_id, analysis_id)
+            bundle = build_error_bundle(
+                analysis_id=str(analysis_id), head_sha=head, code=code, config=self.config
+            )
+            if bundle is not None:
+                self.store.save(organization_id, analysis_id, bundle)
+        except Exception as exc:  # noqa: BLE001 - best effort; the original error wins
+            LOGGER.warning(
+                "Verdict v2 could not record the recompute failure",
+                extra={"analysis_id": str(analysis_id), "reason_code": type(exc).__name__},
+            )
+
+    def _recompute(
+        self, session: Any, organization_id: UUID, analysis_id: UUID
+    ) -> bool:
         from radius_testing.infrastructure.sqlalchemy_store import SqlAlchemyTestStore
 
         from radius_worker.verdict_v2.intent_refresh import refresh_stage_a_intent
@@ -1286,8 +1453,9 @@ class StageBRecomputer:
         stage_a = self.store.latest_stage_a(organization_id, analysis_id)
         if stage_a is None:
             return False
+        criteria, actors, pr_author = _intent_context(session, organization_id, analysis_id)
         stage_a = refresh_stage_a_intent(
-            stage_a, _current_criteria(session, organization_id, analysis_id)
+            stage_a, criteria, actors=actors, pr_author=pr_author
         )
         facts = outcomes_from_uploads(
             SqlAlchemyTestStore(session).list_result_uploads(analysis_id), stage_a

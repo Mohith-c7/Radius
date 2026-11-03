@@ -59,3 +59,10 @@ class SqlVerdictStore:
         if raw is None:
             return None
         return StageAInput.from_dict(raw)
+
+    def latest_head(self, organization_id: UUID, analysis_id: UUID) -> str | None:
+        """Head sha of the newest stored revision (for an error row), if any."""
+
+        with self._session_factory() as session:
+            stored = SqlVerdictV2Repository(session).latest(organization_id, analysis_id)
+        return stored.head_sha if stored is not None else None
