@@ -1,6 +1,30 @@
 # SSO / OIDC design (PRD-26)
 
-Status: **design only, 2026-11-03. No auth code was changed.** Nothing here is implemented or tested. SCIM is out of scope.
+Status (2026-11-03): **the enterprise OIDC/SSO feature in sections 2 to 12 is still design only and not implemented. The security gaps 1 to 4 in section 1 are fixed for the existing Google and GitHub sign-in** (branch `fix/oauth-pkce-oidc-validation`, see "Implementation status" below). SCIM is out of scope.
+
+## Implementation status (Google and GitHub sign-in)
+
+Code: `apps/api/src/app/oauth.py` (primitives), `routes_auth.py` (routes), `auth.py` (`user_from_provider`), `models.py` (`auth_oauth_flows`). Tests: `apps/api/tests/test_oauth_flow.py`, driven against an in-test stub IdP (authorize, token, JWKS, `/user`, `/user/emails`, RSA keys generated at run time, no network).
+
+| Section 1 gap | Status |
+|---|---|
+| 1. No PKCE | **Fixed.** `code_challenge` (S256) is sent for Google and GitHub; the verifier is generated per flow, kept server-side and sent only to the token endpoint. GitHub's PKCE support for OAuth Apps follows its documentation and could not be verified offline; if GitHub ignored the parameters the flow would degrade to `state` plus client secret, never to something less strict than before. |
+| 2. ID token not validated; `email_verified` ignored | **Fixed for Google.** Identity now comes only from the ID token: RS256 only (`none`, HS* and others refused), key chosen by `kid` from the JWKS (cached 1 h, refetched at most once a minute on an unknown `kid`, so rotation works), `iss` in the Google allow-list, `aud` equals the client id (`azp` required when there are several audiences), `exp`/`iat`/`sub` required (60 s skew), `nonce` compared in constant time. `email_verified` must be exactly `true`. The userinfo endpoint is no longer used. |
+| 3. Linking by email | **Fixed.** Lookup is by `(provider, sub)` first (`auth_accounts`, unique); email is never the key. An unknown identity needs a provider-verified email. It is linked to an existing local account only when that account's email is also verified; otherwise sign-in fails with `/login?error=oauth_link_refused` (no session, nothing linked). The existence of an account is already revealed by sign-up (HTTP 409), so this adds no new disclosure. |
+| 4. Bare `except` | **Fixed.** Failures raise `OAuthError` with a short code; each outcome is logged as `provider`, `outcome`, `reason` (a code or exception class) and never with codes, tokens, secrets, provider bodies or the verifier. The browser sees only `oauth`, `oauth_denied`, `oauth_email_unverified` or `oauth_link_refused`. |
+| 5. Role/group claims ignored | Not changed (SSO feature). |
+
+Also in this change: random single-use `state` (32 bytes, stored as SHA-256, deleted before it is judged), bound to the browser by the HTTP-only `radius_oauth_flow` cookie (SameSite=Lax, path `/api/v1/auth/oauth`), 10-minute expiry; `next` accepted only as a same-origin relative path (else `/`); redirect URI read only from settings and required to be exactly `<origin>/api/v1/auth/oauth/<provider>/callback` over https (http only for localhost outside production; production start-up refuses a non-https value); GitHub identity from `/user/emails` only (primary and verified, the public profile email is ignored); the callback is in the existing `auth` rate-limit bucket (10 requests per minute per IP by default); token and JWKS calls have a 10 s timeout, follow no redirects and cap the response size.
+
+Schema: one new table, `auth_oauth_flows`. The auth tables are created by `Base.metadata.create_all` at start-up (they are not in the Alembic history), so a new table needs no migration and `auth_accounts` already stores `(provider, provider_account_id=sub)`. Existing rows keep working. Rollback: deploy the previous version; the extra table is inert.
+
+Behaviour changes for operators: Google and GitHub users whose provider email is unverified can no longer sign in; users whose only local account is unverified are refused instead of silently linked; production refuses to start with a non-https `GOOGLE_REDIRECT_URI` or `GITHUB_REDIRECT_URI`. In-flight sign-ins started before the upgrade fail once and can be retried.
+
+Not implemented (unchanged from this design): the generic enterprise OIDC provider, discovery, organization/role mapping, JIT provisioning settings, the SSO configuration UI, `OIDC_*` variables, `/auth/providers`, session cap for SSO, admin revoke-all, DNS-verified domains, SCIM. There is also no profile-page "link this provider" flow yet, so refused linking has no self-service path today (sign in with the password, or verify the e-mail first).
+
+Not verified offline: the real behaviour of Google's and GitHub's endpoints (claim shapes such as string-valued `email_verified`, which is rejected here by design, GitHub PKCE, GitHub's `/user/emails` scopes). No real provider was called. A manual run against test OAuth clients is needed before release.
+
+Threat notes for this change: authorization-code interception (PKCE plus single-use flow); login CSRF and session fixation (`state` + cookie binding, a new session id on every login); ID-token forgery, algorithm confusion and substitution (RS256 allow-list, JWKS key by `kid`, `iss`/`aud`/`nonce`); pre-hijack and account takeover through unverified emails (verified on both sides before linking); open redirect (relative-path allow-list, also after percent-decoding); secret leakage in logs (code-only reasons, tested); callback abuse (rate limit, flow burned on first use). Residual: a compromised provider signing key or a provider that asserts a wrong `email_verified`; in-memory rate-limit store is per process (see `HTTP_HARDENING.md`); the verifier and nonce sit unencrypted in the database for at most 10 minutes; Dashboard CSRF on state-changing calls is a separate open item.
 
 ## 1. Where we start (read from the code)
 
