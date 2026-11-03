@@ -1,6 +1,6 @@
 # Radius Implementation Plan (Research + Product)
 
-**Status:** Proposed. Date: 2026-11-02.
+**Status:** Proposed. Date: 2026-11-02. Verification note 2026-11-03: the dev stack, the Verdict v2 panel and intent confirmation (DEC-033) were run in Chrome and the smoke test passes in CI; real GitHub, production mode, calibration, mutation scores in the worker and a second annotator remain unverified (see [KNOWN_LIMITATIONS](../KNOWN_LIMITATIONS.md)). Task boxes below were not changed by that pass.
 **Companion docs:** `DESIGN.md` (what and why), `EVALUATION_PLAN.md` (paper track), `PRODUCT_AND_GTM.md` (market track), `tasks/*.md` (the detailed tasks).
 
 This plan has **three tracks that run together** and share one codebase:
