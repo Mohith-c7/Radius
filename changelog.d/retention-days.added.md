@@ -1,0 +1,1 @@
+Opt-in data retention: `RADIUS_RETENTION_DAYS` (default 0 = off, minimum 7) makes the worker hourly delete expired rows from `idempotency_keys`, exhausted `verdict_v2_requests` outbox rows and `mutation_result_cache` in batches; `RADIUS_RETENTION_DRY_RUN=true` only logs the counts. Analyses, verdicts and audit rows are never deleted.

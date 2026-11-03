@@ -1,13 +1,20 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from radius_analysis.ai import pruner as _pruner_module
 from radius_analysis.ai.pruner import SemanticPruner
+
+# The google-genai SDK is an optional extra (installed via the dev extra in CI).
+requires_genai = pytest.mark.skipif(
+    _pruner_module.genai is None, reason="google-genai SDK not installed"
+)
 
 # ==========================================
 # Modern google-genai SDK tests (_USE_GENAI=True)
 # ==========================================
 
 
+@requires_genai
 @patch("radius_analysis.ai.pruner._USE_GENAI", True)
 @patch("radius_analysis.ai.pruner.genai.Client")
 def test_semantic_pruner_impacted(mock_client_class):
@@ -33,6 +40,7 @@ def test_semantic_pruner_impacted(mock_client_class):
     assert call_kwargs["config"]["response_schema"] == PrunerDecision
 
 
+@requires_genai
 @patch("radius_analysis.ai.pruner._USE_GENAI", True)
 @patch("radius_analysis.ai.pruner.genai.Client")
 def test_semantic_pruner_benign(mock_client_class):
@@ -53,6 +61,7 @@ def test_semantic_pruner_benign(mock_client_class):
     mock_client.models.generate_content.assert_called_once()
 
 
+@requires_genai
 @patch("radius_analysis.ai.pruner._USE_GENAI", True)
 @patch("radius_analysis.ai.pruner.genai.Client")
 def test_semantic_pruner_fallback_on_error(mock_client_class):
@@ -66,6 +75,7 @@ def test_semantic_pruner_fallback_on_error(mock_client_class):
     assert result is True
 
 
+@requires_genai
 @patch("radius_analysis.ai.pruner._USE_GENAI", True)
 @patch("radius_analysis.ai.pruner.genai.Client")
 def test_semantic_pruner_fallback_on_invalid_json(mock_client_class):
