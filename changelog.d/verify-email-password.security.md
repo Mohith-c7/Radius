@@ -1,0 +1,1 @@
+In uat and production the verify-email page now asks the new account holder to choose a password (the password typed at signup is still discarded), so a genuine signup no longer needs a password reset. New endpoint `POST /api/v1/auth/verify-email/check`.

@@ -22,7 +22,7 @@ How to read it.
   (`RADIUS_LLM_*`) silently fall back to their default on a bad number.
 
 
-Variables documented: **157** (15 secret, 10 feature flags).
+Variables documented: **158** (15 secret, 10 feature flags).
 
 ## Core, API, GitHub and observability
 
@@ -108,6 +108,7 @@ Variables documented: **157** (15 secret, 10 feature flags).
 | `RADIUS_TRUSTED_PROXIES` | str | `empty` | api | no | - | Comma separated IPs/CIDRs of reverse proxies whose X-Forwarded-For is trusted. |
 | `RADIUS_UPLOAD_MAX_BODY_BYTES` | int | `20971520` | api | no | - | Body cap in bytes for CI test-report uploads. |
 | `RADIUS_VERDICT_V2_CHECK_CONCLUSIONS` | str | `advisory` | worker | no | - | Check Run conclusion mapping for Verdict v2 (alpha). advisory (default): never success; verified, insufficient_evidence and needs_review are neutral, failed is failure only when decided by R1a/R1b/R1c (failing linked test, failing CI, high-severity tamper). strict: verified is success. |
+| `RADIUS_VERDICT_V2_CONFIRM_POLICY` | str | `allow_unverified` | worker | no | - | Who may lift the unconfirmed-intent block and the author-hint cap by confirming a criterion (B-07). The confirmer is the authenticated principal recorded by the API. A confirmer linked to the PR author's GitHub login never counts. allow_unverified (default): a confirmer whose GitHub link is unknown counts but is labelled 'unverified confirmer' in the verdict. require_second_person: only a confirmer verifiably linked to a different GitHub account counts. An unrecognised value stops the worker at start. |
 | `RADIUS_WEBHOOK_MAX_BODY_BYTES` | int | `5242880` | api | no | - | Body cap in bytes for GitHub webhook deliveries. |
 | `RADIUS_WORKER_METRICS_PORT` | int | `0` | api, worker | no | - | Port for the worker's Prometheus endpoint; ``0`` disables it. |
 | `SERVICE_NAME` | str | `radius-api` | api, worker | no | - | Service name used in logs. Defaults differ per service (`radius-api`, `radius-worker`); normally left alone. |
@@ -126,7 +127,7 @@ Variables documented: **157** (15 secret, 10 feature flags).
 | Variable | Type | Default | Service | Secret | Status | Description |
 |---|---|---|---|---|---|---|
 | `REPOSITORY_CACHE_DIR` | Path | `.radius/repositories` | worker | no | - | Worker: directory for cloned repositories (a volume in Compose: `/var/lib/radius/repositories`). |
-| `WORKER_ANALYSIS_DEADLINE_SECONDS` | int | `7200` | worker | no | - | An analysis still pending/running this long after it started is failed by the reaper and its GitHub check completed. Keep it above WORKER_JOB_STALE_AFTER_SECONDS * WORKER_JOB_MAX_ATTEMPTS plus queue wait. |
+| `WORKER_ANALYSIS_DEADLINE_SECONDS` | int | `7200` | worker | no | - | An analysis that is still pending/running this long after its job last changed (queued, claimed or requeued) is failed by the reaper and its GitHub check completed. A job whose worker keeps renewing its lease (heartbeat) is never reaped for being long; one that stops heartbeating is recovered after WORKER_JOB_STALE_AFTER_SECONDS. Keep it above WORKER_JOB_STALE_AFTER_SECONDS * WORKER_JOB_MAX_ATTEMPTS plus queue wait. |
 | `WORKER_EXECUTE_TESTS` | bool | `false` | worker | no | deprecated (use WORKER_TEST_EXECUTION_MODE) | Run selected tests inside the worker. Disabled by default: the tests are pull-request-controlled code and the worker process holds database and GitHub App credentials. Enable only when the worker runs in an isolated sandbox with no credentials; otherwise run the selected tests in CI and upload JUnit results. |
 | `WORKER_FLAKY_POLICY` | str | `exclude` | worker | no | - | exclude (default): flaky tests are neither pass nor fail and block a 'verified' verdict. fail: flaky tests count as failures. |
 | `WORKER_HEALTH_FILE` | str | `empty` | worker | no | - | When set, the worker touches this file on every loop iteration and while a job's lease is renewed. The container healthcheck (python -m radius_worker.healthcheck) fails when it is older than WORKER_HEALTH_MAX_AGE_SECONDS. |
