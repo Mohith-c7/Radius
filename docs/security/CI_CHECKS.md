@@ -15,6 +15,7 @@ not measured on GitHub-hosted runners; CI results can differ slightly.
 | `security.yml` | `Dependency audit (pnpm)` | yes, against expiring baseline | `pnpm audit` gated by `.github/security/audit-baseline.json` |
 | `security.yml` | `SBOM and license report` | yes for AGPL/SSPL/GPL only | CycloneDX SBOM + license reports as artifacts |
 | `smoke.yml` | `Smoke (API + worker + PostgreSQL)` | after one green run on develop | end-to-end smoke of the real API, worker and PostgreSQL with a fake GitHub edge |
+| `stack.yml` | `Stack boot + browser (verdict v2 off)`, `(verdict v2 on)` | after one green run on develop | boots the real Docker Compose stack and drives the dashboard in a browser |
 | `nightly.yml` | `Benchmarks (non-blocking)` | never | nightly `pytest benchmarks`, JUnit artifact |
 
 Only `Validate` is a required check today. Add the new checks to branch
@@ -110,6 +111,16 @@ Verified locally: actionlint 1.7.7 clean on all workflows, YAML parse of `depend
 - Does not prove: real GitHub behaviour (the GitHub REST API is an in-memory fake), a browser or the dashboard, Docker image builds or Compose wiring, the test sandbox.
 - Dashboard: the Next.js dashboard is not started by the smoke. Its lint, typecheck, test and build already run in the `Validate` job of `ci.yml` (`pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`), so no extra pnpm step was added; a browser-level smoke remains a follow-up.
 - Status: the first run on a CI runner has not happened yet; it was run locally against `postgres:16-alpine` only.
+
+## Stack boot and browser end-to-end
+
+- Workflow: `stack.yml`, job `stack`, two matrix legs: `RADIUS_FEATURE_VERDICT_V2=off` and `on` (the `on` leg exercises the Verdict v2 import path in the API and the worker). Pull requests and pushes to `develop`; `contents: read`, no secrets, 25 minute timeout, actions pinned by SHA.
+- Steps: `python3 scripts/gen_dev_env.py` (random local-dev `.env`), `docker compose config -q`, build of the `api`, `worker`, `migrations` and `dashboard` images with `docker-compose.yml` plus `docker-compose.dev.yml`, `up -d --wait --wait-timeout 300`, then `scripts/ci/check_stack.py`, then the Playwright suite in `e2e/`. Container logs are dumped and uploaded when a step fails; `down -v` always runs.
+- `scripts/ci/check_stack.py` (pure parts unit-tested in `tests/test_check_stack.py`): after a 60 s stability window every long-running service (`postgres`, `api`, `worker`, `dashboard`) must still be `running` (and `healthy` where it has a health check), `migrations` must have exited 0, `GET /api/v1/health`, `/api/v1/ready`, dashboard `/` (after the redirect to sign-in) and `/login` must return 200, and the worker log must contain `Radius worker ready`. This is what catches an image that crashes on import (for example `No module named radius_evidence` when a Dockerfile `PYTHONPATH` misses a package) or a crash loop.
+- Browser tests: `e2e/` is a separate npm project (its own pinned `package-lock.json`, installed with `npm ci`; the pnpm workspace and `pnpm-lock.yaml` are untouched). `@playwright/test` 1.64.1 with the Playwright-managed Chromium (`npx playwright install --with-deps chromium`). `e2e/tests/dashboard.spec.mjs` signs up (dev auto-verify), must land on the dashboard and must not show "Check your email", waits for the home page to become network-idle, opens `/pull-requests`, `/repositories`, `/analyses`, `/settings`, `/help`, signs out and signs in again. It fails on page errors, `console.error` and any HTTP 4xx/5xx response except the documented one (`GET /api/v1/auth/me` -> 401, the session probe before sign-in and after sign-out). Screenshots, the HTML report and failure traces are uploaded as the artifact `e2e-verdict-v2-<off|on>`. The base URL must be `localhost` (the session cookie is host-scoped).
+- Local run against a running dev stack: `cd e2e && npm ci && npx playwright install chromium && npx playwright test` (set `E2E_CHROME_PATH` to use an installed Chrome instead).
+- Does not prove: real GitHub behaviour, the sandbox profile, the production-like compose file (this uses the dev override: `RADIUS_ENV=development`, auto-verified sign-ups), cross-browser behaviour (Chromium only). No buildx layer cache is used, so each leg builds the images from scratch.
+- Status: the workflow has not run on a CI runner yet. Verified locally: `actionlint` 1.7.7 clean, `scripts/ci/check_action_pins.py`, `docker compose config -q` with a generated `.env`, the unit tests, and the browser spec against an already running local dev stack (installed Chrome). The first real run is in CI. Note: the `worker` and `api` images need the `radius_evidence` package on `PYTHONPATH`; until that Dockerfile fix is on the branch under test, this job is expected to fail on the worker ready line.
 
 ## Coverage
 
