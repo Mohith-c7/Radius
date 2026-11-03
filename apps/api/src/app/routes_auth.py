@@ -321,6 +321,12 @@ def resend_verification(
     }
 
 
+def _log_label(value: str) -> str:
+    """A provider label for log lines taken from our own table, never from the request string."""
+    known = oauth.PROVIDERS.get(value)
+    return known.name if known is not None else "unknown"
+
+
 def oauth_config(provider: str) -> tuple[str, str, str]:
     """Return ``(client_id, client_secret, redirect_uri)`` or raise 503 when not configured.
 
@@ -352,7 +358,7 @@ def oauth_config(provider: str) -> tuple[str, str, str]:
             production=settings.runtime_env.strip().lower() == "production",
         )
     except oauth.OAuthError as exc:
-        LOGGER.error("oauth provider=%s misconfigured: %s", provider, exc.code)
+        LOGGER.error("oauth provider=%s misconfigured: %s", _log_label(provider), exc.code)
         raise HTTPException(
             status_code=503, detail=f"{provider.title()} sign in is not configured."
         ) from exc
@@ -453,17 +459,21 @@ async def oauth_callback(
         )
         redirect.delete_cookie(oauth.FLOW_COOKIE, path=oauth.FLOW_COOKIE_PATH)
         set_session(redirect, db, user)
-        LOGGER.info("oauth provider=%s outcome=success", provider)
+        LOGGER.info("oauth provider=%s outcome=success", _log_label(provider))
         return redirect
     except oauth.OAuthError as exc:
         # Log the failure class only: never codes, tokens, secrets or provider bodies.
-        LOGGER.warning("oauth provider=%s outcome=failure reason=%s", provider, exc.code)
+        LOGGER.warning("oauth provider=%s outcome=failure reason=%s", _log_label(provider), exc.code)
         return _login_error(exc.public)
     except HTTPException as exc:
-        LOGGER.warning("oauth provider=%s outcome=failure reason=http_%s", provider, exc.status_code)
+        LOGGER.warning(
+            "oauth provider=%s outcome=failure reason=http_%s", _log_label(provider), exc.status_code
+        )
         return _login_error("oauth")
     except Exception as exc:
         LOGGER.warning(
-            "oauth provider=%s outcome=failure reason=unexpected:%s", provider, type(exc).__name__
+            "oauth provider=%s outcome=failure reason=unexpected:%s",
+            _log_label(provider),
+            type(exc).__name__,
         )
         return _login_error("oauth")
