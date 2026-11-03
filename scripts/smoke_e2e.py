@@ -26,6 +26,14 @@ It creates a throw-away database (``radius_smoke_<random>``) next to the one in
 ``DATABASE_URL`` and drops it at the end. The webhook secret, the API-key pepper,
 the legacy API key and the GitHub App RSA key are generated per run.
 
+Fixtures: the default run is fixture 01 (the full product flow, including confirming
+criteria and the failing-CI regression) plus fixture 04; ``--fixture NN`` (repeatable) picks
+others and ``--all`` runs all eight F-14 fixtures, each in its own process and database. Every
+fixture other than 01 runs webhook -> worker -> CI upload -> worker -> confirm all criteria
+in the intent panel, and the served verdict, deciding rule, per-criterion state and S are
+compared with ``docs/research/design/verdict_v2.fixture_expectations.json`` (gold). Reviewed
+differences are in ``KNOWN_E2E_DEVIATIONS`` and in docs/research/evaluation/FIXTURE_E2E.md.
+
 Exit code 0 only if every check passed. Not covered: real GitHub, a browser or the
 dashboard, Docker image builds, the test sandbox (``WORKER_EXECUTE_TESTS`` stays
 off; CI results arrive as an uploaded JUnit report, the supported default).
@@ -33,6 +41,7 @@ off; CI results arrive as an uploaded JUnit report, the supported default).
 
 from __future__ import annotations
 
+import argparse
 import base64
 import hashlib
 import hmac
@@ -56,7 +65,12 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURE = "01_correct_strong_tests"
-FIXTURE_DIR = ROOT / "benchmarks" / "fixtures" / "intent" / FIXTURE
+INTENT_FIXTURES = ROOT / "benchmarks" / "fixtures" / "intent"
+FIXTURE_DIR = INTENT_FIXTURES / FIXTURE
+EXPECTATIONS = ROOT / "docs" / "research" / "design" / "verdict_v2.fixture_expectations.json"
+#: Default (CI) subset: the full 01 flow (confirm, republish, regression) plus one
+#: fast verdict-only fixture that ends in a different verdict (a rejected PR).
+DEFAULT_FIXTURES = ("01", "04")
 OWNER, REPO = "smoke-org", "pricing-service"
 INSTALLATION_ID = 424242
 GITHUB_REPO_ID = 777001
@@ -183,19 +197,31 @@ def intent_spec(expected: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def build_origin_repo(path: Path, spec: str) -> tuple[str, str]:
+def fixture_dir(selector: str) -> Path:
+    """The fixture directory for ``03`` or ``03_incorrect_passes_weak_tests``."""
+
+    matches = sorted(p for p in INTENT_FIXTURES.iterdir()
+                     if p.is_dir() and (p / "expected.json").is_file() and p.name.startswith(selector))
+    if len(matches) != 1:
+        raise SystemExit(f"fixture selector {selector!r} matches {[m.name for m in matches]}")
+    return matches[0]
+
+
+def build_origin_repo(path: Path, spec: str, source: Path | None = None) -> tuple[str, str]:
     """A git repo with ``main`` = fixture base and ``feature`` = fixture head."""
+
+    source = source or FIXTURE_DIR
 
     path.mkdir(parents=True)
     _git(["init", "-q", "-b", "main"], path)
-    _replace_tree(FIXTURE_DIR / "base", path)
+    _replace_tree(source / "base", path)
     (path / ".radius").mkdir()
     (path / ".radius" / "intent.yml").write_text(spec, encoding="utf-8", newline="\n")
     _git(["add", "-A"], path)
     _git(["commit", "-q", "-m", "base"], path)
     base_sha = _git(["rev-parse", "HEAD"], path)
     _git(["checkout", "-q", "-b", "feature"], path)
-    _replace_tree(FIXTURE_DIR / "head", path)
+    _replace_tree(source / "head", path)
     (path / ".radius").mkdir(exist_ok=True)
     (path / ".radius" / "intent.yml").write_text(spec, encoding="utf-8", newline="\n")
     _git(["add", "-A"], path)
@@ -266,6 +292,7 @@ class FakeGitHub:
         self.head_sha = head_sha
         self.spec = spec
         self.pr_body = "Adds apply_discount to pricing."
+        self.title = "Add apply_discount"
         self.check_runs: list[dict[str, Any]] = []
         self.comments: list[dict[str, Any]] = []
         self.requests: list[tuple[str, str]] = []
@@ -340,7 +367,7 @@ class FakeGitHub:
                 {
                     "sha": self.head_sha,
                     "parents": [{"sha": "0" * 40}],
-                    "commit": {"message": "Add apply_discount"},
+                    "commit": {"message": self.title},
                 }
             ]
         if method == "GET" and path == f"{slug}/contents/.radius/intent.yml":
@@ -405,7 +432,7 @@ class FakeGitHub:
     def _pull(self) -> dict[str, Any]:
         return {
             "number": PR_NUMBER,
-            "title": "Add apply_discount",
+            "title": self.title,
             "body": self.pr_body,
             "state": "open",
             "head": {"sha": self.head_sha, "ref": "feature"},
@@ -420,9 +447,52 @@ class FakeGitHub:
 
 # ------------------------------------------------------------------------- smoke
 
+#: Differences between the real-service result (webhook -> worker -> API) and
+#: ``verdict_v2.fixture_expectations.json`` that are reviewed and documented in
+#: docs/research/evaluation/FIXTURE_E2E.md. fixture -> {"verdict" | "decided_by": (value, why),
+#: "uim" | "intent_coverage": (value, why), "states": {criterion: (state, why)}}.
+KNOWN_E2E_DEVIATIONS: dict[str, dict[str, Any]] = {
+    "01_correct_strong_tests": {
+        "S": {
+            "C1": (0.7399, "hints plus VS-04 relevance: a further test with r_ct 0.15 "
+                   "(test_discount_rejects_negative_percent, word overlap) adds evidence to C1 "
+                   "(gold 0.734); still proven, verdict unchanged"),
+            "C2": (0.6211, "same cause as C1 (gold 0.604); still proven"),
+        },
+    },
+    "02_correct_weak_tests": {
+        "S": {"C2": (0.0139, "the real worker also runs VS-04 test relevance next to the author's hints "
+                     "(the gold harness turns it off): a lexical link ('address') gives the test-less "
+                     "criterion a tiny S; the state stays unevidenced and the verdict is unchanged "
+                     "(the expectations file lists the same spurious link as a fixture disagreement)")},
+    },
+    "06_hallucinated_dependency": {
+        "verdict": ("needs_review", "the worker has no package registry, so the guarded import of an "
+                    "unknown package is `unverified_guarded_import` (medium), not `registry_missing` "
+                    "(high): needs_review by R3a, the expectations file's offline_registry_variant "
+                    "(DEC-028). Not verified here: the `failed` outcome with a registry."),
+        "decided_by": ("R3a", "same cause as the verdict"),
+    },
+    "07_vague_intent": {
+        "states": {"C2": ("excluded", "the testability rater lists 'faster' among vague adjectives (an "
+                          "unquantified comparative), so 'report generation is faster' is rated "
+                          "subjective_or_vague and excluded, while the fixture labels it "
+                          "non_functional (unevidenced). With every criterion excluded the verdict is "
+                          "still insufficient_evidence by R2a (changed behavior, nothing to verify)")},
+        "uim": (0.0, "no non-excluded criterion is left, so unsupported intent mass is 0 (cause: C2 excluded)"),
+        "intent_coverage": (0.0, "same cause as uim"),
+    },
+}
+
 
 class Smoke:
-    def __init__(self, workdir: Path, database_url: str) -> None:
+    def __init__(self, workdir: Path, database_url: str, fixture: str = FIXTURE) -> None:
+        self.fixture_dir = fixture_dir(fixture)
+        self.fixture = self.fixture_dir.name
+        #: fixture 01 runs the full product flow (confirm in the intent panel, regression);
+        #: every other fixture runs the verdict flow and is compared with the expectations.
+        self.full = self.fixture == FIXTURE
+        self.observed: dict[str, Any] = {}
         self.workdir = workdir
         self.database_url = database_url
         self.webhook_secret = secrets.token_hex(24)
@@ -433,7 +503,7 @@ class Smoke:
         self.other_org_id = uuid.uuid4()
         self.pull_org_id = uuid.uuid4()
         self.pull_key = "pull-" + secrets.token_hex(16)
-        self.expected = json.loads((FIXTURE_DIR / "expected.json").read_text(encoding="utf-8"))
+        self.expected = json.loads((self.fixture_dir / "expected.json").read_text(encoding="utf-8"))
         self.headers: dict[str, str] = {}
         self.client: Any = None
         self.runtime: Any = None
@@ -475,7 +545,7 @@ class Smoke:
                 "owner": {"login": OWNER},
             },
             "pull_request": {
-                "number": PR_NUMBER, "title": "Add apply_discount",
+                "number": PR_NUMBER, "title": self.github.title,
                 "body": self.github.pr_body, "state": "open", "draft": False,
                 "merged": False, "user": {"login": "dev"},
                 "head": {"ref": "feature", "sha": self.head_sha},
@@ -501,12 +571,16 @@ class Smoke:
 
         spec = intent_spec(self.expected)
         self.origin = self.workdir / "origin"
-        self.base_sha, self.head_sha = build_origin_repo(self.origin, spec)
+        self.base_sha, self.head_sha = build_origin_repo(self.origin, spec, self.fixture_dir)
         self.github = FakeGitHub(public_key_pem=public_pem, head_sha=self.head_sha, spec=spec)
-        self.github.pr_body = (
-            "Adds apply_discount to pricing.\n\n## Summary\n"
-            "- Rejects a percent outside 0..100 inclusive with a ValueError\n"
-        )
+        if self.full:
+            self.github.pr_body = (
+                "Adds apply_discount to pricing.\n\n## Summary\n"
+                "- Rejects a percent outside 0..100 inclusive with a ValueError\n"
+            )
+        else:
+            self.github.title = self.expected["title"]
+            self.github.pr_body = f"Fixture {self.fixture}: {self.expected['title']}."
 
         env = {
             "DATABASE_URL": self.database_url,
@@ -516,7 +590,7 @@ class Smoke:
             "RADIUS_API_KEY_PEPPER": self.pepper,
             "RADIUS_FEATURE_VERDICT_V2": "on",
             "RADIUS_FEATURE_INTENT_INGESTION": "true",
-            "RADIUS_INTENT_EXTRACTION_MODE": "summary",
+            "RADIUS_INTENT_EXTRACTION_MODE": "summary" if self.full else "sections",
             "GITHUB_APP_ID": "12345",
             "GITHUB_APP_PRIVATE_KEY": private_pem,
             "GITHUB_PUBLISH_RESULTS": "true",
@@ -781,6 +855,19 @@ class Smoke:
             time.sleep(0.5)
         raise SmokeFailure(f"no verdict revision above {above} appeared within {timeout_s:.0f}s")
 
+    def wait_until_settled(self, *, timeout_s: float = 90.0) -> dict[str, Any]:
+        """Run the real worker until no refresh is queued for the analysis (intent debounce)."""
+
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            self.run_worker()
+            r = self.api("GET", f"/analyses/{self.analysis_id}/verdict-v2")
+            body = r.json()
+            if r.status_code == 200 and not body.get("meta", {}).get("refresh_pending"):
+                return body["data"]
+            time.sleep(0.5)
+        raise SmokeFailure(f"the verdict was still stale after {timeout_s:.0f}s")
+
     def confirm_stage(self) -> None:
         section("confirm criteria in the intent panel -> recompute -> republish in place")
         base = f"/analyses/{self.analysis_id}"
@@ -854,6 +941,7 @@ class Smoke:
         self.assert_published(expected_verdict_label="supported", expect_rev=payload["revision"])
         r = self.api("GET", f"{base}/verdict-v2")
         check("refresh_pending" not in r.json().get("meta", {}), "the stale marker is gone")
+        self.compare_with_expectations(payload)
         writes_before = len(self.github.requests)
         self.run_worker()
         check(len(self.github.requests) == writes_before, "an idle worker makes no GitHub calls")
@@ -978,12 +1066,216 @@ class Smoke:
         check(self.webhook_calls == webhook_calls_before,
               "no webhook delivery was sent during the whole stage")
 
+    # -- verdict flow (fixtures 02..08): webhook -> worker -> CI upload -> worker -> compare
+
+    def verdict_flow(self) -> None:
+        section(f"verdict flow for {self.fixture}")
+        self.webhook_stage()
+        self.run_worker()
+        r = self.api("GET", f"/analyses/{self.analysis_id}")
+        status = r.json()["data"]["status"]
+        check(status == "completed", f"analysis completed by the worker (status={status})")
+        check(not self.github.unhandled, f"no unexpected GitHub API calls {self.github.unhandled}")
+        r = self.api("GET", f"/analyses/{self.analysis_id}/verdict-v2")
+        check(r.status_code == 200, f"verdict-v2 endpoint returns 200 before CI (got {r.status_code}: {r.text[:200]})")
+        first = r.json()["data"]
+        self.observed["verdict_before_ci"] = first["verdict"]
+        check(len(self.github.check_runs) == 1 and len(self.github.comments) == 1,
+              "one Check Run and one PR comment were published before CI results")
+
+        path = f"/analyses/{self.analysis_id}/tests/results"
+        report = junit_from_outcomes(self.expected["test_outcomes"]["head"])
+        r = self.api("POST", path, params={"commit_sha": self.head_sha}, content=report)
+        check(r.status_code == 200, f"CI results upload accepted (got {r.status_code}: {r.text[:200]})")
+        self.run_worker()
+        r = self.api("GET", f"/analyses/{self.analysis_id}/verdict-v2")
+        payload = r.json()["data"]
+        if os.environ.get("SMOKE_DEBUG"):
+            print(json.dumps(payload, indent=1)[:8000])
+        check(payload["revision"] > first["revision"],
+              f"CI results produced a new verdict revision ({first['revision']} -> {payload['revision']})")
+        check(len(self.github.comments) == 1 and len(self.github.check_runs) == 1,
+              "the PR comment and Check Run were updated in place (still one each)")
+        self.assert_published_for(payload)
+        self.compare_with_expectations(payload)
+        self.observed["before_confirm"] = {"verdict": payload["verdict"], "lifecycles": sorted(
+            {c["lifecycle"] for c in payload["criteria"]})}
+
+        # As a user would: confirm every criterion in the intent panel. The verdict must not
+        # move (the fixtures' hints are base-spec hints already) and must stay published in place.
+        base = f"/analyses/{self.analysis_id}"
+        for criterion in self.api("GET", f"{base}/intent").json()["data"]["criteria"]:
+            r = self.api("PATCH", f"{base}/intent/criteria/{criterion['id']}", json={"action": "confirm"})
+            check(r.status_code == 200, f"criterion {criterion['id'][:8]} confirmed through the API ({r.status_code})")
+        payload = self.wait_until_settled()
+        check(not any("unconfirmed" in c["flags"] for c in payload["criteria"]),
+              "after confirming, no criterion carries the 'unconfirmed' flag")
+        check(len(self.github.comments) == 1 and len(self.github.check_runs) == 1,
+              "the confirm republished in place (still one comment and one Check Run)")
+        self.assert_published_for(payload, same_render_ok=True)
+        self.compare_with_expectations(payload)
+        writes_before = len(self.github.requests)
+        self.run_worker()
+        check(len(self.github.requests) == writes_before, "an idle worker makes no GitHub calls")
+
+    def assert_published_for(self, payload: dict[str, Any], *, same_render_ok: bool = False) -> None:
+        from radius_github.verdict_v2.markdown import DISCLAIMER, parse_v2_marker
+
+        run = self.github.check_runs[0]
+        body = self.github.comments[0]["body"]
+        marker = parse_v2_marker(body)
+        # After a confirm that changes nothing visible (e.g. every criterion excluded) the
+        # publisher keeps the comment as is (same rendered digest), so its marker may lag.
+        check(marker is not None and (marker[0] == payload["revision"]
+                                      or (same_render_ok and marker[0] < payload["revision"])),
+              f"the PR comment carries the stored verdict revision {payload['revision']} (marker {marker})")
+        check(DISCLAIMER in body and DISCLAIMER in run["output"]["summary"],
+              "comment and Check Run carry the alpha disclaimer")
+        decisive = payload["justification"]["decided_by"] in ("R1a", "R1b", "R1c")
+        want = "failure" if payload["verdict"] == "failed" and decisive else "neutral"
+        check(run["status"] == "completed" and run["conclusion"] == want,
+              f"Check Run conclusion is {want} for {payload['verdict']} by "
+              f"{payload['justification']['decided_by']} (got {run.get('conclusion')})")
+        check(run["head_sha"] == self.head_sha, "Check Run is on the PR head commit")
+        label = {"verified": "supported", "failed": "failed", "needs_review": "review",
+                 "insufficient_evidence": "insufficient"}[payload["verdict"]]
+        check(label in body.lower(), f"the PR comment shows the '{label}' verdict")
+
+    def compare_with_expectations(self, payload: dict[str, Any]) -> None:
+        """Gold-like comparison with ``verdict_v2.fixture_expectations.json``."""
+
+        doc = json.loads(EXPECTATIONS.read_text(encoding="utf-8"))
+        exp = next(f for f in doc["fixtures"] if f["fixture"] == self.fixture)
+        tol = doc["tolerance"]
+        text_to_id = {c["text"]: c["id"] for c in self.expected["criteria"]}
+        got_states: dict[str, str] = {}
+        got_s: dict[str, float | None] = {}
+        for c in payload["criteria"]:
+            cid = text_to_id.get(c["text"])
+            if cid is None and self.full:
+                continue  # fixture 01 also carries the PR-body criterion proposed by summary mode
+            check(cid is not None, f"served criterion {c['text'][:40]!r} maps to a fixture criterion")
+            got_states[cid] = c["state"]
+            got_s[cid] = c.get("S")
+        observed = {
+            "verdict": payload["verdict"],
+            "decided_by": payload["justification"]["decided_by"],
+            "states": dict(sorted(got_states.items())),
+            "S": dict(sorted(got_s.items())),
+            "uim": payload["summary"].get("uim"),
+            "intent_coverage": payload["summary"].get("intent_coverage"),
+            "verdict_before_ci": self.observed.get("verdict_before_ci"),
+        }
+        want = {
+            "verdict": exp["expected_verdict"],
+            "decided_by": exp["decided_by"].split(" ")[0],
+            "states": dict(sorted(exp["gold"]["states"].items())),
+            "S": exp["gold"]["S"],
+            "uim": exp["gold"]["uim"],
+            "intent_coverage": exp["intent_coverage"],
+        }
+        deviation = KNOWN_E2E_DEVIATIONS.get(self.fixture, {})
+        self.observed.update(observed=observed, expected=want, deviations=sorted(deviation))
+        mismatches: list[str] = []
+        for key in ("verdict", "decided_by"):
+            target = deviation[key][0] if key in deviation else want[key]
+            if observed[key] != target:
+                mismatches.append(f"{key}: observed {observed[key]!r}, expected {target!r}")
+        for cid, state in want["states"].items():
+            dev = deviation.get("states", {}).get(cid)
+            target = dev[0] if dev else state
+            if observed["states"].get(cid) != target:
+                mismatches.append(f"{cid} state: observed {observed['states'].get(cid)!r}, expected {target!r}")
+            if state != "excluded" and not dev:
+                s_dev = deviation.get("S", {}).get(cid)
+                target_s = s_dev[0] if s_dev else want["S"][cid]
+                value = observed["S"].get(cid)
+                if value is None or abs(value - target_s) > (0.0005 if s_dev else tol):
+                    mismatches.append(f"{cid} S: observed {value}, expected {target_s}")
+        if self.full:  # extra summary-mode criterion shifts the mass figures; compare verdict and states
+            for key in ("uim", "intent_coverage"):
+                observed.pop(key)
+                want.pop(key)
+        if set(observed["states"]) != set(want["states"]):
+            mismatches.append(f"criteria: observed {sorted(observed['states'])}, expected {sorted(want['states'])}")
+        for key in [k for k in ("uim", "intent_coverage") if k in observed]:
+            target = deviation[key][0] if key in deviation else want[key]
+            if observed[key] is None or abs(observed[key] - target) > tol:
+                mismatches.append(f"{key}: observed {observed[key]}, expected {target}")
+        self.observed["mismatches"] = mismatches
+        check(not mismatches, "verdict, deciding rule, per-criterion state and S equal the expectations"
+              + (" (documented deviations applied)" if deviation else "") + f" {mismatches or ''}")
+
     def finish(self) -> None:
         if self.client is not None:
             self.client.__exit__(None, None, None)
 
 
-def main() -> int:
+def run_fixture(base_url: str, selector: str, *, keep_db: bool) -> tuple[bool, dict[str, Any]]:
+    """One fixture in a throw-away database; returns ``(ok, observed)``."""
+
+    workdir = Path(tempfile.mkdtemp(prefix="radius-smoke-"))
+    database_url, name = create_database(base_url)
+    smoke = Smoke(workdir, database_url, selector)
+    ok = False
+    try:
+        smoke.setup()
+        smoke.health_and_auth()
+        if smoke.full:
+            smoke.webhook_stage()
+            smoke.worker_stage()
+            smoke.ci_stage()
+            smoke.confirm_stage()
+            smoke.regression_stage()
+            smoke.pull_stage()
+        else:
+            smoke.verdict_flow()
+        ok = True
+    except SmokeFailure as exc:
+        print(f"\nSMOKE FAILED ({smoke.fixture}): {exc}", file=sys.stderr)
+    except Exception:  # noqa: BLE001
+        print(f"\nSMOKE ERROR ({smoke.fixture}):", file=sys.stderr)
+        traceback.print_exc()
+    finally:
+        try:
+            smoke.finish()
+        finally:
+            if keep_db:
+                print(f"kept database {name} for manual inspection (RADIUS_SMOKE_KEEP_DB=1); drop it when done")
+            else:
+                drop_database(base_url, name)
+            shutil.rmtree(workdir, ignore_errors=True)
+    return ok, {"fixture": smoke.fixture, **smoke.observed}
+
+
+RESULT_PREFIX = "FIXTURE_RESULT "
+
+
+def _parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
+    parser.add_argument("--fixture", action="append", default=[], metavar="NN",
+                        help="fixture number or name prefix (repeatable); default: "
+                        + ", ".join(DEFAULT_FIXTURES))
+    parser.add_argument("--all", action="store_true", help="run all eight F-14 fixtures")
+    parser.add_argument("--json-out", metavar="PATH", help="write the per-fixture results as JSON")
+    return parser.parse_args(argv)
+
+
+def _print_table(results: list[dict[str, Any]]) -> None:
+    print("\nfixture                                 expected (rule)                      observed (rule)")
+    for r in results:
+        exp, obs = r.get("expected"), r.get("observed")
+        if not (exp and obs):
+            print(f"{r['fixture']:<40}no comparison (failed before the verdict)")
+            continue
+        print(f"{r['fixture']:<40}{exp['verdict'] + ' (' + exp['decided_by'] + ')':<37}"
+              f"{obs['verdict']} ({obs['decided_by']})"
+              + ("  MISMATCH" if r.get("mismatches") else "")
+              + ("  (documented deviation: " + ", ".join(r["deviations"]) + ")" if r.get("deviations") else ""))
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(sys.argv[1:] if argv is None else argv)
     for entry in reversed(_pythonpath()):
         path = str(ROOT / entry)
         if path not in sys.path:
@@ -995,39 +1287,48 @@ def main() -> int:
         print("DATABASE_URL is required (PostgreSQL). Example: docker compose up -d postgres", file=sys.stderr)
         return 2
 
+    selectors = [p.name for p in sorted(INTENT_FIXTURES.iterdir()) if (p / "expected.json").is_file()] \
+        if args.all else (args.fixture or list(DEFAULT_FIXTURES))
+    for selector in selectors:
+        fixture_dir(selector)  # fail fast on a bad selector
+
     started = time.monotonic()
     os.chdir(ROOT)
-    workdir = Path(tempfile.mkdtemp(prefix="radius-smoke-"))
-    database_url, name = create_database(base_url)
-    smoke = Smoke(workdir, database_url)
-    ok = False
-    try:
-        smoke.setup()
-        smoke.health_and_auth()
-        smoke.webhook_stage()
-        smoke.worker_stage()
-        smoke.ci_stage()
-        smoke.confirm_stage()
-        smoke.regression_stage()
-        smoke.pull_stage()
-        ok = True
-    except SmokeFailure as exc:
-        print(f"\nSMOKE FAILED: {exc}", file=sys.stderr)
-    except Exception:  # noqa: BLE001
-        print("\nSMOKE ERROR:", file=sys.stderr)
-        traceback.print_exc()
-    finally:
-        try:
-            smoke.finish()
-        finally:
-            if keep_db:
-                print(f"kept database {name} for manual inspection (RADIUS_SMOKE_KEEP_DB=1); drop it when done")
-            else:
-                drop_database(base_url, name)
-            shutil.rmtree(workdir, ignore_errors=True)
+    results: list[dict[str, Any]] = []
+    all_ok = True
+    if len(selectors) == 1:
+        ok, observed = run_fixture(base_url, selectors[0], keep_db=keep_db)
+        results.append(observed)
+        all_ok = ok
+    else:
+        # One process per fixture: the services read their settings at import and start
+        # (cached), so a fresh interpreter is the honest way to start each run clean.
+        for selector in selectors:
+            sub_started = time.monotonic()
+            with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as handle:
+                out_path = handle.name
+            proc = subprocess.run(  # noqa: S603 - fixed argv
+                [sys.executable, str(Path(__file__).resolve()), "--fixture", selector,
+                 "--json-out", out_path],
+                env=os.environ.copy(), check=False,
+            )
+            try:
+                observed = json.loads(Path(out_path).read_text(encoding="utf-8"))[0]
+            except (OSError, ValueError, IndexError):
+                observed = {"fixture": selector}
+            finally:
+                Path(out_path).unlink(missing_ok=True)
+            observed["seconds"] = round(time.monotonic() - sub_started, 1)
+            results.append(observed)
+            all_ok = all_ok and proc.returncode == 0
+        _print_table(results)
+    if args.json_out:
+        Path(args.json_out).write_text(json.dumps(results, indent=1, default=str), encoding="utf-8")
     elapsed = time.monotonic() - started
-    print(f"\n{'SMOKE PASSED' if ok else 'SMOKE FAILED'}: {len(STEPS)} checks in {elapsed:.1f}s")
-    return 0 if ok else 1
+    checks = f"{len(STEPS)} checks" if len(selectors) == 1 else "per-fixture checks above"
+    print(f"\n{'SMOKE PASSED' if all_ok else 'SMOKE FAILED'}: {checks} in {elapsed:.1f}s"
+          f" ({len(selectors)} fixture{'s' if len(selectors) != 1 else ''})")
+    return 0 if all_ok else 1
 
 
 if __name__ == "__main__":

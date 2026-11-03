@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Check, Eye, EyeOff, Github, LoaderCircle } from "lucide-react";
-import { authRequest, oauthUrl } from "../lib/auth";
+import { authRequest, oauthUrl, type AuthUser } from "../lib/auth";
+import { postSignupPath } from "../lib/post-signup";
 import { useAuth } from "./auth-provider";
 
 function GoogleIcon() {
@@ -251,12 +252,13 @@ export function SignupForm() {
     setLoading(true);
     setError("");
     try {
-      await authRequest("/auth/signup", {
+      const user = await authRequest<AuthUser>("/auth/signup", {
         method: "POST",
         body: JSON.stringify({ name, email, password }),
       });
       await refresh();
-      router.replace("/verify-email");
+      // Already verified (dev auto-verify) -> dashboard; otherwise ask to verify.
+      router.replace(postSignupPath(user));
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -493,10 +495,17 @@ export function ResetPasswordForm() {
 
 export function VerifyEmailPage() {
   const query = useSearchParams();
+  const router = useRouter();
+  const { user } = useAuth();
   const [status, setStatus] = useState<"ready" | "loading" | "done" | "error">(
     "ready"
   );
   const token = query.get("token");
+
+  // A signed-in, already verified account has nothing to check: go to the dashboard.
+  useEffect(() => {
+    if (!token && user?.email_verified) router.replace(postSignupPath(user));
+  }, [router, token, user]);
 
   async function verify() {
     if (!token) return;

@@ -8,6 +8,10 @@ on:
   push:
     branches:
       - develop
+  # Optional / scheduled: the same smoke over all eight F-14 fixtures (about 3 minutes).
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -58,5 +62,12 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
 
+      # Required check: fixture 01 (full flow) plus fixture 04 (a rejected PR), under 1 minute.
       - name: End-to-end smoke
+        if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
         run: python scripts/smoke_e2e.py
+
+      # Scheduled / manual only, never a required check: all eight fixtures.
+      - name: End-to-end smoke (all fixtures)
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: python scripts/smoke_e2e.py --all
