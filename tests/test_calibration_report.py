@@ -106,6 +106,25 @@ def test_split_keeps_clusters_together_and_is_seeded():
     assert cr.split_rows(rows, 0.5, 8) != (cal, ev)
 
 
+def _assert_close(actual, expected, path="report"):
+    """Structure and strings equal; floats equal to 1e-6 relative (the iterative Platt fit is not
+    bit-identical across platforms/BLAS builds, so exact float equality is not a real guarantee)."""
+    if isinstance(expected, dict):
+        assert isinstance(actual, dict) and actual.keys() == expected.keys(), path
+        for key in expected:
+            _assert_close(actual[key], expected[key], f"{path}.{key}")
+    elif isinstance(expected, list):
+        assert isinstance(actual, list) and len(actual) == len(expected), path
+        for i, (x, y) in enumerate(zip(actual, expected, strict=True)):
+            _assert_close(x, y, f"{path}[{i}]")
+    elif isinstance(expected, float) and not isinstance(expected, bool):
+        assert isinstance(actual, (int, float)) and abs(actual - expected) <= 1e-6 * max(1.0, abs(expected)), (
+            f"{path}: {actual} != {expected}"
+        )
+    else:
+        assert actual == expected, path
+
+
 def test_committed_example_is_synthetic_labelled_and_reproducible(tmp_path):
     inp = EXAMPLES / "calibration_input_SYNTHETIC.jsonl"
     regenerated = tmp_path / "regen.jsonl"
@@ -117,7 +136,7 @@ def test_committed_example_is_synthetic_labelled_and_reproducible(tmp_path):
     assert cr.main(["--input", str(inp), "--out-dir", str(out), *EXAMPLE_ARGS]) == 0
     assert _lf(out / "report.md") == _lf(EXAMPLES / "calibration_report_SYNTHETIC.md")
     committed = json.loads(_lf(EXAMPLES / "calibration_report_SYNTHETIC.json"))
-    assert json.loads(_lf(out / "report.json")) == committed
+    _assert_close(json.loads(_lf(out / "report.json")), committed)
     assert committed["synthetic"] is True and committed["not_a_research_result"] is True
     assert committed["input"]["sha256"] == hashlib.sha256(_lf(inp).encode()).hexdigest()
     assert _lf(EXAMPLES / "calibration_report_SYNTHETIC.md").startswith(
