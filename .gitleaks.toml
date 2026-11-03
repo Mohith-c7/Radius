@@ -27,4 +27,7 @@ regexes = [
   '''PRIVATE KEY-----.{1,4}AAA.{1,4}BBB.{1,4}-----END''',
   # Garbled placeholder PEM ("QUJD" = base64 of ABC) in tests/test_live_check.py (live GitHub preflight)
   '''PRIVATE KEY-----.{1,4}QUJD.{1,4}-----END RSA PRIVATE KEY''',
+  # Fake passwords in the OAuth password-sign-in test (apps/api/tests/test_oauth_flow.py), already in history
+  '''Passw0rdLong1''',
+  '''Wrong-pass1''',
 ]
