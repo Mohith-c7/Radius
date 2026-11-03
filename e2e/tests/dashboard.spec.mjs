@@ -40,8 +40,10 @@ test("sign up, browse the dashboard, sign out and sign in", async ({ page }) => 
   });
   // The stylesheet @imports Google Fonts. Serve an empty sheet so the test does not depend on
   // (or wait for) an external network.
-  await page.route(/https:\/\/fonts\.(googleapis|gstatic)\.com\//, (route) =>
-    route.fulfill({ status: 200, contentType: "text/css", body: "" }),
+  const FONT_HOSTS = new Set(["fonts.googleapis.com", "fonts.gstatic.com"]);
+  await page.route(
+    (url) => url.protocol === "https:" && FONT_HOSTS.has(url.hostname),
+    (route) => route.fulfill({ status: 200, contentType: "text/css", body: "" }),
   );
   const shot = (name) => page.screenshot({ path: `${SHOTS}/${name}.png`, fullPage: true });
   const heading = (name) => expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
