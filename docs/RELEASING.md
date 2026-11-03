@@ -1,6 +1,6 @@
 # Releasing and commit conventions
 
-Status: **no release has been cut and there is no release automation yet.** Image publishing, signing and provenance are planned as PRD-13 in the [production-readiness backlog](production-readiness/BACKLOG.md). This page records the conventions that already apply and the manual steps a release would follow until then. Update it when PRD-13 lands.
+Status: **no release has been cut.** A tag-triggered `release.yml` exists (PRD-13, partial) but has never run on GitHub; by default it only builds, scans and uploads artifacts, and it pushes and signs only when `RADIUS_RELEASE_PUBLISH=true` and `RADIUS_COSIGN_IMAGE` are set (see [CI_CHECKS](security/CI_CHECKS.md)). `python scripts/release_notes.py check-versions --tag vX.Y.Z` and `python scripts/release_notes.py notes` run locally before tagging. Image publishing, signing and provenance remain PRD-13 in the [production-readiness backlog](production-readiness/BACKLOG.md). This page records the conventions that already apply and the manual steps a release would follow until then. Update it when PRD-13 lands.
 
 ## Commit and pull-request titles
 

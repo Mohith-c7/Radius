@@ -165,7 +165,7 @@ Status key: **NEW** = not in the research plan. **EXT** = extends an existing ta
 - Acceptance: scope tests (OWASP API5), revoked key rejected, no plaintext key in DB or logs.
 - Tests/verification: unit + migration test + log grep test.
 
-### PRD-13 Release pipeline: tags, GHCR, signing, provenance, SBOM   [ ]   NEW
+### PRD-13 Release pipeline: tags, GHCR, signing, provenance, SBOM   [~] (`release.yml` written 2026-11-03, dry-run by default, never run on GitHub; no push or signing unless `RADIUS_RELEASE_PUBLISH=true`; no hosted SLSA builder, no arm64, no GitHub Release assets, no verify job; see CI_CHECKS.md)   NEW
 - Owner type: pair (human configures environments/tokens)
 - Depends on: PRD-01, PRD-06, PRD-08
 - Branch: `feature/release-pipeline`
@@ -247,7 +247,7 @@ Status key: **NEW** = not in the research plan. **EXT** = extends an existing ta
 - Acceptance: mutation score published per package; surviving mutants triaged into issues; no flake in CI (nightly only).
 - Tests/verification: workflow run artifact.
 
-### PRD-21 Property and fuzz tests   [ ]   NEW
+### PRD-21 Property and fuzz tests   [~] (only a seeded webhook signature/body fuzz test, `apps/api/tests/test_webhook_fuzz.py`; the other parsers are not covered)   NEW
 - Owner type: agent-ok
 - Depends on: none
 - Branch: `test/property-fuzz`
@@ -299,7 +299,7 @@ Status key: **NEW** = not in the research plan. **EXT** = extends an existing ta
 
 ## 7. Wave 4: security and operations
 
-### PRD-26 SSO/OIDC and session security   [ ]   NEW
+### PRD-26 SSO/OIDC and session security   [ ] (design only: `docs/security/SSO_DESIGN.md`; no code)   NEW
 - Owner type: pair
 - Depends on: MG-06 design
 - Branch: `feature/oidc-sso`

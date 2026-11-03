@@ -122,6 +122,38 @@ Verified locally: actionlint 1.7.7 clean on all workflows, YAML parse of `depend
 - Does not prove: real GitHub behaviour, the sandbox profile, the production-like compose file (this uses the dev override: `RADIUS_ENV=development`, auto-verified sign-ups), cross-browser behaviour (Chromium only). No buildx layer cache is used, so each leg builds the images from scratch.
 - Status: the workflow has not run on a CI runner yet. Verified locally: `actionlint` 1.7.7 clean, `scripts/ci/check_action_pins.py`, `docker compose config -q` with a generated `.env`, the unit tests, and the browser spec against an already running local dev stack (installed Chrome). The first real run is in CI.
 
+## Release workflow (PRD-13, partial)
+
+- Workflow: `release.yml`. Triggers: a pushed tag `v*` and `workflow_dispatch` (input `dry_run`, default true). Top-level `permissions: contents: read`.
+- Jobs: `prepare` (tag/pyproject/package.json/Dockerfile version consistency via `scripts/release_notes.py check-versions`, release notes from `changelog.d` via `scripts/release_notes.py notes`, uploaded as artifact `release-notes`); `build` (api, worker, dashboard: `docker buildx build --platform linux/amd64 --load`, non-root check, CycloneDX SBOM from Trivy, Trivy gate on fixable HIGH/CRITICAL with `.trivyignore`, SBOM uploaded as `sbom-<image>`); `publish` (see below).
+- Default: **nothing is pushed or signed.** `publish` runs only for a tag push, with `dry_run` not true, **and** the repository variable `RADIUS_RELEASE_PUBLISH` equal to `true`, **and** `RADIUS_COSIGN_IMAGE` set to a cosign image pinned by `@sha256` digest (the job fails early otherwise). Only `publish` has `packages: write`, `id-token: write`, `attestations: write`. It pushes `ghcr.io/<owner>/<repo>/<image>:<version>` (amd64) with BuildKit `--provenance=mode=max`, generates an SBOM of the pushed digest, then runs cosign keyless `sign` and `attest --type cyclonedx` through the pinned cosign image.
+- Run manually: Actions, Release, Run workflow, keep `dry_run` checked. A manual run never publishes. To rehearse a real publish use a `v0.1.0-rc.N` tag in a fork with the two variables set.
+- Deviations from the plan, stated plainly: (1) no new third-party actions were added, because their commit SHAs could not be verified offline and an invented pin would be worse than none. buildx is used through the Docker CLI on the runner, SBOMs come from the already digest-pinned Trivy image instead of syft, and cosign runs from a digest-pinned image supplied by a variable. (2) `actions/attest-build-provenance` is **not** used; the provenance is the BuildKit provenance attestation attached to the image, which is not SLSA Build L3 and has not been verified. Add the action (with a SHA read from `git ls-remote`) when a maintainer can do so. (3) arm64 is not built. (4) The pushed image is rebuilt in `publish`, so its digest can differ from the image scanned in `build`; the Trivy gate does not run on the pushed digest. (5) No GitHub Release object is created and SBOMs are not attached to one.
+- Does not prove: reproducible builds, any SLSA level, that the signature verifies (no `cosign verify` job yet; the verify command is echoed in the log), or that the Trivy invocation with a mounted Docker config works on the runner.
+- Status: **has not run on GitHub.** Verified locally: `actionlint` 1.7.7 clean, `scripts/ci/check_action_pins.py`, unit tests for `scripts/release_notes.py`.
+
+## DAST (ZAP baseline)
+
+- Workflow: `dast.yml`, weekly (Sunday 03:37 UTC) and `workflow_dispatch` only; never on pull requests. `contents: read`, no secrets, 40 minute timeout.
+- It generates a random local-dev `.env`, builds and starts the Compose stack like `stack.yml` (dev override), runs `scripts/ci/check_stack.py`, then runs `zap-baseline.py` (passive scan plus spider, no active attacks) from `ghcr.io/zaproxy/zaproxy` against `http://127.0.0.1:8000/` and `http://127.0.0.1:3000/` on the runner only. Reports (HTML, JSON) are the artifact `zap-reports`.
+- Gate: `scripts/ci/zap_gate.py` fails only on **High** alerts (riskcode 3) whose plugin id is not `IGNORE` in `.zap/rules.tsv`. The file starts with no entries; add one only for a triaged false positive, with reason and date. Medium/low findings are reported but do not fail the job.
+- The image is `vars.RADIUS_ZAP_IMAGE` or the fallback tag `ghcr.io/zaproxy/zaproxy:stable`, which is **not digest-pinned** (the digest could not be resolved offline); the job prints a warning. Set the variable to a digest to pin.
+- Run manually: Actions, DAST, Run workflow. Locally, with the dev stack running: `docker run --rm --network host -v "$PWD/zap-out:/zap/wrk" ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://127.0.0.1:8000/ -J report.json -I`, then `python scripts/ci/zap_gate.py zap-out/report.json`.
+- Does not prove: authenticated coverage (the scan is unauthenticated and most API routes answer 401/403, so little of the API is exercised), absence of injection or access-control bugs (that needs the active/API scan with the OpenAPI spec and credentials), or anything about the production-like compose profile.
+- Status: **has not run on GitHub.** Verified locally: `actionlint` clean, pin check, unit tests for `zap_gate.py`. The ZAP container was not run.
+
+## Load and performance test (`scripts/load_test.py`)
+
+- Stdlib asyncio, no new dependencies. Scenarios: `health`, `ready`, `read_repositories`, `read_analyses` (need `--organization-id` and `--api-key`) and `webhook_ping_signed` (needs `--webhook-secret`; sends HMAC-signed `ping` deliveries with unique delivery ids). Output is JSON with requests, errors, error_rate, p50/p95/p99 and rps per scenario. `--budget p95_ms=500,p99_ms=1500,error_rate=0.01` makes it exit 1 on any breach.
+- It refuses non-loopback hosts unless `--allow-remote` is passed. Run it only against your own local stack.
+- Locally: `make dev`, then `python scripts/load_test.py --organization-id "$GITHUB_DEFAULT_ORGANIZATION_ID" --api-key "$RADIUS_API_KEY" --concurrency 8 --requests 200`. For the webhook scenario set `GITHUB_WEBHOOK_SECRET` in `.env`, recreate the api container and pass `--webhook-secret`. The API rate limiter (`HTTP_HARDENING.md`) answers 429 at high rates and those count as errors; raise the limit for the test or lower the rate.
+- Does not prove: capacity of any real deployment (one client machine, loopback, dev settings, mostly empty database, `ping` webhooks do no analysis work). **The script was not run against a stack and no load numbers have been measured or published.**
+- Tests: `tests/test_load_test.py` covers percentiles, signing, summary and budget logic only.
+
+## Webhook fuzz test
+
+- `apps/api/tests/test_webhook_fuzz.py`: seeded `random.Random` (hypothesis is not a dependency). Asserts that wrong or malformed signatures are always 403 and that correctly signed arbitrary bodies and events never return 5xx. It found a real defect: signed non-JSON, non-object or incomplete payloads returned 500; they now return 4xx (`changelog.d/webhook-malformed-payload-4xx.fixed.md`). It is not coverage-guided fuzzing and does not satisfy PRD-21 in full (diff-hunk, resolver and JUnit parsers are not covered).
+
 ## Coverage
 
 - Command: `python -m pytest apps/api/tests apps/worker/tests packages/*/tests tests --cov` (config in `pyproject.toml` `[tool.coverage]`: sources `apps`, `packages`; tests, conftest and the dashboard are omitted; line coverage).

@@ -40,5 +40,5 @@ Nothing here is ticked on trust.
 
 ## Out of scope for this alpha
 
-Signed images and SBOM (PRD-13), Helm chart, published GitHub Action or CLI, SSO, production-mode
+Signed images and SBOM (PRD-13: `release.yml` exists but has never run and publishes nothing by default), Helm chart, published GitHub Action or CLI, SSO, production-mode
 hardening sign-off, calibration, external security review.

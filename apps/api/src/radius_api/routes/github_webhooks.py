@@ -82,7 +82,7 @@ async def handle_github_webhook(
     _validate_signature(request, body, signature)
     body_hash = hashlib.sha256(body).hexdigest()
     scope = f"github_webhook:{event}"
-    payload = json.loads(body)
+    payload = _parse_payload(body)
     if event == "ping":
         # A ping carries no tenant context; acknowledge it without resolving one.
         result = GitHubWebhookResult(
@@ -130,14 +130,24 @@ async def handle_github_webhook(
 
     _record_installation_id(request, payload, repository_service)
     with span("webhook.handle", **{"github.event": event}):
-        result = _handle_payload(
-            request,
-            event,
-            delivery_id,
-            payload,
-            repository_service,
-            analysis_service,
-        )
+        try:
+            result = _handle_payload(
+                request,
+                event,
+                delivery_id,
+                payload,
+                repository_service,
+                analysis_service,
+            )
+        except (KeyError, TypeError, AttributeError, ValueError) as exc:
+            # A signed delivery with a structurally wrong payload (missing or
+            # mistyped fields) is a client error, not a server fault.
+            LOGGER.warning(
+                "Webhook payload rejected",
+                extra={"github_event": event, "error_type": type(exc).__name__},
+            )
+            msg = f"Webhook payload for event {event!r} is missing or has invalid fields."
+            raise ValidationError(msg) from exc
     LOGGER.info("Webhook delivery handled", extra={"github_event": event})
     response = success_response(result)
     response_body = jsonable_encoder(response)
@@ -605,6 +615,20 @@ def _connect_repository(
         msg = "GitHub repository is already connected to another organization."
         raise AccessDeniedError(msg)
     return repository
+
+
+def _parse_payload(body: bytes) -> dict[str, Any]:
+    """Parse a signed delivery body; anything but a JSON object is a 4xx, never a 500."""
+
+    try:
+        payload = json.loads(body)
+    except (ValueError, RecursionError) as exc:
+        msg = "Webhook body is not valid JSON."
+        raise ValidationError(msg) from exc
+    if not isinstance(payload, dict):
+        msg = "Webhook body must be a JSON object."
+        raise ValidationError(msg)
+    return payload
 
 
 def _validate_signature(
