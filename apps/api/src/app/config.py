@@ -21,7 +21,6 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./radius.db"
     session_secret: str = Field(default="super_secret_radius_session_key_32bytes_min", min_length=32)
     frontend_origin: str = "http://127.0.0.1:3000"
-    api_base_url: str = "http://localhost:8000"
     session_cookie_secure: bool = False
     google_client_id: str | None = None
     google_client_secret: str | None = None

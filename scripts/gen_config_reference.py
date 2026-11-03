@@ -87,7 +87,6 @@ STATUS_OVERRIDE = {
 #: line was checked against the code that reads the setting. Prefer adding a
 #: ``description=`` to the field; the code text always wins over this table.
 DESCRIPTIONS = {
-    "API_BASE_URL": "Auth module: public API base URL. Declared in the auth settings; no other code reads it (verified by grep).",
     "API_KEYS": "Comma-separated `org_id:key` pairs accepted in `X-Radius-API-Key` / Bearer auth. With none configured the API rejects requests unless `RADIUS_ALLOW_INSECURE_DEV` applies (development/test only).",
     "DASHBOARD_BASE_URL": "Canonical public dashboard URL; the worker uses it to build the analysis link in the check run and PR comment.",
     "DATABASE_URL": "PostgreSQL URL for the API, worker and migrations. `postgres://` and `postgresql://` are normalised to `postgresql+psycopg://`. The auth module (sign-in tables) reads the same variable, but its own default is `sqlite:///./radius.db`, so when the variable is unset the auth tables go to a local SQLite file while the main settings default to the local PostgreSQL URL. Always set it explicitly.",
@@ -318,7 +317,7 @@ def extra_entries() -> list[Entry]:
         e("RADIUS_DASHBOARD_INTERNAL_URL", "str", "http://localhost:3000", "Dashboard origin used for server-side calls to its own proxy.", {"dashboard"}, "apps/dashboard/lib/api.ts"),
         e("RADIUS_HSTS_ENABLED", "bool", "false", "Dashboard side of the flag defined for the API: send Strict-Transport-Security and CSP `upgrade-insecure-requests`. Enable only behind TLS.", {"dashboard"}, "apps/dashboard/middleware.ts"),
         e("PORT", "int", "8000 (api), 3000 (dashboard)", "Listen port in the API and dashboard images (`uvicorn --port ${PORT:-8000}`; dashboard `PORT=3000`).", {"api", "dashboard"}, "apps/api/Dockerfile"),
-        e("RADIUS_EXTRAS", "str", "empty", "Compose build argument: extra Python dependency groups to install in the api and worker images (for example `llm`, `observability`).", {"compose build"}, "docker-compose.yml"),
+        e("RADIUS_EXTRAS", "str", "empty", "Compose build argument: extra Python dependency groups to install in the api and worker images (for example `llm`, `gemini`, `observability`).", {"compose build"}, "docker-compose.yml"),
         e("POSTGRES_HOST_PORT", "int", "5432", "Compose: host port published for the bundled PostgreSQL.", {"compose"}, "docker-compose.yml"),
     ]
     return [*items, *_llm_entries()]

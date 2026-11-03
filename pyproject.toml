@@ -29,8 +29,6 @@ dependencies = [
   "tree-sitter-go>=0.25.0",
   "tree-sitter-java>=0.23.5",
   "tree-sitter-rust>=0.24.2",
-  "google-genai>=0.1.0",
-  "google-generativeai>=0.8.3",
   "argon2-cffi>=23.1.0",
   "Authlib>=1.4.1",
   "httpx>=0.28.1",
@@ -49,7 +47,15 @@ llm = [
   # IN-04 optional LLM provider (Anthropic). Not required for tests or the default (off) path.
   "anthropic>=2.0,<3",
 ]
+gemini = [
+  # Legacy experimental SemanticPruner only (off by default, not on the verdict path).
+  "google-genai>=0.1.0",
+  "google-generativeai>=0.8.3",
+]
 dev = [
+  # Gemini SDKs are an optional extra at runtime but installed for the pruner tests.
+  "google-genai>=0.1.0",
+  "google-generativeai>=0.8.3",
   # Observability libraries are optional at runtime but installed for tests.
   "opentelemetry-api>=1.27.0",
   "opentelemetry-sdk>=1.27.0",

@@ -69,8 +69,11 @@ dashboard. Jobs that were `running` when the dump was taken are recovered by the
 
 ## Retention
 
-- **Code:** no automatic pruning of analyses, uploads or graph snapshots was found in the application code
-  (searched for retention/cleanup logic; not an exhaustive audit). The database grows with use; plan disk
+- **Code:** no automatic pruning of analyses, verdicts, uploads or graph snapshots exists; those are never deleted by
+  Radius. One opt-in worker task, `RADIUS_RETENTION_DAYS` (default 0 = off, minimum 7), deletes only expired rows of
+  three disposable tables: `idempotency_keys`, exhausted `verdict_v2_requests` outbox rows (completed requests are
+  already deleted on success) and `mutation_result_cache`. It runs hourly in batches; set `RADIUS_RETENTION_DRY_RUN=true`
+  first to see in the worker log how many rows it would delete. The rest of the database grows with use; plan disk
   and monitor it ([RUNBOOK.md](RUNBOOK.md)).
 - **Backups:** the schedule is yours. A common starting point (a recommendation, not something Radius enforces):
   daily dumps kept 7 days, weekly kept 4, one monthly kept 6, plus a dump before every upgrade. Test a restore on

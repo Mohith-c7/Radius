@@ -22,6 +22,28 @@ test("CSP uses a nonce with strict-dynamic and no script unsafe-inline/eval in p
   assert.equal(directive(csp, "upgrade-insecure-requests"), undefined);
 });
 
+test("CSP allows no external font or style host (fonts are a system stack, nothing is fetched)", () => {
+  const csp = sh.buildCsp({ nonce: "n", apiOrigin: "https://api.example.com" });
+  assert.equal(directive(csp, "style-src"), "style-src 'self' 'unsafe-inline'");
+  assert.equal(directive(csp, "font-src"), "font-src 'self'");
+  assert.doesNotMatch(csp, /googleapis|gstatic/);
+});
+
+test("stylesheets do not import or reference external font hosts", async () => {
+  const { readFileSync, readdirSync } = await import("node:fs");
+  const root = new URL("../", import.meta.url);
+  const files = [
+    "app/globals.css",
+    ...readdirSync(new URL("components/", root))
+      .filter((f) => f.endsWith(".css"))
+      .map((f) => `components/${f}`),
+  ];
+  for (const f of files) {
+    const css = readFileSync(new URL(f, root), "utf8");
+    assert.doesNotMatch(css, /@import|googleapis|gstatic/, f);
+  }
+});
+
 test("CSP never contains wildcards or a bare scheme source for scripts", () => {
   const csp = sh.buildCsp({ nonce: "n", apiOrigin: "http://localhost:8000" });
   assert.doesNotMatch(directive(csp, "script-src"), /\*|https?:/);

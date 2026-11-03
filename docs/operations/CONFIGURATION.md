@@ -22,13 +22,12 @@ How to read it.
   (`RADIUS_LLM_*`) silently fall back to their default on a bad number.
 
 
-Variables documented: **133** (14 secret, 10 feature flags).
+Variables documented: **134** (14 secret, 10 feature flags).
 
 ## Core, API, GitHub and observability
 
 | Variable | Type | Default | Service | Secret | Status | Description |
 |---|---|---|---|---|---|---|
-| `API_BASE_URL` | str | `http://localhost:8000` | api | no | - | Auth module: public API base URL. Declared in the auth settings; no other code reads it (verified by grep). |
 | `API_KEYS` | str | `(secret, no default)` | api | yes | - | DEPRECATED legacy ``org_id:key`` entries (full access). See docs/security/API_KEYS.md. |
 | `CORS_ORIGINS` | str | `empty` | api | no | - | Comma separated browser origins allowed by CORS (``CORS_ORIGINS``). Local dashboard origins are added automatically outside production. In production the list must be explicit: no ``*``, only ``https://`` origins. |
 | `DASHBOARD_BASE_URL` | str | `empty` | worker | no | - | Canonical public dashboard URL; the worker uses it to build the analysis link in the check run and PR comment. |
@@ -61,7 +60,7 @@ Variables documented: **133** (14 secret, 10 feature flags).
 | `RADIUS_CORS_ALLOW_CREDENTIALS` | bool | `true` | api | no | - | Send `Access-Control-Allow-Credentials`. Never combined with `*`. |
 | `RADIUS_ENV` | RuntimeEnvironment | `development` | api, worker | no | - | Runtime environment: `development`, `test`, `uat` or `production`. Production tightens CORS validation (https origins only, no wildcard, no automatic localhost), ignores demo seeding, refuses the public session secret and `EMAIL_DELIVERY_MODE=log`. `docker-compose.yml` pins `production`; `docker-compose.dev.yml` (used by `make dev`) sets `development` for the api. |
 | `RADIUS_EVAL_ALLOW_REAL_LLM` | str | `unset` | evaluation CLI | no | - | Intent evaluation CLI only: must be `1`, together with `--allow-real-llm`, before a real provider is used. Tests and CI never set it. |
-| `RADIUS_EXTRAS` | str | `empty` | compose build | no | - | Compose build argument: extra Python dependency groups to install in the api and worker images (for example `llm`, `observability`). |
+| `RADIUS_EXTRAS` | str | `empty` | compose build | no | - | Compose build argument: extra Python dependency groups to install in the api and worker images (for example `llm`, `gemini`, `observability`). |
 | `RADIUS_GITHUB_POLL_INTERVAL_SECONDS` | float | `0.0` | worker | no | - | Opt-in pull-based trigger (no webhook needed): every this many seconds (plus or minus 10 percent jitter) the worker lists the open, non-draft pull requests of connected repositories whose GitHub App installation it can reach and queues an analysis for every head commit that has none yet. 0 (default) = off. Values from 1 to 29 are raised to 30; negative = off. Needs GITHUB_APP_ID and a private key in the worker. |
 | `RADIUS_GITHUB_POLL_MAX_ANALYSES_PER_TICK` | int | `10` | worker | no | - | Upper bound of analyses one poll tick may queue; the rest wait for the next tick. |
 | `RADIUS_GITHUB_POLL_MAX_REPOSITORIES_PER_TICK` | int | `25` | worker | no | - | Upper bound of repositories one poll tick lists from GitHub (one API call each); repositories take turns so none starves. |
@@ -87,6 +86,8 @@ Variables documented: **133** (14 secret, 10 feature flags).
 | `RADIUS_RATE_LIMIT_GENERAL` | str | `600/60` | api | no | - | Token bucket for general routes, `<requests>/<window seconds>`. |
 | `RADIUS_RATE_LIMIT_IP_MULTIPLIER` | int | `2` | api | no | - | Per-IP limit = per-key limit x this, for key-identified buckets. |
 | `RADIUS_RATE_LIMIT_WEBHOOK` | str | `600/60` | api | no | - | Token bucket for the GitHub webhook route, `<requests>/<window seconds>`. |
+| `RADIUS_RETENTION_DAYS` | int | `0` | worker | no | - | Opt-in data retention: every hour the worker deletes rows older than this many days from idempotency_keys, exhausted verdict_v2_requests outbox rows and mutation_result_cache. Never touches analyses, verdicts, evidence or audit rows. 0 (default) = off; values from 1 to 6 are raised to 7. |
+| `RADIUS_RETENTION_DRY_RUN` | bool | `false` | worker | no | - | With RADIUS_RETENTION_DAYS set: only log how many rows each retention pass would delete, delete nothing. |
 | `RADIUS_SEED_DEMO_DATA` | bool | `false` | api | no | - | Seed illustrative demo fixtures and a demo login at startup. Off by default and never honoured in production: the demo account uses a publicly documented password and the fixtures are not real analyses. |
 | `RADIUS_TRACING_ENABLED` | bool | `false` | api, worker | no | - | Create OpenTelemetry spans (needs the `observability` extra). Off by default. |
 | `RADIUS_TRUSTED_PROXIES` | str | `empty` | api | no | - | Comma separated IPs/CIDRs of reverse proxies whose X-Forwarded-For is trusted. |
