@@ -796,11 +796,7 @@ def _publish_github_in_progress(
                 owner=repository.owner,
                 repository_name=repository.name,
                 head_sha=analysis.commit_sha,
-                dashboard_url=(
-                    f"{settings.dashboard_base_url.rstrip('/')}/analyses/{analysis_id}"
-                    if settings.dashboard_base_url
-                    else None
-                ),
+                dashboard_url=settings.dashboard_analysis_url(analysis_id),
             )
     except Exception as exc:
         LOGGER.warning(
@@ -849,11 +845,7 @@ def _publish_github_failure(
             error_summary=redact_secrets(
                 f"{error.__class__.__name__}: {error}", max_length=300
             ),
-            dashboard_url=(
-                f"{settings.dashboard_base_url.rstrip('/')}/analyses/{analysis_id}"
-                if settings.dashboard_base_url
-                else None
-            ),
+            dashboard_url=settings.dashboard_analysis_url(analysis_id),
         )
     except Exception as publish_exc:  # pragma: no cover - best effort
         LOGGER.warning(
@@ -905,11 +897,7 @@ def _github_report(
     if repository is None or pull_request is None or confidence is None:
         msg = f"GitHub publishing artifacts for analysis {analysis_id} are incomplete."
         raise NotFoundError(msg)
-    dashboard_url = (
-        f"{settings.dashboard_base_url.rstrip('/')}/analyses/{analysis_id}"
-        if settings.dashboard_base_url
-        else None
-    )
+    dashboard_url = settings.dashboard_analysis_url(analysis_id)
 
     test_selection = (
         session.query(db_models.TestSelection)

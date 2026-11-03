@@ -108,6 +108,18 @@ class WorkerSettings(DatabaseSettings):
         alias="GITHUB_INSTALLATION_ID",
     )
 
+    def dashboard_analysis_url(self, analysis_id: object) -> str | None:
+        """Link to an analysis in the dashboard, from ``DASHBOARD_BASE_URL``.
+
+        ``None`` when the base URL is unset or not an http(s) URL, so the Check Run and PR
+        comment then carry no link instead of a broken one.
+        """
+
+        base = (self.dashboard_base_url or "").strip().rstrip("/")
+        if not base.lower().startswith(("http://", "https://")):
+            return None
+        return f"{base}/analyses/{analysis_id}"
+
     @field_validator("github_installation_id", mode="before")
     @classmethod
     def _parse_installation_id(cls, v):

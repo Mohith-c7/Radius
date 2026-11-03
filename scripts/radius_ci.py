@@ -14,6 +14,14 @@ Flow inside a CI job for a pull request head commit:
 ``radius_ci.py verdict`` prints the current verdict without uploading (e.g. when
 Radius selected no tests) and applies the same exit-code gate.
 
+``radius_ci.py run`` is the laptop variant of steps 2 and 3 for a demo or a
+machine without a CI runner that can reach the API: it waits for the analysis,
+runs the repository's pytest suite locally with JUnit output, and uploads the
+report bound to the checked-out ``HEAD`` commit (``--commit`` overrides). Use
+``--dry-run`` to run the tests and show what would be uploaded without any
+network call. ``--api`` and ``--org`` default to ``RADIUS_API_URL`` and
+``RADIUS_ORG_ID``.
+
 Exit codes: 0 success, 1 error (API rejected the request, network failure,
 invalid input), 2 usage error, 3 timed out waiting for the analysis,
 4 the uploaded results make the Radius verdict ``failed``, 5 the verdict is not
@@ -30,6 +38,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 import urllib.error
@@ -41,6 +50,8 @@ from pathlib import Path
 
 TIMEOUT_SECONDS = 30
 API_KEY_ENV = "RADIUS_API_KEY"
+API_URL_ENV = "RADIUS_API_URL"
+ORG_ID_ENV = "RADIUS_ORG_ID"
 DEFAULT_WAIT_SECONDS = 900
 DEFAULT_POLL_SECONDS = 10
 MAX_TRANSIENT_FAILURES = 3
@@ -208,7 +219,8 @@ _HINTS = {
         "belongs to the organization passed with --org."
     ),
     403: (
-        "Access denied. The API key is wrong for this organization, or the "
+        "Access denied. The API key is wrong for this organization, the key is "
+        "read-only (uploading results needs a key with write scope), or the "
         "repository/analysis belongs to another organization. Check RADIUS_ORG_ID "
         "and RADIUS_API_KEY."
     ),
@@ -606,15 +618,26 @@ def _parser() -> argparse.ArgumentParser:
         "plan": "Wait for the analysis and print the selected test files.",
         "upload": "Upload JUnit report(s) for the analysis, bound to a commit.",
         "verdict": "Print the analysis' current verdict and gate on it.",
+        "run": "Run the repository's pytest suite locally, then upload the JUnit report.",
     }
     for name, help_text in commands.items():
         cmd = sub.add_parser(name, help=help_text, description=help_text)
-        cmd.add_argument("--api", required=True, help="Radius API base URL")
-        cmd.add_argument("--org", required=True, help="Radius organization id")
+        cmd.add_argument(
+            "--api",
+            required=not os.environ.get(API_URL_ENV),
+            default=os.environ.get(API_URL_ENV),
+            help=f"Radius API base URL (default: ${API_URL_ENV})",
+        )
+        cmd.add_argument(
+            "--org",
+            required=not os.environ.get(ORG_ID_ENV),
+            default=os.environ.get(ORG_ID_ENV),
+            help=f"Radius organization id (default: ${ORG_ID_ENV})",
+        )
         cmd.add_argument("--analysis", help="Radius analysis id (skips the lookup)")
         cmd.add_argument("--repository", help="owner/name, e.g. $GITHUB_REPOSITORY")
         cmd.add_argument("--pr", type=int, help="Pull request number")
-        if name in {"upload", "verdict"}:
+        if name in {"upload", "verdict", "run"}:
             cmd.add_argument(
                 "--require-verified",
                 action="store_true",
@@ -626,12 +649,13 @@ def _parser() -> argparse.ArgumentParser:
         cmd.add_argument(
             "--commit",
             required=name == "upload",
-            help="PR head commit SHA (the commit the tests run on)",
+            help="PR head commit SHA (the commit the tests run on)"
+            + ("; default for run: git HEAD of --repo-dir" if name == "run" else ""),
         )
         cmd.add_argument(
             "--wait",
             type=float,
-            default=120 if name == "upload" else DEFAULT_WAIT_SECONDS,
+            default=120 if name in {"upload", "run"} else DEFAULT_WAIT_SECONDS,
             help="Seconds to wait for the analysis to complete (default: %(default)s)",
         )
         cmd.add_argument(
@@ -655,10 +679,152 @@ def _parser() -> argparse.ArgumentParser:
         action="append",
         help="JUnit XML report path (repeat for several reports)",
     )
+    run = sub.choices["run"]
+    run.add_argument("--repo-dir", default=".", help="Checkout to test (default: current directory)")
+    run.add_argument("--junit", help="Upload this existing JUnit report instead of running pytest")
+    run.add_argument(
+        "--junit-out", help="Where pytest writes the report (default: a temporary directory)"
+    )
+    run.add_argument(
+        "--selected-only",
+        action="store_true",
+        help="Run only the test files Radius selected for this analysis (default: whole suite)",
+    )
+    run.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Run the tests and validate the report, but make no network call and upload nothing",
+    )
+    run.add_argument("pytest_args", nargs="*", help="Extra pytest arguments, after a literal --")
     return parser
 
 
+def _git_head(repo_dir: Path) -> str:
+    try:
+        done = subprocess.run(  # noqa: S603 - fixed argv
+            ["git", "-C", str(repo_dir), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise RadiusCiError(
+            f"Could not read the commit of {repo_dir} (git rev-parse HEAD failed). "
+            "Run inside the checkout, or pass --commit SHA."
+        ) from exc
+    return done.stdout.strip()
+
+
+def _run_pytest(repo_dir: Path, junit_path: Path, extra: list[str]) -> int:
+    """Run pytest in ``repo_dir``; the API key is removed from the child environment."""
+
+    env = {k: v for k, v in os.environ.items() if k != API_KEY_ENV}
+    command = [
+        sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "-q",
+        f"--junitxml={junit_path}", *extra,
+    ]
+    _log(f"running pytest in {repo_dir}")
+    try:
+        return subprocess.run(  # noqa: S603 - argv built here, no shell
+            command, cwd=repo_dir, env=env, check=False
+        ).returncode
+    except OSError as exc:
+        raise RadiusCiError(f"Could not start pytest: {exc}") from exc
+
+
+def _junit_counts(junit_path: Path) -> dict[str, int]:
+    import xml.etree.ElementTree as ET  # noqa: S405 - our own report, not remote input
+
+    try:
+        root = ET.parse(junit_path).getroot()  # noqa: S314
+    except (ET.ParseError, OSError) as exc:
+        raise RadiusCiError(f"JUnit report {junit_path} is not readable XML: {exc}") from exc
+    counts = {"total": 0, "failed": 0, "skipped": 0}
+    for case in root.iter("testcase"):
+        counts["total"] += 1
+        if case.find("failure") is not None or case.find("error") is not None:
+            counts["failed"] += 1
+        elif case.find("skipped") is not None:
+            counts["skipped"] += 1
+    if counts["total"] == 0:
+        raise RadiusCiError(f"JUnit report {junit_path} has no <testcase> entries.")
+    return counts
+
+
+def _run_laptop(args: argparse.Namespace) -> None:
+    repo_dir = Path(args.repo_dir).resolve()
+    if not repo_dir.is_dir():
+        raise RadiusCiError(f"--repo-dir {args.repo_dir} is not a directory.")
+    if not args.commit:
+        args.commit = _git_head(repo_dir)
+    target = _target(args)  # validates every input before anything runs
+    commit = _validate_sha(args.commit)
+    extra = list(args.pytest_args or ())
+    if extra and extra[0] == "--":
+        extra = extra[1:]
+
+    analysis_id = target.analysis_id
+    if not args.dry_run:
+        analysis = resolve(target, wait_seconds=args.wait, poll_seconds=args.poll_interval)
+        analysis_id = _validate_uuid(str(analysis.get("id")), "analysis id from the API")
+        if args.selected_only:
+            paths = selected_tests(target, analysis_id)
+            if not paths:
+                raise RadiusCiError("Radius selected no tests; run without --selected-only.")
+            extra = [*paths, *extra]
+
+    cleanup = None
+    try:
+        if args.junit:
+            junit = Path(args.junit)
+        else:
+            if args.junit_out:
+                junit = Path(args.junit_out)
+            else:
+                import tempfile
+
+                cleanup = tempfile.TemporaryDirectory(prefix="radius-ci-")
+                junit = Path(cleanup.name) / "junit.xml"
+            junit.parent.mkdir(parents=True, exist_ok=True)
+            code = _run_pytest(repo_dir, junit, extra)
+            # 0 = all passed, 1 = some tests failed (still evidence); anything else means
+            # pytest itself did not run the suite, so there is nothing trustworthy to upload.
+            if code not in (0, 1) or not junit.is_file():
+                raise RadiusCiError(
+                    f"pytest exited with code {code} before producing a usable report; "
+                    "nothing was uploaded. Fix the test run first."
+                )
+        counts = _junit_counts(junit)
+        _log(
+            f"report: {counts['total']} tests, {counts['failed']} failed, "
+            f"{counts['skipped']} skipped, for commit {commit[:12]}"
+        )
+        if args.dry_run:
+            query = urllib.parse.urlencode({"commit_sha": commit})
+            where = analysis_id or "<resolved from repository/pr/commit>"
+            print(
+                f"DRY RUN: would POST {junit.stat().st_size} bytes of JUnit XML to "
+                f"{target.api}/api/v1/analyses/{where}/tests/results?{query} "
+                f"(org {target.organization_id}); nothing was sent."
+            )
+            return
+        data = upload(target, analysis_id, str(junit), commit)
+        print(upload_summary(str(junit), data))
+        status = str(data.get("verification_status") or "unknown")
+        print(verdict_summary(data))
+        if args.github_output:
+            _write_github_output({"analysis-id": str(analysis_id), "verification-status": status})
+        _gate(status, args.require_verified)
+    finally:
+        if cleanup is not None:
+            cleanup.cleanup()
+
+
 def _run(args: argparse.Namespace) -> None:
+    if args.command == "run":
+        _run_laptop(args)
+        return
     target = _target(args)
     analysis = resolve(target, wait_seconds=args.wait, poll_seconds=args.poll_interval)
     analysis_id = _validate_uuid(str(analysis.get("id")), "analysis id from the API")
