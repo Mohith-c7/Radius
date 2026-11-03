@@ -4,7 +4,7 @@
 # Base images are pinned by digest; the tag in each FROM line is what Dependabot
 # (package-ecosystem: docker) reads and bumps together with the digest.
 
-FROM ghcr.io/astral-sh/uv:0.12.20@sha256:100047e74f30778ab704942321a09750d6158739573ff58bf3924085cc6cd2d8 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.6@sha256:af22a52f5eafef3d78e551599d405c02df61919d18028f0cea8eda93bc9986d0 AS uv
 
 # ---- builder: install dependencies exactly as locked in uv.lock (uv verifies the
 # hashes recorded there). No compiler is needed: UV_NO_BUILD makes the build fail
