@@ -19,6 +19,8 @@ services:
       CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
       FRONTEND_ORIGIN: http://localhost:3000
       DEV_AUTO_VERIFY_EMAIL: "true"
+      # Plain http://localhost in development; the base file defaults this to true.
+      SESSION_COOKIE_SECURE: "false"
       EMAIL_DELIVERY_MODE: log
 
   dashboard:

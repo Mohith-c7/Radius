@@ -264,6 +264,15 @@ ProcessLauncher = Callable[..., _Process]
 AuxRunner = Callable[..., object]
 
 
+def _private_scratch_root() -> Path:
+    """Create the per-run scratch directory, owner-only (0700) on POSIX hosts."""
+
+    root = Path(tempfile.mkdtemp(prefix="radius-sandbox-"))
+    if os.name == "posix":
+        root.chmod(0o700)
+    return root
+
+
 @dataclass(slots=True)
 class _Execution:
     stdout: str = ""
@@ -385,7 +394,7 @@ class ContainerSandboxRunner:
             error = _CommandOutcome(error=f"sandbox unavailable, refusing to execute: {exc}")
             return build_run_result(plan, [error], outputs, started)
 
-        root = Path(tempfile.mkdtemp(prefix="radius-sandbox-"))
+        root = _private_scratch_root()
         try:
             workspace = root / "workspace"
             try:
@@ -511,7 +520,10 @@ class ContainerSandboxRunner:
     ) -> tuple[_CommandOutcome, Path, bool]:
         results_dir = scratch / "results"
         results_dir.mkdir(parents=True)
-        # The container runs as nobody; it must be able to write its report here.
+        # The container runs as nobody (a uid that does not own this directory), so it
+        # needs write access here. Other local users cannot reach it: the scratch root
+        # above is created 0700 (``_private_scratch_root``), so this mode is only
+        # reachable through the bind mount. Residual: a host user who is root.
         results_dir.chmod(0o777)
         inner_argv, is_pytest = sandbox_command(command, args)
         container_name = f"radius-sbx-{uuid4().hex[:16]}"

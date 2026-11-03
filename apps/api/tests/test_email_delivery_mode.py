@@ -85,6 +85,7 @@ def test_action_token_links_are_logged_only_for_dev(monkeypatch, env, mode, expe
     if env:
         monkeypatch.setenv("RADIUS_ENV", env)
         monkeypatch.setenv("SESSION_SECRET", secrets.token_urlsafe(40))  # production refuses the default
+        monkeypatch.setenv("SESSION_COOKIE_SECURE", "true")  # uat/production refuse insecure cookies
     if mode:
         monkeypatch.setenv("EMAIL_DELIVERY_MODE", mode)
     assert auth_module._may_log_action_tokens() is expected

@@ -17,12 +17,10 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 
-from radius_testing.domain.entities import CaseOutcome, ReportedTestCase
+# No stdlib fallback (A-17): a missing defusedxml must fail at import, not downgrade.
+import defusedxml.ElementTree as _safe_et
 
-try:
-    import defusedxml.ElementTree as _safe_et
-except ImportError:  # pragma: no cover - defusedxml is a declared dependency
-    _safe_et = None
+from radius_testing.domain.entities import CaseOutcome, ReportedTestCase
 
 # Backwards-compatible name: one reported case with location hints.
 ExecutedCase = ReportedTestCase
@@ -179,8 +177,6 @@ def _norm(path: str) -> str:
 
 
 def _xml_cases(text: str) -> tuple[ReportedTestCase, ...]:
-    if _safe_et is None:  # pragma: no cover
-        return ()
     try:
         root = _safe_et.fromstring(text.encode("utf-8"))
     except Exception:  # noqa: BLE001 - malformed reports yield no evidence

@@ -1,8 +1,10 @@
 """HTTP boundary for Radius authentication. Sessions are HTTP-only cookies."""
 
+import html
 import logging
 import smtplib
-from datetime import UTC, datetime
+import time
+from datetime import UTC, datetime, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from urllib.parse import urlencode
@@ -14,12 +16,16 @@ from sqlalchemy.orm import Session
 
 from . import oauth
 from .auth import (
+    SESSION_TTL,
+    burn_password_check,
     consume_action_token,
     create_action_token,
     create_session,
     decode_session,
     hash_password,
+    is_production_like,
     provision_domain_user_and_org,
+    revoke_user_sessions,
     should_auto_verify_email,
     user_from_provider,
     verify_password,
@@ -57,9 +63,6 @@ def send_email_message(
             flush=True,
         )
         return True
-    print(
-        f"\n[Radius Email Dispatch] FROM: {sender} -> TO: {to_email}\nSubject: {subject}\n"
-    )
     if settings.smtp_username and settings.smtp_password:
         try:
             msg = MIMEMultipart("alternative")
@@ -72,16 +75,53 @@ def send_email_message(
                 server.starttls()
                 server.login(settings.smtp_username, settings.smtp_password)
                 server.sendmail(sender, [to_email], msg.as_string())
-            print(f"[Radius SMTP Success] Email successfully delivered to {to_email}")
+            LOGGER.info("email dispatched via SMTP")
             return True
         except Exception as exc:
-            print(f"[Radius SMTP Error] Failed to send email to {to_email}: {exc}")
+            # Class name only: SMTP error text can echo the recipient or credentials.
+            LOGGER.warning("email dispatch failed: %s", type(exc).__name__)
             return False
-    else:
-        print(
-            "[Radius SMTP Note] SMTP_USERNAME and SMTP_PASSWORD not set in environment. Falling back to console log."
-        )
+    LOGGER.warning("SMTP_USERNAME/SMTP_PASSWORD are not set; email was not sent")
+    return False
+
+
+_LOGIN_FAILURE_LIMIT = 10
+_LOGIN_FAILURE_WINDOW_SECONDS = 15 * 60
+_LOGIN_TRACKED_MAX = 10_000
+_login_failures: dict[str, tuple[int, float]] = {}
+
+
+def _login_locked(email: str) -> bool:
+    entry = _login_failures.get(email)
+    if entry is None:
         return False
+    count, started = entry
+    if time.monotonic() - started > _LOGIN_FAILURE_WINDOW_SECONDS:
+        _login_failures.pop(email, None)
+        return False
+    return count >= _LOGIN_FAILURE_LIMIT
+
+
+def _note_login_failure(email: str) -> None:
+    now = time.monotonic()
+    if len(_login_failures) >= _LOGIN_TRACKED_MAX:
+        for key in [
+            k
+            for k, (_, started) in _login_failures.items()
+            if now - started > _LOGIN_FAILURE_WINDOW_SECONDS
+        ]:
+            _login_failures.pop(key, None)
+        if len(_login_failures) >= _LOGIN_TRACKED_MAX:
+            return  # full of live entries: stay bounded, rely on the per-IP limiter
+    count, started = _login_failures.get(email, (0, now))
+    if now - started > _LOGIN_FAILURE_WINDOW_SECONDS:
+        count, started = 0, now
+    _login_failures[email] = (count + 1, started)
+
+
+def _mail_name(user: User) -> str:
+    """The user-chosen display name, safe for interpolation into HTML mail (A-08)."""
+    return html.escape(user.name or "", quote=True)
 
 
 def public_user(user: User) -> UserResponse:
@@ -118,23 +158,37 @@ def current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Your session has expired. Please sign in again.",
         )
-    user_id, session_id = decode_session(radius_session)
+    return _load_session(radius_session, db)[0]
+
+
+def _expired() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Your session has expired. Please sign in again.",
+    )
+
+
+def _load_session(token: str, db: Session) -> tuple[User, AuthSession]:
+    """Resolve a session cookie to (user, live session row) or raise 401.
+
+    Every attribute of the row is read only after the existence check: a validly
+    signed token whose row is gone is an expired session, not a server error.
+    """
+    user_id, session_id = decode_session(token)
     session = db.get(AuthSession, session_id)
     user = db.get(User, user_id)
-    now = datetime.now(UTC)
-    expires_at = session.expires_at if session.expires_at.tzinfo is not None else session.expires_at.replace(tzinfo=UTC)
-    if (
-        not user
-        or not session
-        or session.user_id != user.id
-        or session.revoked_at is not None
-        or expires_at < now
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Your session has expired. Please sign in again.",
-        )
-    return user
+    if not user or not session or session.user_id != user.id:
+        raise _expired()
+    if session.revoked_at is not None:
+        raise _expired()
+    expires_at = (
+        session.expires_at
+        if session.expires_at.tzinfo is not None
+        else session.expires_at.replace(tzinfo=UTC)
+    )
+    if expires_at < datetime.now(UTC):
+        raise _expired()
+    return user, session
 
 
 @router.post(
@@ -156,8 +210,12 @@ def signup(payload: Signup, response: Response, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
-    provision_domain_user_and_org(db, user)
-    db.refresh(user)
+    if user.email_verified or not is_production_like():
+        provision_domain_user_and_org(db, user)
+        db.refresh(user)
+    # Production/uat, unverified: do NOT join an existing organization / domain user
+    # for this address yet. Whoever types an e-mail address at signup has not proven
+    # they own it (A-07); provisioning happens when the address is verified.
     token = create_action_token(db, user.id, "verify_email", minutes=24 * 60)
     verify_url = f"{get_settings().frontend_origin}/verify-email?token={token}"
     subject = "Verify your Radius account"
@@ -165,7 +223,7 @@ def signup(payload: Signup, response: Response, db: Session = Depends(get_db)):
     html_body = f"""
     <div style="font-family: Arial, sans-serif; max-width: 500px; padding: 24px; border: 1px solid #e7ece8; border-radius: 8px;">
       <h2 style="color: #13231E;">Welcome to Radius</h2>
-      <p style="color: #555;">Hello {user.name},</p>
+      <p style="color: #555;">Hello {_mail_name(user)},</p>
       <p style="color: #555;">Please verify your email address to secure your account.</p>
       <div style="margin: 24px 0;">
         <a href="{verify_url}" style="background-color: #19815C; color: #ffffff; padding: 12px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Verify Email Address</a>
@@ -174,22 +232,45 @@ def signup(payload: Signup, response: Response, db: Session = Depends(get_db)):
     </div>
     """
     send_email_message(user.email, subject, text_body, html_body)
-    set_session(response, db, user)
+    if user.email_verified or not is_production_like():
+        set_session(response, db, user)
+    # Production/uat: no session until the address is verified (A-07).
     return public_user(user)
 
 
 @router.post("/login", response_model=UserResponse)
 def login(payload: Login, response: Response, db: Session = Depends(get_db)):
-    user = db.scalar(select(User).where(User.email == payload.email.lower()))
-    if (
-        not user
-        or not user.password_hash
-        or not verify_password(payload.password, user.password_hash)
-    ):
+    email = payload.email.lower()
+    if _login_locked(email):
+        raise HTTPException(
+            status_code=429,
+            detail="Too many failed sign-in attempts. Try again later.",
+        )
+    user = db.scalar(select(User).where(User.email == email))
+    if user is not None and user.password_hash:
+        ok = verify_password(payload.password, user.password_hash)
+    else:
+        # Same argon2 work for unknown accounts: response time must not reveal them.
+        burn_password_check(payload.password)
+        ok = False
+    if not ok or user is None:
+        _note_login_failure(email)
         raise HTTPException(
             status_code=401,
             detail="Unable to sign in. Please check your credentials and try again.",
         )
+    if not user.email_verified and is_production_like():
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Verify your email address before signing in. If the link has "
+                "expired, use 'Forgot password' to prove ownership of the address."
+            ),
+        )
+    _login_failures.pop(email, None)
+    if not user.organization_id:
+        provision_domain_user_and_org(db, user)
+        db.refresh(user)
     set_session(response, db, user, payload.remember)
     return public_user(user)
 
@@ -220,10 +301,23 @@ def me(user: User = Depends(current_user)):
 @router.post("/refresh", response_model=UserResponse)
 def refresh(
     response: Response,
-    user: User = Depends(current_user),
+    radius_session: str | None = Cookie(default=None),
     db: Session = Depends(get_db),
 ):
-    set_session(response, db, user)
+    """Rotate the session: the presented one is revoked, a fresh one is issued.
+
+    A stolen cookie therefore cannot mint sessions that outlive the original
+    (each refresh kills its predecessor), and the "remember me" lifetime is kept.
+    """
+    if not radius_session:
+        raise _expired()
+    user, old = _load_session(radius_session, db)
+    created = old.created_at if old.created_at.tzinfo else old.created_at.replace(tzinfo=UTC)
+    expires = old.expires_at if old.expires_at.tzinfo else old.expires_at.replace(tzinfo=UTC)
+    remembered = (expires - created) > SESSION_TTL + timedelta(days=1)
+    old.revoked_at = datetime.now(UTC)
+    db.commit()
+    set_session(response, db, user, remembered)
     return public_user(user)
 
 
@@ -255,7 +349,7 @@ def forgot_password(payload: ForgotPassword, db: Session = Depends(get_db)):
       </div>
       <h2 style="font-size: 20px; font-weight: 800; color: #17211E; margin: 0 0 12px 0;">Reset your password</h2>
       <p style="font-size: 14px; line-height: 1.6; color: #70807A; margin: 0 0 24px 0;">
-        Hello {user.name}, we received a request to reset your password for your Radius account.
+        Hello {_mail_name(user)}, we received a request to reset your password for your Radius account.
       </p>
       <div style="margin: 28px 0;">
         <a href="{reset_url}" style="background-color: #19815C; color: #FFFFFF; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Reset Password</a>
@@ -283,15 +377,31 @@ def reset_password(payload: ResetPassword, db: Session = Depends(get_db)):
     user = consume_action_token(db, payload.token, "reset_password")
     user.password_hash = hash_password(payload.password)
     user.email_verified = True
+    # Whoever held the old password (or a session made with it) must be signed out.
+    revoke_user_sessions(db, user.id)
     db.commit()
+    if not user.organization_id:
+        provision_domain_user_and_org(db, user)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/verify-email", response_model=UserResponse)
 def verify_email(payload: VerifyToken, db: Session = Depends(get_db)):
     user = consume_action_token(db, payload.token, "verify_email")
+    was_unverified = not user.email_verified
     user.email_verified = True
+    if was_unverified and is_production_like():
+        # Pre-hijacking defence (A-07): the password on an account that was
+        # unverified until now was chosen by whoever typed the address at signup,
+        # who may not be the mailbox owner. Clear it so the mailbox owner sets
+        # their own via "Forgot password" (sign-in with Google/GitHub also works).
+        user.password_hash = None
+    # Sessions created before the address was proven are not trusted either.
+    revoke_user_sessions(db, user.id)
     db.commit()
+    if not user.organization_id:
+        provision_domain_user_and_org(db, user)
+        db.refresh(user)
     return public_user(user)
 
 
@@ -307,7 +417,7 @@ def resend_verification(
         html_body = f"""
         <div style="font-family: Arial, sans-serif; max-width: 500px; padding: 24px; border: 1px solid #e7ece8; border-radius: 8px;">
           <h2 style="color: #13231E;">Verify your Radius email</h2>
-          <p style="color: #555;">Hello {user.name},</p>
+          <p style="color: #555;">Hello {_mail_name(user)},</p>
           <p style="color: #555;">Please verify your email address to secure your account.</p>
           <div style="margin: 24px 0;">
             <a href="{verify_url}" style="background-color: #19815C; color: #ffffff; padding: 12px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Verify Email Address</a>

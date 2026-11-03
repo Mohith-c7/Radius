@@ -1,4 +1,5 @@
 """Runtime configuration loaded from environment variables."""
+import os
 from functools import lru_cache
 from urllib.parse import urlsplit
 
@@ -45,6 +46,25 @@ class Settings(BaseSettings):
             msg = f"EMAIL_DELIVERY_MODE must be one of {', '.join(EMAIL_DELIVERY_MODES)}."
             raise ValueError(msg)
         return mode
+
+    @model_validator(mode="after")
+    def _production_like_guards(self) -> "Settings":
+        """Controls that must hold in production AND uat (A-09, A-16)."""
+        if self.runtime_env.strip().lower() not in {"production", "uat"}:
+            return self
+        if not self.session_cookie_secure:
+            msg = (
+                "SESSION_COOKIE_SECURE must be true when RADIUS_ENV is production or uat: "
+                "the session and OAuth flow cookies would otherwise travel over plain HTTP."
+            )
+            raise ValueError(msg)
+        if os.environ.get("DEV_AUTO_VERIFY_EMAIL", "").strip().lower() in {"true", "1", "yes"}:
+            msg = (
+                "DEV_AUTO_VERIFY_EMAIL marks every signup as verified and is refused "
+                "when RADIUS_ENV is production or uat."
+            )
+            raise ValueError(msg)
+        return self
 
     @model_validator(mode="after")
     def _production_guards(self) -> "Settings":

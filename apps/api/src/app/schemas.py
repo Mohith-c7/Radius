@@ -25,7 +25,12 @@ class Signup(Credentials):
     name: str = Field(min_length=1, max_length=120)
 
 
-class Login(Credentials):
+class Login(BaseModel):
+    """Sign-in body. Deliberately NOT subject to the signup password-strength rule:
+    accounts created under an older or weaker policy must still be able to sign in."""
+
+    email: EmailStr
+    password: str = Field(min_length=1, max_length=256)
     remember: bool = False
 
 
