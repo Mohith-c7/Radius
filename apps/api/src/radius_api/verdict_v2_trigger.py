@@ -48,11 +48,8 @@ def request_verdict_v2_recompute(
             delay_seconds=INTENT_DEBOUNCE_SECONDS,
         )
     except Exception as exc:
-        # Log the exception type only: its message can carry request-derived text (log injection).
-        LOGGER.warning(
-            "Could not enqueue verdict v2 recompute (%s)",
-            type(exc).__name__,
-            extra={"analysis_id": str(analysis_id)},
-        )
+        # Log a constant message and the exception type only: neither the exception text nor the
+        # request-derived ids go into the log line (CodeQL py/log-injection).
+        LOGGER.warning("Could not enqueue verdict v2 recompute (%s)", type(exc).__name__)
         return False
     return True
