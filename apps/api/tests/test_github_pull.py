@@ -248,3 +248,45 @@ def test_sync_without_credentials_returns_stored_pull_requests(key_pair) -> None
     assert response.json()["data"] == []
     assert response.json()["meta"] == {"github": "not_configured"}
     assert unconfigured.github.requests == []
+
+
+def test_rerun_works_for_an_analysis_started_by_the_pull_based_path(env: Env) -> None:
+    repository_id = env.connect().json()["data"]["id"]
+    first = env.post(f"/repositories/{repository_id}/pull-requests/7/analyze").json()["data"]
+
+    headers = {"Idempotency-Key": "rerun-key-0001"}
+    rerun = env.http.post(
+        f"/api/v1/analyses/{first['id']}/rerun", headers={**env.headers, **headers}
+    )
+
+    assert rerun.status_code == 202, rerun.text
+    second = rerun.json()["data"]
+    assert second["id"] != first["id"], "a rerun is a new analysis"
+    assert second["commit_sha"] == first["commit_sha"] == SHA_A
+    assert second["pull_request_id"] == first["pull_request_id"]
+    assert second["status"] == "pending"
+    replay = env.http.post(
+        f"/api/v1/analyses/{first['id']}/rerun", headers={**env.headers, **headers}
+    )
+    assert replay.json()["data"]["id"] == second["id"], "same Idempotency-Key replays"
+    # The poller / sync treat the head commit as analyzed; no extra analysis appears.
+    sync = env.post(f"/repositories/{repository_id}/sync-pull-requests")
+    assert sync.json()["meta"]["analysisIds"] == []
+
+
+def test_rerun_is_refused_for_another_organization_and_a_disconnected_repository(
+    env: Env,
+) -> None:
+    repository_id = env.connect().json()["data"]["id"]
+    first = env.post(f"/repositories/{repository_id}/pull-requests/7/analyze").json()["data"]
+
+    other = env.http.post(
+        f"/api/v1/analyses/{first['id']}/rerun",
+        headers={"X-Radius-Organization-Id": str(uuid4())},
+    )
+    assert other.status_code == 403
+
+    env.http.delete(f"/api/v1/repositories/{repository_id}", headers=env.headers)
+    refused = env.post(f"/analyses/{first['id']}/rerun")
+    assert refused.status_code == 409
+    assert refused.json()["error"]["code"] == "REPOSITORY_DISCONNECTED"

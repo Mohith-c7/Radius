@@ -7,17 +7,16 @@ from fastapi import APIRouter, Depends, Header, Query, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from radius_analysis.application import AnalysisApplicationService
-from radius_analysis.dto import AnalysisListQuery, StartAnalysisCommand
 from radius_github import GitHubAppClient
+from radius_github.pull_sync import record_pull_request, sync_open_pull_requests
 from radius_repository.application import RepositoryApplicationService
 from radius_repository.domain import RepositoryVisibility
 from radius_repository.dto import (
     ConnectRepositoryCommand,
     RepositoryListQuery,
-    UpsertPullRequestCommand,
 )
 from radius_shared.dto import success_response
-from radius_shared.errors import AccessDeniedError, ConflictError, RadiusError
+from radius_shared.errors import AccessDeniedError, ConflictError
 
 from radius_api.auth import ApiPrincipal, ensure_same_organization, get_api_principal
 from radius_api.dependencies import (
@@ -31,7 +30,6 @@ from radius_api.github_pull import (
     open_access,
     parse_owner_repo,
     parse_pull_request,
-    pull_request_status,
     require_configured,
     translate_github_error,
 )
@@ -314,72 +312,32 @@ def _record_and_analyze(
     raw_pull_request: dict,
     principal: ApiPrincipal,
     analyze: bool,
-    skip_analyzed: bool = False,
 ):
     """Upsert one GitHub pull request; start an analysis for its head commit."""
 
     pull_request = parse_pull_request(raw_pull_request)
-    upserted = service.upsert_pull_request(
-        UpsertPullRequestCommand(
-            repository_id=UUID(str(repository.id)),
-            github_pr_number=pull_request.number,
-            title=pull_request.title,
-            source_branch=pull_request.head.ref,
-            target_branch=pull_request.base.ref,
-            author=pull_request.user.login,
-            status=pull_request_status(pull_request),
-            opened_at=pull_request.created_at,
-            merged_at=pull_request.merged_at,
-        )
+    upserted, analysis = record_pull_request(
+        repository_service=service,
+        analysis_service=analysis_service,
+        repository=repository,
+        pull_request=pull_request,
+        analyze=analyze,
     )
-    analysis = None
-    if analyze and pull_request.head.sha and skip_analyzed and _already_analyzed(
-        analysis_service, UUID(str(repository.id)), UUID(str(upserted.id)), pull_request.head.sha
-    ):
-        analyze = False
-    if analyze and pull_request.head.sha:
-        analysis = analysis_service.start_analysis(
-            StartAnalysisCommand(
-                repository_id=UUID(str(repository.id)),
-                pull_request_id=UUID(str(upserted.id)),
-                commit_sha=pull_request.head.sha,
-            )
-        )
-        if getattr(http_request.state, "radius_webhook_org_id", None) is None:
-            http_request.state.radius_webhook_org_id = principal.organization_id
-        record_pull_request_intent(
-            http_request,
-            analysis_id=UUID(str(analysis.id)),
-            payload=pull_request,
-            owner=repository.owner,
-            repo=repository.name,
-            trigger="pull_request.pull",
-        )
+    if analysis is not None:
+        _record_intent(http_request, analysis, pull_request, repository, principal)
     return upserted, analysis
 
 
-def _skip_reason(exc: Exception) -> str:
-    """Short, secret-free reason a pull request was skipped during a sync."""
-
-    if isinstance(exc, RadiusError):
-        return f"{exc.detail.code}: {exc.detail.message}"[:200]
-    return type(exc).__name__
-
-
-def _already_analyzed(
-    analysis_service: AnalysisApplicationService,
-    repository_id: UUID,
-    pull_request_id: UUID,
-    commit_sha: str,
-) -> bool:
-    """True when this head commit has a live or finished analysis (repeat syncs are no-ops)."""
-
-    return any(
-        analysis.commit_sha.lower() == commit_sha.lower()
-        and analysis.status not in ("failed", "cancelled")
-        for analysis in analysis_service.list_analyses(
-            AnalysisListQuery(repository_id=repository_id, pull_request_id=pull_request_id)
-        )
+def _record_intent(http_request, analysis, pull_request, repository, principal) -> None:
+    if getattr(http_request.state, "radius_webhook_org_id", None) is None:
+        http_request.state.radius_webhook_org_id = principal.organization_id
+    record_pull_request_intent(
+        http_request,
+        analysis_id=UUID(str(analysis.id)),
+        payload=pull_request,
+        owner=repository.owner,
+        repo=repository.name,
+        trigger="pull_request.pull",
     )
 
 
@@ -448,36 +406,24 @@ def sync_pull_requests(
             exc, what=f"listing pull requests of {repository.owner}/{repository.name}"
         ) from exc
 
-    synced = []
-    analyses: list[str] = []
-    skipped: list[dict[str, object]] = []
-    for raw in raw_pull_requests:
-        number = raw.get("number")
-        analyze = bool(auto_analyze and not raw.get("draft"))
-        try:
-            upserted, analysis = _record_and_analyze(
-                http_request,
-                service=service,
-                analysis_service=analysis_service,
-                repository=repository,
-                raw_pull_request=raw,
-                principal=principal,
-                analyze=analyze,
-                skip_analyzed=True,
-            )
-        except Exception as exc:  # noqa: BLE001 - one bad PR must not stop the sync
-            skipped.append({"number": number, "reason": _skip_reason(exc)})
-            continue
-        synced.append(upserted)
-        if analysis is not None:
-            analyses.append(str(analysis.id))
+    outcome = sync_open_pull_requests(
+        repository_service=service,
+        analysis_service=analysis_service,
+        repository=repository,
+        raw_pull_requests=raw_pull_requests,
+        auto_analyze=auto_analyze,
+        parse=parse_pull_request,
+        on_analysis=lambda analysis, parsed: _record_intent(
+            http_request, analysis, parsed, repository, principal
+        ),
+    )
     return success_response(
-        synced,
+        outcome.synced,
         meta={
             "github": "synced",
             "installationId": access.installation_id,
-            "analysisIds": analyses,
-            "skipped": skipped,
+            "analysisIds": outcome.analysis_ids,
+            "skipped": outcome.skipped,
         },
     )
 

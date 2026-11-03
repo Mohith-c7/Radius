@@ -1063,8 +1063,65 @@ class Smoke:
         check(len(gh.requests) == writes, "an idle worker makes no GitHub calls")
         check(len(gh.check_runs) == 1 and len(gh.comments) == 1,
               "still exactly one Check Run and one comment after the repeat sync")
+        self.poller_stage(api, repository_id, analysis_id)
         check(self.webhook_calls == webhook_calls_before,
               "no webhook delivery was sent during the whole stage")
+
+    def poller_stage(self, api: Any, repository_id: str, first_analysis_id: str) -> None:
+        """A new head commit on the pull request is picked up by the worker poller (no webhook)."""
+
+        from radius_worker.poller import PullRequestPoller
+
+        section("pull-based GitHub: poller picks up a new head commit")
+        gh = self.pull_github
+        poller = PullRequestPoller(
+            session_factory=self.runtime.session_factory,
+            github_client=self.runtime.github_client,
+            settings=self.runtime.settings,
+        )
+        idle = poller.poll_once()
+        check(idle.errors == 0 and idle.started == 0,
+              f"a poll tick with nothing new starts no analysis (errors={idle.errors}, started={idle.started})")
+
+        comment_id = gh.comments[0]["id"]
+        body_before = gh.comments[0]["body"]
+        old_sha = gh.head_sha
+        _git(["checkout", "-q", "feature"], self.origin)
+        (self.origin / "CHANGELOG_SMOKE.md").write_text("second commit pushed during the smoke\n", encoding="utf-8")
+        _git(["add", "-A"], self.origin)
+        _git(["commit", "-q", "-m", "Second commit"], self.origin)
+        new_sha = _git(["rev-parse", "HEAD"], self.origin)
+        _git(["checkout", "-q", "main"], self.origin)
+        gh.head_sha = new_sha
+        check(new_sha != old_sha, "a new head commit was pushed on the fake GitHub pull request")
+
+        tick = poller.poll_once()
+        check(tick.errors == 0 and tick.started == 1,
+              f"the poller queued exactly one analysis for the new head commit "
+              f"(errors={tick.errors}, started={tick.started})")
+        again = poller.poll_once()
+        check(again.started == 0, "polling again does not queue the same head commit twice")
+
+        analyses = api("GET", "/analyses", params={"repositoryId": repository_id}).json()["data"]
+        new = [a for a in analyses if a["commit_sha"] == new_sha]
+        check(len(analyses) == 2 and len(new) == 1 and new[0]["id"] != first_analysis_id,
+              "the repository now has one analysis per head commit")
+        check(str(new[0]["id"]) in tick.analysis_ids, "the queued analysis is the one the poller reported")
+
+        self.run_worker()
+        status = api("GET", f"/analyses/{new[0]['id']}").json()["data"]["status"]
+        check(status == "completed", f"the worker completed the poller's analysis (status={status})")
+        check(len(gh.comments) == 1 and gh.comments[0]["id"] == comment_id,
+              "the pull request comment was updated in place (still one comment, same id)")
+        check(gh.comments[0]["body"] != body_before, "the comment text changed for the new head commit")
+        check(len(gh.check_runs) == 2 and gh.check_runs[-1]["head_sha"] == new_sha
+              and gh.check_runs[-1]["status"] == "completed",
+              "a completed Check Run exists on the new head commit")
+        check(not gh.unhandled and not self.github.unhandled,
+              f"no unexpected GitHub API calls {gh.unhandled + self.github.unhandled}")
+        writes = len(gh.requests)
+        self.run_worker()
+        check(len(gh.requests) == writes, "an idle worker makes no GitHub calls after the poll")
 
     # -- verdict flow (fixtures 02..08): webhook -> worker -> CI upload -> worker -> compare
 

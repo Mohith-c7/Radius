@@ -21,6 +21,7 @@ from uuid import UUID
 
 from fastapi import Request
 from radius_github import GitHubAppClient, GitHubHTTPError
+from radius_github.pull_sync import pull_request_status  # noqa: F401  (re-export)
 from radius_shared.database import enums as db_enums
 from radius_shared.database import models as db_models
 from radius_shared.errors import (
@@ -208,16 +209,6 @@ def open_access(
             exc, what=f"creating an installation token for installation {installation_id}"
         ) from exc
     return GitHubAccess(client=client, installation_id=installation_id, token=token)
-
-
-def pull_request_status(payload: GitHubPullRequestPayload) -> str:
-    """Radius status for a GitHub pull request payload."""
-
-    if payload.merged or payload.merged_at is not None:
-        return "merged"
-    if payload.state == "closed":
-        return "closed"
-    return "open"
 
 
 def parse_pull_request(raw: dict[str, Any], *, number: int | None = None):

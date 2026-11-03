@@ -7,6 +7,8 @@ from pydantic import Field, field_validator, model_validator
 from radius_shared.database.session import DatabaseSettings
 from radius_shared.verdict_v2_flag import VerdictV2Mode, parse_verdict_v2_mode
 
+MIN_POLL_INTERVAL_SECONDS = 30.0
+
 
 class WorkerSettings(DatabaseSettings):
     """Runtime settings loaded from environment variables."""
@@ -117,6 +119,46 @@ class WorkerSettings(DatabaseSettings):
         default=None,
         alias="GITHUB_INSTALLATION_ID",
     )
+
+    github_poll_interval_seconds: float = Field(
+        default=0.0,
+        alias="RADIUS_GITHUB_POLL_INTERVAL_SECONDS",
+        description=(
+            "Opt-in pull-based trigger (no webhook needed): every this many seconds "
+            "(plus or minus 10 percent jitter) the worker lists the open, non-draft "
+            "pull requests of connected repositories whose GitHub App installation it "
+            "can reach and queues an analysis for every head commit that has none yet. "
+            "0 (default) = off. Values from 1 to 29 are raised to 30; negative = off. "
+            "Needs GITHUB_APP_ID and a private key in the worker."
+        ),
+    )
+    github_poll_max_analyses_per_tick: int = Field(
+        default=10,
+        ge=1,
+        le=200,
+        alias="RADIUS_GITHUB_POLL_MAX_ANALYSES_PER_TICK",
+        description=(
+            "Upper bound of analyses one poll tick may queue; the rest wait for the "
+            "next tick."
+        ),
+    )
+    github_poll_max_repositories_per_tick: int = Field(
+        default=25,
+        ge=1,
+        le=500,
+        alias="RADIUS_GITHUB_POLL_MAX_REPOSITORIES_PER_TICK",
+        description=(
+            "Upper bound of repositories one poll tick lists from GitHub (one API call "
+            "each); repositories take turns so none starves."
+        ),
+    )
+
+    @field_validator("github_poll_interval_seconds", mode="after")
+    @classmethod
+    def _clamp_poll_interval(cls, value: float) -> float:
+        if value <= 0:
+            return 0.0
+        return max(value, MIN_POLL_INTERVAL_SECONDS)
 
     @model_validator(mode="after")
     def _load_private_key_file(self) -> Self:

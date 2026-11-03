@@ -16,7 +16,7 @@ from radius_analysis.dto import (
 from radius_repository.application import RepositoryApplicationService
 from radius_repository.dto import RepositoryListQuery
 from radius_shared.dto import success_response
-from radius_shared.errors import NotFoundError, ValidationError
+from radius_shared.errors import ConflictError, NotFoundError, ValidationError
 
 from radius_api.auth import ApiPrincipal, ensure_same_organization, get_api_principal
 from radius_api.dependencies import (
@@ -275,6 +275,11 @@ async def rerun_analysis(
     existing_analysis = service.get_analysis(analysis_id)
     repository = repository_service.get_repository(existing_analysis.repository_id)
     ensure_same_organization(principal, repository.organization_id)
+    if repository.status == "disconnected":
+        raise ConflictError(
+            "Repository is disconnected. Connect it again before re-running an analysis.",
+            code="REPOSITORY_DISCONNECTED",
+        )
     body_hash = await request_hash(http_request)
     scope = f"rerun_analysis:{analysis_id}"
     existing = replay_or_validate(

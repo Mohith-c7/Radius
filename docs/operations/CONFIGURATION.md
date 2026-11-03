@@ -22,7 +22,7 @@ How to read it.
   (`RADIUS_LLM_*`) silently fall back to their default on a bad number.
 
 
-Variables documented: **126** (14 secret, 9 feature flags).
+Variables documented: **129** (14 secret, 9 feature flags).
 
 ## Core, API, GitHub and observability
 
@@ -62,6 +62,9 @@ Variables documented: **126** (14 secret, 9 feature flags).
 | `RADIUS_ENV` | RuntimeEnvironment | `development` | api, worker | no | - | Runtime environment: `development`, `test`, `uat` or `production`. Production tightens CORS validation (https origins only, no wildcard, no automatic localhost), ignores demo seeding, refuses the public session secret and `EMAIL_DELIVERY_MODE=log`. `docker-compose.yml` pins `production`; `docker-compose.dev.yml` (used by `make dev`) sets `development` for the api. |
 | `RADIUS_EVAL_ALLOW_REAL_LLM` | str | `unset` | evaluation CLI | no | - | Intent evaluation CLI only: must be `1`, together with `--allow-real-llm`, before a real provider is used. Tests and CI never set it. |
 | `RADIUS_EXTRAS` | str | `empty` | compose build | no | - | Compose build argument: extra Python dependency groups to install in the api and worker images (for example `llm`, `observability`). |
+| `RADIUS_GITHUB_POLL_INTERVAL_SECONDS` | float | `0.0` | worker | no | - | Opt-in pull-based trigger (no webhook needed): every this many seconds (plus or minus 10 percent jitter) the worker lists the open, non-draft pull requests of connected repositories whose GitHub App installation it can reach and queues an analysis for every head commit that has none yet. 0 (default) = off. Values from 1 to 29 are raised to 30; negative = off. Needs GITHUB_APP_ID and a private key in the worker. |
+| `RADIUS_GITHUB_POLL_MAX_ANALYSES_PER_TICK` | int | `10` | worker | no | - | Upper bound of analyses one poll tick may queue; the rest wait for the next tick. |
+| `RADIUS_GITHUB_POLL_MAX_REPOSITORIES_PER_TICK` | int | `25` | worker | no | - | Upper bound of repositories one poll tick lists from GitHub (one API call each); repositories take turns so none starves. |
 | `RADIUS_HSTS_ENABLED` | bool | `false` | api | no | - | Send Strict-Transport-Security. Enable only when served over TLS. |
 | `RADIUS_HSTS_MAX_AGE` | int | `31536000` | api | no | - | `max-age` in seconds of the Strict-Transport-Security header when HSTS is enabled. |
 | `RADIUS_INTENT_ALLOW_CROSS_REPO` | bool | `false` | worker | no | - | Fetch issues named by closing references in OTHER repositories (owner/repo#n, issue URLs). Off by default: the installation token can read every repository of the installation, so honoring a link written by a PR author would expose that repository's issue text. Skipped links are recorded as absent (cross_repo_disabled). |
