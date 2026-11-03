@@ -4,6 +4,8 @@ Companion to [AUDIT.md](AUDIT.md). Template follows `docs/research/IMPLEMENTATIO
 
 Status key: **NEW** = not in the research plan. **EXT** = extends an existing task (do not duplicate; see section 2). All tasks start `[ ]`.
 
+**Verification note (2026-11-03).** No box was ticked on the strength of this pass. What was run: the dev Compose stack, a Chrome walk-through of sign-up, dashboard, demo data and a Verdict v2 analysis, and green develop CI, Coverage, Security, CodeQL, Smoke and Scorecard (7.4). That supports the existing ticks for PRD-07 and PRD-08 only as far as CI goes. It does not satisfy PRD-25 (timing over clean machines was not measured), PRD-17 (the production-like procedure was not run), PRD-22 (no browser e2e in CI), PRD-13, PRD-26 or PRD-30. See [KNOWN_LIMITATIONS](../KNOWN_LIMITATIONS.md) and [RELEASE_CHECKLIST](../RELEASE_CHECKLIST.md).
+
 ## 1. Waves at a glance
 
 | Wave | Tasks | Can start | Theme |
