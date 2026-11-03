@@ -169,7 +169,13 @@ class FixedOutcomes:
         return self._facts
 
 
-def _setup(path: Path, mode: str, registry: str, hint_provenance: str | None = None):
+def _setup(
+    path: Path,
+    mode: str,
+    registry: str,
+    hint_provenance: str | None = None,
+    mutation: Any = None,
+):
     expected = json.loads((path / "expected.json").read_text(encoding="utf-8"))
     name = path.name
     command = ExecuteAnalysisCommand(
@@ -185,6 +191,8 @@ def _setup(path: Path, mode: str, registry: str, hint_provenance: str | None = N
             tamper=tamper_producer(registry),
             # gold = the author's hints only; auto = VS-04 relevance, no hints
             relevance=None if mode == "gold" else Producers().relevance,
+            # contract 5 mutation producer; None (default) = flag off, nothing runs
+            mutation=mutation,
         ),
     )
     facts = OutcomeFacts(cases=adapters.case_inputs(cases_for(expected)).items, uploads=1)
@@ -199,9 +207,13 @@ def collect_stage_a(path: Path, mode: str, registry: str, hint_provenance: str |
 
 
 def run_collect(
-    path: Path, mode: str, registry: str, hint_provenance: str | None = None
+    path: Path,
+    mode: str,
+    registry: str,
+    hint_provenance: str | None = None,
+    mutation: Any = None,
 ) -> dict[str, Any]:
-    command, collector, facts = _setup(path, mode, registry, hint_provenance)
+    command, collector, facts = _setup(path, mode, registry, hint_provenance, mutation)
     report = run_verdict_v2_best_effort(
         mode=VerdictV2Mode.SHADOW,
         analysis_id=command.analysis_id,
