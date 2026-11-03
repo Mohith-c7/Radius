@@ -144,7 +144,10 @@ def test_repro_unpatched_git_clone_runs_upload_pack_option(tmp_path: Path) -> No
         text=True,
         check=False,
     )
-    assert marker.exists(), "git on this machine does not run --upload-pack; repro n/a"
+    if not marker.exists():
+        # Newer git versions refuse option-shaped URLs, so the unpatched primitive does not reproduce
+        # there. That is not a failure of Radius: the client still validates and uses `--`.
+        pytest.skip("this git version does not run --upload-pack for an option-shaped URL")
 
 
 @pytestmark_git
