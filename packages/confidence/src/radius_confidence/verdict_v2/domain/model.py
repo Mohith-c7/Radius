@@ -98,6 +98,9 @@ class CriterionVerdict(Serializable):
     #: Contract 3: who supplied the criterion and each ``tests:``/``paths:`` hint.
     provenance: str = ""
     hints: tuple[dict[str, str], ...] = ()
+    #: Contract 5: mutation facts of the criterion (basis, sample size, union detection,
+    #: survivors); empty when the mutation flag was off.
+    mutation: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)

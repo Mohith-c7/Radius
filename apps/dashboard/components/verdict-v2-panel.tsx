@@ -45,6 +45,7 @@ import {
   waiverCodeLabel,
   waivedFindings,
   provenanceLabel,
+  criterionBasisText,
   evidenceSummary,
   flagLabel,
   formatPercent,
@@ -52,6 +53,8 @@ import {
   headerTags,
   headline,
   itemStatusLabel,
+  mutationGaps,
+  mutationRunNote,
   justificationTree,
   massBar,
   outcomeMeta,
@@ -220,7 +223,12 @@ function VerdictView({ verdict }: { verdict: VerdictV2 }) {
     <>
       <header className="vv2-head">
         <p className="vv2-disclaimer" role="note">
-          <strong>Alpha - static evidence only - uncalibrated.</strong> {disclaimerText(verdict)}
+          <strong>
+            {verdict.summary.evidence_basis === "static_and_mutation"
+              ? "Alpha - static + sampled mutation evidence - uncalibrated."
+              : "Alpha - static evidence only - uncalibrated."}
+          </strong>{" "}
+          {disclaimerText(verdict)}
         </p>
         <p className={`vv2-verdict ${meta.tone}`}>
           <VerdictIcon size={20} aria-hidden="true" />
@@ -242,6 +250,11 @@ function VerdictView({ verdict }: { verdict: VerdictV2 }) {
       {available ? (
         <>
           <SummaryStrip verdict={verdict} />
+          {mutationRunNote(verdict) ? (
+            <p className="vv2-small" role="note" data-testid="mutation-note">
+              {mutationRunNote(verdict)}
+            </p>
+          ) : null}
           {authorHintCount(verdict) > 0 ? (
             <p className="vv2-state" role="status">
               <AlertTriangle size={16} aria-hidden="true" /> {authorHintCount(verdict)}{" "}
@@ -452,6 +465,9 @@ function CriterionDetails({ criterion }: { criterion: Criterion }) {
   return (
     <div className="vv2-detail">
       <p className="vv2-muted">{meta.description}</p>
+      {criterion.mutation ? (
+        <p className="vv2-small" data-testid="evidence-basis">{criterionBasisText(criterion)}</p>
+      ) : null}
       <p className="vv2-small">
         Criterion source: {provenanceLabel(criterion.provenance)}
         {criterion.hints.length > 0
@@ -485,6 +501,24 @@ function CriterionDetails({ criterion }: { criterion: Criterion }) {
         </ul>
       )}
       {criterion.itemsTruncated ? <p className="vv2-muted">Only the first tests are shown.</p> : null}
+      {mutationGaps(criterion).length > 0 ? (
+        <div className="vv2-gaps">
+          <p className="vv2-small">
+            Gaps found by mutation: seeded faults that no linked test caught. This is a sample, and
+            some may be harmless equivalents.
+          </p>
+          <ul className="vv2-reasons" aria-label="Gaps found by mutation">
+            {mutationGaps(criterion).map((gap, index) => (
+              <li key={`${gap}-${index}`}>
+                <code className="vv2-mono">{gap}</code>
+              </li>
+            ))}
+          </ul>
+          {criterion.mutation?.survivorsTruncated ? (
+            <p className="vv2-muted">Only the first gaps are shown.</p>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

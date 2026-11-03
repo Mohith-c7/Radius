@@ -6,7 +6,9 @@ Formulas (verbatim, design 3.5):
     l_st   = w(EXERCISED_BY) if w >= min_test_link else 0
     r_ct   = w(ADDRESSED_BY)
     l      = l_cs * l_st * r_ct
-    d_eff  = min(cap_static, a_static)
+    d_eff  = min(cap_static, a_static)            (unmeasured: the static cap)
+    d_eff  = lcb_wilson(killed, n)                (measured by mutation, contract 5; see
+                                                   ``MutationMeasure`` and ``combine_quality``)
     flaky_f = 0 if flagged by rerun; 1 - min(flaky_discount_max, score) if a score is known; else 1
     tamper_p = 1 - PROD_k (1 - penalty(severity_k))
     q(e,c) = d_eff * i * f * flaky_f * (1 - tamper_p)
@@ -24,7 +26,10 @@ from radius_evidence.domain.config import LinkMapping, QualityConfig
 from radius_evidence.domain.enums import Outcome
 from radius_evidence.domain.model import EvidenceItem, FlakyInfo, Reason
 from radius_evidence.domain.serialization import Serializable
-from radius_evidence.domain.versions import EVIDENCE_QUALITY_VERSION
+from radius_evidence.domain.versions import (
+    EVIDENCE_QUALITY_MUTATION_VERSION,
+    EVIDENCE_QUALITY_VERSION,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,6 +75,13 @@ class EvidenceQuality(Serializable):
     contribution: float | None = None
     path: ChainRef | None = None
     algo_version: str = EVIDENCE_QUALITY_VERSION
+    #: Contract 5. ``d_mut`` above is the point estimate; ``d_eff`` used its Wilson lower
+    #: bound when ``basis == "mutation"``.
+    d_mut_lcb: float | None = None
+    mutation_n: int | None = None
+    mutation_killed: int | None = None
+    #: ``static`` (assertion cap) or ``mutation`` (d_eff measured).
+    basis: str = "static"
 
 
 #: Alias used in the design discussion.
@@ -125,6 +137,23 @@ class LinkStrength(Serializable):
 
 
 @dataclass(frozen=True, slots=True)
+class MutationMeasure(Serializable):
+    """Measured detection power of one test for one criterion (contract 5).
+
+    ``n`` is the number of decided, non-equivalent mutants of the changed symbols linked
+    to the test; ``d_mut = killed / n`` and ``lcb`` is the Wilson lower bound (95%).
+    ``measured`` is False when ``n`` is below the minimum sample: the static cap applies.
+    """
+
+    killed: int
+    n: int
+    d_mut: float | None
+    lcb: float | None
+    measured: bool
+    min_decided: int = 5
+
+
+@dataclass(frozen=True, slots=True)
 class QualityFactors(Serializable):
     """Every component of ``q(e, c)`` with reason codes (audit and ablations)."""
 
@@ -137,6 +166,7 @@ class QualityFactors(Serializable):
     tamper_penalty: float
     q: float
     reasons: tuple[Reason, ...] = ()
+    basis: str = "static"
 
 
 def criterion_link_strength(weight: float, mapping: LinkMapping) -> float:
@@ -195,10 +225,17 @@ def combine_quality(
     flaky_f: float,
     tamper_p: float,
     config: QualityConfig,
+    mutation: MutationMeasure | None = None,
 ) -> QualityFactors:
-    """``q = min(cap_static, a_static) * i * f * flaky_f * (1 - tamper_p)``.
+    """``q = d_eff * i * f * flaky_f * (1 - tamper_p)``.
 
-    Reason codes: ``zero_a_static``, ``capped_static``, ``independence_discount``,
+    ``d_eff = min(cap_static, a_static)`` unless ``mutation`` is a measured
+    :class:`MutationMeasure`, in which case ``d_eff`` is its Wilson lower bound (it may
+    be above or below the static value; unmeasured never gets better than static). A
+    test with ``a_static == 0`` stays at 0 even when measured: it has no assertion, so a
+    "kill" can only be a crash (open decision D4, conservative guard).
+
+    Reason codes: ``d_from_mutation``, ``mutation_insufficient_sample``, ``mutation_ignored_zero_a``, ``zero_a_static``, ``capped_static``, ``independence_discount``,
     ``stale_evidence``, ``flaky_rerun`` / ``flaky_history``, ``tamper_nullified``
     / ``tamper_penalty``.
     """
@@ -209,11 +246,38 @@ def combine_quality(
     fl = _unit(flaky_f, "flaky_f")
     tp = _unit(tamper_p, "tamper_p")
     d_eff = min(config.cap_static, a)
-    q = d_eff * i * f * fl * (1.0 - tp)
+    basis = "static"
     reasons: list[Reason] = []
+    if mutation is not None:
+        if not mutation.measured or mutation.lcb is None:
+            reasons.append(
+                Reason(
+                    "mutation_insufficient_sample",
+                    f"{mutation.n} decided mutant(s), fewer than {mutation.min_decided}: "
+                    "static cap kept",
+                )
+            )
+        elif a == 0.0:
+            reasons.append(
+                Reason(
+                    "mutation_ignored_zero_a",
+                    "no assertion: a kill could only be a crash, static value kept",
+                )
+            )
+        else:
+            d_eff = _unit(mutation.lcb, "mutation lcb")
+            basis = "mutation"
+            reasons.append(
+                Reason(
+                    "d_from_mutation",
+                    f"{mutation.killed}/{mutation.n} mutants killed; Wilson lower bound "
+                    f"{d_eff:.3f} replaces the static cap",
+                )
+            )
+    q = d_eff * i * f * fl * (1.0 - tp)
     if a == 0.0:
         reasons.append(Reason("zero_a_static", "assertion strength is 0"))
-    if a > config.cap_static:
+    if basis == "static" and a > config.cap_static:
         reasons.append(
             Reason("capped_static", f"a_static {a:g} capped at {config.cap_static:g}")
         )
@@ -239,6 +303,7 @@ def combine_quality(
         tamper_penalty=tp,
         q=q,
         reasons=tuple(reasons),
+        basis=basis,
     )
 
 
@@ -247,6 +312,7 @@ def item_quality(
     a_static: float,
     tamper_severities: Iterable[str],
     config: QualityConfig,
+    mutation: MutationMeasure | None = None,
 ) -> QualityFactors:
     """``q`` for an item, reading its independence, freshness and flaky info."""
 
@@ -257,6 +323,7 @@ def item_quality(
         flaky_f=flaky_factor(item.flaky, config),
         tamper_p=tamper_penalty(tamper_severities, config),
         config=config,
+        mutation=mutation,
     )
 
 
@@ -272,6 +339,7 @@ def evidence_quality_row(
     tamper_severities: Iterable[str] = (),
     quality: QualityConfig | None = None,
     mapping: LinkMapping | None = None,
+    mutation: MutationMeasure | None = None,
 ) -> EvidenceQuality:
     """Build the ``EvidenceQuality`` row of (item, criterion) along its best path.
 
@@ -288,7 +356,7 @@ def evidence_quality_row(
     qcfg = quality if quality is not None else QualityConfig()
     lmap = mapping if mapping is not None else LinkMapping()
     link = link_strength(w_cs, w_st, r_ct, lmap)
-    factors = item_quality(item, a_static, tamper_severities, qcfg)
+    factors = item_quality(item, a_static, tamper_severities, qcfg, mutation)
     lam = qcfg.lambda_kind.get(item.kind.value, 0.0)
     if link.r_ct <= 0.0:
         status = gated(GATE_NO_CRITERION_TEST_EDGE)
@@ -322,6 +390,16 @@ def evidence_quality_row(
         term=term,
         status=status,
         lambda_kind=lam,
+        d_mut=mutation.d_mut if mutation is not None and mutation.measured else None,
+        d_mut_lcb=mutation.lcb if mutation is not None and mutation.measured else None,
+        mutation_n=mutation.n if mutation is not None else None,
+        mutation_killed=mutation.killed if mutation is not None else None,
+        basis=factors.basis,
+        algo_version=(
+            EVIDENCE_QUALITY_MUTATION_VERSION
+            if factors.basis == "mutation"
+            else EVIDENCE_QUALITY_VERSION
+        ),
         group_symbol=symbol_id,
         path=ChainRef(
             symbol_id=symbol_id,

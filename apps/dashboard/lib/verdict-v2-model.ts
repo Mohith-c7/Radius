@@ -17,6 +17,10 @@ export const MAX_SNIPPET_CHARS = 1200;
 export const DEFAULT_TAU_SUPPORT = 0.5;
 
 export const STATIC_ONLY_LABEL = "Static assertion strength only (no mutation testing)";
+export const MUTATION_BASIS_LABEL =
+  "Static assertion strength plus sampled mutation testing (where marked)";
+export const MUTATION_DISCLAIMER =
+  "Alpha: static assertion strength plus sampled mutation testing; thresholds are uncalibrated. Where marked mutation-measured, how well a test detects faults was measured on a bounded sample of seeded faults in the changed code. This is not a proof of correctness.";
 export const UNCALIBRATED_LABEL = "Uncalibrated: no probability, no score";
 /** Presentation wording (alpha); the internal enum values (`proven`, `verified`) are unchanged. */
 export const DISCLAIMER =
@@ -71,6 +75,39 @@ export type EvidenceItem = {
   l_cs: number | null;
   l_st: number | null;
   r_ct: number | null;
+  /** Contract 5 (optional): "mutation" when d_eff is the Wilson lower bound of the kill rate. */
+  basis: string;
+  d_mut_lcb: number | null;
+  mutation_n: number | null;
+  mutation_killed: number | null;
+};
+
+export type MutationSurvivor = { mutant_id: string; path: string; line: number; operator: string };
+
+/** Contract 5 (optional): what mutation measured for one criterion. */
+export type CriterionMutation = {
+  basis: string;
+  n_mutants: number;
+  killed: number;
+  d_union: number | null;
+  d_union_lcb: number | null;
+  tests_measured: number;
+  tests_total: number;
+  survivors: MutationSurvivor[];
+  survivorsTruncated: boolean;
+  reason: string;
+};
+
+/** Contract 5 (optional): the mutation run of the analysis. */
+export type MutationRun = {
+  status: string;
+  reason: string;
+  generated: number;
+  sampled: number;
+  decided: number;
+  killed: number;
+  skipped_for_budget: number;
+  ladder: string[];
 };
 
 export type BestLink = { symbol_id: string; l_cs: number; l_st: number; r_ct: number };
@@ -92,6 +129,9 @@ export type Criterion = {
   best_link: BestLink | null;
   items: EvidenceItem[];
   itemsTruncated: boolean;
+  /** Contract 5 (optional): "" when the mutation flag was off. */
+  evidence_basis: string;
+  mutation: CriterionMutation | null;
 };
 
 export type TamperFinding = {
@@ -184,6 +224,7 @@ export type VerdictV2 = {
   presentation: Presentation | null;
   policy: PolicyView | null;
   waivers: WaiversView | null;
+  mutation: MutationRun | null;
 };
 
 /** Contract 4 wording (alpha). All strings are text only. */
@@ -303,6 +344,51 @@ function parseItem(raw: unknown): EvidenceItem | null {
     l_cs: optNum(raw.l_cs),
     l_st: optNum(raw.l_st),
     r_ct: optNum(raw.r_ct),
+    basis: str(raw.basis),
+    d_mut_lcb: optNum(raw.d_mut_lcb),
+    mutation_n: optNum(raw.mutation_n),
+    mutation_killed: optNum(raw.mutation_killed),
+  };
+}
+
+const MAX_SURVIVORS = 50;
+
+function parseCriterionMutation(raw: unknown): CriterionMutation | null {
+  if (!isObject(raw)) return null;
+  const survivors = arr(raw.survivors);
+  return {
+    basis: str(raw.basis, "static_only"),
+    n_mutants: Math.max(0, Math.trunc(num(raw.n_mutants))),
+    killed: Math.max(0, Math.trunc(num(raw.killed))),
+    d_union: optNum(raw.d_union),
+    d_union_lcb: optNum(raw.d_union_lcb),
+    tests_measured: Math.max(0, Math.trunc(num(raw.tests_measured))),
+    tests_total: Math.max(0, Math.trunc(num(raw.tests_total))),
+    survivors: survivors
+      .slice(0, MAX_SURVIVORS)
+      .filter(isObject)
+      .map((s) => ({
+        mutant_id: truncateText(str(s.mutant_id), 40),
+        path: truncateText(str(s.path), 300),
+        line: Math.max(0, Math.trunc(num(s.line))),
+        operator: truncateText(str(s.operator), 16),
+      })),
+    survivorsTruncated: survivors.length > MAX_SURVIVORS,
+    reason: truncateText(str(raw.reason), 80),
+  };
+}
+
+function parseMutationRun(raw: unknown): MutationRun | null {
+  if (!isObject(raw)) return null;
+  return {
+    status: str(raw.status),
+    reason: truncateText(str(raw.reason), 80),
+    generated: Math.max(0, Math.trunc(num(raw.generated))),
+    sampled: Math.max(0, Math.trunc(num(raw.sampled))),
+    decided: Math.max(0, Math.trunc(num(raw.decided))),
+    killed: Math.max(0, Math.trunc(num(raw.killed))),
+    skipped_for_budget: Math.max(0, Math.trunc(num(raw.skipped_for_budget))),
+    ladder: strs(raw.ladder).slice(0, 20).map((x) => truncateText(x, 80)),
   };
 }
 
@@ -352,6 +438,8 @@ function parseCriterion(raw: unknown): Criterion | null {
       .map(parseItem)
       .filter((i): i is EvidenceItem => i !== null),
     itemsTruncated: rawItems.length > MAX_ITEMS_PER_CRITERION,
+    evidence_basis: str(raw.evidence_basis),
+    mutation: parseCriterionMutation(raw.mutation),
   };
 }
 
@@ -655,6 +743,7 @@ export function parseVerdictV2(raw: unknown): ParseResult {
       presentation: parsePresentation(raw.presentation),
       policy: parsePolicy(raw.policy),
       waivers: parseWaivers(raw.waivers),
+      mutation: parseMutationRun(raw.mutation),
     },
   };
 }
@@ -721,6 +810,7 @@ const FLAG_LABELS: Record<string, string> = {
   needs_typed_evidence: "Needs non-functional evidence",
   no_linked_test: "No test linked",
   author_supplied_hint: "Relies on author-supplied test hint",
+  mutation_measured: "Mutation-measured",
 };
 
 export function provenanceLabel(provenance: string): string {
@@ -832,7 +922,9 @@ export function qualityFactors(item: EvidenceItem): Factor[] {
       "a_static",
       "Assertion strength",
       item.a_static,
-      `capped at ${formatScore(item.d_eff)} (no mutation data)`,
+      item.basis === "mutation" && item.mutation_n !== null
+        ? `static estimate; scored by measured detection ${formatScore(item.d_eff)} (lower bound, ${item.mutation_killed ?? "?"} of ${item.mutation_n} mutants killed)`
+        : `capped at ${formatScore(item.d_eff)} (no mutation data)`,
     ),
     factor("i", "Independence", item.i, "who wrote the test relative to the code"),
     factor("f", "Freshness", item.f, item.f > 0 ? "bound to the current head" : "not the current head: ignored"),
@@ -910,9 +1002,12 @@ export type Tag = { key: string; label: string; tone: Tone };
 
 /** Header tags: always the alpha and honesty labels, plus shadow / pending. */
 export function headerTags(v: Pick<VerdictV2, "mode" | "pending" | "status" | "summary">): Tag[] {
+  const mutation = v.summary.evidence_basis === "static_and_mutation";
   const tags: Tag[] = [
     { key: "alpha", label: "v2 alpha", tone: "info" },
-    { key: "static", label: STATIC_ONLY_LABEL, tone: "neutral" },
+    mutation
+      ? { key: "static", label: MUTATION_BASIS_LABEL, tone: "neutral" }
+      : { key: "static", label: STATIC_ONLY_LABEL, tone: "neutral" },
     { key: "uncalibrated", label: UNCALIBRATED_LABEL, tone: "neutral" },
   ];
   if (v.mode === "shadow") tags.push({ key: "shadow", label: "Shadow: not shown on the PR", tone: "info" });
@@ -995,8 +1090,37 @@ export function classifyVerdictError(error: unknown): VerdictErrorInfo {
 // ---------------------------------------------------------------------------
 
 /** Alpha disclaimer: the API wording when present, else the built-in constant. */
-export function disclaimerText(v: Pick<VerdictV2, "presentation">): string {
-  return v.presentation?.disclaimer || DISCLAIMER;
+export function disclaimerText(v: Pick<VerdictV2, "presentation"> & Partial<Pick<VerdictV2, "summary">>): string {
+  const fallback = v.summary?.evidence_basis === "static_and_mutation" ? MUTATION_DISCLAIMER : DISCLAIMER;
+  return v.presentation?.disclaimer || fallback;
+}
+
+/** Per-criterion evidence basis in plain words; "" when the mutation flag was off. */
+export function criterionBasisText(c: Pick<Criterion, "evidence_basis" | "mutation">): string {
+  if (!c.mutation) return "";
+  const n = c.mutation.n_mutants;
+  const noun = n === 1 ? "mutant" : "mutants";
+  if (c.evidence_basis === "mutation_measured") return `Evidence basis: mutation-measured (${n} ${noun})`;
+  if (c.evidence_basis === "mutation_partial") {
+    return `Evidence basis: mutation-measured for some tests (${n} ${noun}), static for the rest`;
+  }
+  return "Evidence basis: static assertion strength only";
+}
+
+/** One line per mutant no linked test killed: "path:line, operator" (text only). */
+export function mutationGaps(c: Pick<Criterion, "mutation">): string[] {
+  return (c.mutation?.survivors ?? []).map((s) => `${s.path}:${s.line}, operator ${s.operator}`);
+}
+
+/** Run-level mutation note for the header area ("" when the flag was off or measured). */
+export function mutationRunNote(v: Pick<VerdictV2, "mutation">): string {
+  const m = v.mutation;
+  if (!m) return "";
+  if (m.status !== "measured") {
+    return `Mutation testing was enabled but did not measure this change (${m.reason.replace(/_/g, " ") || "unknown reason"}); static assertion strength applies.`;
+  }
+  const sampled = m.sampled < m.generated ? `, sampled ${m.sampled} of ${m.generated}` : "";
+  return `Mutation testing: ${m.decided} decided mutants${sampled}, ${m.killed} caught by a linked test. A bounded sample, not a proof.`;
 }
 
 export function legendText(v: Pick<VerdictV2, "presentation">): string {

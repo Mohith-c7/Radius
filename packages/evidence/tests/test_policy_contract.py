@@ -24,7 +24,7 @@ STDLIB = set(sys.stdlib_module_names)
 
 
 def test_contract_three_is_declared() -> None:
-    assert CONTRACT_VERSION == "verdict-v2-contract-4"
+    assert CONTRACT_VERSION == "verdict-v2-contract-5"
 
 
 def test_stage_a_repo_config_round_trips_and_defaults_empty() -> None:

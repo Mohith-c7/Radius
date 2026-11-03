@@ -15,6 +15,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 SupportStateName = Literal["proven", "weak", "unevidenced", "contradicted", "excluded"]
 VerdictName = Literal["verified", "failed", "insufficient_evidence", "needs_review"]
+#: Contract 5: ``static_and_mutation`` only when RADIUS_FEATURE_MUTATION measured something.
+EvidenceBasisName = Literal["static_only", "static_and_mutation"]
+CriterionBasisName = Literal["static_only", "mutation_measured", "mutation_partial"]
 
 
 class _Out(BaseModel):
@@ -51,7 +54,7 @@ class SummaryOut(_Out):
     uim: float = Field(ge=0, le=1, description="Unproven intent mass.")
     intent_coverage: float = Field(ge=0, le=1)
     tamper: dict[str, int] = Field(default_factory=dict)
-    evidence_basis: Literal["static_only"] = "static_only"
+    evidence_basis: EvidenceBasisName = "static_only"
     author_hint_criteria: int = Field(
         default=0,
         ge=0,
@@ -85,6 +88,63 @@ class EvidenceItemOut(_Out):
     term: float
     status: str
     contribution: float | None = None
+    basis: Literal["static", "mutation"] | None = Field(
+        default=None, description="Contract 5, optional: how d_eff was obtained."
+    )
+    d_mut: float | None = Field(default=None, description="Contract 5, optional: kill rate.")
+    d_mut_lcb: float | None = Field(
+        default=None, description="Contract 5, optional: Wilson lower bound used as d_eff."
+    )
+    mutation_n: int | None = Field(
+        default=None, description="Contract 5, optional: decided non-equivalent mutants."
+    )
+    mutation_killed: int | None = None
+
+
+class SurvivorOut(_Out):
+    mutant_id: str
+    path: str = Field(description="UNTRUSTED. Render as text only.")
+    line: int
+    operator: str
+
+
+class CriterionMutationOut(_Out):
+    """Contract 5 (optional): what mutation measured for this criterion. Not a proof."""
+
+    basis: CriterionBasisName
+    n_mutants: int = 0
+    killed: int = 0
+    d_union: float | None = None
+    d_union_lcb: float | None = None
+    tests_measured: int = 0
+    tests_total: int = 0
+    survivors: list[SurvivorOut] = Field(
+        default_factory=list, description="Mutants no linked test killed (gaps found by mutation)."
+    )
+    excluded: dict[str, int] = Field(default_factory=dict)
+    d_reach: float | None = Field(default=None, description="Not computed in this slice.")
+    d_reach_reason: str = ""
+    reason: str = ""
+
+
+class MutationRunOut(_Out):
+    """Contract 5 (optional): the mutation run of this analysis."""
+
+    status: Literal["measured", "unmeasured"]
+    reason: str = ""
+    engine: str = ""
+    seed: int = 0
+    generated: int = 0
+    sampled: int = 0
+    decided: int = 0
+    killed: int = 0
+    equivalent_suspects: int = 0
+    skipped_for_budget: int = 0
+    cache_hits: int = 0
+    min_decided: int = 5
+    ladder: list[str] = Field(default_factory=list)
+    baseline_failed: int = 0
+    baseline_flaky: int = 0
 
 
 class CriterionOut(_Out):
@@ -106,6 +166,10 @@ class CriterionOut(_Out):
     reasons: list[ReasonOut] = Field(default_factory=list)
     best_link: dict[str, Any] | None = None
     items: list[EvidenceItemOut] = Field(default_factory=list)
+    evidence_basis: CriterionBasisName | None = Field(
+        default=None, description="Contract 5, optional: present when mutation was enabled."
+    )
+    mutation: CriterionMutationOut | None = None
 
 
 class TamperFindingOut(_Out):
@@ -224,9 +288,10 @@ class VerdictV2Out(_Out):
     calibrated: Literal[False] = Field(
         default=False, description="Always false: thresholds are uncalibrated."
     )
-    evidence_basis: Literal["static_only"] = Field(
+    evidence_basis: EvidenceBasisName = Field(
         default="static_only",
-        description="What the evidence is: static assertion strength, no mutation testing.",
+        description="What the evidence is: static assertion strength (static_only), or static "
+        "plus mutation-measured detection for some criteria (static_and_mutation, contract 5).",
     )
     presentation: PresentationOut | None = Field(
         default=None,
@@ -249,6 +314,9 @@ class VerdictV2Out(_Out):
     )
     policy: PolicyOut | None = Field(
         default=None, description="Present when the base branch has a .radius/policy.yml."
+    )
+    mutation: MutationRunOut | None = Field(
+        default=None, description="Contract 5: present only when RADIUS_FEATURE_MUTATION ran."
     )
     waivers: WaiversOut | None = Field(
         default=None, description="Present when the base branch has a .radius/waivers.yml."

@@ -63,6 +63,7 @@ def build_criterion_verdict(
     criterion: CriterionInput,
     support: SupportResult,
     state: CriterionStateResult,
+    mutation: Mapping[str, Any] | None = None,
 ) -> CriterionVerdict:
     """Join intent, support and state of one criterion (ids must agree)."""
 
@@ -82,6 +83,7 @@ def build_criterion_verdict(
         flags=state.flags,
         items=support.items,
         best_link=_best_link(support.items),
+        mutation=dict(mutation or {}),
         provenance=criterion.provenance,
         hints=tuple(
             sorted(
@@ -179,6 +181,7 @@ def compute_verdict_v2(
     policy: Mapping[str, Any] | None = None,
     waivers: Mapping[str, Any] | None = None,
     tamper_waived: Sequence[Mapping[str, Any]] = (),
+    evidence_basis: str = "static_only",
 ) -> VerdictV2:
     """Apply rules R1 to R4 in priority order and return the verdict + tree."""
 
@@ -224,6 +227,7 @@ def compute_verdict_v2(
         inputs_digest=digest,
         algo_version=(versions or {}).get("verdict", ALGO_VERSION),
         profile=cfg.profile,
+        evidence_basis=evidence_basis,
         policy=dict(policy or {}),
         waivers=dict(waivers or {}),
         tamper_waived=tuple(dict(w) for w in tamper_waived),

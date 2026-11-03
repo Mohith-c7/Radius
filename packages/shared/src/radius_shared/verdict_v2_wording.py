@@ -19,6 +19,13 @@ DISCLAIMER = (
     "Alpha: static evidence only (assertion strength, no mutation testing); "
     "thresholds are uncalibrated. This is not a proof of correctness."
 )
+#: Contract 5: used instead of ``DISCLAIMER`` only when mutation measured a criterion.
+MUTATION_DISCLAIMER = (
+    "Alpha: static assertion strength plus sampled mutation testing; thresholds are "
+    "uncalibrated. Where marked mutation-measured, how well a test detects faults was "
+    "measured on a bounded sample of seeded faults in the changed code. This is not a "
+    "proof of correctness."
+)
 LEGEND = "supported = static assertion strength above threshold; not a proof of correctness"
 
 STATE_LABELS: Mapping[str, str] = {
@@ -37,12 +44,19 @@ VERDICT_LABELS: Mapping[str, str] = {
 
 
 def presentation(
-    verdict: str | None, supported: int, total: int, *, author_hint_criteria: int = 0
+    verdict: str | None,
+    supported: int,
+    total: int,
+    *,
+    author_hint_criteria: int = 0,
+    evidence_basis: str = "static_only",
 ) -> dict[str, Any]:
     """The additive ``presentation`` block of the served payload."""
 
     label = VERDICT_LABELS.get(verdict or "", "Verdict unavailable")
-    text = f"{label}: {supported} of {total} stated criteria supported by static evidence."
+    mutation = evidence_basis == "static_and_mutation"
+    how = "static evidence and sampled mutation testing" if mutation else "static evidence"
+    text = f"{label}: {supported} of {total} stated criteria supported by {how}."
     if author_hint_criteria:
         noun = "criterion relies" if author_hint_criteria == 1 else "criteria rely"
         text += f" {author_hint_criteria} {noun} on author-supplied test hints."
@@ -50,6 +64,6 @@ def presentation(
         "verdict_label": label,
         "state_labels": dict(STATE_LABELS),
         "legend": LEGEND,
-        "disclaimer": DISCLAIMER,
+        "disclaimer": MUTATION_DISCLAIMER if mutation else DISCLAIMER,
         "summary_text": text,
     }

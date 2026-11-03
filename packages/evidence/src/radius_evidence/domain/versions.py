@@ -6,13 +6,20 @@
 #: waivers / tamper_waived, justification.policy / waivers, rules P1/P2 (only with a policy).
 #: 4: provenance tags (CriterionInput.provenance / hints_provenance, CriterionTestEdgeInput.provenance),
 #: Flag.AUTHOR_SUPPLIED_HINT, LinkMapping.author_hint_cap, payload honesty fields.
-#: All additions are optional with defaults, so contract-1 and -2 payloads still load.
-CONTRACT_VERSION = "verdict-v2-contract-4"
+#: 5: mutation-measured evidence (RADIUS_FEATURE_MUTATION, default off): StageAInput.mutation,
+#: EvidenceQuality.d_mut / mutation_n / basis, CriterionVerdict.mutation, Flag.MUTATION_MEASURED,
+#: per-criterion payload ``evidence_basis`` / ``mutation``, and the top-level ``evidence_basis``
+#: enum widened by ``static_and_mutation`` (the only non-additive change; never emitted with the flag off).
+#: All additions are optional with defaults, so contract-1 to -4 payloads still load.
+CONTRACT_VERSION = "verdict-v2-contract-5"
 
 ALGO_VERSION = "verdict-v2-alpha-1"
 PROFILE_ALPHA_STATIC = "alpha-static"
 
 EVIDENCE_QUALITY_VERSION = "evq-static-1"
+#: Stamped on quality rows whose d_eff came from mutation (rows without it keep the static version).
+EVIDENCE_QUALITY_MUTATION_VERSION = "evq-mutation-1"
+MUTATION_VERSION = "mutation-evidence-1"
 SUPPORT_VERSION = "support-noisyor-1"
 IEG_VERSION = "ieg-1"
 ASSERTIONS_VERSION = "test-assertions-v1"
