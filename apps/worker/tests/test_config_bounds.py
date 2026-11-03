@@ -38,3 +38,14 @@ def test_defaults_are_valid_and_heartbeat_is_derived_from_the_stale_window() -> 
     assert WorkerSettings(WORKER_JOB_STALE_AFTER_SECONDS=60).heartbeat_interval == 20.0
     assert WorkerSettings(WORKER_HEARTBEAT_INTERVAL_SECONDS=5).heartbeat_interval == 5.0
     assert WorkerSettings(WORKER_JOB_RETRY_BASE_SECONDS=0).job_retry_base_seconds == 0
+
+
+def test_confirm_policy_accepts_the_two_documented_values_and_rejects_the_rest() -> None:
+    assert WorkerSettings().verdict_v2_confirm_policy == "allow_unverified"
+    assert WorkerSettings(RADIUS_VERDICT_V2_CONFIRM_POLICY="allow").verdict_v2_confirm_policy == (
+        "allow_unverified"
+    )
+    strict = WorkerSettings(RADIUS_VERDICT_V2_CONFIRM_POLICY=" Require_Second_Person ")
+    assert strict.verdict_v2_confirm_policy == "require_second_person"
+    with pytest.raises(ValidationError):
+        WorkerSettings(RADIUS_VERDICT_V2_CONFIRM_POLICY="trust_everyone")

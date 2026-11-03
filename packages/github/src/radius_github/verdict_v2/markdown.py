@@ -327,8 +327,8 @@ def _evidence_cell(c: CriterionView, tau: float | None) -> str:
 
 def _tags(c: CriterionView) -> str:
     tags = [FLAG_TAGS[f] for f in c.flags if f in FLAG_TAGS]
-    if c.confirmed_by:  # B-07: who confirmed it (an unverified label), never an identity claim
-        tags.append(f"confirmed by {escape.token(c.confirmed_by, 60, fallback='unknown')}")
+    if c.confirmed_by:  # B-07: who confirmed it, with the verification note (escaped text)
+        tags.append(f"confirmed by {escape.token(c.confirmed_by, 100, fallback='unknown')}")
     return f" ({', '.join(sorted(set(tags)))})" if tags else ""
 
 

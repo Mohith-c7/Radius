@@ -60,6 +60,30 @@ class ReapedAnalysis:
     reason: str
 
 
+def _lease_is_live(job: db_models.AnalysisJob | None, lease_cutoff: datetime) -> bool:
+    """True when ``job`` is running under a lease renewed since ``lease_cutoff`` (C-18)."""
+
+    return (
+        job is not None
+        and job.status == db_enums.AnalysisJobStatus.RUNNING
+        and job.claimed_by is not None
+        and job.locked_at is not None
+        and _as_utc(job.locked_at) >= lease_cutoff
+    )
+
+
+def _deadline_reference(
+    analysis: db_models.Analysis, job: db_models.AnalysisJob | None
+) -> datetime:
+    """Where the analysis deadline is counted from: the job's last change (queued, claimed,
+    heartbeat, requeued), or the analysis start when it has no job (C-18)."""
+
+    if job is None:
+        return _as_utc(analysis.started_at)
+    candidates = [job.updated_at, job.created_at, job.available_at, job.locked_at]
+    return max(_as_utc(c) for c in candidates if c is not None)
+
+
 class SqlAlchemyAnalysisJobQueue:
     """Durable FIFO queue for analysis execution."""
 
@@ -390,14 +414,20 @@ class SqlAlchemyAnalysisJobQueue:
         * Stale running jobs are recovered first (requeued, or failed when
           their attempts are exhausted).
         * A pending/running analysis whose job has ``failed`` is failed.
-        * A pending/running analysis started more than ``deadline`` ago is
-          failed, and its job (unless completed) is failed too, so a worker
-          that is still holding it cannot retry it.
+        * An analysis whose job holds a live lease (``status = running``, ``claimed_by`` set and
+          ``locked_at`` renewed within the stale window) is NEVER reaped for taking long: the
+          heartbeat proves a worker is still on it (C-18). A job that stops heartbeating is
+          recovered by ``recover_stale_jobs`` above, whatever the deadline.
+        * Any other pending/running analysis is failed once ``deadline`` has passed since the
+          job last changed (queued, claimed, requeued; ``analysis.started_at`` when it has
+          no job), and its job (unless completed) is failed too, so a worker that is still
+          holding it cannot retry it.
         """
 
         self.recover_stale_jobs()
         current = now or datetime.now(UTC)
         cutoff = current - deadline
+        lease_cutoff = current - self._stale_after
         rows = self._session.execute(
             select(db_models.Analysis, db_models.AnalysisJob)
             .outerjoin(
@@ -410,7 +440,9 @@ class SqlAlchemyAnalysisJobQueue:
         for analysis, job in rows:
             if job is not None and job.status == db_enums.AnalysisJobStatus.FAILED:
                 reason = job.last_error or EXHAUSTED_ATTEMPTS_ERROR
-            elif _as_utc(analysis.started_at) < _as_utc(cutoff):
+            elif _lease_is_live(job, lease_cutoff):
+                continue  # C-18: a heartbeating worker is on it; length alone never reaps it
+            elif _deadline_reference(analysis, job) < _as_utc(cutoff):
                 reason = (
                     "Analysis did not finish within "
                     f"{int(deadline.total_seconds())}s and was stopped."

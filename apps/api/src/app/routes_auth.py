@@ -4,14 +4,24 @@ import html
 import logging
 import smtplib
 import time
+import uuid
 from datetime import UTC, datetime, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Cookie,
+    Depends,
+    HTTPException,
+    Response,
+    status,
+)
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from . import oauth
@@ -24,6 +34,7 @@ from .auth import (
     decode_session,
     hash_password,
     is_production_like,
+    peek_action_token,
     provision_domain_user_and_org,
     revoke_user_sessions,
     should_auto_verify_email,
@@ -39,6 +50,8 @@ from .schemas import (
     ResetPassword,
     Signup,
     UserResponse,
+    VerifyCheck,
+    VerifyCheckResponse,
     VerifyToken,
 )
 
@@ -192,31 +205,7 @@ def _load_session(token: str, db: Session) -> tuple[User, AuthSession]:
     return user, session
 
 
-@router.post(
-    "/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED
-)
-def signup(payload: Signup, response: Response, db: Session = Depends(get_db)):
-    if db.scalar(select(User).where(User.email == payload.email.lower())):
-        raise HTTPException(
-            status_code=409,
-            detail="An account with this email already exists. Please sign in instead.",
-        )
-    auto_verify = should_auto_verify_email()
-    user = User(
-        name=payload.name.strip(),
-        email=payload.email.lower(),
-        password_hash=hash_password(payload.password),
-        email_verified=auto_verify,
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    if user.email_verified or not is_production_like():
-        provision_domain_user_and_org(db, user)
-        db.refresh(user)
-    # Production/uat, unverified: do NOT join an existing organization / domain user
-    # for this address yet. Whoever types an e-mail address at signup has not proven
-    # they own it (A-07); provisioning happens when the address is verified.
+def _verify_mail_for(db: Session, user: User) -> tuple[str, str, str, str]:
     token = create_action_token(db, user.id, "verify_email", minutes=24 * 60)
     verify_url = f"{get_settings().frontend_origin}/verify-email?token={token}"
     subject = "Verify your Radius account"
@@ -232,7 +221,107 @@ def signup(payload: Signup, response: Response, db: Session = Depends(get_db)):
       <p style="color: #888; font-size: 12px;">Or copy and paste this link into your browser:<br/><a href="{verify_url}">{verify_url}</a></p>
     </div>
     """
-    send_email_message(user.email, subject, text_body, html_body)
+    return user.email, subject, text_body, html_body
+
+
+def _existing_account_mail(user: User) -> tuple[str, str, str, str]:
+    """A-12: what a verified account's owner receives when someone signs up with their address."""
+    origin = get_settings().frontend_origin
+    login_url, forgot_url = f"{origin}/login", f"{origin}/forgot-password"
+    subject = "You already have a Radius account"
+    text_body = (
+        f"Hello {user.name},\n\n"
+        "Someone tried to create a Radius account with this email address, but you already "
+        "have one.\n\n"
+        f"Sign in: {login_url}\n"
+        f"Forgot your password? {forgot_url}\n\n"
+        "If this was not you, you can ignore this email; nothing was changed.\n"
+    )
+    html_body = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 500px; padding: 24px; border: 1px solid #e7ece8; border-radius: 8px;">
+      <h2 style="color: #13231E;">You already have a Radius account</h2>
+      <p style="color: #555;">Hello {_mail_name(user)},</p>
+      <p style="color: #555;">Someone tried to create a Radius account with this email address. You already have one, so nothing was changed.</p>
+      <div style="margin: 24px 0;">
+        <a href="{login_url}" style="background-color: #19815C; color: #ffffff; padding: 12px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Sign in</a>
+      </div>
+      <p style="color: #888; font-size: 12px;">Forgot your password? <a href="{forgot_url}">Reset it</a>. If this was not you, ignore this email.</p>
+    </div>
+    """
+    return user.email, subject, text_body, html_body
+
+
+@router.post(
+    "/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED
+)
+def signup(
+    payload: Signup,
+    response: Response,
+    background: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    email = payload.email.lower()
+    existing = db.scalar(select(User).where(User.email == email))
+    if existing is not None and not is_production_like():
+        # Development / test: a clear error is more useful than privacy here.
+        raise HTTPException(
+            status_code=409,
+            detail="An account with this email already exists. Please sign in instead.",
+        )
+    # The same expensive work (one password hash) for a new and an existing address.
+    password_hash = hash_password(payload.password)
+    if existing is not None:
+        # A-12 (uat/production): answer exactly as for a new address (201, same body shape,
+        # no session) so the response does not reveal whether the address is registered. The
+        # mailbox owner learns of it by e-mail; the existing account is not touched, and the
+        # password sent with this request is discarded.
+        if existing.email_verified:
+            mail = _existing_account_mail(existing)
+        else:
+            mail = _verify_mail_for(db, existing)  # a fresh link for the unverified owner
+        background.add_task(send_email_message, *mail)
+        return UserResponse(
+            id=str(uuid.uuid4()),
+            name=payload.name.strip(),
+            email=email,
+            email_verified=False,
+            role="developer",
+            organization_id=None,
+        )
+    auto_verify = should_auto_verify_email()
+    user = User(
+        name=payload.name.strip(),
+        email=email,
+        password_hash=password_hash,
+        email_verified=auto_verify,
+    )
+    db.add(user)
+    try:
+        db.commit()
+    except IntegrityError:
+        # A concurrent signup took the address between the check and the insert.
+        db.rollback()
+        if not is_production_like():
+            raise HTTPException(
+                status_code=409,
+                detail="An account with this email already exists. Please sign in instead.",
+            ) from None
+        return UserResponse(
+            id=str(uuid.uuid4()),
+            name=payload.name.strip(),
+            email=email,
+            email_verified=False,
+            role="developer",
+            organization_id=None,
+        )
+    db.refresh(user)
+    if user.email_verified or not is_production_like():
+        provision_domain_user_and_org(db, user)
+        db.refresh(user)
+    # Production/uat, unverified: do NOT join an existing organization / domain user
+    # for this address yet. Whoever types an e-mail address at signup has not proven
+    # they own it (A-07); provisioning happens when the address is verified.
+    background.add_task(send_email_message, *_verify_mail_for(db, user))
     if user.email_verified or not is_production_like():
         set_session(response, db, user)
     # Production/uat: no session until the address is verified (A-07).
@@ -388,17 +477,40 @@ def reset_password(payload: ResetPassword, db: Session = Depends(get_db)):
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+def _password_required(user: User) -> bool:
+    """A-07: in uat/production the password of an account that was unverified until now is
+    discarded at verification, so the mailbox owner has to choose one in the same step."""
+    return is_production_like() and not user.email_verified
+
+
+@router.post("/verify-email/check", response_model=VerifyCheckResponse)
+def verify_email_check(payload: VerifyCheck, db: Session = Depends(get_db)):
+    """Tell the verify page whether to ask for a password. Does NOT use the token up; an
+    invalid or expired token is the same generic 400 as verification itself."""
+    user = peek_action_token(db, payload.token, "verify_email")
+    return VerifyCheckResponse(password_required=_password_required(user))
+
+
 @router.post("/verify-email", response_model=UserResponse)
 def verify_email(payload: VerifyToken, db: Session = Depends(get_db)):
+    # Decide before the one-time token is spent: a request that must carry a password but
+    # does not leaves the link usable (the user simply submits the form again).
+    pending = peek_action_token(db, payload.token, "verify_email")
+    must_set_password = _password_required(pending)
+    if must_set_password and payload.password is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Choose a password to finish verifying your email address.",
+        )
     user = consume_action_token(db, payload.token, "verify_email")
     was_unverified = not user.email_verified
     user.email_verified = True
     if was_unverified and is_production_like():
-        # Pre-hijacking defence (A-07): the password on an account that was
-        # unverified until now was chosen by whoever typed the address at signup,
-        # who may not be the mailbox owner. Clear it so the mailbox owner sets
-        # their own via "Forgot password" (sign-in with Google/GitHub also works).
-        user.password_hash = None
+        # Pre-hijacking defence (A-07): the password on an account that was unverified
+        # until now was chosen by whoever typed the address at signup, who may not be the
+        # mailbox owner. Replace it with the one chosen now, by the holder of this link
+        # (the mailbox owner). Never keep the signup password.
+        user.password_hash = hash_password(payload.password) if payload.password else None
     # Sessions created before the address was proven are not trusted either.
     revoke_user_sessions(db, user.id)
     db.commit()
@@ -566,6 +678,7 @@ async def oauth_callback(
             identity.email,
             identity.name,
             email_verified=True,  # fetch_identity only returns provider-verified emails
+            login=identity.login,
         )
         redirect = _redirect(
             f"{get_settings().frontend_origin}{oauth.sanitize_next(flow.next_path)}"

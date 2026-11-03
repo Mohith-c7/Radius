@@ -102,6 +102,7 @@ capacity.
 
 ### Known limits
 
+* The account login throttle (`routes_auth._login_failures`: 10 failures per account per 15 minutes, then 429) is also per process and is not behind the `RateLimitStore` seam. With several API replicas either run one replica for the auth endpoints or rate-limit `/api/v1/auth/*` per IP and per account at the reverse proxy; do not rely on the in-process counter for replicated deployments (DEC-040).
 * In-memory state is per process: with N replicas the effective limit is up to
   N x configured, and a restart resets buckets. Multi-replica deployments need a
   shared store (follow-up: Redis-compatible or PostgreSQL-backed adapter), or

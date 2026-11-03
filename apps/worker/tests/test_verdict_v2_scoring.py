@@ -212,26 +212,86 @@ def test_bundle_follows_the_store_contract(fixture: str) -> None:
     json.dumps(bundle)  # serialisable
 
 
-def test_payload_matches_the_shared_reader_when_available() -> None:
-    reader = pytest.importorskip("radius_shared.verdict_v2_payload")
-    sb = LOADER.stage_b("08_multi_criterion_partial_evidence", mode="gold")
-    scored = pipeline().score_full(sb)
-    stored = reader.StoredVerdict(
+def _stored_from(scored, sb, bundle):
+    from radius_shared.verdict_v2_payload import StoredVerdict
+
+    return StoredVerdict(
         row_id="r", organization_id="o", analysis_id=sb.stage_a.analysis_id,
-        head_sha=sb.stage_a.head_sha, revision=1,
-        inputs_digest=scored.bundle["inputs_digest"], status="ok", mode="shadow",
-        verdict=scored.bundle["verdict"]["verdict"], pending=False,
-        reason_code=scored.bundle["reason_code"], algo_version=scored.bundle["algo_version"],
-        profile=scored.bundle["profile"], config_digest=scored.bundle["config_digest"],
-        bundle=scored.bundle, justification=scored.bundle["verdict"]["justification"],
+        head_sha=sb.stage_a.head_sha, revision=scored.payload["revision"],
+        inputs_digest=bundle["inputs_digest"], status="ok", mode="shadow",
+        verdict=bundle["verdict"]["verdict"], pending=bundle["verdict"]["pending"],
+        reason_code=bundle["reason_code"], algo_version=bundle["algo_version"],
+        profile=bundle["profile"], config_digest=bundle["config_digest"],
+        bundle=bundle, justification=bundle["verdict"]["justification"],
         error_detail=None, fallback=None, published_at=None, published_digest=None,
         publish_error=None, computed_at=CLOCK(),
     )
-    theirs = reader.build_payload(stored)
-    ours = scored.payload
-    for key in ("verdict", "summary", "tamper_findings", "unlinked_symbols", "next_actions"):
-        assert theirs[key] == ours[key], key
-    assert [c["state"] for c in theirs["criteria"]] == [c["state"] for c in ours["criteria"]]
+
+
+@pytest.mark.parametrize("fixture", FIXTURES)
+def test_b20_worker_payload_equals_what_the_api_serves_from_the_stored_bundle(fixture: str) -> None:
+    """One builder: the payload computed by the worker and the payload the API serves from
+    the stored row (after the JSON round trip of the database) must be identical."""
+
+    from radius_shared.verdict_v2_payload import build_payload as served
+
+    sb = LOADER.stage_b(fixture, mode="gold")
+    scored = pipeline().score_full(sb)
+    stored_bundle = json.loads(json.dumps(scored.bundle))  # what the SQL row holds
+
+    api = served(_stored_from(scored, sb, stored_bundle))
+
+    assert api == json.loads(json.dumps(scored.payload)), fixture
+    assert json.dumps(api, sort_keys=True) == json.dumps(scored.payload, sort_keys=True)
+
+
+def test_b20_there_is_no_second_payload_builder() -> None:
+    """``scoring.build_payload`` only wraps the shared builder (guard against re-forking)."""
+
+    import inspect
+
+    src = inspect.getsource(scoring.build_payload)
+    assert "shared_build_payload(" in src
+    assert '"criteria"' not in src and '"summary"' not in src and "presentation(" not in src
+
+
+def test_b20_old_stored_bundles_without_the_newer_keys_still_read() -> None:
+    from radius_shared.verdict_v2_payload import build_payload as served
+
+    sb = LOADER.stage_b("08_multi_criterion_partial_evidence", mode="gold")
+    scored = pipeline().score_full(sb)
+    old = json.loads(json.dumps(scored.bundle))
+    for key in ("degraded", "suggested_tests", "mutation", "next_actions"):
+        old.pop(key, None)
+    for crit in old["verdict"]["criteria"]:
+        crit.pop("confirmed_by", None)
+        for reason in crit.get("reasons", []):
+            reason.pop("refs", None)
+
+    payload = served(_stored_from(scored, sb, old))
+
+    assert payload["verdict"] == scored.payload["verdict"]
+    assert payload["next_actions"] == scored.payload["next_actions"]  # derived when absent
+    assert "suggested_tests" not in payload and "mutation" not in payload
+    assert all("confirmed_by" not in c for c in payload["criteria"])
+
+
+def test_b20_suggestions_are_sanitised_by_the_shared_builder_in_the_worker_payload() -> None:
+    sb = LOADER.stage_b("08_multi_criterion_partial_evidence", mode="gold")
+    cid = sb.stage_a.criteria[0].criterion_id
+
+    def suggester(result, stage_b):  # noqa: ARG001
+        class Report:
+            items = ({"criterion_id": cid, "test_code": "def test_x():\n    assert 1\n",
+                      "executed": True, "evidence": True, "provenance": "x"},)
+            rejected = ()
+
+        return Report()
+
+    scored = scoring.ScoringPipeline(mode="shadow", clock=CLOCK, suggester=suggester).score_full(sb)
+
+    (item,) = scored.payload["suggested_tests"]
+    assert (item["executed"], item["evidence"], item["provenance"]) == (False, False, "llm_proposed")
 
 
 def test_bundle_cap_drops_optional_parts_first() -> None:

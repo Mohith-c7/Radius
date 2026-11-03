@@ -851,43 +851,50 @@ def load_persisted_analysis_command(
         raise NotFoundError(msg)
 
     destination = _repository_cache_path(repository_cache_dir, repository)
+    # Everything below is git work (clone, fetch, checkout): copy what it needs out of the
+    # rows and end the read transaction first, so no connection waits on git (C-04).
+    clone_url = repository.clone_url
+    repository_id, pr_number = repository.id, pull_request.github_pr_number
+    commit_sha, analysis_pk = analysis.commit_sha, analysis.id
+    target_branch = pull_request.target_branch
+    _end_read_transaction(session)
     # The stored URL is untrusted data (A-01/A-02): LocalGitRepositoryClient
     # re-validates it (https, allow-listed host, owner/repo shape) before git runs
     # and never sends the installation token to another host.
     repository_path = git_client.clone_or_fetch(
-        repository.clone_url,
+        clone_url,
         destination,
         extra_headers=extra_headers,
     )
-    if hasattr(git_client, "fetch_pull_request") and pull_request.github_pr_number:
+    if hasattr(git_client, "fetch_pull_request") and pr_number:
         try:
             git_client.fetch_pull_request(
                 repository_path,
-                pull_request.github_pr_number,
+                pr_number,
                 extra_headers=extra_headers,
             )
         except Exception:
             LOGGER.debug(
                 "Could not fetch pull request ref directly; continuing with commit SHA checkout.",
-                extra={"pr_number": pull_request.github_pr_number},
+                extra={"pr_number": pr_number},
             )
     if cleanup is not None and hasattr(git_client, "analysis_worktree"):
         repository_path = cleanup.enter_context(
             git_client.analysis_worktree(
                 repository_path,
-                analysis.commit_sha,
+                commit_sha,
                 repository_cache_dir / WORKTREES_DIRNAME,
-                str(analysis.id),
+                str(analysis_pk),
             )
         )
     else:
-        git_client.checkout(repository_path, analysis.commit_sha)
+        git_client.checkout(repository_path, commit_sha)
     return ExecuteAnalysisCommand(
-        analysis_id=analysis.id,
-        repository_id=repository.id,
+        analysis_id=analysis_pk,
+        repository_id=repository_id,
         repository_path=repository_path,
-        base_ref=f"origin/{pull_request.target_branch}",
-        head_ref=analysis.commit_sha,
+        base_ref=f"origin/{target_branch}",
+        head_ref=commit_sha,
     )
 
 
@@ -988,6 +995,7 @@ def _github_clone_headers(
         analysis_id=analysis_id,
         settings=settings,
     )
+    _end_read_transaction(session)  # C-04: no open transaction during the GitHub call
     token = github_client.create_installation_token(installation_id).token
     return (_git_basic_auth_header(token),)
 
@@ -1033,6 +1041,7 @@ def _publish_github_result(
             settings=settings,
         )
         report = _github_report(session, analysis_id, settings)
+        _end_read_transaction(session)  # C-04: no open transaction during the GitHub calls
         with stage("publish"):
             GitHubAnalysisPublisher(github_client).publish(
                 installation_id=installation_id,
@@ -1064,6 +1073,20 @@ def _publish_github_result(
             github_client=github_client,
             error=RuntimeError("Radius could not publish its result to GitHub."),
         )
+
+
+def _end_read_transaction(session: Session) -> None:
+    """End the transaction a read-only step opened, before slow network or git work (C-04).
+
+    Only called where the session holds nothing but reads, so committing is a pure release
+    of the connection (SQLAlchemy begins a new transaction on the next use). Without this a
+    pooled connection sits "idle in transaction" for the whole GitHub round trip or clone.
+    """
+
+    if session.new or session.dirty or session.deleted:
+        msg = "A read-only unit must not hold pending changes."
+        raise RuntimeError(msg)
+    session.commit()
 
 
 def _mark_analysis_running(session: Session, analysis_id) -> None:
@@ -1126,16 +1149,20 @@ def _publish_github_in_progress(
         )
         if analysis is None or repository is None:
             return
+        installation_id = _github_installation_id(
+            session=session,
+            analysis_id=analysis_id,
+            settings=settings,
+        )
+        owner, repository_name = repository.owner, repository.name
+        head_sha = analysis.commit_sha
+        _end_read_transaction(session)  # C-04: no open transaction during the GitHub call
         with stage("publish"):
             GitHubAnalysisPublisher(github_client).publish_in_progress(
-                installation_id=_github_installation_id(
-                    session=session,
-                    analysis_id=analysis_id,
-                    settings=settings,
-                ),
-                owner=repository.owner,
-                repository_name=repository.name,
-                head_sha=analysis.commit_sha,
+                installation_id=installation_id,
+                owner=owner,
+                repository_name=repository_name,
+                head_sha=head_sha,
                 dashboard_url=settings.dashboard_analysis_url(analysis_id),
             )
     except Exception as exc:
@@ -1171,15 +1198,19 @@ def _publish_github_failure(
         publisher = GitHubAnalysisPublisher(github_client)
         if not hasattr(publisher, "publish_failure"):
             return
+        installation_id = _github_installation_id(
+            session=session,
+            analysis_id=analysis_id,
+            settings=settings,
+        )
+        owner, repository_name = repository.owner, repository.name
+        head_sha = analysis.commit_sha
+        _end_read_transaction(session)  # C-04: no open transaction during the GitHub call
         publisher.publish_failure(
-            installation_id=_github_installation_id(
-                session=session,
-                analysis_id=analysis_id,
-                settings=settings,
-            ),
-            owner=repository.owner,
-            repository_name=repository.name,
-            head_sha=analysis.commit_sha,
+            installation_id=installation_id,
+            owner=owner,
+            repository_name=repository_name,
+            head_sha=head_sha,
             # Exception text can contain repository-controlled content and
             # credentials echoed by git/HTTP clients: redact, then keep it short.
             error_summary=redact_secrets(

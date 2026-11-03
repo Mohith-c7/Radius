@@ -1271,6 +1271,23 @@
           "origin": {
             "$ref": "#/components/schemas/OriginView"
           },
+          "source_quote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "B-11: for an LLM-proposed criterion, the verbatim text of the source at `span` (the quote the model had to cite), at most 500 characters. Untrusted source text: render as text only. Null for other origins or when the source text is gone.",
+            "title": "Source Quote"
+          },
+          "source_quote_truncated": {
+            "default": false,
+            "title": "Source Quote Truncated",
+            "type": "boolean"
+          },
           "span": {
             "$ref": "#/components/schemas/SpanView"
           },
@@ -2352,8 +2369,50 @@
         "title": "ValidationError",
         "type": "object"
       },
+      "VerifyCheck": {
+        "properties": {
+          "token": {
+            "maxLength": 512,
+            "minLength": 20,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "VerifyCheck",
+        "type": "object"
+      },
+      "VerifyCheckResponse": {
+        "description": "Whether the verify page must ask for a password (the token is not used up).",
+        "properties": {
+          "password_required": {
+            "title": "Password Required",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "password_required"
+        ],
+        "title": "VerifyCheckResponse",
+        "type": "object"
+      },
       "VerifyToken": {
         "properties": {
+          "password": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 8,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          },
           "token": {
             "maxLength": 512,
             "minLength": 20,
@@ -3345,7 +3404,25 @@
             }
           },
           {
-            "description": "Optional label of the human acting (for example a username); recorded in the audit trail under the authenticated organization. Not verified by Radius.",
+            "description": "Signed session of the user acting (sent by the dashboard server, never by a browser). It makes the confirmer a verified user.",
+            "in": "header",
+            "name": "X-Radius-Session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Signed session of the user acting (sent by the dashboard server, never by a browser). It makes the confirmer a verified user.",
+              "title": "X-Radius-Session"
+            }
+          },
+          {
+            "description": "Deprecated and ignored, except in the insecure development mode. The audit actor is the authenticated principal (a signed-in user or the API key), not a header.",
             "in": "header",
             "name": "X-Radius-Actor",
             "required": false,
@@ -3358,7 +3435,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Optional label of the human acting (for example a username); recorded in the audit trail under the authenticated organization. Not verified by Radius.",
+              "description": "Deprecated and ignored, except in the insecure development mode. The audit actor is the authenticated principal (a signed-in user or the API key), not a header.",
               "title": "X-Radius-Actor"
             }
           }
@@ -3502,7 +3579,25 @@
             }
           },
           {
-            "description": "Optional label of the human acting (for example a username); recorded in the audit trail under the authenticated organization. Not verified by Radius.",
+            "description": "Signed session of the user acting (sent by the dashboard server, never by a browser). It makes the confirmer a verified user.",
+            "in": "header",
+            "name": "X-Radius-Session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Signed session of the user acting (sent by the dashboard server, never by a browser). It makes the confirmer a verified user.",
+              "title": "X-Radius-Session"
+            }
+          },
+          {
+            "description": "Deprecated and ignored, except in the insecure development mode. The audit actor is the authenticated principal (a signed-in user or the API key), not a header.",
             "in": "header",
             "name": "X-Radius-Actor",
             "required": false,
@@ -3515,7 +3610,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Optional label of the human acting (for example a username); recorded in the audit trail under the authenticated organization. Not verified by Radius.",
+              "description": "Deprecated and ignored, except in the insecure development mode. The audit actor is the authenticated principal (a signed-in user or the API key), not a header.",
               "title": "X-Radius-Actor"
             }
           }
@@ -5833,6 +5928,55 @@
         },
         "security": [],
         "summary": "Verify Email",
+        "tags": [
+          "authentication"
+        ],
+        "x-stability": "internal"
+      }
+    },
+    "/api/v1/auth/verify-email/check": {
+      "post": {
+        "description": "Tell the verify page whether to ask for a password. Does NOT use the token up; an\ninvalid or expired token is the same generic 400 as verification itself.",
+        "operationId": "verify_email_check",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyCheck"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyCheckResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [],
+        "summary": "Verify Email Check",
         "tags": [
           "authentication"
         ],

@@ -23,6 +23,7 @@ import asyncio
 import base64
 import hashlib
 import json
+import re
 import secrets
 import time
 from collections.abc import Callable
@@ -367,6 +368,8 @@ class ProviderIdentity:
     subject: str
     email: str
     name: str
+    #: GitHub ``login`` (B-07); ``None`` for providers without one.
+    login: str | None = None
 
 
 def _json_object(response: httpx.Response, code: str) -> dict[str, Any]:
@@ -457,7 +460,13 @@ async def _github_identity(
         raise OAuthError("email_unverified", public="oauth_email_unverified")
     email = primary_verified[0].strip().lower()
     name = profile.get("name") or profile.get("login") or email
-    return ProviderIdentity("github", str(github_id), email, str(name)[:120])
+    raw_login = profile.get("login")
+    login = (
+        raw_login
+        if isinstance(raw_login, str) and re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})", raw_login)
+        else None
+    )
+    return ProviderIdentity("github", str(github_id), email, str(name)[:120], login)
 
 
 async def fetch_identity(

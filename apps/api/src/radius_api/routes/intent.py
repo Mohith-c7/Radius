@@ -3,15 +3,18 @@
 from typing import Annotated
 from uuid import UUID
 
+from app.database import get_db as get_auth_db
 from fastapi import APIRouter, Depends, Header, Query, Request, Response, status
 from radius_analysis.application import AnalysisApplicationService
 from radius_repository.application import RepositoryApplicationService
 from radius_shared.dto import ApiResponse, success_response
 from radius_shared.errors import NotFoundError, ValidationError
 from radius_shared.verdict_v2_repository import VerdictV2Repository
+from sqlalchemy.orm import Session
 
 from radius_api import intent_presenter as present
 from radius_api.auth import ApiPrincipal, get_api_principal
+from radius_api.confirmer import SESSION_HEADER, resolve_actor
 from radius_api.dependencies import (
     get_analysis_service,
     get_intent_service,
@@ -114,27 +117,40 @@ IfMatch = Annotated[
 ]
 
 
-def _actor(principal: ApiPrincipal, label: str | None) -> str:
-    """Audit actor: the authenticated organization, plus an optional user label."""
+def _actor(
+    principal: ApiPrincipal,
+    label: str | None,
+    session_token: str | None,
+    auth_db: Session,
+) -> str:
+    """Audit actor from the authenticated principal (B-07, DEC-040), never from a header.
 
-    base = f"org:{principal.organization_id}"
-    if label is None:
-        return base
-    if not ACTOR_LABEL_PATTERN.match(label):
+    ``label`` (``X-Radius-Actor``) is only honoured in the insecure development mode."""
+
+    if label is not None and not ACTOR_LABEL_PATTERN.match(label):
         msg = "X-Radius-Actor must match [A-Za-z0-9_.@:+-]{1,128}."
         raise ValidationError(msg, code="INTENT_ACTOR_INVALID")
-    return f"{base}/{label}"
+    return resolve_actor(principal, session_token=session_token, label=label, auth_db=auth_db)
 
 
 ActorLabel = Annotated[
     str | None,
     Header(
         alias="X-Radius-Actor",
-        description="Optional label of the human acting (for example a username); "
-        "recorded in the audit trail under the authenticated organization. "
-        "Not verified by Radius.",
+        description="Deprecated and ignored, except in the insecure development mode. The "
+        "audit actor is the authenticated principal (a signed-in user or the API key), "
+        "not a header.",
     ),
 ]
+SessionToken = Annotated[
+    str | None,
+    Header(
+        alias=SESSION_HEADER,
+        description="Signed session of the user acting (sent by the dashboard server, "
+        "never by a browser). It makes the confirmer a verified user.",
+    ),
+]
+AuthDb = Annotated[Session, Depends(get_auth_db)]
 
 
 @router.get(
@@ -333,7 +349,9 @@ def update_criterion(
     response: Response,
     request: Request,
     verdicts: Annotated[VerdictV2Repository, Depends(get_verdict_v2_repository)],
+    auth_db: AuthDb,
     if_match: IfMatch = None,
+    session_token: SessionToken = None,
     actor_label: ActorLabel = None,
 ):
     """Apply a human decision through the domain state machine (audited).
@@ -351,7 +369,7 @@ def update_criterion(
         body.action,
         text=body.text,
         reason=body.reason,
-        actor=_actor(principal, actor_label),
+        actor=_actor(principal, actor_label, session_token, auth_db),
         if_match=if_match,
     )
     request_verdict_v2_recompute(
@@ -376,7 +394,9 @@ def add_criterion(
     response: Response,
     request: Request,
     verdicts: Annotated[VerdictV2Repository, Depends(get_verdict_v2_repository)],
+    auth_db: AuthDb,
     if_match: IfMatch = None,
+    session_token: SessionToken = None,
     actor_label: ActorLabel = None,
 ):
     """Add a criterion authored by a human (`origin.method = human`).
@@ -389,7 +409,7 @@ def add_criterion(
         principal.organization_id,
         analysis_id,
         text=body.text,
-        actor=_actor(principal, actor_label),
+        actor=_actor(principal, actor_label, session_token, auth_db),
         reason=body.reason,
         if_match=if_match,
     )

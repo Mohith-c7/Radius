@@ -48,7 +48,12 @@ from radius_shared.database.models import (
 )
 from radius_shared.verdict_v2_flag import VerdictV2Mode
 from radius_worker.verdict_v2 import adapters
-from radius_worker.verdict_v2.intent_refresh import refresh_stage_a_intent
+from radius_worker.verdict_v2.intent_refresh import (
+    ConfirmDecision,
+    confirm_policy_for,
+    parse_actor,
+    refresh_stage_a_intent,
+)
 from radius_worker.verdict_v2.scoring import (
     HINT_METHOD,
     ScoringPipeline,
@@ -448,7 +453,10 @@ def test_b07_confirmation_by_someone_else_lifts_the_cap_and_records_who(capped_s
     payload = _score(refreshed)
 
     assert payload["verdict"] == "verified"
-    assert {c["confirmed_by"] for c in payload["criteria"]} == {"reviewer-bob"}
+    # an old row (label from a header): counts under the default policy, shown as unverified
+    assert {c["confirmed_by"] for c in payload["criteria"]} == {
+        "reviewer-bob (unverified confirmer)"
+    }
 
 
 def test_b07_the_pr_author_confirming_their_own_criteria_does_not_lift_anything(
@@ -488,10 +496,85 @@ def test_b07_policy_hook_can_be_replaced() -> None:
     sa = _stage_a_with_hint(provenance="author_pr_body", hint_provenance="author_pr_body")
     refreshed = refresh_stage_a_intent(
         sa, [db("C1", "confirmed")], actors={"C1": "org:1/anyone"}, pr_author="x",
-        confirm_policy=lambda label, author: True,  # "nobody may confirm" (strict deployments)
+        # "nobody may confirm" (strict deployments)
+        confirm_policy=lambda who, author: ConfirmDecision(False, "nobody"),
     )
     assert refreshed.criteria[0].provenance == "author_pr_body"
     assert refreshed.criteria[0].lifecycle == "proposed"
+
+
+def _confirmed_by(stage_a, actor: str, author, policy="allow_unverified"):
+    current = [db(cid, "confirmed") for cid in _ids(stage_a)]
+    refreshed = refresh_stage_a_intent(
+        stage_a,
+        current,
+        actors={cid: actor for cid in _ids(stage_a)},
+        pr_author=author,
+        confirm_policy=confirm_policy_for(policy),
+    )
+    return _score(refreshed)
+
+
+def test_b07_a_verified_other_github_account_counts_and_is_not_marked_unverified(
+    capped_stage_a,
+) -> None:
+    payload = _confirmed_by(capped_stage_a, "org:1/user=u-0001/gh=bob", "alice")
+
+    assert payload["verdict"] == "verified"
+    assert {c["confirmed_by"] for c in payload["criteria"]} == {"bob"}
+
+
+def test_b07_a_session_user_linked_to_the_author_github_account_is_never_counted(
+    capped_stage_a,
+) -> None:
+    for policy in ("allow_unverified", "require_second_person"):
+        payload = _confirmed_by(capped_stage_a, "org:1/user=u-0001/gh=Alice", "alice", policy)
+
+        assert payload["verdict"] == "insufficient_evidence"
+        assert payload["summary"]["author_hint_criteria"] == 2
+        assert all("the PR author: not counted" in c["confirmed_by"] for c in payload["criteria"])
+
+
+def test_b07_an_unlinked_confirmer_counts_by_default_but_is_labelled_unverified(
+    capped_stage_a,
+) -> None:
+    for actor in ("org:1/user=u-0002", "org:1/key=ab12cd", "org:1/legacy-env-key", "org:1"):
+        payload = _confirmed_by(capped_stage_a, actor, "alice")
+
+        assert payload["verdict"] == "verified"
+        assert all("(unverified confirmer)" in c["confirmed_by"] for c in payload["criteria"])
+
+
+def test_b07_require_second_person_refuses_what_it_cannot_verify(capped_stage_a) -> None:
+    for actor, author in (
+        ("org:1/user=u-0002", "alice"),  # no GitHub link
+        ("org:1/key=ab12cd", "alice"),  # an organisation credential, no person
+        ("org:1/user=u-0003/gh=bob", None),  # PR author unknown
+    ):
+        payload = _confirmed_by(capped_stage_a, actor, author, "require_second_person")
+
+        assert payload["verdict"] == "insufficient_evidence", actor
+        assert payload["summary"]["author_hint_criteria"] == 2
+        assert all("not counted" in c["confirmed_by"] for c in payload["criteria"])
+    ok = _confirmed_by(capped_stage_a, "org:1/user=u-0003/gh=bob", "alice", "require_second_person")
+    assert ok["verdict"] == "verified"
+
+
+def test_b07_only_a_session_can_vouch_for_a_github_login() -> None:
+    assert parse_actor("org:1/key=ab12/gh=alice").github_login is None
+    assert parse_actor("org:1/dev=me/gh=alice").github_login is None
+    assert parse_actor("org:1/legacy-env-key/gh=alice").github_login is None
+    who = parse_actor("org:1/user=u1/gh=alice")
+    assert (who.kind, who.subject, who.github_login) == ("user", "u1", "alice")
+    # a declared label (dev mode, old rows) equal to the author is still refused
+    assert parse_actor("org:1/dev=Alice").declared_label
+    assert not confirm_policy_for(None)(parse_actor("org:1/dev=Alice"), "alice").counted
+
+
+def test_b07_unknown_policy_name_is_an_error() -> None:
+    with pytest.raises(ValueError):
+        confirm_policy_for("whatever")
+    assert confirm_policy_for(None) is confirm_policy_for("allow")
 
 
 def test_b09_a_criterion_added_after_the_analysis_blocks_verified_visibly(capped_stage_a) -> None:

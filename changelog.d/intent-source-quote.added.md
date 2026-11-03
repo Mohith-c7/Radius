@@ -1,0 +1,1 @@
+The intent API and the dashboard intent panel show the verbatim source quote next to criteria proposed by the language model (`source_quote`), so a reviewer confirms the wording against the text it came from.

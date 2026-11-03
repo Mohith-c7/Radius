@@ -103,6 +103,11 @@ its rows, which are a pure cache.
 - `WORKER_EXECUTE_TESTS` is deprecated. When `WORKER_TEST_EXECUTION_MODE` is unset, `WORKER_EXECUTE_TESTS=true`
   still maps to `unsafe_in_process`, which the worker refuses to start with in `uat`/`production` unless
   `RADIUS_ALLOW_UNSAFE_EXECUTION=true` ([EXECUTION_ISOLATION.md](../security/EXECUTION_ISOLATION.md)).
+- Review partials (DEC-040): migration `20261104_0021` adds `auth_accounts.provider_login` (nullable). Users who signed in
+  with GitHub before the upgrade are treated as "GitHub link unknown" until their next GitHub sign-in. Set the same
+  `RADIUS_VERDICT_V2_CONFIRM_POLICY` (`allow_unverified` default, or `require_second_person`) on the worker. The dashboard now
+  sends `X-Radius-Session` to the API on intent writes; keep that hop private. In uat/production the verify-email page asks for
+  a password and signup no longer answers 409 for a registered address.
 - The 0-100 confidence score is labelled `heuristic_uncalibrated` and is not a probability; do not build
   gates on it.
 - Pre-1.0: `0.y.z` may change anything. There is no stated API compatibility promise yet.

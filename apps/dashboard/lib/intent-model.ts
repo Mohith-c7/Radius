@@ -61,6 +61,9 @@ export type IntentCriterion = {
   testability_rationale: string | null;
   state: CriterionState | string;
   hints: { paths: string[]; tests: string[]; label: string | null };
+  /** B-11: verbatim source text at `span` for an LLM-proposed criterion (untrusted text). */
+  source_quote?: string | null;
+  source_quote_truncated?: boolean;
 };
 
 export type IntentSourceSummary = {
@@ -593,4 +596,21 @@ export function actorLabel(user: { id?: string | null } | null | undefined): str
   if (!id) return null;
   const label = `user:${id}`;
   return ACTOR_PATTERN.test(label) ? label : null;
+}
+
+export const MAX_SOURCE_QUOTE_CHARS = 500;
+
+/**
+ * B-11: the evidence shown next to an LLM-proposed criterion, so a human confirms the
+ * wording against the exact text it was drawn from. Plain text only (callers render it as a
+ * React text node, never as HTML). `null` when there is nothing to show.
+ */
+export function sourceQuoteView(
+  criterion: Pick<IntentCriterion, "origin" | "source_quote" | "source_quote_truncated">,
+): { quote: string; truncated: boolean } | null {
+  if (criterion.origin.method !== "llm") return null;
+  const raw = criterion.source_quote;
+  if (typeof raw !== "string" || raw.trim() === "") return null;
+  const cut = truncateText(raw, MAX_SOURCE_QUOTE_CHARS);
+  return { quote: cut.truncated ? cut.text : raw, truncated: cut.truncated || criterion.source_quote_truncated === true };
 }

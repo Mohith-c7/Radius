@@ -286,27 +286,29 @@ def test_reaper_fails_analysis_whose_stale_job_exhausted_attempts(tmp_path) -> N
     assert len(github.check_runs) == 1
 
 
-def test_reaper_fails_running_analysis_past_deadline(tmp_path) -> None:
-    session_factory = _session_factory()
-    analysis_id = _persist_analysis(
-        session_factory,
-        status=db_enums.AnalysisStatus.RUNNING,
-        started_at=datetime.now(UTC) - timedelta(hours=5),
-    )
+def _age_job(session_factory, analysis_id, *, ago: timedelta, **fields) -> None:
+    """Make the job look ``ago`` old (every timestamp), then apply ``fields``."""
+
+    then = datetime.now(UTC) - ago
     with session_factory() as session:
         job = session.scalar(select(AnalysisJob).where(AnalysisJob.analysis_id == analysis_id))
-        # Still freshly locked: stale recovery alone would never end it.
-        job.status = db_enums.AnalysisJobStatus.RUNNING
-        job.attempts = 1
-        job.locked_at = datetime.now(UTC)
+        job.created_at = then
+        job.updated_at = then
+        for name, value in fields.items():
+            setattr(job, name, value)
         session.commit()
+
+
+def test_reaper_fails_a_job_that_has_sat_unchanged_past_the_deadline(tmp_path) -> None:
+    session_factory = _session_factory()
+    analysis_id = _persist_analysis(
+        session_factory, started_at=datetime.now(UTC) - timedelta(hours=5)
+    )
+    _age_job(session_factory, analysis_id, ago=timedelta(hours=5))
     fresh_id = _persist_analysis(session_factory)
     github = FakeGitHubClient()
     runtime = _runtime(
-        session_factory,
-        tmp_path,
-        github,
-        WORKER_ANALYSIS_DEADLINE_SECONDS=3600,
+        session_factory, tmp_path, github, WORKER_ANALYSIS_DEADLINE_SECONDS=3600
     )
 
     reaped = runtime.reap_stuck_analyses()
@@ -320,6 +322,121 @@ def test_reaper_fails_running_analysis_past_deadline(tmp_path) -> None:
     assert fresh.status == db_enums.AnalysisStatus.PENDING
     assert fresh_job.status == db_enums.AnalysisJobStatus.PENDING
     assert len(github.check_runs) == 1
+
+
+def test_c18_a_long_job_with_a_live_heartbeat_is_never_reaped(tmp_path) -> None:
+    session_factory = _session_factory()
+    analysis_id = _persist_analysis(
+        session_factory,
+        status=db_enums.AnalysisStatus.RUNNING,
+        started_at=datetime.now(UTC) - timedelta(hours=9),
+    )
+    # claimed long ago, but the worker renewed the lease a moment ago
+    _age_job(
+        session_factory,
+        analysis_id,
+        ago=timedelta(hours=9),
+        status=db_enums.AnalysisJobStatus.RUNNING,
+        attempts=1,
+        claimed_by="worker-live",
+        locked_at=datetime.now(UTC) - timedelta(seconds=20),
+    )
+    github = FakeGitHubClient()
+    runtime = _runtime(
+        session_factory, tmp_path, github, WORKER_ANALYSIS_DEADLINE_SECONDS=3600
+    )
+
+    assert runtime.reap_stuck_analyses() == []
+
+    analysis, job = _state(session_factory, analysis_id)
+    assert analysis.status == db_enums.AnalysisStatus.RUNNING
+    assert job.status == db_enums.AnalysisJobStatus.RUNNING
+    assert job.claimed_by == "worker-live"
+    assert github.check_runs == []
+
+
+def test_c18_a_real_heartbeat_keeps_an_otherwise_expired_job_alive(tmp_path) -> None:
+    session_factory = _session_factory()
+    analysis_id = _persist_analysis(
+        session_factory,
+        status=db_enums.AnalysisStatus.RUNNING,
+        started_at=datetime.now(UTC) - timedelta(hours=9),
+    )
+    _age_job(
+        session_factory,
+        analysis_id,
+        ago=timedelta(hours=9),
+        status=db_enums.AnalysisJobStatus.RUNNING,
+        attempts=1,
+        claimed_by="worker-live",
+        locked_at=datetime.now(UTC) - timedelta(hours=2),  # the lease had lapsed ...
+    )
+    with session_factory() as session:
+        queue = SqlAlchemyAnalysisJobQueue(session, worker_id="worker-live")
+        assert queue.heartbeat(analysis_id) is True  # ... and the worker renewed it
+        session.commit()
+    runtime = _runtime(
+        session_factory, tmp_path, FakeGitHubClient(), WORKER_ANALYSIS_DEADLINE_SECONDS=3600
+    )
+
+    assert runtime.reap_stuck_analyses() == []
+    _, job = _state(session_factory, analysis_id)
+    assert job.status == db_enums.AnalysisJobStatus.RUNNING
+
+
+def test_c18_an_expired_lease_is_recovered_and_retried_not_reaped_by_the_old_start(
+    tmp_path,
+) -> None:
+    session_factory = _session_factory()
+    analysis_id = _persist_analysis(
+        session_factory,
+        status=db_enums.AnalysisStatus.RUNNING,
+        started_at=datetime.now(UTC) - timedelta(hours=9),
+    )
+    _age_job(
+        session_factory,
+        analysis_id,
+        ago=timedelta(hours=9),
+        status=db_enums.AnalysisJobStatus.RUNNING,
+        attempts=1,
+        claimed_by="worker-dead",
+        locked_at=datetime.now(UTC) - timedelta(hours=3),  # no heartbeat for 3 h
+    )
+    github = FakeGitHubClient()
+    runtime = _runtime(
+        session_factory, tmp_path, github, WORKER_ANALYSIS_DEADLINE_SECONDS=3600
+    )
+
+    assert runtime.reap_stuck_analyses() == []  # recovered for another attempt, not failed
+
+    analysis, job = _state(session_factory, analysis_id)
+    assert job.status == db_enums.AnalysisJobStatus.PENDING
+    assert job.claimed_by is None and job.locked_at is None
+    assert analysis.status != db_enums.AnalysisStatus.FAILED
+    assert github.check_runs == []
+
+
+def test_c18_an_expired_lease_with_no_attempts_left_is_failed(tmp_path) -> None:
+    session_factory = _session_factory()
+    analysis_id = _persist_analysis(
+        session_factory, status=db_enums.AnalysisStatus.RUNNING
+    )
+    _age_job(
+        session_factory,
+        analysis_id,
+        ago=timedelta(hours=1),
+        status=db_enums.AnalysisJobStatus.RUNNING,
+        attempts=3,
+        claimed_by="worker-dead",
+        locked_at=datetime.now(UTC) - timedelta(hours=1),
+    )
+    runtime = _runtime(session_factory, tmp_path, FakeGitHubClient())
+
+    reaped = runtime.reap_stuck_analyses()
+
+    assert [item.analysis_id for item in reaped] == [analysis_id]
+    analysis, _ = _state(session_factory, analysis_id)
+    assert analysis.status == db_enums.AnalysisStatus.FAILED
 
 
 def test_reaper_fails_pending_analysis_without_job_past_deadline(tmp_path) -> None:

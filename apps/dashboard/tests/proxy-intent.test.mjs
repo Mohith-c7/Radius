@@ -110,3 +110,20 @@ test("response ETag pattern accepts strong ETags only", () => {
   assert.equal(proxy.IF_MATCH_PATTERN.test('"3f9a"'), true);
   assert.equal(proxy.IF_MATCH_PATTERN.test('W/"3f9a"'), false);
 });
+
+test("B-07: a validated session is forwarded instead of any client actor header", () => {
+  const jwt = "aaaa1111.bbbb2222.cccc3333";
+  const incoming = new Headers({ "X-Radius-Actor": "user:forged", "X-Radius-Session": "client-sent" });
+  const out = proxy.buildUpstreamHeaders(cfg, incoming, { ...intentPatch, actor: "me@example.com", session: jwt });
+  assert.equal(out.get("X-Radius-Session"), jwt);
+  assert.equal(out.get("X-Radius-Actor"), null);
+  // the browser can never choose the session header
+  const noSession = proxy.buildUpstreamHeaders(cfg, incoming, intentPatch);
+  assert.equal(noSession.get("X-Radius-Session"), null);
+  // a malformed value is not forwarded (and falls back to the validated actor)
+  const bad = proxy.buildUpstreamHeaders(cfg, incoming, { ...intentPatch, session: "not a token\r\nx: y" });
+  assert.equal(bad.get("X-Radius-Session"), null);
+  // never outside intent writes
+  const get = proxy.buildUpstreamHeaders(cfg, incoming, { segments: ["analyses", "a1", "intent"], method: "GET", session: jwt });
+  assert.equal(get.get("X-Radius-Session"), null);
+});

@@ -225,38 +225,95 @@ def test_production_like_signup_does_not_join_an_existing_organization(
     assert response.json()["organization_id"] is None
 
 
-def test_production_like_verification_clears_the_pre_verification_password(
+def test_production_like_verification_replaces_the_pre_verification_password(
     production_like, mails, db
 ) -> None:
     client = production_like
     _, attacker_password = _signup(client)
+    token = _token_from(mails[0])
+    mine = _password()
+
+    # A-07 remainder: the page asks first; a password is required and the link survives a
+    # request that forgot it.
+    check = client.post("/api/v1/auth/verify-email/check", json={"token": token})
+    assert check.status_code == 200 and check.json() == {"password_required": True}
+    missing = client.post("/api/v1/auth/verify-email", json={"token": token})
+    assert missing.status_code == 400
+    weak = client.post("/api/v1/auth/verify-email", json={"token": token, "password": "short"})
+    assert weak.status_code == 422
+    assert client.post("/api/v1/auth/verify-email/check", json={"token": token}).status_code == 200
+
     verified = client.post(
-        "/api/v1/auth/verify-email", json={"token": _token_from(mails[0])}
+        "/api/v1/auth/verify-email", json={"token": token, "password": mine}
     )
     assert verified.status_code == 200
     assert verified.json()["email_verified"] is True
 
-    # The password the signer chose no longer works; the mailbox owner uses reset.
+    # The password the signer chose never works; the one chosen at verification does.
     login = client.post(
         "/api/v1/auth/login",
         json={"email": "victim@example.com", "password": attacker_password},
     )
     assert login.status_code == 401
-    client.post("/api/v1/auth/forgot-password", json={"email": "victim@example.com"})
-    reset_mail = [m for m in mails if "Reset" in m["subject"]][0]
-    mine = _password()
-    assert (
-        client.post(
-            "/api/v1/auth/reset-password",
-            json={"token": _token_from(reset_mail), "password": mine},
-        ).status_code
-        == 204
-    )
     ok = client.post(
         "/api/v1/auth/login", json={"email": "victim@example.com", "password": mine}
     )
     assert ok.status_code == 200
     assert ok.json()["organization_id"]
+    # the link is single use, also for the check
+    assert client.post("/api/v1/auth/verify-email/check", json={"token": token}).status_code == 400
+
+
+def test_production_like_forgot_password_still_works_after_verification(
+    production_like, mails, db
+) -> None:
+    client = production_like
+    _signup(client)
+    mine = _password()
+    client.post(
+        "/api/v1/auth/verify-email",
+        json={"token": _token_from(mails[0]), "password": mine},
+    )
+    client.post("/api/v1/auth/forgot-password", json={"email": "victim@example.com"})
+    reset_mail = [m for m in mails if "Reset" in m["subject"]][0]
+    newer = _password()
+    reset = client.post(
+        "/api/v1/auth/reset-password",
+        json={"token": _token_from(reset_mail), "password": newer},
+    )
+    assert reset.status_code == 204
+    assert client.post(
+        "/api/v1/auth/login", json={"email": "victim@example.com", "password": newer}
+    ).status_code == 200
+
+
+def test_verification_with_a_password_does_not_change_an_already_verified_account(
+    production_like, mails, db
+) -> None:
+    client = production_like
+    _, original = _signup(client)
+    mine = _password()
+    client.post(
+        "/api/v1/auth/verify-email",
+        json={"token": _token_from(mails[0]), "password": mine},
+    )
+    # a second link for a verified address (resend path) cannot be used to change the password
+    from app.auth import create_action_token
+    from app.models import User as AuthUser
+
+    user = db.query(AuthUser).filter_by(email="victim@example.com").one()
+    token = create_action_token(db, user.id, "verify_email", minutes=5)
+    check = client.post("/api/v1/auth/verify-email/check", json={"token": token})
+    assert check.json() == {"password_required": False}
+    other = _password()
+    client.post("/api/v1/auth/verify-email", json={"token": token, "password": other})
+    assert client.post(
+        "/api/v1/auth/login", json={"email": "victim@example.com", "password": mine}
+    ).status_code == 200
+    assert client.post(
+        "/api/v1/auth/login", json={"email": "victim@example.com", "password": other}
+    ).status_code == 401
+    assert original != mine
 
 
 # --- A-08 ---------------------------------------------------------------------
@@ -535,3 +592,96 @@ def test_compose_forwards_the_api_key_pepper_and_secure_cookies() -> None:
     )
     assert "RADIUS_API_KEY_PEPPER: ${RADIUS_API_KEY_PEPPER:-}" in text
     assert "SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}" in text
+
+
+# --- A-07 remainder (development behaviour kept) ------------------------------
+
+
+def test_development_verification_needs_no_password_and_keeps_the_signup_password(
+    client, mails
+) -> None:
+    _, password = _signup(client)
+    token = _token_from(mails[0])
+
+    check = client.post("/api/v1/auth/verify-email/check", json={"token": token})
+    assert check.json() == {"password_required": False}
+    assert client.post("/api/v1/auth/verify-email", json={"token": token}).status_code == 200
+
+    ok = client.post(
+        "/api/v1/auth/login", json={"email": "victim@example.com", "password": password}
+    )
+    assert ok.status_code == 200
+
+
+def test_verify_check_is_a_generic_400_for_unknown_tokens(client) -> None:
+    bad = client.post("/api/v1/auth/verify-email/check", json={"token": "x" * 40})
+    assert bad.status_code == 400
+    assert bad.json()["detail"] == "This link is invalid or has expired."
+
+
+# --- A-12 remainder: signup does not reveal registered addresses --------------
+
+
+def test_development_signup_for_an_existing_address_is_a_clear_409(client, mails) -> None:
+    _signup(client)
+    again, _ = _signup(client)
+    assert again.status_code == 409
+    assert "already exists" in again.json()["detail"]
+
+
+def test_production_like_signup_answers_the_same_for_new_and_existing_addresses(
+    production_like, mails, db, monkeypatch
+) -> None:
+    client = production_like
+    hashes: list[int] = []
+    real_hash = routes_auth.hash_password
+
+    def counting(value):
+        hashes.append(1)
+        return real_hash(value)
+
+    monkeypatch.setattr(routes_auth, "hash_password", counting)
+
+    new, _ = _signup(client, name="Newcomer")
+    token = _token_from(mails[0])
+    mine = _password()
+    client.post("/api/v1/auth/verify-email", json={"token": token, "password": mine})
+    mails.clear()
+    hashes.clear()
+
+    # the same address again: now a verified account exists
+    existing, _ = _signup(client, name="Someone Else")
+    fresh, _ = _signup(client, email="brand.new@example.com", name="Someone Else")
+
+    assert existing.status_code == fresh.status_code == new.status_code == 201
+    assert set(existing.json()) == set(fresh.json()) == set(new.json())
+    for body in (existing.json(), fresh.json()):
+        assert body["email_verified"] is False and body["organization_id"] is None
+        assert body["role"] == "developer"
+    assert existing.json()["id"] != fresh.json()["id"]  # neither leaks the real account id
+    assert "radius_session" not in client.cookies
+    assert len(hashes) == 2  # the same password-hashing work in both cases
+    # the existing account's owner is told by mail; the real account was not changed
+    notice = [m for m in mails if m["to"] == "victim@example.com"]
+    assert [m["subject"] for m in notice] == ["You already have a Radius account"]
+    assert "token=" not in notice[0]["text"]
+    ok = client.post(
+        "/api/v1/auth/login", json={"email": "victim@example.com", "password": mine}
+    )
+    assert ok.status_code == 200
+    assert ok.json()["name"] == "Newcomer"
+
+
+def test_production_like_signup_for_an_unverified_address_sends_a_fresh_link_only(
+    production_like, mails, db
+) -> None:
+    client = production_like
+    first, original = _signup(client)
+    again, _ = _signup(client, name="Other")
+
+    assert first.status_code == again.status_code == 201
+    assert len(mails) == 2 and all("Verify" in m["subject"] for m in mails)
+    # the earlier signup password still does not turn into a working login
+    assert client.post(
+        "/api/v1/auth/login", json={"email": "victim@example.com", "password": original}
+    ).status_code == 403
