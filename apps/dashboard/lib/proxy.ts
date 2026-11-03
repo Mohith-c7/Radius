@@ -6,10 +6,14 @@ export const MAX_BODY_BYTES = 5 * 1024 * 1024; // 5 MiB (JUnit XML uploads)
 const ID = "[A-Za-z0-9_-]{1,64}";
 const ALLOWED: Array<{ pattern: RegExp; methods: readonly string[] }> = [
   { pattern: new RegExp(`^repositories$`), methods: ["GET", "POST"] },
+  // Must precede the generic repositories/<id> rule, which would match first.
+  { pattern: new RegExp(`^repositories/connect-github$`), methods: ["POST"] },
   { pattern: new RegExp(`^repositories/${ID}$`), methods: ["GET", "PATCH", "DELETE"] },
   { pattern: new RegExp(`^repositories/${ID}/pull-requests$`), methods: ["GET"] },
   { pattern: new RegExp(`^repositories/${ID}/pull-requests/[0-9]{1,9}$`), methods: ["GET"] },
   { pattern: new RegExp(`^repositories/${ID}/sync-pull-requests$`), methods: ["POST"] },
+  // Pull-based GitHub (no webhook): connect by owner/name and analyze one PR by number.
+  { pattern: new RegExp(`^repositories/${ID}/pull-requests/[0-9]{1,9}/analyze$`), methods: ["POST"] },
   { pattern: new RegExp(`^analyses$`), methods: ["GET", "POST"] },
   { pattern: new RegExp(`^analyses/${ID}$`), methods: ["GET"] },
   { pattern: new RegExp(`^analyses/${ID}/rerun$`), methods: ["POST"] },

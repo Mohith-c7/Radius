@@ -9,6 +9,7 @@ that was not run or not found in code is marked **Unverified**.
 | Document | Use it to |
 |---|---|
 | [INSTALL.md](INSTALL.md) | Bring up the Docker Compose stack and reach a first verdict |
+| [LIVE_GITHUB_DEMO.md](LIVE_GITHUB_DEMO.md) | Demo against real GitHub with no webhook, tunnel or public URL |
 | [CONFIGURATION.md](CONFIGURATION.md) | Look up an environment variable (generated from the code, do not edit) |
 | [UPGRADE.md](UPGRADE.md) | Apply a new version, migrate the database, roll back |
 | [BACKUP_RESTORE.md](BACKUP_RESTORE.md) | Back up and restore PostgreSQL; what lives where |
