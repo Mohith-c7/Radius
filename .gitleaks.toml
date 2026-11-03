@@ -25,4 +25,6 @@ regexes = [
   '''sk_live_9f8a7b6c5d4e''',
   # Placeholder PEM body in tests/test_github_app_manifest.py (F-06)
   '''PRIVATE KEY-----.{1,4}AAA.{1,4}BBB.{1,4}-----END''',
+  # Garbled placeholder PEM ("QUJD" = base64 of ABC) in tests/test_live_check.py (live GitHub preflight)
+  '''PRIVATE KEY-----.{1,4}QUJD.{1,4}-----END RSA PRIVATE KEY''',
 ]
