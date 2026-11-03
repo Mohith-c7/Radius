@@ -111,3 +111,28 @@ test("hostile mutation payloads are bounded and never throw", () => {
   assert.equal(v.criteria[1].mutation, null);
   assert.equal(v.mutation, null);
 });
+
+test("link gaps (stage 2): honest wording, bounded, absent when there is none", () => {
+  const raw = withMutation();
+  raw.criteria[0].mutation.link_gaps = [
+    { mutant_id: "m3", path: "src/validators.py", line: 20, operator: "ROR", tests: ["tests/<b>t</b>.py::t"] },
+  ];
+  raw.criteria[0].mutation.link_gap_tests = ["tests/<b>t</b>.py::t"];
+  const v = parse(raw);
+  const text = m.linkGapText(v.criteria[0]);
+  assert.equal(
+    text,
+    "Link gaps: 1 mutant killed only by tests not linked to this criterion: tests/<b>t</b>.py::t.",
+  );
+  assert.match(m.LINK_GAP_ACTION, /tests:/);
+  assert.equal(m.linkGapText(v.criteria[1]), "");
+  // hostile input is bounded and never throws
+  raw.criteria[0].mutation.link_gaps = Array.from({ length: 500 }, () => ({ tests: "x" }));
+  raw.criteria[0].mutation.link_gap_tests = Array.from({ length: 500 }, () => "t".repeat(5000));
+  const w = parse(raw);
+  assert.ok(w.criteria[0].mutation.link_gaps.length <= 50);
+  assert.ok(w.criteria[0].mutation.link_gap_tests.length <= 10);
+  assert.ok(w.criteria[0].mutation.link_gap_tests[0].length < 5000);
+  // flag off / stage 1 only: nothing
+  assert.equal(m.linkGapText(parse(structuredClone(example)).criteria[0]), "");
+});

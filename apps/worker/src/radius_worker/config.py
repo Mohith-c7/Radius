@@ -125,6 +125,39 @@ class WorkerSettings(DatabaseSettings):
             "this value). A timed-out mutant is excluded from the detection score."
         ),
     )
+    mutation_stage2_enabled: bool = Field(
+        default=False,
+        alias="RADIUS_MUTATION_STAGE2",
+        description=(
+            "Mutation evidence stage 2 (default OFF; only used when RADIUS_FEATURE_MUTATION "
+            "is on). Each mutant that survives the linked tests is also run, in the same "
+            "hardened sandbox and with early exit, against the repository's other tests "
+            "that import the mutated module. A mutant killed only by such an unlinked test "
+            "is reported as a link gap (the criterion's links are incomplete) instead of "
+            "counting as weak evidence. Unlinked tests never add support."
+        ),
+    )
+    mutation_stage2_max_tests: int = Field(
+        default=60,
+        ge=1,
+        le=500,
+        alias="RADIUS_MUTATION_STAGE2_MAX_TESTS",
+        description=(
+            "Mutation stage 2: maximum wider tests run against one surviving mutant "
+            "(deterministic order: sorted test ids). Tests beyond the cap are not tried."
+        ),
+    )
+    mutation_stage2_wall_clock_seconds: float = Field(
+        default=300.0,
+        ge=10.0,
+        le=3600.0,
+        alias="RADIUS_MUTATION_STAGE2_WALL_CLOCK_SECONDS",
+        description=(
+            "Mutation stage 2: wall-clock budget for the whole stage (separate from the "
+            "stage 1 budget; added latency). Survivors not reached keep their stage 1 "
+            "result and are counted as skipped_for_budget."
+        ),
+    )
     tamper_rules_enabled: bool = Field(
         default=False,
         alias="RADIUS_FEATURE_TAMPER_RULES",

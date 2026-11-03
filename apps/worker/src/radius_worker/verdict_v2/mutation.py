@@ -122,6 +122,9 @@ def to_input(m: Any, *, image: str = "") -> MutationInput:
                 status=r.status,
                 killed_by=tuple(r.killed_by),
                 equivalent_suspect=r.equivalent_suspect,
+                killed_outside_linked=(
+                    None if r.killed_outside_linked is None else tuple(r.killed_outside_linked)
+                ),
             )
             for r in m.mutants
         ),
@@ -138,7 +141,28 @@ def to_input(m: Any, *, image: str = "") -> MutationInput:
         engine=m.engine,
         operators=tuple(m.operators),
         image=image or m.image,
+        stage2=stage2_block(getattr(m, "stage2", None)),
     )
+
+
+def stage2_block(s: Any) -> dict[str, Any] | None:
+    """Plain-data stage 2 summary for ``MutationInput.stage2``; ``None`` when not enabled."""
+
+    if s is None:
+        return None
+    return {
+        "enabled": True,
+        "survivors": s.survivors,
+        "run": s.run,
+        "killed_outside_linked": s.killed,
+        "unconfirmed": s.unconfirmed,
+        "no_wider_tests": s.no_wider_tests,
+        "skipped_for_budget": s.skipped_for_budget,
+        "errors": s.errors,
+        "cache_hits": s.cache_hits,
+        "tests_considered": s.tests_considered,
+        "ladder": list(s.ladder),
+    }
 
 
 # ------------------------------------------------------------------ image identity
@@ -292,7 +316,12 @@ class SandboxMutationProducer:
                 max_mutants=int(s.mutation_max_mutants),
                 wall_clock_seconds=float(s.mutation_wall_clock_seconds),
                 per_mutant_timeout_seconds=float(s.mutation_mutant_timeout_seconds),
-            )
+            ),
+            stage2=bool(getattr(s, "mutation_stage2_enabled", False)),
+            stage2_max_tests=int(getattr(s, "mutation_stage2_max_tests", 60)),
+            stage2_wall_clock_seconds=float(
+                getattr(s, "mutation_stage2_wall_clock_seconds", 300.0)
+            ),
         )
         targets = select_targets(req)
         if not targets:

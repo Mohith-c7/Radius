@@ -22,7 +22,7 @@ How to read it.
   (`RADIUS_LLM_*`) silently fall back to their default on a bad number.
 
 
-Variables documented: **134** (14 secret, 10 feature flags).
+Variables documented: **137** (14 secret, 10 feature flags).
 
 ## Core, API, GitHub and observability
 
@@ -77,6 +77,9 @@ Variables documented: **134** (14 secret, 10 feature flags).
 | `RADIUS_MUTATION_ALLOW_LOCAL` | bool | `unset` | library | no | - | Dev/tests only: allows the mutation prototype's local subprocess runner, which executes code on the host and is unsafe for untrusted repositories. Never set in production. |
 | `RADIUS_MUTATION_MAX_MUTANTS` | int | `50` | worker | no | - | Mutation evidence: hard cap on mutants run per analysis (seeded, stratified sample when more exist). Each mutant costs about one sandbox container run. |
 | `RADIUS_MUTATION_MUTANT_TIMEOUT_SECONDS` | float | `60.0` | worker | no | - | Mutation evidence: upper bound of the per-mutant sandbox timeout (the effective timeout is 3x the median baseline run, clamped to 5-120 s and to this value). A timed-out mutant is excluded from the detection score. |
+| `RADIUS_MUTATION_STAGE2` | bool | `false` | worker | no | - | Mutation evidence stage 2 (default OFF; only used when RADIUS_FEATURE_MUTATION is on). Each mutant that survives the linked tests is also run, in the same hardened sandbox and with early exit, against the repository's other tests that import the mutated module. A mutant killed only by such an unlinked test is reported as a link gap (the criterion's links are incomplete) instead of counting as weak evidence. Unlinked tests never add support. |
+| `RADIUS_MUTATION_STAGE2_MAX_TESTS` | int | `60` | worker | no | - | Mutation stage 2: maximum wider tests run against one surviving mutant (deterministic order: sorted test ids). Tests beyond the cap are not tried. |
+| `RADIUS_MUTATION_STAGE2_WALL_CLOCK_SECONDS` | float | `300.0` | worker | no | - | Mutation stage 2: wall-clock budget for the whole stage (separate from the stage 1 budget; added latency). Survivors not reached keep their stage 1 result and are counted as skipped_for_budget. |
 | `RADIUS_MUTATION_WALL_CLOCK_SECONDS` | float | `600.0` | worker | no | - | Mutation evidence: wall-clock budget for the whole mutation stage of one analysis. The stage runs inside the analysis job, so this is added latency. When it is too small for the sampled mutants the stage degrades (fewer mutants, finally 'unmeasured, static cap'). |
 | `RADIUS_OTEL_SERVICE_NAME` | str | `radius` | api, worker | no | - | OpenTelemetry service name. |
 | `RADIUS_OTLP_ENDPOINT` | str | `empty` | api, worker | no | - | OTLP/HTTP traces endpoint, e.g. ``http://localhost:4318/v1/traces``. Empty means spans are created but not exported anywhere. |

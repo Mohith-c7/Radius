@@ -333,7 +333,9 @@ def compute_pipeline(
             items_by_test,
             severity,
             cfg,
-            lambda test_id, _syms=c_symbols: measure_test(sa.mutation, _syms, test_id),
+            lambda test_id, _syms=c_symbols, _cid=c.criterion_id: measure_test(
+                sa.mutation, _syms, test_id, index.tests_for_criterion(_cid)
+            ),
         )
         sup = compute_support(c.criterion_id, rows, cfg.support)
         supports[c.criterion_id] = sup
@@ -358,6 +360,7 @@ def compute_pipeline(
                 c_symbols,
                 [r.path.test_id for r in counted],
                 {r.path.test_id for r in counted if r.basis == "mutation"},
+                index.tests_for_criterion(c.criterion_id),
             )
             crit_mutation[c.criterion_id] = cm
             state = replace(state, flags=_mutation_flags(state.flags, cm))
@@ -575,7 +578,7 @@ def _mutation_flags(flags: tuple[Flag, ...], cm: CriterionMutation) -> tuple[Fla
 def _criterion_block(cm: CriterionMutation) -> dict[str, Any]:
     """Plain-data mutation facts of one criterion (payload and ``CriterionVerdict.mutation``)."""
 
-    return {
+    out: dict[str, Any] = {
         "basis": cm.basis,
         "n_mutants": cm.n_mutants,
         "killed": cm.killed,
@@ -592,6 +595,21 @@ def _criterion_block(cm: CriterionMutation) -> dict[str, Any]:
         "d_reach_reason": cm.d_reach_reason,
         "reason": cm.reason,
     }
+    if cm.link_gaps:
+        # optional (DEC-036): only present when stage 2 found a link gap, so stage-1-only
+        # output is unchanged
+        out["link_gaps"] = [
+            {
+                "mutant_id": g.mutant_id,
+                "path": g.path,
+                "line": g.line,
+                "operator": g.operator,
+                "tests": list(g.tests),
+            }
+            for g in cm.link_gaps
+        ]
+        out["link_gap_tests"] = list(cm.link_gap_tests)
+    return out
 
 
 def _run_block(sa: StageAInput) -> dict[str, Any] | None:
@@ -619,6 +637,7 @@ def _run_block(sa: StageAInput) -> dict[str, Any] | None:
         "ladder": list(m.ladder),
         "baseline_failed": len(m.baseline_failed),
         "baseline_flaky": len(m.baseline_flaky),
+        **({"stage2": dict(m.stage2)} if m.stage2 is not None else {}),
     }
 
 

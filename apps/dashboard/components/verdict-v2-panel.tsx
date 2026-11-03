@@ -53,6 +53,8 @@ import {
   headerTags,
   headline,
   itemStatusLabel,
+  LINK_GAP_ACTION,
+  linkGapText,
   mutationGaps,
   mutationRunNote,
   justificationTree,
@@ -515,6 +517,15 @@ function CriterionDetails({ criterion }: { criterion: Criterion }) {
         </ul>
       )}
       {criterion.itemsTruncated ? <p className="vv2-muted">Only the first tests are shown.</p> : null}
+      {linkGapText(criterion) ? (
+        <div className="vv2-gaps">
+          <p className="vv2-small">{linkGapText(criterion)}</p>
+          <p className="vv2-muted">
+            These tests are not counted as evidence for the criterion, and these mutants are left
+            out of its mutation score instead of counting as weak evidence. {LINK_GAP_ACTION}
+          </p>
+        </div>
+      ) : null}
       {mutationGaps(criterion).length > 0 ? (
         <div className="vv2-gaps">
           <p className="vv2-small">

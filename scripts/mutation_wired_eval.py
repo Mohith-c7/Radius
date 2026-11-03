@@ -9,6 +9,7 @@ an explicit opt-in::
 
     RADIUS_MUTATION_ALLOW_LOCAL=1 python scripts/mutation_wired_eval.py
     RADIUS_MUTATION_ALLOW_LOCAL=1 python scripts/mutation_wired_eval.py 01 08 --mode gold --json out.json
+    RADIUS_MUTATION_ALLOW_LOCAL=1 python scripts/mutation_wired_eval.py --stage2   # adds ON stage1+2
 
 The worker never does this: in the worker the producer is sandbox-only
 (``radius_worker.verdict_v2.mutation``). Output: per fixture and mode, verdict and the
@@ -42,7 +43,7 @@ def _load_runner_module() -> Any:
 RUN = _load_runner_module()
 
 
-def local_dev_producer(max_mutants: int, wall_clock: float):
+def local_dev_producer(max_mutants: int, wall_clock: float, stage2: bool = False):
     """Dev-only ``Producers.mutation``: the same selection and measurement as the worker."""
 
     from radius_testing.mutation import (
@@ -65,7 +66,8 @@ def local_dev_producer(max_mutants: int, wall_clock: float):
             budget=MutationBudget(
                 max_mutants=max_mutants, wall_clock_seconds=wall_clock,
                 per_mutant_timeout_seconds=60.0,
-            )
+            ),
+            stage2=stage2,
         )
         with SubprocessLocalRunner(req.repository_path) as runner:
             m = measure_mutation(
@@ -92,6 +94,8 @@ def summarize(payload: dict[str, Any]) -> dict[str, Any]:
                     f"{s['path']}:{s['line']} {s['operator']}"
                     for s in (c.get("mutation") or {}).get("survivors", [])
                 ],
+                "link_gaps": len((c.get("mutation") or {}).get("link_gaps", [])),
+                "link_gap_tests": (c.get("mutation") or {}).get("link_gap_tests", []),
                 "tests": {
                     i["test_id"].rsplit("::", 1)[-1]: {
                         "a_static": i["a_static"], "d_eff": i["d_eff"],
@@ -114,6 +118,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--mode", choices=("gold", "auto", "both"), default="gold")
     ap.add_argument("--max-mutants", type=int, default=50)
     ap.add_argument("--wall-clock", type=float, default=600.0)
+    ap.add_argument("--stage2", action="store_true", help="also run ON with stage 2 (wider tests)")
     ap.add_argument("--json", dest="json_out")
     args = ap.parse_args(argv)
     if os.environ.get("RADIUS_MUTATION_ALLOW_LOCAL") != "1":
@@ -126,6 +131,7 @@ def main(argv: list[str] | None = None) -> int:
     }
     modes = ("gold", "auto") if args.mode == "both" else (args.mode,)
     producer = local_dev_producer(args.max_mutants, args.wall_clock)
+    producer2 = local_dev_producer(args.max_mutants, args.wall_clock, stage2=True)
     out: dict[str, Any] = {}
     for path in RUN.fixture_dirs(args.fixtures):
         for mode in modes:
@@ -133,6 +139,17 @@ def main(argv: list[str] | None = None) -> int:
             on = RUN.run_collect(path, mode, "static", mutation=producer)
             a, b = summarize(off), summarize(on)
             out[f"{path.name}:{mode}"] = {"off": a, "on": b}
+            if args.stage2:
+                on2 = RUN.run_collect(path, mode, "static", mutation=producer2)
+                c2 = summarize(on2)
+                out[f"{path.name}:{mode}"]["on_stage2"] = c2
+                st2 = (c2["mutation_run"] or {}).get("stage2")
+                print(f"   stage2    verdict {c2['verdict']:<22} stage2={st2}")
+                for cid, cb in b["criteria"].items():
+                    cc = c2["criteria"][cid]
+                    print(f"   {cid:<3} ON1 {cb['state']:<12} {cb['S']:.3f} n={cb['n_mutants']}  "
+                          f"ON1+2 {cc['state']:<12} {cc['S']:.3f} n={cc['n_mutants']} "
+                          f"link_gaps={cc['link_gaps']} {cc['link_gap_tests']}")
             exp = expectations[path.name]
             print(f"\n== {path.name} [{mode}]  expected verdict: {exp['expected_verdict']}")
             print(f"   verdict   OFF {a['verdict']:<22} ON {b['verdict']:<22} "

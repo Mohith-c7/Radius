@@ -58,7 +58,9 @@ daemon/image unavailable, runtime vanishing after build, configurability) and
 `packages/testing/tests/test_sandbox_runner.py` (readiness, signal exit codes, output
 flood, ulimit and seccomp flags).
 
-## Mutation evidence runs mutants only in the sandbox (DEC-035)
+## Mutation evidence runs mutants only in the sandbox (DEC-035, stage 2: DEC-036)
+
+Stage 2 (`RADIUS_MUTATION_STAGE2`, default off) adds no execution path: it calls the same `MutantRunner` as stage 1, so in the worker every stage 2 run is a `SandboxMutantRunner` container run on a fresh copy of the checkout. It discovers the wider test files with a static `ast` scan on the worker (nothing of the repository is imported or run there), validates every test id before it can reach the pytest command line, and its extra runs are bounded by their own wall clock and test cap. The worker still never builds `SubprocessLocalRunner` (tested with stage 2 on). Stage 2 has not been exercised against a real container.
 
 `RADIUS_FEATURE_MUTATION` (default off) makes the Verdict v2 Stage A `mutation` producer
 run many **generated variants** of the pull request's own code. A mutant is as untrusted as the

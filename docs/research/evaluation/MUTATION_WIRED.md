@@ -52,3 +52,25 @@ See `docs/security/EXECUTION_ISOLATION.md` ("Measured: sandbox adapter versus lo
 ## Limits that apply to any result
 
 A bounded sample of one fault family; symbol-level links (a criterion implemented by part of a function is charged for the mutants of the rest); `d_reach` not computed; the operator set is the frozen default (the post-hoc `CALLX` is not used); the design's stage 2 (wider test set on survival) is not implemented; timings below depend on a loaded Windows machine.
+
+## Stage 2 (DEC-036): ON stage 1 versus ON stage 1+2 (fixture sanity, NOT a research result)
+
+Run on 2026-11-03, same machine and local runner as above, `RADIUS_MUTATION_ALLOW_LOCAL=1 python scripts/mutation_wired_eval.py --mode both --stage2` (stage 2 defaults: 60 wider tests, 300 s). Columns: verdict OFF, ON stage 1, ON stage 1+2; stage 2 counts = stage-1 survivors / mutants run against a wider set / confirmed `killed_outside_linked` / distinct wider tests found; support S(c) of stage 1 -> stage 1+2.
+
+| fixture | mode | OFF | ON s1 | ON s1+2 | stage 2 (survivors / run / killed outside / wider tests) | S(c) s1 -> s1+2 |
+|---|---|---|---|---|---|---|
+| 01 | auto | insufficient_evidence | insufficient_evidence | insufficient_evidence | 0 / 0 / 0 / 0 | unchanged (C1 0.131, C2 0.184) |
+| 01 | gold | verified | insufficient_evidence | insufficient_evidence | 0 / 0 / 0 / 0 | unchanged (C1 0.408, C2 0.173) |
+| 02 | auto, gold | insufficient_evidence | insufficient_evidence | insufficient_evidence | 2 / 2 / 0 / 3 | unchanged |
+| 03 | auto, gold | insufficient_evidence | insufficient_evidence | insufficient_evidence | 1 / 1 / 0 / 4 | unchanged |
+| 04 | auto, gold | failed | failed | failed | unmeasured (too few decided mutants), stage 2 not reached | unchanged |
+| 05 | auto, gold | insufficient_evidence | insufficient_evidence | insufficient_evidence | 1 / 1 / 0 / 5 | unchanged |
+| 06 | auto, gold | failed | failed | failed | 0 / 0 / 0 / 0 | unchanged |
+| 07 | auto, gold | insufficient_evidence | insufficient_evidence | insufficient_evidence | 1 / 1 / 0 / 2 | unchanged |
+| 08 | auto, gold | insufficient_evidence | insufficient_evidence | insufficient_evidence | 5 / 5 / 0 / 5 | unchanged |
+
+What happened, without tuning anything:
+
+- **Fixture 01's flip (verified -> insufficient_evidence) did not go away.** Stage 2 had nothing to do there: all 18 decided mutants were already killed by some test in stage 1 (0 survivors). The drop comes from a different effect, the symbol-level denominator: each criterion is charged for mutants that only tests counted for the other criterion kill. That is not a link gap in the stage 2 sense (the killing tests are linked to the symbol) and DEC-036 deliberately does not change it. A criterion-level link-gap notion for that case is an open follow-up, not done here.
+- **No link gap was found on any fixture** (0 confirmed `killed_outside_linked`, so no score, verdict or payload field changed; ON stage 1+2 equals ON stage 1 everywhere). Where stage 2 did run (02, 03, 05, 07, 08: 10 survivors in total, each run against 2 to 5 other tests of the fixture's own test files), no other test killed the survivor, which supports "under-tested", not "links incomplete", for those mutants. The fixtures have no test files beyond the linked ones, so this table cannot show a positive case.
+- **Positive path is covered only with fakes** (`packages/testing/tests/test_mutation_stage2.py`, `apps/worker/tests/test_verdict_v2_mutation.py`: hand-computed d_mut 8/10 -> 8/9, early exit, budget, cache, confirmation). Not run against a real container.

@@ -778,3 +778,284 @@ def _validate(value, schema, path="$"):
             elif isinstance(extra, dict):
                 errors += _validate(v, extra, f"{path}.{k}")
     return errors
+
+
+# ------------------------------------------------------------------ stage 2 / link gaps (DEC-036)
+
+import math  # noqa: E402
+
+TX = "tests/test_elsewhere.py::test_catches_it"  # a test that is NOT linked to any criterion
+
+
+def wilson_lcb(k: int, n: int, z: float = 1.96) -> float:
+    """Independent restatement of the Wilson lower bound (hand-computed expectations)."""
+
+    p = k / n
+    denom = 1 + z * z / n
+    centre = p + z * z / (2 * n)
+    margin = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n))
+    return (centre - margin) / denom
+
+
+def with_gaps(m: MutationInput, gap_ids: tuple[str, ...], killers=(TX,)) -> MutationInput:
+    muts = tuple(
+        dataclasses.replace(x, killed_outside_linked=tuple(killers)) if x.mutant_id in gap_ids else x
+        for x in m.mutants
+    )
+    return dataclasses.replace(
+        m, mutants=muts, stage2={"enabled": True, "killed_outside_linked": len(gap_ids)}
+    )
+
+
+def strip_stage2(m: MutationInput) -> MutationInput:
+    return dataclasses.replace(
+        m,
+        mutants=tuple(dataclasses.replace(x, killed_outside_linked=None) for x in m.mutants),
+        stage2=None,
+    )
+
+
+def test_link_gap_hand_computed_d_mut_before_and_after() -> None:
+    """T7 kills 8 of 10; m8 and m9 survive. m8 is killed outside the linked set by TX.
+
+    Before: d_mut(T7) = 8/10, lcb = wilson(8, 10) = 0.490157.
+    After:  m8 leaves the pool: d_mut(T7) = 8/9, lcb = wilson(8, 9) = 0.5650 (hand value).
+    The unlinked test TX gets no credit: the numerator stays 8.
+    """
+
+    base = mutation_input({T7: 8, T8: 4})
+    before = pipeline().score_full(with_mutation(base)).payload
+    after = pipeline().score_full(with_mutation(with_gaps(base, ("m8",)))).payload
+    seven_b, seven_a = item(crit(before, "C1"), T7), item(crit(after, "C1"), T7)
+    assert (seven_b["mutation_killed"], seven_b["mutation_n"]) == (8, 10)
+    assert (seven_a["mutation_killed"], seven_a["mutation_n"]) == (8, 9)
+    assert seven_b["d_eff"] == pytest.approx(wilson_lcb(8, 10), abs=1e-5)
+    assert seven_a["d_eff"] == pytest.approx(wilson_lcb(8, 9), abs=1e-5)
+    assert seven_a["d_eff"] == pytest.approx(0.5650, abs=1e-3)
+    eight_a = item(crit(after, "C1"), T8)
+    assert (eight_a["mutation_killed"], eight_a["mutation_n"]) == (4, 9)
+    # only the unfair penalty is dropped: exactly the value of "the mutant never existed"
+    assert crit(after, "C1")["S"] >= crit(before, "C1")["S"]
+    removed = dataclasses.replace(base, mutants=tuple(x for x in base.mutants if x.mutant_id != "m8"))
+    never = pipeline().score_full(with_mutation(removed)).payload
+    assert crit(after, "C1")["S"] == pytest.approx(crit(never, "C1")["S"], abs=1e-9)
+    # the unlinked test is not evidence: no item for TX anywhere
+    assert all(i["test_id"] != TX for c in after["criteria"] for i in c["items"])
+
+
+def test_link_gap_block_and_run_summary_are_reported() -> None:
+    m = with_gaps(mutation_input({T7: 8, T8: 4}), ("m8",))
+    p = pipeline().score_full(with_mutation(m)).payload
+    mu = crit(p, "C1")["mutation"]
+    assert (mu["n_mutants"], mu["killed"]) == (9, 8)
+    assert mu["excluded"]["killed_outside_linked"] == 1
+    assert [s["mutant_id"] for s in mu["survivors"]] == ["m9"]  # the gap is NOT listed as a survivor
+    assert mu["link_gaps"] == [
+        {"mutant_id": "m8", "path": "src/validators.py", "line": 28, "operator": "AOR", "tests": [TX]}
+    ]
+    assert mu["link_gap_tests"] == [TX]
+    assert mu["d_union"] == pytest.approx(8 / 9, abs=1e-6)
+    assert p["mutation"]["stage2"]["killed_outside_linked"] == 1
+    plain = pipeline().score_full(with_mutation(mutation_input({T7: 8, T8: 4}))).payload
+    assert "link_gaps" not in crit(plain, "C1")["mutation"] and "stage2" not in plain["mutation"]
+
+
+def test_stage2_without_gaps_changes_no_score() -> None:
+    base = mutation_input({T7: 8, T8: 4})
+    a = pipeline().score_full(with_mutation(base)).payload
+    nothing = dataclasses.replace(
+        base,
+        mutants=tuple(
+            dataclasses.replace(x, killed_outside_linked=()) if x.status == "survived" else x
+            for x in base.mutants
+        ),
+        stage2={"enabled": True, "killed_outside_linked": 0},
+    )
+    b = pipeline().score_full(with_mutation(nothing)).payload
+    assert [c["S"] for c in a["criteria"]] == [c["S"] for c in b["criteria"]]
+    assert a["verdict"] == b["verdict"]
+
+
+def test_killer_that_is_linked_is_not_a_gap_and_the_mutant_stays_a_survivor() -> None:
+    m = with_gaps(mutation_input({T7: 8, T8: 4}), ("m8",), killers=(TU,))
+    mu = crit(pipeline().score_full(with_mutation(m)).payload, "C1")["mutation"]
+    assert mu["n_mutants"] == 10 and "link_gaps" not in mu
+    assert [s["mutant_id"] for s in mu["survivors"]] == ["m8", "m9"]
+
+
+def test_too_many_link_gaps_leave_the_pair_unmeasured_static_cap_kept() -> None:
+    base = mutation_input({T7: 4})  # m0..m3 killed by T7, m4..m9 survive
+    gaps = with_gaps(base, tuple(f"m{i}" for i in range(4, 10)))  # leaves 4 decided < 5
+    p = pipeline().score_full(with_mutation(gaps)).payload
+    seven = item(crit(p, "C1"), T7)
+    assert seven["basis"] != "mutation"
+    static = pipeline().score_full(with_mutation(None)).payload
+    assert seven["d_eff"] == item(crit(static, "C1"), T7)["d_eff"]
+
+
+def test_property_stage2_never_creates_failed_and_never_beats_mutant_absent() -> None:
+    sb = LOADER.stage_b(FIXTURE, mode="gold")
+    first = next(c for c in sb.cases if c.test_id == T7)
+    failed_case = dataclasses.replace(first, outcome=type(first.outcome)("failed"))
+    failing = tuple(failed_case if c is first else c for c in sb.cases)
+    rng = random.Random(4242)
+    for _ in range(60):
+        m = random_matrix(rng)
+        ids = tuple(x.mutant_id for x in m.mutants if x.status == "survived" and rng.random() < 0.7)
+        killers = tuple(rng.sample([TX, "tests/other.py::t", T8], rng.randrange(1, 4)))
+        m2 = with_gaps(m, ids, killers=killers)
+        # a failing CI case stays failed / contradicted whatever stage 2 reports
+        sa = dataclasses.replace(sb.stage_a, mutation=m2)
+        p = pipeline().score_full(dataclasses.replace(sb, stage_a=sa, cases=failing)).payload
+        assert p["verdict"] == "failed" and crit(p, "C1")["state"] == "contradicted"
+        assert item(crit(p, "C1"), T7)["term"] == 0.0
+        # stage 2 alone never creates a failure or a contradiction
+        q = pipeline().score_full(with_mutation(m2)).payload
+        assert q["verdict"] != "failed" and all(c["state"] != "contradicted" for c in q["criteria"])
+        # support: never below the stage-1 value, never above "those mutants did not exist"
+        s1 = pipeline().score_full(with_mutation(strip_stage2(m2))).payload
+        real_gap = {
+            x.mutant_id
+            for x in m2.mutants
+            if x.mutant_id in ids and set(x.killed_outside_linked or ()) - {T7, T8, TD, TU}
+        }
+        gone = strip_stage2(
+            dataclasses.replace(m2, mutants=tuple(x for x in m2.mutants if x.mutant_id not in real_gap))
+        )
+        r = pipeline().score_full(with_mutation(gone)).payload
+        for a, b, c in zip(q["criteria"], s1["criteria"], r["criteria"], strict=True):
+            assert a["S"] >= b["S"] - 1e-9
+            assert a["S"] == pytest.approx(c["S"], abs=1e-9)
+
+
+def test_link_gap_wording_in_comment_is_honest_and_escaped() -> None:
+    evil = "tests/<b>x</b>|y.py::t`1"
+    m = with_gaps(mutation_input({T7: 8, T8: 4}), ("m8",), killers=(evil,))
+    body = render_comment(VerdictV2View.from_payload(pipeline().score_full(with_mutation(m)).payload))
+    assert "Link gaps: 1 mutant killed only by tests not linked to this criterion:" in body
+    assert "not counted as evidence" in body and "`tests:` hints" in body
+    assert "`tests/<b>x</b>\\|y.py::t'1`" in body  # inert code span, pipe escaped, backtick neutralised
+    for banned in ("proven correct", "guarantee", "verified correct"):
+        assert banned not in body.lower()
+    off = render_comment(
+        VerdictV2View.from_payload(
+            pipeline().score_full(with_mutation(mutation_input({T7: 8, T8: 4}))).payload
+        )
+    )
+    assert "Link gaps" not in off
+
+
+def test_stage2_payload_conforms_to_schema_api_and_shared_reader() -> None:
+    m = with_gaps(mutation_input({T7: 8, T8: 4}), ("m8",))
+    scored = pipeline().score_full(with_mutation(m))
+    p = scored.payload
+    assert _validate(p, SCHEMA) == []
+    out = VerdictV2Out.model_validate(p)
+    assert out.criteria[0].mutation.link_gaps[0].tests == [TX]
+    assert out.mutation.stage2["killed_outside_linked"] == 1
+    stored = StoredVerdict(
+        row_id="r", organization_id="o", analysis_id=p["analysis_id"], head_sha=p["head_sha"],
+        revision=1, inputs_digest="d", status="ok", mode="shadow", verdict=p["verdict"],
+        pending=p["pending"], reason_code=None, algo_version=p["algo_version"], profile=p["profile"],
+        config_digest="c", bundle=json.loads(json.dumps(scored.bundle)),
+        justification=p["justification"], error_detail=None, fallback=None, published_at=None,
+        published_digest=None, publish_error=None, computed_at=datetime(2026, 11, 3, tzinfo=UTC),
+    )
+    served = shared_build_payload(stored)
+    assert served["mutation"] == p["mutation"] and _validate(served, SCHEMA) == []
+    assert served["criteria"][0]["mutation"]["link_gaps"] == p["criteria"][0]["mutation"]["link_gaps"]
+    again = StageAInput.from_dict(json.loads(json.dumps(scored.bundle["stage_a"])))
+    assert again.mutation == m  # round trip of killed_outside_linked / stage2
+
+
+def test_stage1_only_bundle_serialization_has_no_stage2_keys() -> None:
+    text = json.dumps(mutation_input({T7: 8, T8: 4}).to_dict())
+    assert "killed_outside_linked" not in text and "stage2" not in text
+
+
+class _Stage2Sandbox(_FakeSandbox):
+    """Like the stage-1 fake, plus a wider test file; the CON mutant (return 1) fails w1."""
+
+    def run_collecting(self, plan, ws, artifacts=()):
+        ws = Path(ws)
+        self.workspaces.append(ws)
+        (_, args), = plan.command_plan
+        text = (ws / "src" / "f.py").read_text()
+        wanted = [a for a in args if a.endswith(".py") or "::" in a]
+        cases = []
+        for a in wanted:
+            rel, _, one = a.partition("::")
+            cls = rel.removesuffix(".py").replace("/", ".")
+            lines = (ws / rel).read_text().splitlines()
+            names = [ln.split("(")[0][4:] for ln in lines if ln.startswith("def test_")]
+            for name in [one] if one else names:
+                bad = (">=" in text and name == "test_a") or ("return 1" in text and name == "test_w1")
+                cases.append(
+                    f'<testcase classname="{cls}" name="{name}">'
+                    + ("<failure/>" if bad else "")
+                    + "</testcase>"
+                )
+        xml = ("<testsuites><testsuite>" + "".join(cases) + "</testsuite></testsuites>").encode()
+        return NS(output=""), {"0/junit.xml": xml}
+
+
+@pytest.mark.skipif(
+    _rm._safe_et is None, reason="defusedxml missing: JUnit reports cannot be parsed in this env"
+)
+def test_stage2_runs_only_through_the_sandbox_adapter_on_copies(tmp_path: Path, monkeypatch) -> None:
+    from radius_testing.infrastructure.sandbox_runner import SandboxConfig
+    from radius_testing.mutation import SandboxMutantRunner
+
+    monkeypatch.setattr(SandboxMutantRunner, "_sandbox_with_timeout", lambda self, t: self._sandbox)
+    repo = _tmp_repo(tmp_path)
+    (repo / "tests" / "test_wide.py").write_text(
+        "from f import f\ndef test_w1(): pass\ndef test_w2(): pass\n"
+    )
+    (repo / "tests" / "test_f.py").write_text(
+        "from src.f import f\ndef test_a(): pass\ndef test_b(): pass\n"
+    )
+    before = {p: p.read_bytes() for p in repo.rglob("*") if p.is_file()}
+    sandbox = _Stage2Sandbox(SandboxConfig(timeout_seconds=30))
+    req, _sid = _request(repo)
+    settings = _settings(
+        mutation_stage2_enabled=True, mutation_stage2_max_tests=10,
+        mutation_stage2_wall_clock_seconds=100.0,
+    )
+    out = mut.SandboxMutationProducer(settings, sandbox, image_digest=lambda s: "")(req)
+    assert out.status == "measured", out
+    con = next(m for m in out.mutants if m.operator == "CON")
+    assert con.status == "survived" and con.killed_outside_linked == ("tests/test_wide.py::test_w1",)
+    assert out.stage2["enabled"] and out.stage2["killed_outside_linked"] == 1
+    assert before == {p: p.read_bytes() for p in repo.rglob("*") if p.is_file()}  # checkout untouched
+    assert sandbox.workspaces and all(w.resolve() != repo.resolve() for w in sandbox.workspaces)
+    off = mut.SandboxMutationProducer(
+        _settings(), _Stage2Sandbox(SandboxConfig(timeout_seconds=30)), image_digest=lambda s: ""
+    )(req)
+    assert off.stage2 is None and all(m.killed_outside_linked is None for m in off.mutants)
+
+
+def test_factory_never_builds_the_local_runner_even_with_stage2(monkeypatch) -> None:
+    monkeypatch.setenv("RADIUS_MUTATION_ALLOW_LOCAL", "1")
+    from radius_testing.mutation import runner as runner_mod
+
+    def forbidden(*a, **k):
+        raise AssertionError("the local runner must never be constructed in the worker")
+
+    monkeypatch.setattr(runner_mod.SubprocessLocalRunner, "__init__", forbidden)
+    unsafe = NS(
+        mutation_enabled=True, mutation_stage2_enabled=True, test_execution_mode="unsafe_in_process",
+        execute_tests=True, environment=NS(value="development"), allow_unsafe_execution=True,
+    )
+    assert mut.create_mutation_producer(unsafe)(None).reason == "sandbox_disabled"
+    assert mut.create_mutation_producer(NS(mutation_enabled=False, mutation_stage2_enabled=True)) is None
+    src = (ROOT / "apps/worker/src/radius_worker/verdict_v2/mutation.py").read_text(encoding="utf-8")
+    import ast
+
+    tree = ast.parse(src)
+    called = {
+        n.func.id if isinstance(n.func, ast.Name) else getattr(n.func, "attr", "")
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Call)
+    }
+    kwargs = {k.arg for n in ast.walk(tree) if isinstance(n, ast.Call) for k in n.keywords}
+    assert "SubprocessLocalRunner" not in called and "allow_local_runner" not in kwargs

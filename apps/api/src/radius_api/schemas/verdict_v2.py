@@ -108,6 +108,14 @@ class SurvivorOut(_Out):
     operator: str
 
 
+class LinkGapOut(_Out):
+    mutant_id: str
+    path: str = Field(description="UNTRUSTED. Render as text only.")
+    line: int
+    operator: str
+    tests: list[str] = Field(default_factory=list, description="UNTRUSTED. Render as text only.")
+
+
 class CriterionMutationOut(_Out):
     """Contract 5 (optional): what mutation measured for this criterion. Not a proof."""
 
@@ -125,6 +133,14 @@ class CriterionMutationOut(_Out):
     d_reach: float | None = Field(default=None, description="Not computed in this slice.")
     d_reach_reason: str = ""
     reason: str = ""
+    link_gaps: list[LinkGapOut] = Field(
+        default_factory=list,
+        description="Optional (DEC-036, stage 2): mutants killed only by tests not linked to the "
+        "criterion. Left out of n_mutants; the unlinked tests are not evidence.",
+    )
+    link_gap_tests: list[str] = Field(
+        default_factory=list, description="UNTRUSTED. Render as text only."
+    )
 
 
 class MutationRunOut(_Out):
@@ -145,6 +161,11 @@ class MutationRunOut(_Out):
     ladder: list[str] = Field(default_factory=list)
     baseline_failed: int = 0
     baseline_flaky: int = 0
+    stage2: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional (DEC-036): stage 2 summary (wider tests for survivors); "
+        "killed_outside_linked is the number of link-gap mutants.",
+    )
 
 
 class CriterionOut(_Out):

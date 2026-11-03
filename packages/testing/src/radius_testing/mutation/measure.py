@@ -18,7 +18,14 @@ Flow (see ``docs/research/design/MUTATION_EVIDENCE.md`` and ``docs/verdict-v2.md
    exit: per-test attribution needs every failing test); timeouts are rerun once;
    survivors are rerun ``survivor_reruns`` times and a rerun kill makes them ``flaky``;
 6. a result cache keyed by (mutant hash, tests, image digest, repository context hash)
-   short-circuits final statuses (``killed`` / ``survived``) only.
+   short-circuits final statuses (``killed`` / ``survived``) only;
+7. optional **stage 2** (``MeasureConfig.stage2``, default off; design 5.1, DEC-036): each
+   surviving non-equivalent mutant is run against a wider, bounded, deterministic set
+   of the repository's other tests that import the mutated module, with early exit at the
+   first failing test. A confirmed kill is recorded as ``killed_outside_linked`` (the
+   mutant stays ``survived`` for the linked tests; the killers are NOT evidence for any
+   criterion). Same runner (so sandbox-only in the worker), separate cache keys, own
+   budget; any problem leaves the stage-1 result untouched.
 
 Degradation ladder (each step recorded in ``Measurement.ladder``)::
 
@@ -111,10 +118,27 @@ class MeasureConfig:
     operators: tuple[str, ...] = OPERATOR_IDS
     #: Estimated share of mutants that are survivors and rerun (cost model, design 7).
     survivor_share: float = 0.3
+    #: Stage 2 (wider test set for survivors); off by default.
+    stage2: bool = False
+    #: Max wider tests passed to one stage-2 run (command length, container time).
+    stage2_max_tests: int = 60
+    #: Wall clock of the whole stage 2 (separate from the stage-1 budget).
+    stage2_wall_clock_seconds: float = 300.0
+    #: Max test files taken per mutated module from the static import scan.
+    stage2_max_files: int = 40
+    #: Killing tests kept per mutant in the result.
+    stage2_max_killers: int = 5
 
     def __post_init__(self) -> None:
         if self.baseline_runs < 1 or self.survivor_reruns < 0 or self.min_decided < 1:
             raise ValueError("invalid mutation measurement configuration")
+        if (
+            self.stage2_max_tests < 1
+            or self.stage2_max_files < 1
+            or self.stage2_max_killers < 1
+            or self.stage2_wall_clock_seconds <= 0
+        ):
+            raise ValueError("invalid stage 2 configuration")
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +152,26 @@ class MeasuredMutant:
     killed_by: tuple[str, ...] = ()
     equivalent_suspect: bool = False
     cached: bool = False
+    #: Stage 2: tests outside the linked set that kill this stage-1 survivor (sorted,
+    #: capped, confirmed by a repeat run). ``None`` = stage 2 did not run for this mutant;
+    #: ``()`` = it ran and nothing killed it.
+    killed_outside_linked: tuple[str, ...] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Stage2Summary:
+    """What stage 2 did (all counts are over stage-1 survivors)."""
+
+    survivors: int = 0
+    run: int = 0  # mutants actually run against a wider set (incl. cache hits)
+    killed: int = 0  # confirmed killed_outside_linked
+    unconfirmed: int = 0  # killed once, not on the confirmation run: stays a survivor
+    no_wider_tests: int = 0
+    skipped_for_budget: int = 0
+    errors: int = 0  # timeout / sandbox error: no stage-2 statement
+    cache_hits: int = 0
+    tests_considered: int = 0  # distinct baseline-stable wider tests
+    ladder: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,6 +192,8 @@ class Measurement:
     engine: str = ENGINE_VERSION
     operators: tuple[str, ...] = ()
     image: str = ""
+    #: ``None`` when stage 2 was not enabled.
+    stage2: Stage2Summary | None = None
 
 
 def unmeasured(reason: str, config: MeasureConfig, ladder: Sequence[str] = ()) -> Measurement:
@@ -472,10 +518,237 @@ def _measure(
             tuple(flaky), generated, len(runnable), skipped, hits, budget.seed, cfg.min_decided,
             tuple(ladder), ENGINE_VERSION, cfg.operators, image_digest,
         )
+    summary: Stage2Summary | None = None
+    if cfg.stage2:
+        by_mutant = {m.id: m for m in runnable}
+        records, summary = _stage2(
+            runner, root, cfg, records, by_mutant, sym_tests, timeout,
+            cache if use_cache else None, image_digest, ctx or "", clock,
+        )
     return Measurement(
         "measured", "", tuple(records), sym_tests, tuple(failed), tuple(flaky), generated,
         len(runnable), skipped, hits, budget.seed, cfg.min_decided, tuple(ladder),
-        ENGINE_VERSION, cfg.operators, image_digest,
+        ENGINE_VERSION, cfg.operators, image_digest, summary,
+    )
+
+
+# ------------------------------------------------------------------ stage 2
+
+_TEST_FILE_BYTES = 512 * 1024
+_SCAN_SKIP = {".git", "__pycache__", "node_modules", ".venv", "venv", ".mypy_cache", ".pytest_cache"}
+
+
+def _module_candidates(path: str) -> frozenset[str]:
+    """Dotted names a test may use to import ``path`` (every suffix; src layouts, packages)."""
+
+    parts = [p for p in PurePosixPath(path.replace("\\", "/")).with_suffix("").parts if p]
+    if parts and parts[-1] == "__init__":
+        parts = parts[:-1]
+    return frozenset(".".join(parts[i:]) for i in range(len(parts)))
+
+
+def _imported_names(tree: ast.AST) -> frozenset[str]:
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names.update(a.name for a in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            base = node.module or ""
+            if base:
+                names.add(base)
+            names.update(f"{base}.{a.name}" if base else a.name for a in node.names)
+    return frozenset(names)
+
+
+def discover_wide_test_files(
+    root: Path, module_paths: Sequence[str], *, max_files: int
+) -> dict[str, tuple[str, ...]]:
+    """Static scan (pure ``ast``, nothing is imported or run): test files of the repository
+    that import each module. Sorted, bounded by ``max_files`` per module, test files only."""
+
+    index: list[tuple[str, frozenset[str]]] = []
+    stack = [root]
+    while stack:
+        cur = stack.pop()
+        try:
+            children = sorted(cur.iterdir())
+        except OSError:
+            continue
+        for child in children:
+            if child.name in _SCAN_SKIP or child.is_symlink():
+                continue
+            if child.is_dir():
+                stack.append(child)
+            elif child.suffix == ".py" and child.name != "conftest.py":
+                rel = child.relative_to(root).as_posix()
+                if not is_test_path(rel):
+                    continue
+                try:
+                    if child.stat().st_size > _TEST_FILE_BYTES:
+                        continue
+                    tree = ast.parse(child.read_text(encoding="utf-8"))
+                except (OSError, SyntaxError, ValueError, UnicodeDecodeError, RecursionError):
+                    continue
+                index.append((rel, _imported_names(tree)))
+    index.sort()
+    out: dict[str, tuple[str, ...]] = {}
+    for mp in module_paths:
+        cands = _module_candidates(mp)
+        hits = [rel for rel, names in index if names & cands]
+        out[mp] = tuple(hits[:max_files])
+    return out
+
+
+def _is_linked(test_id: str, linked: Sequence[str]) -> bool:
+    return any(test_id == t or test_id.startswith(t + "[") for t in linked)
+
+
+def _stage2(
+    runner: MutantRunner,
+    root: Path,
+    cfg: MeasureConfig,
+    records: list[MeasuredMutant],
+    by_mutant: dict[str, Mutant],
+    sym_tests: dict[str, tuple[str, ...]],
+    timeout: float,
+    cache: MutantCache | None,
+    image_digest: str,
+    ctx: str,
+    clock: Callable[[], float],
+) -> tuple[list[MeasuredMutant], Stage2Summary]:
+    """Run the wider test set against every stage-1 survivor (see the module docstring).
+
+    Stage-1 statuses are never changed here; only ``killed_outside_linked`` is filled.
+    """
+
+    deadline = clock() + cfg.stage2_wall_clock_seconds
+    ladder: list[str] = []
+    survivors = [
+        r
+        for r in records
+        if r.status == SURVIVED and not r.equivalent_suspect and r.mutant_id in by_mutant
+    ]
+    if not survivors:
+        return records, Stage2Summary(ladder=("stage2:no_survivors",))
+    n = len(survivors)
+    paths = sorted({r.path for r in survivors})
+    files_by_path = discover_wide_test_files(root, paths, max_files=cfg.stage2_max_files)
+    all_files: list[str] = []
+    for f in sorted({f for fs in files_by_path.values() for f in fs}):
+        try:
+            validate_test_ids([f])
+        except ValueError:
+            continue
+        all_files.append(f)
+    if not all_files:
+        return records, Stage2Summary(
+            survivors=n, no_wider_tests=n, ladder=("stage2:no_test_files_found",)
+        )
+
+    # baseline of the wider files on the unmutated module: only tests that pass in every
+    # run can attribute a kill to the mutant (failing and flaky tests are excluded, F-11)
+    base_timeout = max(1.0, min(120.0, cfg.stage2_wall_clock_seconds))
+    base: list[RunOutcome] = []
+    for _ in range(cfg.baseline_runs):
+        if clock() >= deadline:
+            return records, Stage2Summary(
+                survivors=n, skipped_for_budget=n,
+                ladder=("stage2:budget_exhausted_before_baseline",),
+            )
+        base.append(runner.run(None, all_files, base_timeout))
+    if any(b.status != "ok" or not b.results for b in base):
+        return records, Stage2Summary(
+            survivors=n, errors=n, ladder=("stage2:baseline_failed_to_run",)
+        )
+    stable: list[str] = []
+    for tid in sorted(base[0].results):
+        if all(b.results.get(tid) == CaseOutcome.PASSED for b in base):
+            try:
+                validate_test_ids([tid])
+            except ValueError:
+                continue
+            stable.append(tid)
+    if not stable:
+        return records, Stage2Summary(
+            survivors=n, no_wider_tests=n, ladder=("stage2:no_stable_wider_tests",)
+        )
+    stage2_timeout = _timeout_for([b.duration for b in base], cfg.budget.per_mutant_timeout_seconds)
+
+    run = killed = unconfirmed = none_wider = skipped = errors = hits = 0
+    updated: dict[str, tuple[str, ...]] = {}
+    for r in survivors:  # canonical order: records are sorted
+        m = by_mutant[r.mutant_id]
+        own_files = set(files_by_path.get(r.path, ()))
+        linked = sym_tests.get(r.symbol_id, ())
+        wide = [
+            t for t in stable if t.split("::", 1)[0] in own_files and not _is_linked(t, linked)
+        ][: cfg.stage2_max_tests]
+        if not wide:
+            none_wider += 1
+            continue
+        key = (
+            cache_key(m.mutant_hash, ["stage2", *wide], image_digest, ctx)
+            if cache is not None
+            else ""
+        )
+        if cache is not None and key in cache:
+            hit = cache[key]
+            if hit.status in {KILLED, SURVIVED}:
+                hits += 1
+                run += 1
+                kills = tuple(sorted(hit.killed_by))[: cfg.stage2_max_killers]
+                updated[r.mutant_id] = kills
+                killed += 1 if kills else 0
+                continue
+        if clock() >= deadline:
+            skipped += 1
+            continue
+        out = runner.run(m, wide, stage2_timeout, stop_on_first_failure=True)
+        if out.status != "ok" or not out.results:
+            errors += 1
+            continue
+        res = collapse_results(out.results, wide)
+        killers = sorted(t for t in wide if res[t] == CaseOutcome.FAILED)
+        if not killers:
+            run += 1
+            updated[r.mutant_id] = ()
+            if cache is not None:
+                cache[key] = MutantOutcome(m.id, SURVIVED, duration=out.duration)
+            continue
+        # confirm: a flaky test must not turn a survivor into a "link gap" (that can only
+        # ever lower the penalty), so the kill has to repeat on a second run
+        if clock() >= deadline:
+            skipped += 1  # killed once but not confirmed in budget: no statement
+            continue
+        again = runner.run(m, killers, stage2_timeout)
+        if again.status != "ok" or not again.results:
+            errors += 1
+            continue
+        res2 = collapse_results(again.results, killers)
+        confirmed = sorted(t for t in killers if res2[t] == CaseOutcome.FAILED)
+        run += 1
+        if not confirmed:
+            unconfirmed += 1
+            updated[r.mutant_id] = ()
+            continue
+        updated[r.mutant_id] = tuple(confirmed[: cfg.stage2_max_killers])
+        killed += 1
+        if cache is not None:
+            cache[key] = MutantOutcome(m.id, KILLED, frozenset(confirmed), out.duration)
+    if skipped:
+        ladder.append(f"stage2:wall_clock_expired:{skipped}skipped")
+    if hits:
+        ladder.append(f"stage2:cache_hits:{hits}")
+    if len(stable) > cfg.stage2_max_tests:
+        ladder.append(f"stage2:tests_capped_at:{cfg.stage2_max_tests}")
+    new_records = [
+        replace(r, killed_outside_linked=updated[r.mutant_id]) if r.mutant_id in updated else r
+        for r in records
+    ]
+    return new_records, Stage2Summary(
+        survivors=n, run=run, killed=killed, unconfirmed=unconfirmed, no_wider_tests=none_wider,
+        skipped_for_budget=skipped, errors=errors, cache_hits=hits, tests_considered=len(stable),
+        ladder=tuple(ladder),
     )
 
 
