@@ -23,6 +23,12 @@ from radius_intent.infrastructure.llm.merge import (
     MergeResult,
     merge_proposals,
 )
+from radius_intent.infrastructure.llm.pr_text import (
+    LlmModeSetup,
+    LlmRunRecord,
+    PrTextLlmExtractor,
+    build_llm_mode_extractors,
+)
 from radius_intent.infrastructure.llm.provider import (
     LlmProvider,
     LlmRequest,
@@ -52,10 +58,13 @@ __all__ = [
     "LlmCriterionExtractor",
     "LlmExtractionConfig",
     "LlmExtractionResult",
+    "LlmModeSetup",
     "LlmProvider",
     "LlmRequest",
     "LlmResponse",
+    "LlmRunRecord",
     "MergeResult",
+    "PrTextLlmExtractor",
     "ProviderAuthError",
     "ProviderConfigError",
     "ProviderError",
@@ -66,5 +75,6 @@ __all__ = [
     "ResponseCache",
     "UsageLedger",
     "backoff_delay",
+    "build_llm_mode_extractors",
     "merge_proposals",
 ]

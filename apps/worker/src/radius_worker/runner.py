@@ -431,7 +431,9 @@ def create_sql_worker_runtime(settings: WorkerSettings) -> SqlAlchemyWorkerRunti
     if settings.verdict_v2_mode != VerdictV2Mode.OFF:
         from radius_worker.verdict_v2.scoring import create_recomputer
 
-        verdict_v2_recomputer = create_recomputer(session_factory, settings.verdict_v2_mode)
+        verdict_v2_recomputer = create_recomputer(
+            session_factory, settings.verdict_v2_mode, settings
+        )
     return SqlAlchemyWorkerRuntime(
         session_factory=session_factory,
         repository_cache_dir=settings.repository_cache_dir,

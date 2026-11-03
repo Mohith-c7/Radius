@@ -21,6 +21,19 @@ class _Out(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+class SuggestedTestOut(_Out):
+    """An LLM-proposed pytest snippet (DEC-034): gated, never executed, never evidence."""
+
+    criterion_id: str
+    test_code: str
+    a_static: float = 0.0
+    imports: dict[str, list[str]] = Field(default_factory=dict)
+    model: str = ""
+    provenance: Literal["llm_proposed"] = "llm_proposed"
+    executed: Literal[False] = False
+    evidence: Literal[False] = False
+
+
 class ReasonOut(_Out):
     code: str
     detail: str
@@ -239,4 +252,10 @@ class VerdictV2Out(_Out):
     )
     waivers: WaiversOut | None = Field(
         default=None, description="Present when the base branch has a .radius/waivers.yml."
+    )
+    suggested_tests: list[SuggestedTestOut] = Field(
+        default_factory=list,
+        description="Opt-in (RADIUS_FEATURE_SUGGEST_TESTS): LLM-proposed pytest snippets for "
+        "unevidenced or weak criteria, gated deterministically. Not run, not evidence; the "
+        "verdict does not depend on them.",
     )

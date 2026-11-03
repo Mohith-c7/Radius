@@ -466,7 +466,9 @@ class LlmCriterionExtractor:
     ) -> tuple[Criterion, ...]:
         cfg = self._cfg
         sanitized = {u.source_id: u.text for u in clean}
-        version = f"{PROMPT_VERSION};model={model};prompt_sha256={prompt_hash}"
+        # Stored in a 64-character column (rules.MAX_EXTRACTOR_VERSION_CHARS): a longer value
+        # made every LLM criterion unstorable. The full hash stays in the result/trace.
+        version = f"{PROMPT_VERSION};model={model[:18]};sha={prompt_hash[:12]}"
         order = {u.source_id: i for i, u in enumerate(clean)}
         out: dict[str, Criterion] = {}
 

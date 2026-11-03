@@ -184,6 +184,48 @@ def _criterion(
     }
 
 
+MAX_SUGGESTED_TESTS = 5
+MAX_SUGGESTED_CODE = 2500
+
+
+def suggested_tests(raw: Any) -> list[dict[str, Any]]:
+    """Sanitised ``suggested_tests`` (DEC-034): LLM-proposed, gated, never run, never evidence.
+
+    The flags are forced here, whatever the stored bundle says, so no reader can be told a
+    suggestion was executed or counts as evidence.
+    """
+
+    out: list[dict[str, Any]] = []
+    for item in _maps(raw)[:MAX_SUGGESTED_TESTS]:
+        code = item.get("test_code")
+        cid = item.get("criterion_id")
+        if not (isinstance(code, str) and isinstance(cid, str) and code.strip()):
+            continue
+        imports = item.get("imports")
+        out.append(
+            {
+                "criterion_id": cid,
+                "test_code": code[:MAX_SUGGESTED_CODE],
+                "a_static": item["a_static"]
+                if isinstance(item.get("a_static"), (int, float))
+                and not isinstance(item.get("a_static"), bool)
+                else 0.0,
+                "imports": {
+                    str(m): [str(n) for n in names if isinstance(n, str)]
+                    for m, names in imports.items()
+                    if isinstance(names, list)
+                }
+                if isinstance(imports, Mapping)
+                else {},
+                "model": item["model"] if isinstance(item.get("model"), str) else "",
+                "provenance": "llm_proposed",
+                "executed": False,
+                "evidence": False,
+            }
+        )
+    return out
+
+
 def build_payload(
     stored: StoredVerdict,
     *,
@@ -303,6 +345,10 @@ def build_payload(
         payload["policy"] = dict(verdict["policy"])
     if ok and isinstance(verdict.get("waivers"), Mapping) and verdict["waivers"]:
         payload["waivers"] = dict(verdict["waivers"])
+    if ok:
+        suggestions = suggested_tests(bundle.get("suggested_tests"))
+        if suggestions:
+            payload["suggested_tests"] = suggestions
     if stored.status != "ok":
         payload["error"] = {
             "code": stored.reason_code or stored.status,

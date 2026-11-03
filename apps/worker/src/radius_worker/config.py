@@ -172,7 +172,27 @@ class WorkerSettings(DatabaseSettings):
             "summary (opt-in): additionally proposes low-weight criteria from a "
             "conventional-commit PR title and behavioural bullets under Summary/Changes/"
             "What/Why/Description headings; never confirmed, provenance author_pr_body. "
+            "llm (opt-in, DEC-034): summary plus guarded LLM proposals from the PR title and "
+            "body ONLY (the PR text is sent to a third-party model provider); needs "
+            "RADIUS_LLM_INTENT_ENABLED, RADIUS_LLM_INTENT_ORGS and ANTHROPIC_API_KEY, "
+            "otherwise it logs why and behaves as summary; proposals are llm_proposed, never "
+            "confirmed, and block verified until a human confirms them. "
             "Unknown values mean sections."
+        ),
+    )
+
+    suggest_tests_enabled: bool = Field(
+        default=False,
+        alias="RADIUS_FEATURE_SUGGEST_TESTS",
+        description=(
+            "Verdict v2 (DEC-034, opt-in, default off): for criteria that are unevidenced or "
+            "weak, ask an LLM for one pytest snippet and show it, after a deterministic gate "
+            "(parses, imports only the changed symbols, has an assertion rated strong), in a "
+            "separate 'Suggested tests (not run, not evidence)' block. Never executed, never "
+            "evidence, never changes the verdict. Criterion text and changed symbol NAMES "
+            "(no source code) are sent to a third-party model provider; needs "
+            "RADIUS_LLM_INTENT_ENABLED, RADIUS_LLM_INTENT_ORGS and ANTHROPIC_API_KEY, "
+            "otherwise nothing is sent."
         ),
     )
 
