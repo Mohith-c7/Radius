@@ -488,6 +488,21 @@ def test_producer_timeout_is_its_own_marker_and_does_not_block_the_verdict() -> 
     assert sa.mutation.status == "unmeasured"
 
 
+def test_mutation_time_does_not_consume_the_shared_stage_a_budget() -> None:
+    """Regression: a long (but in-budget) mutation stage made later producers time out."""
+
+    def slow_but_ok(req):
+        time.sleep(0.4)
+        return MutationInput(status="measured", generated=1)
+
+    limits = CollectLimits(timeout_s=0.3, step_timeout_s=0.3, mutation_timeout_s=5.0)
+    sa = _collect(_producers(mutation=slow_but_ok), limits)
+    assert sa.mutation.status == "measured"
+    assert "truncated" not in sa.degraded
+    assert not [d for d in sa.degraded if d.startswith("producer_timeout")]
+    assert sa.assertions is not None  # the assertions step still ran
+
+
 def test_unmeasured_result_leaves_a_marker_and_no_linked_tests_skips_the_producer() -> None:
     sa = _collect(_producers(mutation=lambda r: MutationInput(status="unmeasured", reason="sandbox_disabled")))
     assert "mutation_unmeasured:sandbox_disabled" in sa.degraded
