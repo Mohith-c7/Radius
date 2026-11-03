@@ -142,10 +142,8 @@ async def handle_github_webhook(
         except (KeyError, TypeError, AttributeError, ValueError) as exc:
             # A signed delivery with a structurally wrong payload (missing or
             # mistyped fields) is a client error, not a server fault.
-            LOGGER.warning(
-                "Webhook payload rejected",
-                extra={"github_event": event, "error_type": type(exc).__name__},
-            )
+            # The event name comes from a request header: keep it out of the log line.
+            LOGGER.warning("Webhook payload rejected", extra={"error_type": type(exc).__name__})
             msg = f"Webhook payload for event {event!r} is missing or has invalid fields."
             raise ValidationError(msg) from exc
     LOGGER.info("Webhook delivery handled", extra={"github_event": event})

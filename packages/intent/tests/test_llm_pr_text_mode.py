@@ -232,7 +232,9 @@ def test_no_key_disables_the_llm_part_with_a_clear_log_line(caplog):
     assert not setup.active and setup.llm is None and setup.extractors == base
     assert "ANTHROPIC_API_KEY" in setup.reason
     text = " ".join(r.getMessage() for r in caplog.records)
-    assert "disabled" in text and "ANTHROPIC_API_KEY" in text and "summary" in text
+    # The log line is a fixed message (the detailed reason stays in setup.reason, never logged).
+    assert "disabled" in text and "API key" in text and "summary" in text
+    assert "x" * 20 not in text
 
 
 def test_flag_off_and_unlisted_org_disable_the_llm_part():

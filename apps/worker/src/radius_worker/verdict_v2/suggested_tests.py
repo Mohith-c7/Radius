@@ -432,7 +432,12 @@ def make_suggester(
         return None
     provider, why = provider_factory(config, environ)
     if provider is None:
-        LOGGER.warning("%s is on but the LLM is unavailable (%s).", FEATURE_FLAG, why)
+        # ``why`` is not logged: it is derived from the environment (CodeQL: sensitive data).
+        LOGGER.warning(
+            "%s is on but no LLM provider could be created (is the API key set and the SDK "
+            "installed?); no tests are suggested.",
+            FEATURE_FLAG,
+        )
         return None
     return TestSuggester(provider, config, organization_id, environ=environ)
 

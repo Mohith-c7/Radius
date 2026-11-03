@@ -189,21 +189,29 @@ def build_llm_mode_extractors(
     base_t = tuple(base)
     config = LlmExtractionConfig.from_env(environ)
 
-    def disabled(reason: str) -> LlmModeSetup:
+    def disabled(reason: str, code: str) -> LlmModeSetup:
+        # One fixed message per reason code: ``reason`` can derive from the environment and is
+        # returned to the caller but never logged (CodeQL: clear-text logging of sensitive data).
+        if code == "flag_off":
+            detail = "RADIUS_LLM_INTENT_ENABLED is not true"
+        elif code == "org_not_listed":
+            detail = "the organization is not listed in RADIUS_LLM_INTENT_ORGS"
+        else:
+            detail = "no LLM provider could be created (is the API key set and the SDK installed?)"
         _LOG.warning(
-            "RADIUS_INTENT_EXTRACTION_MODE=llm is selected but the LLM part is "
-            "disabled (%s); falling back to the deterministic summary extraction.",
-            reason,
+            "RADIUS_INTENT_EXTRACTION_MODE=llm is selected but the LLM part is disabled: %s; "
+            "falling back to the deterministic summary extraction.",
+            detail,
         )
         return LlmModeSetup(base_t, None, False, reason)
 
     if not config.enabled:
-        return disabled("RADIUS_LLM_INTENT_ENABLED is not true")
+        return disabled("RADIUS_LLM_INTENT_ENABLED is not true", "flag_off")
     if not EnvEgressPolicy.from_config(config).egress_allowed(organization_id):
-        return disabled("organization is not listed in RADIUS_LLM_INTENT_ORGS")
+        return disabled("organization is not listed in RADIUS_LLM_INTENT_ORGS", "org_not_listed")
     provider, why = provider_factory(config, environ)
     if provider is None:
-        return disabled(why)
+        return disabled(why, "provider_unavailable")
     inner = LlmCriterionExtractor(
         provider,
         organization_id=organization_id,
