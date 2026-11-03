@@ -26,6 +26,7 @@ from radius_confidence.infrastructure import (
     SqlAlchemyConfidenceStore,
     SqlAlchemyCoverageStore,
 )
+from radius_github import GitHubAppClient, GitHubAppSettings
 from radius_github.intent_ingestion import IntentIngestionService
 from radius_graph.infrastructure import InMemoryGraphStore, SqlAlchemyGraphStore
 from radius_intent.application import IntentSnapshotService
@@ -325,6 +326,16 @@ def _release_request_session(request: Request, *, failed: bool) -> None:
     finally:
         session.close()
         request.state.radius_db_session = None
+
+
+def get_github_client() -> GitHubAppClient:
+    """Return the GitHub App client for the pull-based routes.
+
+    Built per request so a restarted API picks up changed credentials; tests
+    and the smoke script override it with a client on a fake transport.
+    """
+
+    return GitHubAppClient(GitHubAppSettings())
 
 
 def get_repository_service(request: Request):

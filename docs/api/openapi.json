@@ -958,6 +958,23 @@
         ],
         "type": "object"
       },
+      "ConnectGitHubRepositoryRequest": {
+        "description": "Request to connect a repository by name through the GitHub App.",
+        "properties": {
+          "repository": {
+            "description": "owner/name (a github.com URL is accepted too).",
+            "maxLength": 300,
+            "minLength": 3,
+            "title": "Repository",
+            "type": "string"
+          }
+        },
+        "required": [
+          "repository"
+        ],
+        "title": "ConnectGitHubRepositoryRequest",
+        "type": "object"
+      },
       "ConnectRepositoryRequest": {
         "description": "Request to connect a repository.",
         "properties": {
@@ -6262,6 +6279,66 @@
         "x-stability": "stable"
       }
     },
+    "/api/v1/repositories/connect-github": {
+      "post": {
+        "description": "Connect a repository by ``owner/name`` through the GitHub App (no webhook).\n\nThe API asks GitHub which App installation covers the repository, reads the\nrepository metadata (id, default branch, clone URL, visibility) and stores\nthe installation id on the organization, which is all the worker needs to\nclone, analyze and publish. Safe to repeat: an already connected repository\nis returned (and reconnected if it had been disconnected).",
+        "operationId": "connect_github_repository",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectGitHubRepositoryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Connect Github Repository",
+        "tags": [
+          "repositories"
+        ],
+        "x-stability": "stable"
+      }
+    },
     "/api/v1/repositories/{repository_id}": {
       "delete": {
         "description": "Disconnect one repository.",
@@ -6569,9 +6646,77 @@
         "x-stability": "stable"
       }
     },
+    "/api/v1/repositories/{repository_id}/pull-requests/{github_pr_number}/analyze": {
+      "post": {
+        "description": "Analyze one pull request by number: fetch it from GitHub, queue an analysis.\n\nThis is the pull-based replacement for the ``pull_request`` webhook. The head\ncommit is read from GitHub, so the caller does not need a commit SHA. A\npending or running analysis of the same head commit is reused.",
+        "operationId": "analyze_pull_request",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repository_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Repository Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "github_pr_number",
+            "required": true,
+            "schema": {
+              "title": "Github Pr Number",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Analyze Pull Request",
+        "tags": [
+          "repositories"
+        ],
+        "x-stability": "stable"
+      }
+    },
     "/api/v1/repositories/{repository_id}/sync-pull-requests": {
       "post": {
-        "description": "Sync open pull requests from GitHub and optionally trigger automatic scoring.",
+        "description": "Pull open pull requests from GitHub (no webhook) and analyze them.\n\nDraft pull requests are stored but not analyzed; use the per-PR ``analyze``\nroute to analyze one explicitly. Without GitHub App credentials the stored\npull requests are returned unchanged (``meta.github = not_configured``).\nGitHub failures are returned as errors, not swallowed.",
         "operationId": "sync_pull_requests",
         "parameters": [
           {

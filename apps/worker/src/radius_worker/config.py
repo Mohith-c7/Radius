@@ -1,8 +1,9 @@
 """Worker runtime configuration."""
 
 from pathlib import Path
+from typing import Self
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from radius_shared.database.session import DatabaseSettings
 from radius_shared.verdict_v2_flag import VerdictV2Mode, parse_verdict_v2_mode
 
@@ -103,10 +104,29 @@ class WorkerSettings(DatabaseSettings):
     )
     github_app_id: str = Field(default="", alias="GITHUB_APP_ID")
     github_app_private_key: str = Field(default="", alias="GITHUB_APP_PRIVATE_KEY")
+    github_app_private_key_path: str = Field(
+        default="",
+        alias="GITHUB_APP_PRIVATE_KEY_PATH",
+        description=(
+            "Path to the GitHub App private key (.pem). Used when "
+            "`GITHUB_APP_PRIVATE_KEY` is empty, so the key never has to be pasted "
+            "into an environment variable or committed."
+        ),
+    )
     github_installation_id: int | None = Field(
         default=None,
         alias="GITHUB_INSTALLATION_ID",
     )
+
+    @model_validator(mode="after")
+    def _load_private_key_file(self) -> Self:
+        if not self.github_app_private_key and self.github_app_private_key_path:
+            from radius_github.client import read_private_key_file
+
+            self.github_app_private_key = read_private_key_file(
+                self.github_app_private_key_path
+            )
+        return self
 
     @field_validator("github_installation_id", mode="before")
     @classmethod
