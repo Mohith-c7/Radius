@@ -151,6 +151,8 @@ class MutationMeasure(Serializable):
     lcb: float | None
     measured: bool
     min_decided: int = 5
+    #: Stage-2 link gaps removed from ``n`` (killed only by unlinked tests; DEC-036).
+    link_gap: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -271,7 +273,13 @@ def combine_quality(
                 Reason(
                     "d_from_mutation",
                     f"{mutation.killed}/{mutation.n} mutants killed; Wilson lower bound "
-                    f"{d_eff:.3f} replaces the static cap",
+                    f"{d_eff:.3f} replaces the static cap"
+                    + (
+                        f"; {mutation.link_gap} mutant(s) killed only by unlinked tests "
+                        "left out (link gap)"
+                        if mutation.link_gap
+                        else ""
+                    ),
                 )
             )
     q = d_eff * i * f * fl * (1.0 - tp)

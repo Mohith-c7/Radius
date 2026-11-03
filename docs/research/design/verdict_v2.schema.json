@@ -569,6 +569,49 @@
               },
               "reason": {
                 "type": "string"
+              },
+              "link_gaps": {
+                "type": "array",
+                "description": "Optional (DEC-036, stage 2): mutants killed only by tests not linked to the criterion; left out of n_mutants. The unlinked tests are not evidence.",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "mutant_id",
+                    "path",
+                    "line",
+                    "operator",
+                    "tests"
+                  ],
+                  "properties": {
+                    "mutant_id": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string",
+                      "description": "UNTRUSTED. Render as text only."
+                    },
+                    "line": {
+                      "type": "integer"
+                    },
+                    "operator": {
+                      "type": "string"
+                    },
+                    "tests": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "UNTRUSTED. Render as text only."
+                    }
+                  }
+                }
+              },
+              "link_gap_tests": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Optional (DEC-036): distinct unlinked killing tests (capped). UNTRUSTED. Render as text only."
               }
             }
           }
@@ -1090,6 +1133,48 @@
         },
         "baseline_flaky": {
           "type": "integer"
+        },
+        "stage2": {
+          "type": "object",
+          "description": "Optional (DEC-036): stage 2 summary; killed_outside_linked = link-gap mutants.",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "survivors": {
+              "type": "integer"
+            },
+            "run": {
+              "type": "integer"
+            },
+            "killed_outside_linked": {
+              "type": "integer"
+            },
+            "unconfirmed": {
+              "type": "integer"
+            },
+            "no_wider_tests": {
+              "type": "integer"
+            },
+            "skipped_for_budget": {
+              "type": "integer"
+            },
+            "errors": {
+              "type": "integer"
+            },
+            "cache_hits": {
+              "type": "integer"
+            },
+            "tests_considered": {
+              "type": "integer"
+            },
+            "ladder": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
         }
       }
     }

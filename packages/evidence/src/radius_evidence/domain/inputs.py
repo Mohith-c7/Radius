@@ -114,6 +114,12 @@ class MutantInput(Serializable):
     status: str
     killed_by: tuple[str, ...] = ()
     equivalent_suspect: bool = False
+    #: Stage 2 (DEC-036): tests OUTSIDE the linked set that killed this stage-1 survivor
+    #: (sorted, capped, confirmed). ``None`` = stage 2 did not run for it (omitted from
+    #: the serialization, so stage-1-only bundles are unchanged); ``()`` = it ran, no kill.
+    killed_outside_linked: tuple[str, ...] | None = field(
+        default=None, metadata={"omit_none": True}
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,6 +149,8 @@ class MutationInput(Serializable):
     engine: str = ""
     operators: tuple[str, ...] = ()
     image: str = ""
+    #: Stage 2 summary (counts, ladder); ``None`` when stage 2 was not enabled.
+    stage2: dict[str, Any] | None = field(default=None, metadata={"omit_none": True})
 
 
 @dataclass(frozen=True, slots=True)

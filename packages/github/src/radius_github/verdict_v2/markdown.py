@@ -254,6 +254,37 @@ def gap_lines(c: CriterionView) -> list[str]:
     return lines
 
 
+LINK_GAP_ACTION = (
+    "Link these tests to the criterion, or add them as `tests:` hints in .radius/intent.yml."
+)
+MAX_LINK_GAP_TESTS_SHOWN = 5
+
+
+def link_gap_lines(c: CriterionView) -> list[str]:
+    """Stage 2 (DEC-036): mutants killed only by tests that are not linked to the criterion.
+
+    Wording is deliberate: the unlinked tests are NOT counted as evidence; they point at
+    an incomplete criterion-to-test link, and the mutants are left out of the score rather
+    than counted as weak evidence. All names are escaped as code spans."""
+
+    if not c.mutation:
+        return []
+    raw = c.mutation.get("link_gaps")
+    gaps = [g for g in raw if isinstance(g, Mapping)] if isinstance(raw, list) else []
+    if not gaps:
+        return []
+    tests = c.mutation.get("link_gap_tests")
+    names = list(dict.fromkeys(t for t in tests if isinstance(t, str))) if isinstance(tests, list) else []
+    shown = [escape.code(t, 100) for t in names[:MAX_LINK_GAP_TESTS_SHOWN]]
+    tail = f" and {len(names) - len(shown)} more" if len(names) > len(shown) else ""
+    return [
+        f"Link gaps: {_plural(len(gaps), 'mutant')} killed only by tests not linked to this "
+        f"criterion: {', '.join(shown) if shown else '(names not available)'}{tail}.",
+        "These tests are not counted as evidence for the criterion, and these mutants are left "
+        "out of its mutation score instead of counting as weak evidence. " + LINK_GAP_ACTION,
+    ]
+
+
 def _plural(n: int, word: str) -> str:
     return f"{n} {word}" if n == 1 else f"{n} {word}s"
 
@@ -801,6 +832,9 @@ def _evidence_section(view: VerdictV2View) -> str:
                 "a sample, and some may be harmless equivalents):",
                 *gaps,
             ]
+        link_gap = link_gap_lines(c)
+        if link_gap:
+            lines += ["", *link_gap]
         blocks.append("\n".join(lines))
     if len(candidates) > MAX_EVIDENCE_CRITERIA:
         blocks.append(f"+{len(candidates) - MAX_EVIDENCE_CRITERIA} more criteria, see the dashboard.")
