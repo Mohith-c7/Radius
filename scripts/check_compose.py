@@ -21,6 +21,14 @@ Rules
       (no literal values).
   R8  ``.env.example`` holds no value that looks like a real secret (only empty
       values or recognised placeholders for secret-looking names).
+  R9  No literal database credential in the base file: ``POSTGRES_PASSWORD`` and the
+      password inside every ``DATABASE_URL`` must be a required variable (C-21).
+  R10 api and dashboard publish their ports on a configurable bind address that
+      defaults to 127.0.0.1 (C-21); production exposure is an explicit choice.
+  R11 postgres, api, worker and dashboard have a restart policy, and the worker has a
+      ``stop_grace_period`` of at least one minute so ``compose stop`` drains it (C-09).
+  R12 Every worker setting (``WorkerSettings`` alias) is forwarded to the worker service
+      unless it is listed in ``WORKER_NOT_FORWARDED`` with a reason (C-10).
 """
 
 from __future__ import annotations
@@ -41,13 +49,35 @@ SECRET_NAME = re.compile(r"(SECRET|PASSWORD|TOKEN|KEY|PEPPER)", re.IGNORECASE)
 VAR_REF = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?P<op>:?[-?+][^}]*)?\}")
 
 #: (service, setting) -> reason. These are the only literal secret-looking
-#: defaults allowed in the base file.
-WAIVED_LITERALS: dict[tuple[str, str], str] = {
-    ("postgres", "POSTGRES_PASSWORD"): "bundled local DB; port bound to loopback only",
-    ("migrations", "DATABASE_URL"): "same bundled DB credential, container network only",
-    ("api", "DATABASE_URL"): "same bundled DB credential, container network only",
-    ("worker", "DATABASE_URL"): "same bundled DB credential, container network only",
+#: defaults allowed in the base file. None are needed today: the database password is
+#: a required variable (C-21).
+WAIVED_LITERALS: dict[tuple[str, str], str] = {}
+
+#: Worker settings that docker-compose.yml intentionally does not forward (C-10).
+_SANDBOX = "sandbox / in-process test execution needs a container runtime the compose worker does not have"
+WORKER_NOT_FORWARDED: dict[str, str] = {
+    "RADIUS_ALLOW_INSECURE_DEV": "dev-only switch; the base file pins RADIUS_ENV=production",
+    "SERVICE_NAME": "log label, not an operator setting",
+    "WORKER_HEALTH_FILE": "set by the worker image (ENV) for its healthcheck",
+    "WORKER_EXECUTE_TESTS": "legacy flag for in-process test execution; " + _SANDBOX,
+    "RADIUS_ALLOW_UNSAFE_EXECUTION": "only relevant to unsafe in-process execution; " + _SANDBOX,
+    "RADIUS_FEATURE_COVERAGE_CONTEXTS": "library entry point only, not wired into the pipeline",
+    "GITHUB_APP_PRIVATE_KEY_PATH": "a host path is not mounted in the compose worker; use GITHUB_APP_PRIVATE_KEY",
+    "WORKER_TEST_RERUNS": _SANDBOX,
+    "WORKER_FLAKY_POLICY": _SANDBOX,
+    "WORKER_SANDBOX_RUNTIME": _SANDBOX,
+    "WORKER_SANDBOX_IMAGE": _SANDBOX,
+    "WORKER_SANDBOX_MEMORY": _SANDBOX,
+    "WORKER_SANDBOX_CPUS": _SANDBOX,
+    "WORKER_SANDBOX_PIDS_LIMIT": _SANDBOX,
+    "WORKER_SANDBOX_TMPFS_SIZE": _SANDBOX,
+    "WORKER_SANDBOX_NOFILE_LIMIT": _SANDBOX,
+    "WORKER_SANDBOX_MAX_FILE_SIZE_BYTES": _SANDBOX,
+    "WORKER_SANDBOX_MAX_OUTPUT_BYTES": _SANDBOX,
+    "WORKER_SANDBOX_SECCOMP_PROFILE": _SANDBOX,
 }
+LOOPBACK_BIND = re.compile(r"^\$\{[A-Z_]+:-127\.0\.0\.1\}:|^127\.0\.0\.1:")
+RESTARTED = ("postgres", "api", "worker", "dashboard")
 
 #: Values that are placeholders, not secrets, when found in .env.example.
 PLACEHOLDER = re.compile(
@@ -56,6 +86,16 @@ PLACEHOLDER = re.compile(
     re.IGNORECASE,
 )
 DEV_SERVICES = {"api", "dashboard", "worker"}
+
+
+def _default_of(op: str) -> str:
+    """The default text of a ``:-`` / ``-`` expansion operator ('' for other operators)."""
+
+    if op.startswith(":-"):
+        return op[2:]
+    if op.startswith("-"):
+        return op[1:]
+    return ""
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -114,9 +154,9 @@ def check_base(base: dict[str, Any]) -> list[str]:
             if not SECRET_NAME.search(setting):
                 continue
             literal = VAR_REF.sub("", value).strip()
-            has_literal_default = bool(re.search(r"\$\{[^}]*:?-[^}]+\}", value)) or (
-                "${" not in value and value != ""
-            )
+            has_literal_default = any(
+                _default_of(m.group("op") or "") != "" for m in VAR_REF.finditer(value)
+            ) or ("${" not in value and value != "")
             if (has_literal_default or literal) and (name, setting) not in WAIVED_LITERALS:
                 problems.append(f"R3 base: {name}.{setting} has a literal default")
         if name in {"api", "worker"} and env.get("RADIUS_ENV") != "production":
@@ -134,6 +174,32 @@ def check_base(base: dict[str, Any]) -> list[str]:
             ports_seen[key] = name
             if name == "postgres" and not text.startswith("127.0.0.1:"):
                 problems.append("R5 base: postgres must be published on 127.0.0.1 only")
+            if name in {"api", "dashboard"} and not LOOPBACK_BIND.match(text):
+                problems.append(
+                    f"R10 base: {name} port {text} must bind ${{VAR:-127.0.0.1}} by default"
+                )
+        for setting, value in env.items():
+            if setting == "POSTGRES_PASSWORD" or (
+                setting == "DATABASE_URL" and "@postgres" in value
+            ):
+                credential = re.sub(r"\$\{[^}]*\}", "", value)
+                literal_password = re.search(r"//[^:@/]+:([^@]+)@", credential)
+                required = "${POSTGRES_PASSWORD:?" in value
+                if setting == "POSTGRES_PASSWORD":
+                    ok = value.startswith("${POSTGRES_PASSWORD:?")
+                else:
+                    ok = required and not literal_password
+                if not ok:
+                    problems.append(
+                        f"R9 base: {name}.{setting} must use the required ${{POSTGRES_PASSWORD:?...}} variable"
+                    )
+    for name in RESTARTED:
+        if name in services and not services[name].get("restart"):
+            problems.append(f"R11 base: {name} needs a restart policy (restart: unless-stopped)")
+    worker = services.get("worker", {})
+    if worker and _grace_seconds(worker.get("stop_grace_period")) < 60:
+        problems.append("R11 base: worker needs stop_grace_period >= 1m so `compose stop` drains it")
+    problems.extend(check_worker_forwarding(worker))
     for required in ("postgres", "api"):
         if required not in services or not services[required].get("healthcheck"):
             problems.append(f"R6 base: {required} needs a healthcheck")
@@ -146,6 +212,47 @@ def check_base(base: dict[str, Any]) -> list[str]:
                 ):
                     problems.append(f"R6 base: {name} waits for {dep} to be healthy but {dep} has no healthcheck")
     return problems
+
+
+def _grace_seconds(value: Any) -> float:
+    """Seconds of a compose duration such as ``15m``, ``90s`` or ``${VAR:-15m}``; 0 when absent."""
+
+    text = str(value or "")
+    default = re.search(r"\$\{[A-Z_]+:-([^}]*)\}", text)
+    if default:
+        text = default.group(1)
+    total = 0.0
+    for amount, unit in re.findall(r"(\d+(?:\.\d+)?)(h|m|s)", text):
+        total += float(amount) * {"h": 3600, "m": 60, "s": 1}[unit]
+    return total
+
+
+def worker_setting_aliases() -> list[str] | None:
+    """Env var names of ``WorkerSettings`` (``None`` when the packages cannot be imported)."""
+
+    import importlib
+
+    for src in [*(ROOT / "packages").glob("*/src"), ROOT / "apps" / "worker" / "src"]:
+        if str(src) not in sys.path:
+            sys.path.insert(0, str(src))
+    try:
+        config = importlib.import_module("radius_worker.config")
+    except Exception:  # noqa: BLE001 - optional rule when the environment lacks the deps
+        return None
+    return [field.alias or name.upper() for name, field in config.WorkerSettings.model_fields.items()]
+
+
+def check_worker_forwarding(worker: dict[str, Any]) -> list[str]:
+    aliases = worker_setting_aliases()
+    if aliases is None or not worker:
+        return []
+    forwarded = set(environment_of(worker))
+    return [
+        f"R12 base: worker setting {alias} is not forwarded by docker-compose.yml "
+        "(add it, or list it in WORKER_NOT_FORWARDED with a reason)"
+        for alias in aliases
+        if alias not in forwarded and alias not in WORKER_NOT_FORWARDED
+    ]
 
 
 def check_dev(dev: dict[str, Any], base: dict[str, Any]) -> list[str]:

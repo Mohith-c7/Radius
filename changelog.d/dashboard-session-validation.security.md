@@ -1,0 +1,1 @@
+The dashboard no longer treats any `radius_session` cookie as signed in: its middleware and API proxy validate the session against the API on every request (short cache, fail closed), `DELETE` needs an admin, and the audit actor is the signed-in user. A deployment remains single-tenant (all signed-in users share the configured organization).

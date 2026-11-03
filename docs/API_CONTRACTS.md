@@ -220,17 +220,13 @@ AnalysisStarted
 
 ## GET /analyses
 
-List analyses.
+List analyses, newest first.
 
-Supports
+Query: `repositoryId`, `pullRequestId`, `status` (filters), `limit` (1 to 500, default 100) and `offset` (0 or more). Values outside the range answer 422. `GET /repositories` and `GET /repositories/{id}/pull-requests` take the same `limit`/`offset`.
 
-Pagination
+`data` stays a list. `meta.pagination` is `{ "limit", "offset", "total", "returned" }`, where `total` counts all items matching the filters.
 
-Filtering
-
-Sorting
-
-Search
+Not implemented: sorting options and free-text search.
 
 ---
 

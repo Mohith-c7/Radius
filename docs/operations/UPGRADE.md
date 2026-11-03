@@ -28,9 +28,17 @@ Consequence: starting a new API image against your database migrates it immediat
    ```bash
    docker compose run --rm migrations alembic current
    ```
-3. **Drain.** Optional but safer: stop the worker (`docker compose stop worker`) so no job is mid-flight.
-   Running jobs are leased in the database; a stopped worker's job is recovered after
-   `WORKER_JOB_STALE_AFTER_SECONDS` (default 1800) and retried up to `WORKER_JOB_MAX_ATTEMPTS`.
+3. **Drain.** Optional but safer: `docker compose stop worker`. On SIGTERM the worker claims no new job and
+   finishes the one it is running; the worker service has `stop_grace_period` 15 minutes
+   (`WORKER_STOP_GRACE_PERIOD`) so Compose waits for that instead of killing it after 10 seconds. A job still
+   running when the grace period ends is killed; it holds a lease that is renewed every
+   `WORKER_HEARTBEAT_INTERVAL_SECONDS` while the worker lives, so after the kill it is recovered once the lease
+   has been unrenewed for `WORKER_JOB_STALE_AFTER_SECONDS` (default 1800) and retried up to
+   `WORKER_JOB_MAX_ATTEMPTS`. Several workers are safe: only the worker that claimed a job can complete, fail or
+   requeue it. **Unverified** against a live PostgreSQL with several replicas.
+   Upgrading from a version without `POSTGRES_PASSWORD`: the existing database volume keeps the old password
+   (`radius`). Either set `POSTGRES_PASSWORD=radius` in `.env` (and change it in the database later) or, for a
+   disposable dev stack, `make clean-volumes` and `make env`.
 4. **Fetch and rebuild.**
    ```bash
    git fetch origin && git checkout <new commit or tag>

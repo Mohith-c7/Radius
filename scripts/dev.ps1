@@ -93,7 +93,9 @@ Targets (same names as the Makefile):
   'seed-demo' {
     $env:STORAGE_BACKEND = 'sql'
     $pgPort = if ($env:POSTGRES_HOST_PORT) { $env:POSTGRES_HOST_PORT } else { '5432' }
-    $env:DATABASE_URL = "postgresql+psycopg://radius:radius@localhost:$pgPort/radius"
+    $py = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $py) { $py = Get-Command py -ErrorAction SilentlyContinue }
+    $env:DATABASE_URL = (& $py.Source scripts/gen_dev_env.py --env-file .env --print-database-url $pgPort)
     Invoke-Native uv run --frozen python scripts/seed_demo.py --yes
   }
   'sandbox' { Invoke-Native docker compose --profile sandbox up --build sandbox-image }

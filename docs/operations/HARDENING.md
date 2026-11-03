@@ -127,5 +127,5 @@ dashboard.
 
 ## Not covered
 
-No SSO/RBAC (backlog), no audit log, no CSRF defences beyond cookie flags (PRD-26), no formal tenant isolation or
+No per-organization RBAC (only `admin`/`developer`; Google/GitHub sign-in exists, see SSO_DESIGN), no general audit log (API-key and intent changes are audited), no CSRF defences beyond cookie flags (PRD-26), no formal tenant isolation or
 sandbox penetration test, no published image provenance or signing. See `docs/production-readiness/BACKLOG.md`.

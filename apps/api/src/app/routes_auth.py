@@ -147,6 +147,7 @@ def set_session(
         samesite="lax",
         max_age=60 * 60 * 24 * (30 if remember else 14),
         path="/",
+        domain=settings.session_cookie_domain,
     )
 
 
@@ -290,7 +291,9 @@ def logout(
                 db.commit()
         except HTTPException:
             pass
-    response.delete_cookie(SESSION_COOKIE, path="/")
+    response.delete_cookie(
+        SESSION_COOKIE, path="/", domain=get_settings().session_cookie_domain
+    )
 
 
 @router.get("/me", response_model=UserResponse)

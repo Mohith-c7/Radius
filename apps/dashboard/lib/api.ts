@@ -311,8 +311,11 @@ export async function radiusRequest<T>(
   };
 }
 
+/** API list endpoints are paginated (default 100, hard maximum 500); ask for the maximum page. */
+export const LIST_PAGE_SIZE = 500;
+
 export function listRepositories() {
-  return radiusFetch<Repository[]>("/repositories");
+  return radiusFetch<Repository[]>(`/repositories?limit=${LIST_PAGE_SIZE}`);
 }
 
 export function getRepository(repositoryId: UUID) {
@@ -345,7 +348,9 @@ export function getPullRequestByNumber(repositoryId: UUID, prNumber: number) {
 }
 
 export function listPullRequests(repositoryId: UUID) {
-  return radiusFetch<PullRequest[]>(`/repositories/${repositoryId}/pull-requests`);
+  return radiusFetch<PullRequest[]>(
+    `/repositories/${repositoryId}/pull-requests?limit=${LIST_PAGE_SIZE}`,
+  );
 }
 
 export type SyncResult = {
@@ -414,12 +419,16 @@ export function listAnalyses(params: {
   repositoryId?: UUID;
   pullRequestId?: UUID;
   status?: string;
+  limit?: number;
+  offset?: number;
 } = {}) {
   return radiusFetch<Analysis[]>(
     `/analyses${buildQuery({
       repositoryId: params.repositoryId,
       pullRequestId: params.pullRequestId,
       status: params.status,
+      limit: String(Math.min(Math.max(params.limit ?? LIST_PAGE_SIZE, 1), LIST_PAGE_SIZE)),
+      offset: params.offset ? String(Math.max(params.offset, 0)) : undefined,
     })}`,
   );
 }

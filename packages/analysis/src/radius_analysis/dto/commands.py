@@ -29,6 +29,11 @@ class AnalysisListQuery:
     repository_id: UUID | None = None
     pull_request_id: UUID | None = None
     status: str | None = None
+    #: Several repositories at once (one query instead of one per repository).
+    repository_ids: tuple[UUID, ...] | None = None
+    #: Page window, newest first. ``None`` = no limit (internal callers only).
+    limit: int | None = None
+    offset: int = 0
 
 
 @dataclass(frozen=True, slots=True)

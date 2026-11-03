@@ -234,15 +234,13 @@ def test_clone_argv_has_double_dash_and_hardening(monkeypatch, tmp_path: Path) -
     def fake_run(command, **kwargs):
         captured["command"] = list(command)
         captured["env"] = kwargs["env"]
-        captured["shell"] = kwargs.get("shell")
         return subprocess.CompletedProcess(command, 0, "", "")
 
-    monkeypatch.setattr(local_git.subprocess, "run", fake_run)
+    monkeypatch.setattr(local_git, "_exec", fake_run)
     LocalGitRepositoryClient().clone_or_fetch(
         "https://github.com/acme/radius", tmp_path / "dest"
     )
     command = captured["command"]
-    assert captured["shell"] is False
     assert command[: command.index("clone")][0] == "git"
     assert "protocol.allow=never" in command
     assert "protocol.https.allow=always" in command

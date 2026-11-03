@@ -8,6 +8,8 @@ that could be valid anywhere else:
 * ``RADIUS_API_KEY``: random dev key. ``docker-compose.dev.yml`` registers it as
   the legacy ``API_KEYS`` entry for the dev organization, and the dashboard proxy
   sends it server-side. Dev only; do not reuse it anywhere.
+* ``POSTGRES_PASSWORD``: random password of the bundled database (C-21). docker-compose.yml
+  requires it; an existing dev database volume keeps its old password (see INSTALL.md).
 * ``GITHUB_DEFAULT_ORGANIZATION_ID`` / ``NEXT_PUBLIC_RADIUS_ORGANIZATION_ID``: the
   organization id used by ``scripts/seed_demo.py`` so the demo data is visible.
 
@@ -31,6 +33,7 @@ def render(example_text: str) -> str:
 
     values = {
         "SESSION_SECRET": secrets.token_urlsafe(48),
+        "POSTGRES_PASSWORD": secrets.token_hex(24),
         "RADIUS_API_KEY": "dev_" + secrets.token_urlsafe(32),
         "GITHUB_DEFAULT_ORGANIZATION_ID": DEMO_ORG_ID,
         "NEXT_PUBLIC_RADIUS_ORGANIZATION_ID": DEMO_ORG_ID,
@@ -61,12 +64,34 @@ def render(example_text: str) -> str:
     return header + "\n".join(out) + "\n"
 
 
+def database_url_from_env_file(env_file: Path, port: str = "5432") -> str:
+    """Host-side DATABASE_URL for the bundled database, from ``POSTGRES_PASSWORD`` in ``.env``."""
+
+    password = ""
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        if line.startswith("POSTGRES_PASSWORD="):
+            password = line.split("=", 1)[1].strip()
+    if not password:
+        raise SystemExit(f"POSTGRES_PASSWORD is not set in {env_file}; run `make env` or set it.")
+    return f"postgresql+psycopg://radius:{password}@localhost:{port}/radius"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--env-file", default=str(ROOT / ".env"))
     parser.add_argument("--example", default=str(ROOT / ".env.example"))
+    parser.add_argument(
+        "--print-database-url",
+        metavar="PORT",
+        nargs="?",
+        const="5432",
+        help="print the host-side DATABASE_URL built from POSTGRES_PASSWORD in the env file and exit",
+    )
     args = parser.parse_args(argv)
     target = Path(args.env_file)
+    if args.print_database_url is not None:
+        print(database_url_from_env_file(target, args.print_database_url))
+        return 0
     if target.exists():
         print(f"{target} exists; leaving it unchanged.")
         return 0

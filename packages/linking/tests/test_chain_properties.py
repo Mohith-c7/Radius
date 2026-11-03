@@ -274,4 +274,6 @@ def test_performance_bound_2000_criteria_50_symbols_20_tests():
     elapsed = time.perf_counter() - start
     assert len(res.criteria) == n_crit
     assert all(len(c.chains) <= CFG.max_chains_kept for c in res.criteria)
-    assert elapsed < 30.0, f"took {elapsed:.1f}s"
+    # Generous: it takes ~18 s on a busy developer laptop and more on a shared CI runner. The bound
+    # only has to catch an order-of-magnitude (for example quadratic) regression.
+    assert elapsed < 90.0, f"took {elapsed:.1f}s"

@@ -155,6 +155,30 @@ Trade-offs:
     curl -sI http://localhost:3000/login | grep -iE "content-security|x-frame|nosniff"
     curl -s http://localhost:3000/login | grep -o '<script[^>]*>' | grep -vc nonce   # 0
 
+## Dashboard session validation and tenancy (C-01)
+
+* The dashboard never trusts the mere presence of a `radius_session` cookie. Its middleware **and** the
+  `/api/radius/*` proxy route call `GET /api/v1/auth/me` on the API with the cookie (server side) and accept the
+  request only on a clear "signed in" answer. The answer is cached in memory for 15 s (a rejection for 5 s;
+  errors are never cached), keyed by a per-process keyed digest of the cookie. Any other outcome (API down,
+  timeout of 5 s, 5xx, malformed answer) is **fail closed**: the proxy answers 503 `AUTH_UNAVAILABLE`, pages redirect to `/login`.
+  A revoked or expired session therefore stops working within the cache time. `next dev` (NODE_ENV=development)
+  keeps the old no-auth behaviour for local work only.
+* Destructive proxied calls (`DELETE`) additionally need the validated user's role to be `admin` (403 otherwise).
+  The audit actor (`X-Radius-Actor`) of intent writes is the validated user's e-mail, not a client header.
+* **A deployment is single-tenant.** The proxy talks to the API with ONE configured key and organization
+  (`RADIUS_API_KEY`, `RADIUS_ORGANIZATION_ID`). Every authenticated dashboard user shares that organization and its
+  data, whatever workspace was created for them at sign-up. Do not enable open sign-up on a shared deployment
+  (see A-07 in the security review); per-user organization routing is not implemented.
+* Cookie scope: the session cookie is host-only by default, which needs the dashboard and the API on one origin
+  (or both on `localhost`, where ports are ignored). For separate hosts such as `app.example.com` and
+  `api.example.com`, set `SESSION_COOKIE_DOMAIN=example.com` on the API (and `SESSION_COOKIE_SECURE=true` over TLS).
+* Published ports: Compose binds api (8000) and dashboard (3000) to `127.0.0.1` by default. The production
+  binding is a deliberate choice: a TLS reverse proxy in front (recommended), or
+  `RADIUS_API_BIND_ADDRESS` / `RADIUS_DASHBOARD_BIND_ADDRESS` set to `0.0.0.0`.
+* List endpoints (`/repositories`, `/repositories/{id}/pull-requests`, `/analyses`) take `limit` (default 100,
+  maximum 500) and `offset` and return `meta.pagination` (`limit`, `offset`, `total`, `returned`).
+
 ## Not verified here
 
 No browser was available: CSP violations at runtime (console reports) are

@@ -1,5 +1,6 @@
 """Runtime configuration loaded from environment variables."""
 import os
+import re
 from functools import lru_cache
 from urllib.parse import urlsplit
 
@@ -23,6 +24,10 @@ class Settings(BaseSettings):
     session_secret: str = Field(default="super_secret_radius_session_key_32bytes_min", min_length=32)
     frontend_origin: str = "http://127.0.0.1:3000"
     session_cookie_secure: bool = False
+    session_cookie_domain: str | None = None
+    """Optional ``Domain`` of the session cookie (C-20), for example ``example.com`` when the
+    dashboard (``app.example.com``) and the API (``api.example.com``) are separate hosts. Unset
+    (default) keeps a host-only cookie, which needs one origin or localhost."""
     google_client_id: str | None = None
     google_client_secret: str | None = None
     google_redirect_uri: str | None = None
@@ -37,6 +42,22 @@ class Settings(BaseSettings):
     smtp_password: str | None = None
     smtp_from_email: str | None = None
 
+
+    @field_validator("session_cookie_domain")
+    @classmethod
+    def _valid_cookie_domain(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        domain = value.strip().lower().lstrip(".")
+        labels = domain.split(".")
+        if (
+            len(labels) < 2
+            or any(not re.fullmatch(r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?", label) for label in labels)
+            or re.fullmatch(r"[0-9.]+", domain)
+        ):
+            msg = "SESSION_COOKIE_DOMAIN must be a registrable DNS name such as example.com (no IP address, port or scheme)."
+            raise ValueError(msg)
+        return domain
 
     @field_validator("email_delivery_mode")
     @classmethod

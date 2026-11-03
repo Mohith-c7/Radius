@@ -149,7 +149,7 @@ def _runtime(
         settings=worker_runner.WorkerSettings(
             GITHUB_APP_ID="app-id",
             GITHUB_APP_PRIVATE_KEY="private-key",
-            **settings,
+            **{"WORKER_JOB_RETRY_BASE_SECONDS": 0, **settings},
         ),
         github_client=github_client,
     )

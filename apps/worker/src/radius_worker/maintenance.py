@@ -7,6 +7,9 @@ window:
 * ``verdict_v2_requests``: outbox rows that gave up (attempts exhausted). Completed
   requests are already deleted by the outbox on success, so only dead letters can linger.
 * ``mutation_result_cache``: a pure cache of mutant results; a miss only costs a re-run.
+* ``auth_sessions``, ``auth_tokens``, ``auth_oauth_flows`` (C-13): sign-in sessions, one-time
+  tokens and OAuth flows that expired (or were revoked/used) more than the window ago. Only
+  dead rows are removed; a live session is never touched. Skipped when the tables do not exist.
 
 It NEVER touches analyses, verdicts, evidence, audit rows or anything else. Each table is
 pruned in bounded batches (one commit per batch) so a large backlog cannot hold a long
@@ -19,13 +22,14 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
+import sqlalchemy as sa
 from radius_shared.database import models as db_models
 from radius_shared.database.verdict_v2 import (
     MutationResultCacheRow,
     VerdictV2RequestRow,
 )
 from radius_shared.logging import get_logger
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, inspect, select
 from sqlalchemy.orm import Session
 
 LOGGER = get_logger(__name__)
@@ -63,6 +67,25 @@ def normalise_retention_days(value: object) -> int:
     return max(days, MIN_RETENTION_DAYS)
 
 
+def _auth_table(name: str, *columns: str) -> sa.TableClause:
+    """Lightweight handle on a sign-in table (its models live in the API app)."""
+
+    return sa.table(
+        name,
+        sa.column("id", sa.String),
+        *(sa.column(column, sa.DateTime(timezone=True)) for column in columns),
+    )
+
+
+_AUTH_SESSIONS = _auth_table("auth_sessions", "expires_at", "revoked_at")
+_AUTH_TOKENS = _auth_table("auth_tokens", "expires_at", "used_at")
+_AUTH_OAUTH_FLOWS = _auth_table("auth_oauth_flows", "expires_at")
+
+
+def _id_column(model):
+    return model.c.id if isinstance(model, sa.TableClause) else model.id
+
+
 def _targets(cutoff: datetime):
     """(name, model, condition) triples: the only tables retention may delete from."""
 
@@ -82,6 +105,21 @@ def _targets(cutoff: datetime):
             "mutation_result_cache",
             MutationResultCacheRow,
             MutationResultCacheRow.created_at < cutoff,
+        ),
+        (
+            "auth_sessions",
+            _AUTH_SESSIONS,
+            (_AUTH_SESSIONS.c.expires_at < cutoff) | (_AUTH_SESSIONS.c.revoked_at < cutoff),
+        ),
+        (
+            "auth_tokens",
+            _AUTH_TOKENS,
+            (_AUTH_TOKENS.c.expires_at < cutoff) | (_AUTH_TOKENS.c.used_at < cutoff),
+        ),
+        (
+            "auth_oauth_flows",
+            _AUTH_OAUTH_FLOWS,
+            _AUTH_OAUTH_FLOWS.c.expires_at < cutoff,
         ),
     )
 
@@ -110,6 +148,10 @@ def run_retention(
     for name, model, condition in _targets(cutoff):
         deleted = 0
         with session_factory() as session:
+            table_name = model.name if isinstance(model, sa.TableClause) else model.__tablename__
+            if not inspect(session.get_bind()).has_table(table_name):
+                continue  # e.g. the sign-in tables before the API first ran
+            id_col = _id_column(model)
             if dry_run:
                 deleted = int(
                     session.scalar(
@@ -121,12 +163,12 @@ def run_retention(
                 for _ in range(max_batches):
                     ids = list(
                         session.scalars(
-                            select(model.id).where(condition).limit(batch_size)
+                            select(id_col).where(condition).limit(batch_size)
                         )
                     )
                     if not ids:
                         break
-                    session.execute(delete(model).where(model.id.in_(ids)))
+                    session.execute(delete(model).where(id_col.in_(ids)))
                     session.commit()
                     deleted += len(ids)
                     if len(ids) < batch_size:

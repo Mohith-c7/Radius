@@ -1,0 +1,1 @@
+The analysis is marked `running` before the pipeline starts and the GitHub result is published only after the result is committed. Worker job settings are bounded (for example `WORKER_JOB_MAX_ATTEMPTS` 1-20) and an invalid value stops the worker with a clear error.

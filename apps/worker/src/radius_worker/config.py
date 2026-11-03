@@ -21,15 +21,77 @@ class WorkerSettings(DatabaseSettings):
     )
     poll_interval_seconds: float = Field(
         default=2.0,
+        ge=0.05,
+        le=3600.0,
         alias="WORKER_POLL_INTERVAL_SECONDS",
     )
     job_stale_after_seconds: int = Field(
         default=1800,
+        ge=60,
+        le=604800,
         alias="WORKER_JOB_STALE_AFTER_SECONDS",
+        description=(
+            "A running job whose lease was not renewed for this long is treated as "
+            "abandoned and returned to pending (or failed when its attempts are "
+            "exhausted). A live worker renews the lease every "
+            "WORKER_HEARTBEAT_INTERVAL_SECONDS, so this bounds crash recovery, not job length."
+        ),
     )
-    job_max_attempts: int = Field(default=3, alias="WORKER_JOB_MAX_ATTEMPTS")
+    job_heartbeat_interval_seconds: float | None = Field(
+        default=None,
+        ge=1.0,
+        le=3600.0,
+        alias="WORKER_HEARTBEAT_INTERVAL_SECONDS",
+        description=(
+            "How often a worker renews the lease of the job it is running. Default "
+            "(unset): the smaller of 60 and one third of WORKER_JOB_STALE_AFTER_SECONDS. "
+            "When set it must be at most half of WORKER_JOB_STALE_AFTER_SECONDS."
+        ),
+    )
+    job_retry_base_seconds: float = Field(
+        default=15.0,
+        ge=0.0,
+        le=3600.0,
+        alias="WORKER_JOB_RETRY_BASE_SECONDS",
+        description=(
+            "Retry backoff: a failed attempt is retried after base * 2^(attempt-1) "
+            "seconds (+-25% jitter), capped by WORKER_JOB_RETRY_MAX_SECONDS. 0 = retry at once."
+        ),
+    )
+    job_retry_max_seconds: float = Field(
+        default=900.0,
+        ge=1.0,
+        le=86400.0,
+        alias="WORKER_JOB_RETRY_MAX_SECONDS",
+        description="Upper bound of the retry backoff delay.",
+    )
+    health_file: str = Field(
+        default="",
+        alias="WORKER_HEALTH_FILE",
+        description=(
+            "When set, the worker touches this file on every loop iteration and "
+            "while a job's lease is renewed. The container healthcheck "
+            "(python -m radius_worker.healthcheck) fails when it is older than "
+            "WORKER_HEALTH_MAX_AGE_SECONDS."
+        ),
+    )
+    health_max_age_seconds: int = Field(
+        default=300,
+        ge=10,
+        le=86400,
+        alias="WORKER_HEALTH_MAX_AGE_SECONDS",
+        description="Maximum age of WORKER_HEALTH_FILE before the worker is reported unhealthy.",
+    )
+    job_max_attempts: int = Field(
+        default=3,
+        ge=1,
+        le=20,
+        alias="WORKER_JOB_MAX_ATTEMPTS",
+    )
     analysis_deadline_seconds: int = Field(
         default=7200,
+        ge=300,
+        le=2592000,
         alias="WORKER_ANALYSIS_DEADLINE_SECONDS",
         description=(
             "An analysis still pending/running this long after it started is "
@@ -200,6 +262,14 @@ class WorkerSettings(DatabaseSettings):
         alias="GITHUB_INSTALLATION_ID",
     )
 
+    @property
+    def heartbeat_interval(self) -> float:
+        """Seconds between lease renewals (explicit setting or the derived default)."""
+
+        if self.job_heartbeat_interval_seconds is not None:
+            return self.job_heartbeat_interval_seconds
+        return min(60.0, self.job_stale_after_seconds / 3)
+
     def dashboard_analysis_url(self, analysis_id: object) -> str | None:
         """Link to an analysis in the dashboard, from ``DASHBOARD_BASE_URL``.
 
@@ -244,6 +314,80 @@ class WorkerSettings(DatabaseSettings):
         ),
     )
 
+    git_clone_timeout_seconds: float = Field(
+        default=300.0,
+        ge=5.0,
+        le=3600.0,
+        alias="RADIUS_GIT_CLONE_TIMEOUT_SECONDS",
+        description=(
+            "Time limit for `git clone`. The git process group is killed on expiry and the "
+            "job is retried."
+        ),
+    )
+    git_timeout_seconds: float = Field(
+        default=120.0,
+        ge=5.0,
+        le=1800.0,
+        alias="RADIUS_GIT_TIMEOUT_SECONDS",
+        description=(
+            "Time limit for every other git command (fetch, worktree, checkout, gc). The "
+            "process group is killed on expiry and the job is retried."
+        ),
+    )
+    git_lock_timeout_seconds: float = Field(
+        default=300.0,
+        ge=1.0,
+        le=3600.0,
+        alias="RADIUS_GIT_LOCK_TIMEOUT_SECONDS",
+        description=(
+            "How long a job waits for the exclusive lock of one repository cache (held "
+            "while fetching or creating a worktree) before it fails retryably."
+        ),
+    )
+    git_stale_lock_seconds: float = Field(
+        default=900.0,
+        ge=30.0,
+        le=86400.0,
+        alias="RADIUS_GIT_STALE_LOCK_SECONDS",
+        description=(
+            "A git `index.lock` older than this, found while the worker holds the repository "
+            "lock, is a leftover of a dead process and is removed."
+        ),
+    )
+    git_cache_max_idle_days: int = Field(
+        default=0,
+        ge=0,
+        le=3650,
+        alias="RADIUS_GIT_CACHE_MAX_IDLE_DAYS",
+        description=(
+            "Opt-in pruning of repository caches: every hour a cache unused for this many "
+            "days (and not locked or in use by a worktree) is deleted and re-cloned on next "
+            "use. 0 (default) = fall back to RADIUS_RETENTION_DAYS when that is set, else "
+            "never prune. Cache housekeeping (stale locks, `git worktree prune`, "
+            "`git gc --auto`, orphaned analysis worktrees) always runs."
+        ),
+    )
+
+    github_poll_failed_retries: int = Field(
+        default=2,
+        ge=0,
+        le=10,
+        alias="RADIUS_GITHUB_POLL_FAILED_RETRIES",
+        description=(
+            "How many times the poller queues a head commit again after its analysis "
+            "FAILED (for example after a GitHub or network outage that outlasted the job "
+            "retries). Spacing doubles from RADIUS_GITHUB_POLL_FAILED_RETRY_DELAY_SECONDS. "
+            "0 = never retry a failed head automatically (re-run it explicitly)."
+        ),
+    )
+    github_poll_failed_retry_delay_seconds: float = Field(
+        default=900.0,
+        ge=60.0,
+        le=86400.0,
+        alias="RADIUS_GITHUB_POLL_FAILED_RETRY_DELAY_SECONDS",
+        description="Minimum wait after a failed analysis before the poller retries its head.",
+    )
+
     retention_days: int = Field(
         default=0,
         alias="RADIUS_RETENTION_DAYS",
@@ -276,6 +420,26 @@ class WorkerSettings(DatabaseSettings):
         if value <= 0:
             return 0.0
         return max(value, MIN_POLL_INTERVAL_SECONDS)
+
+    @model_validator(mode="after")
+    def _check_job_timing(self) -> Self:
+        if (
+            self.job_heartbeat_interval_seconds is not None
+            and self.job_heartbeat_interval_seconds * 2 > self.job_stale_after_seconds
+        ):
+            msg = (
+                "WORKER_HEARTBEAT_INTERVAL_SECONDS must be at most half of "
+                "WORKER_JOB_STALE_AFTER_SECONDS, otherwise a healthy job is recovered "
+                "as stale."
+            )
+            raise ValueError(msg)
+        if self.analysis_deadline_seconds <= self.job_stale_after_seconds:
+            msg = (
+                "WORKER_ANALYSIS_DEADLINE_SECONDS must be larger than "
+                "WORKER_JOB_STALE_AFTER_SECONDS."
+            )
+            raise ValueError(msg)
+        return self
 
     @model_validator(mode="after")
     def _load_private_key_file(self) -> Self:

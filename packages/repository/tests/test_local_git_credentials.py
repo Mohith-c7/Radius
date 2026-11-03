@@ -57,7 +57,7 @@ def test_credentials_are_not_in_argv_but_in_child_environment(monkeypatch, tmp_p
         captured["env"] = kwargs["env"]
         return subprocess.CompletedProcess(command, 0, "", "")
 
-    monkeypatch.setattr(local_git.subprocess, "run", fake_run)
+    monkeypatch.setattr(local_git, "_exec", fake_run)
     LocalGitRepositoryClient().clone_or_fetch(
         "https://github.com/acme/radius.git", tmp_path / "dest", extra_headers=(HEADER,)
     )
@@ -80,7 +80,7 @@ def test_no_headers_still_restricts_transports_but_adds_no_config(
         captured["env"] = kwargs["env"]
         return subprocess.CompletedProcess(command, 0, "", "")
 
-    monkeypatch.setattr(local_git.subprocess, "run", fake_run)
+    monkeypatch.setattr(local_git, "_exec", fake_run)
     LocalGitRepositoryClient().clone_or_fetch("https://github.com/a/b.git", tmp_path / "d")
     env = captured["env"]
     assert env["GIT_ALLOW_PROTOCOL"] == "https"

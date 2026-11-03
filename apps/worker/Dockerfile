@@ -66,6 +66,8 @@ RUN apt-get update \
 
 WORKDIR /app
 
+ENV WORKER_HEALTH_FILE=/tmp/radius-worker-health
+
 COPY --from=builder /opt/venv /opt/venv
 COPY pyproject.toml alembic.ini ./
 COPY infra/database ./infra/database
@@ -77,7 +79,7 @@ FROM base AS sandbox
 COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 USER 10001:10001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD ["python", "-c", "import os; from sqlalchemy import create_engine, text; c = create_engine(os.environ['DATABASE_URL']).connect(); c.execute(text('select 1')); c.close()"]
+    CMD ["python", "-m", "radius_worker.healthcheck"]
 CMD ["python", "-m", "radius_worker"]
 
 # ---- runtime: default target (must stay last).
@@ -86,9 +88,9 @@ USER 10001:10001
 
 # The worker has no listening port unless RADIUS_WORKER_METRICS_PORT is set (it
 # needs the observability extra), so liveness = the worker can reach its database
-# (its only queue). A hung poll loop is not detected; that needs an in-app
-# heartbeat (follow-up).
+# AND its loop (or the lease heartbeat of a running job) touched WORKER_HEALTH_FILE
+# recently (python -m radius_worker.healthcheck).
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD ["python", "-c", "import os; from sqlalchemy import create_engine, text; c = create_engine(os.environ['DATABASE_URL']).connect(); c.execute(text('select 1')); c.close()"]
+    CMD ["python", "-m", "radius_worker.healthcheck"]
 
 CMD ["python", "-m", "radius_worker"]

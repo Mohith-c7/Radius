@@ -158,7 +158,14 @@ class AssertionWeakened(BaseRule):
         if check is None and h.strength < b.strength and b.kind != "raises" and h.kind != "raises":
             check = "strength_reduced"
             reason = f"{b.kind} check weakened to {h.kind} check"
-        if check is None and h.conjuncts < b.conjuncts and h.strength <= b.strength:
+        if (
+            check is None
+            and h.conjuncts < b.conjuncts
+            and h.strength <= b.strength
+            # `assert a and b` split into `assert a` / `assert b` keeps every clause: compare the
+            # clause totals of the whole test, not just the positionally paired assertion.
+            and sum(a.conjuncts for a in p.head.assertions) < sum(a.conjuncts for a in p.base.assertions)
+        ):
             check = "conjunct_dropped"
             reason = f"assertion lost {b.conjuncts - h.conjuncts} clause(s) of an `and` chain"
         if check is None:
