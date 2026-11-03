@@ -6716,7 +6716,7 @@
     },
     "/api/v1/repositories/{repository_id}/sync-pull-requests": {
       "post": {
-        "description": "Pull open pull requests from GitHub (no webhook) and analyze them.\n\nDraft pull requests are stored but not analyzed; use the per-PR ``analyze``\nroute to analyze one explicitly. Without GitHub App credentials the stored\npull requests are returned unchanged (``meta.github = not_configured``).\nGitHub failures are returned as errors, not swallowed.",
+        "description": "Pull open pull requests from GitHub (no webhook) and analyze them.\n\nDraft pull requests are stored but not analyzed, and a head commit that already\nhas a live or finished analysis is not analyzed again (repeat syncs are cheap);\nuse the per-PR ``analyze`` route to analyze one explicitly. Without GitHub App credentials the stored\npull requests are returned unchanged (``meta.github = not_configured``).\nGitHub failures are returned as errors, not swallowed.",
         "operationId": "sync_pull_requests",
         "parameters": [
           {

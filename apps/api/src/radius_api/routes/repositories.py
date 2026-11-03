@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Header, Query, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from radius_analysis.application import AnalysisApplicationService
-from radius_analysis.dto import StartAnalysisCommand
+from radius_analysis.dto import AnalysisListQuery, StartAnalysisCommand
 from radius_github import GitHubAppClient
 from radius_repository.application import RepositoryApplicationService
 from radius_repository.domain import RepositoryVisibility
@@ -17,7 +17,7 @@ from radius_repository.dto import (
     UpsertPullRequestCommand,
 )
 from radius_shared.dto import success_response
-from radius_shared.errors import AccessDeniedError, ConflictError
+from radius_shared.errors import AccessDeniedError, ConflictError, RadiusError
 
 from radius_api.auth import ApiPrincipal, ensure_same_organization, get_api_principal
 from radius_api.dependencies import (
@@ -314,6 +314,7 @@ def _record_and_analyze(
     raw_pull_request: dict,
     principal: ApiPrincipal,
     analyze: bool,
+    skip_analyzed: bool = False,
 ):
     """Upsert one GitHub pull request; start an analysis for its head commit."""
 
@@ -332,6 +333,10 @@ def _record_and_analyze(
         )
     )
     analysis = None
+    if analyze and pull_request.head.sha and skip_analyzed and _already_analyzed(
+        analysis_service, UUID(str(repository.id)), UUID(str(upserted.id)), pull_request.head.sha
+    ):
+        analyze = False
     if analyze and pull_request.head.sha:
         analysis = analysis_service.start_analysis(
             StartAnalysisCommand(
@@ -351,6 +356,31 @@ def _record_and_analyze(
             trigger="pull_request.pull",
         )
     return upserted, analysis
+
+
+def _skip_reason(exc: Exception) -> str:
+    """Short, secret-free reason a pull request was skipped during a sync."""
+
+    if isinstance(exc, RadiusError):
+        return f"{exc.detail.code}: {exc.detail.message}"[:200]
+    return type(exc).__name__
+
+
+def _already_analyzed(
+    analysis_service: AnalysisApplicationService,
+    repository_id: UUID,
+    pull_request_id: UUID,
+    commit_sha: str,
+) -> bool:
+    """True when this head commit has a live or finished analysis (repeat syncs are no-ops)."""
+
+    return any(
+        analysis.commit_sha.lower() == commit_sha.lower()
+        and analysis.status not in ("failed", "cancelled")
+        for analysis in analysis_service.list_analyses(
+            AnalysisListQuery(repository_id=repository_id, pull_request_id=pull_request_id)
+        )
+    )
 
 
 def _connected_repository(
@@ -386,8 +416,9 @@ def sync_pull_requests(
 ):
     """Pull open pull requests from GitHub (no webhook) and analyze them.
 
-    Draft pull requests are stored but not analyzed; use the per-PR ``analyze``
-    route to analyze one explicitly. Without GitHub App credentials the stored
+    Draft pull requests are stored but not analyzed, and a head commit that already
+    has a live or finished analysis is not analyzed again (repeat syncs are cheap);
+    use the per-PR ``analyze`` route to analyze one explicitly. Without GitHub App credentials the stored
     pull requests are returned unchanged (``meta.github = not_configured``).
     GitHub failures are returned as errors, not swallowed.
     """
@@ -432,9 +463,10 @@ def sync_pull_requests(
                 raw_pull_request=raw,
                 principal=principal,
                 analyze=analyze,
+                skip_analyzed=True,
             )
         except Exception as exc:  # noqa: BLE001 - one bad PR must not stop the sync
-            skipped.append({"number": number, "reason": type(exc).__name__})
+            skipped.append({"number": number, "reason": _skip_reason(exc)})
             continue
         synced.append(upserted)
         if analysis is not None:

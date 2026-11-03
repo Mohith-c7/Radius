@@ -210,6 +210,9 @@ def test_sync_pulls_open_prs_and_skips_drafts_for_analysis(env: Env) -> None:
     analyses = env.get(f"/analyses?repositoryId={repository_id}").json()["data"]
     assert [a["commit_sha"] for a in analyses] == [SHA_A]
 
+    repeat = env.post(f"/repositories/{repository_id}/sync-pull-requests")
+    assert repeat.json()["meta"]["analysisIds"] == [], "same head commit is not queued twice"
+
     no_analysis = env.post(f"/repositories/{repository_id}/sync-pull-requests?auto_analyze=false")
     assert no_analysis.json()["meta"]["analysisIds"] == []
     assert len(env.get(f"/analyses?repositoryId={repository_id}").json()["data"]) == 1
