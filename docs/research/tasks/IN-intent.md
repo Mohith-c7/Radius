@@ -134,7 +134,7 @@ Goal: capture what a change is *supposed* to do as a set of confirmable, testabl
 - Acceptance: one command prints a table and writes JSON; results are stored with `algo_version`; CI runs a small subset.
 - Status (harness ready; real numbers pending IN-09): `scripts/intent_eval.py` / `python -m radius_intent.evaluation` (`run`, `report`, `compare`, `list-extractors`), library in `packages/intent/src/radius_intent/evaluation/`, docs in `docs/research/evaluation/INTENT_EVAL.md`. Only synthetic and F-14-derived data has been run (labelled SYNTHETIC); the real gold plugs in through an adapter (`--adapter module:function`). The remaining acceptance step is to run it on the IN-09 gold test split.
 
-### IN-11 Dashboard Intent panel and confirmation   [x]
+### IN-11 Dashboard Intent panel and confirmation   [x] (2026-11-03: confirm in the browser verified end to end: new verdict revision stored, "unconfirmed" flag cleared, DEC-033; intent upload button not verified)
 - Owner type: agent-ok
 - Depends on: IN-08
 - Branch: `feature/dashboard-intent-panel`

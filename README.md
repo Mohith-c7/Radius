@@ -7,7 +7,39 @@
 
 CI can pass while the tests that ran never touched the change, and AI-assisted code makes pull requests larger than people can read closely. Radius analyses the pull request as a change to a dependency graph, selects the tests that can reach it, and returns a verdict that is computed from the test results it receives: `verified`, `failed`, or `insufficient_evidence`. It never turns missing evidence into a pass.
 
-> **Project status and honesty.** Radius is pre-1.0 (version `0.1.0`) and was built as a capstone project. It has no published releases, and its numbers come from a small self-evaluation. The 0-100 score is an uncalibrated heuristic, not a probability. It is licensed under Apache-2.0 (see [License](#license)). Anything labelled experimental or planned below is not something to rely on.
+> **Project status.** Radius is pre-1.0 (version `0.1.0`), an **alpha** built as a capstone project. There are no published releases, images or packages. Its numbers come from a small self-evaluation, and the 0-100 score is an uncalibrated heuristic, not a probability. Licensed under Apache-2.0 (see [License](#license)).
+
+## Status: what was verified, what is alpha, what is not done
+
+Last checked by running the product: 2026-11-03. Only the items in the first list were actually run.
+
+**Verified by running it**
+
+- The local development stack (`make dev`, which layers `docker-compose.dev.yml`) builds and its four services (migrations, api, worker, dashboard) become healthy, with PostgreSQL.
+- In Chrome: sign-up (auto-verified in dev mode), the dashboard pages, demo sign-in, a seeded demo analysis page, and a real analysis with the Verdict v2 panel rendered (alpha banner, per-criterion states, "why this verdict" rules, CI evidence, dependency graph).
+- Confirming an intent criterion in the dashboard stores a new verdict revision within seconds and clears that criterion's "unconfirmed" flag (DEC-033).
+- The end-to-end smoke test (real API, real worker, PostgreSQL, a fake GitHub) passes on the Linux CI runner. On develop, CI, Coverage, Security, CodeQL, Smoke and Scorecard (7.4) are green.
+
+**Alpha (works in the cases above, not trusted beyond them)**
+
+- Verdict v2 is off by default and must be turned on explicitly. It uses static assertion strength only, is uncalibrated, covers Python only, and part of its evidence is controlled by the PR author.
+- The v1 verdict, test selection, intent layer, tamper rules and linking are tested in CI but evaluated only on small or synthetic corpora.
+
+**Not verified or not done**
+
+- Anything against real GitHub (webhooks, GitHub App installation, check runs and comments on a real repository). Only a fake GitHub has been exercised.
+- A production-mode run (`docker compose up` without the dev override), the sandbox on Windows, and signed releases (not built). SSO is not built.
+- Mutation scores in the worker (research spike only), calibration, and a second gold-set annotator.
+- In the browser: the "Re-run analysis" button, and the intent-upload and JUnit-upload buttons. TypeScript typecheck, lint and build of the dashboard were not re-run in the verification session.
+
+The full list with mitigations and where each item is tracked is in [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md). The go/no-go list for a first alpha release is [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md).
+
+## What Radius is and is not
+
+- It is **static evidence**. Verdicts come from the graph of the change, the test results your CI uploads, and the shape of the test code (for example whether a test asserts anything). Radius does not execute your tests by default.
+- It is **uncalibrated**. Thresholds were fitted to a handful of fixtures (8 in the Verdict v2 replay). Scores and states are not probabilities and have no measured error rate.
+- It is **not a proof** of correctness. "Supported" means the available evidence looks adequate for a stated criterion; the PR author can influence some of that evidence, and the Verdict v2 Check Run is advisory by default.
+- It does **not replace** your CI or code review, and it abstains (`insufficient_evidence`) rather than passing when evidence is missing.
 
 ## How it works
 
@@ -33,9 +65,9 @@ flowchart LR
 
 The intent layer (what a change is supposed to do, as confirmable criteria with provenance) exists as a package, API and dashboard panel through milestone M1. It does not feed the default (v1) verdict or the PR comment. The opt-in Verdict v2 alpha (`RADIUS_FEATURE_VERDICT_V2`, off by default) is the only path that uses it. Details: [System architecture](docs/SYSTEM_ARCHITECTURE.md).
 
-## Quickstart
+## Quickstart (local, about 5 minutes after the first build)
 
-Needs Docker with Compose v2. The first build takes several minutes (about 10 on a cold cache in the reference run, see the [development guide](docs/DEVELOPMENT_GUIDE.md)); later starts take under a minute.
+This is the path that was run and checked on 2026-11-03. It needs Docker with Compose v2. The first image build takes several minutes; later starts are faster. Never expose this development profile to a network.
 
 ```bash
 git clone https://github.com/Mohith-c7/Radius.git && cd Radius
@@ -43,13 +75,20 @@ make dev                          # Linux, macOS, WSL, Git Bash
 # Windows PowerShell without make:  .\scripts\dev.ps1 dev
 ```
 
+`make dev` generates a `.env` with random secrets and starts PostgreSQL, migrations, the api, the worker and the dashboard in development mode (auto-verified accounts, sign-in links also printed in `make logs`). It waits until all services are healthy.
+
 | What | URL |
 |---|---|
 | Dashboard | http://localhost:3000 |
 | API docs | http://localhost:8000/docs |
 | Health | http://localhost:8000/api/v1/health |
 
-`make dev` is the local-development profile: it generates a `.env` with random secrets and layers `docker-compose.dev.yml` (development mode, localhost sign-in, auto-verified accounts, sign-in links printed in `make logs`, one random dev API key). Never expose it to a network. Stop with `make down`. Plain `docker compose up` is production-like and needs real secrets, keys and https origins: see [docs/operations/INSTALL.md](docs/operations/INSTALL.md). A full-stack run of the dev profile is not yet verified end to end. This brings up PostgreSQL, migrations, the API, the worker and the dashboard. It does **not** connect a GitHub repository: for that, create a GitHub App and set the webhook and key variables, following the [deployment guide](docs/DEPLOYMENT.md) and the [GitHub App validation runbook](docs/github-app-validation/RUNBOOK.md). For a look at the UI with illustrative (not real) data on a disposable database, run `make seed-demo`. To run your tests with the verdict as a CI gate, see the [CI integration guide](docs/CI_INTEGRATION_GUIDE.md).
+1. **Sign up** in the dashboard with any e-mail address; in dev mode the account is verified immediately.
+2. **Load demo data** (optional, disposable database only): `make seed-demo` (Windows: `.\scripts\dev.ps1 seed-demo`, which needs `uv`). It adds hand-written illustrative fixtures and a demo login (`demo@radius.dev`, publicly documented password). It is not real analysis output. See the [development guide](docs/DEVELOPMENT_GUIDE.md).
+3. **Turn on Verdict v2** (off by default). Set `RADIUS_FEATURE_VERDICT_V2=on` in `.env`; the intent-aware result also needs `RADIUS_FEATURE_INTENT_INGESTION=true` (see `.env.example`). Then run `make dev` again so the api and worker are recreated with the new value.
+4. Stop with `make down`; `make clean-volumes` also deletes the database.
+
+What this does **not** do: connect a GitHub repository. For that, create a GitHub App and follow the [deployment guide](docs/DEPLOYMENT.md) and the [GitHub App validation runbook](docs/github-app-validation/RUNBOOK.md); that path has not been run against real GitHub. Plain `docker compose up` is production-like, needs real secrets, keys and https origins ([INSTALL](docs/operations/INSTALL.md)), and was not run. To use the verdict as a CI gate see the [CI integration guide](docs/CI_INTEGRATION_GUIDE.md).
 
 ## What works today
 
@@ -98,6 +137,8 @@ Only what the [novelty assessment](docs/research/literature/novelty-assessment.m
 - [System architecture](docs/SYSTEM_ARCHITECTURE.md), [API contracts](docs/API_CONTRACTS.md), [observability](docs/OBSERVABILITY.md)
 - [Product vision](docs/PRODUCT_VISION.md), [roadmap](docs/roadmap.md), [decisions](docs/decisions.md)
 - [Production-readiness audit and backlog](docs/production-readiness/README.md): what is missing before 1.0, including the v1.0 definition of done
+- [Known limitations](docs/KNOWN_LIMITATIONS.md) and [alpha release checklist](docs/RELEASE_CHECKLIST.md)
+- [Verdict v2: how to read it](docs/verdict-v2.md), [policy](docs/policy.md), [threat model](docs/security/VERDICT_V2_THREAT_MODEL.md), [CI checks](docs/security/CI_CHECKS.md)
 - [Changelog](CHANGELOG.md)
 
 Repository layout: `apps/` (api, worker, dashboard), `packages/` (analysis, confidence, evidence, github, graph, intent, linking, parser, repository, shared, testing), `infra/` (migrations, observability), `docs/`, `tests/`, `benchmarks/`.
