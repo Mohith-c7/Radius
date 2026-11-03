@@ -1538,6 +1538,7 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
         <CiTestResultsCard
           testResult={testResult}
           analysisId={analysisId}
+          commitSha={analysis.commit_sha}
           onRefresh={() => setRefreshKey((k) => k + 1)}
         />
         <TestSelectionHub tests={tests} analysisId={analysisId} />
@@ -1724,10 +1725,13 @@ function BlastRadiusVisualizerCard({
 function CiTestResultsCard({
   testResult,
   analysisId,
+  commitSha,
   onRefresh,
 }: {
   testResult: TestRunResult | null;
   analysisId: string;
+  /** The analysed head commit; uploaded results are bound to it. */
+  commitSha: string;
   onRefresh: () => void;
 }) {
   const [uploading, setUploading] = useState(false);
@@ -1739,7 +1743,7 @@ function CiTestResultsCard({
     setUploading(true);
     setErrorMsg(null);
     try {
-      await uploadTestResults(analysisId, payload, isXml);
+      await uploadTestResults(analysisId, payload, isXml, commitSha);
       setShowModal(false);
       setXmlInput("");
       onRefresh();
@@ -1859,6 +1863,8 @@ function CiTestResultsCard({
             <h2 style={{ marginTop: 0 }}>Upload Test Results</h2>
             <p className="muted" style={{ fontSize: "12px", marginBottom: "14px" }}>
               Upload or paste a standard JUnit XML or JSON report to update the confidence score dynamically.
+              The results are bound to the analysed commit{commitSha ? <> <code>{shortSha(commitSha)}</code></> : ""}:
+              run the tests on that commit.
             </p>
 
             <label style={{ display: "block", marginBottom: "12px" }}>
