@@ -243,6 +243,16 @@ def _stale_reason(
     return None
 
 
+#: Reason codes of an ``error`` row written because a recompute failed (B-01, B-04). Unlike
+#: an ordinary v2 error (v1 stays the published result), these are published as "verdict
+#: unavailable" so a previously published verdict (even ``verified``) does not stay current.
+STALE_MARKER_PREFIXES = ("recompute_failed", "stage_a_not_stored")
+
+
+def is_stale_marker(reason_code: str | None) -> bool:
+    return bool(reason_code) and str(reason_code).startswith(STALE_MARKER_PREFIXES)
+
+
 def publish_latest(
     session: Session,
     *,
@@ -282,7 +292,7 @@ def publish_latest(
     stored = repo_store.latest(organization_id, analysis_id)
     if stored is None:
         return PublishOutcome("skipped", "not_computed")
-    if stored.status != "ok":
+    if stored.status != "ok" and not is_stale_marker(stored.reason_code):
         return PublishOutcome("skipped", "v2_not_ok")
     stale = _stale_reason(session, analysis, stored)
     if stale is not None:
@@ -307,7 +317,9 @@ def publish_latest(
             github_client, token, repository.owner, repository.name,
             pull_request.github_pr_number,
         )
-        if live is not None and live.lower() != stored.head_sha.lower():
+        if live is None:  # fail closed (B-15): never overwrite a comment on an unknown head
+            return PublishOutcome("skipped", "live_head_unknown")
+        if live.lower() != stored.head_sha.lower():
             return PublishOutcome("skipped", "stale_head_on_github")
         digest, wrote = publisher.publish(
             token=token,
@@ -334,14 +346,16 @@ def publish_latest(
 def _live_head(
     client: GitHubAppClient, token: str, owner: str, repo: str, number: int
 ) -> str | None:
-    """Current head SHA of the PR per GitHub, or None when it is not in the open list."""
+    """Current head SHA of the PR per GitHub, or None when it cannot be determined.
 
-    for pull in client.list_pull_requests(token=token, owner=owner, repo=repo):
-        if pull.get("number") == number:
-            head = pull.get("head")
-            sha = head.get("sha") if isinstance(head, dict) else None
-            return sha if isinstance(sha, str) else None
-    return None
+    Asks for the pull request itself (``GET /pulls/{number}``): the open-PR list is paged at
+    100, so a PR beyond the first page used to be invisible and the guard failed open (B-15).
+    """
+
+    pull = client.get_pull_request(token=token, owner=owner, repo=repo, number=number)
+    head = pull.get("head") if isinstance(pull, dict) else None
+    sha = head.get("sha") if isinstance(head, dict) else None
+    return sha if isinstance(sha, str) and sha else None
 
 
 def v2_replaces_v1(session: Session, settings: WorkerSettings, analysis_id: UUID) -> bool:

@@ -139,10 +139,11 @@ class FakeGitHub:
     def create_installation_token(self, installation_id):
         return type("T", (), {"token": "ghs_x"})()
 
-    def list_pull_requests(self, **_):
-        if self.live_head is None:
-            return []
-        return [{"number": self.pr_number, "head": {"sha": self.live_head}}]
+    def get_pull_request(self, *, number, **_):
+        # GET /pulls/{number}: works for any PR, not only the first 100 open ones (B-15)
+        if self.live_head is None or number != self.pr_number:
+            return {}
+        return {"number": number, "head": {"sha": self.live_head}}
 
     def list_check_runs_for_ref(self, *, ref, check_name, **_):
         return [r for r in self.check_runs if r["head_sha"] == ref and r["name"] == check_name]
