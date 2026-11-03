@@ -1,0 +1,20 @@
+/* Pull-based GitHub actions. Uses the dashboard tokens from app/globals.css. */
+.gh-connect { display: grid; gap: 10px; margin-bottom: 20px; padding: 21px; }
+.gh-connect h2 { font-size: 15px; margin: 0; }
+.gh-connect p { margin: 0; }
+.gh-connect-form { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
+.gh-connect-form input { background: #fbfcfb; border: 1px solid var(--line); border-radius: 7px; color: var(--ink); flex: 1 1 260px; font: 500 13px Manrope, Arial, sans-serif; outline-color: var(--green); padding: 10px 11px; }
+.gh-connect-form input[aria-invalid="true"] { border-color: #d98a8a; }
+.gh-visually-hidden { border: 0; clip: rect(0 0 0 0); height: 1px; margin: -1px; overflow: hidden; padding: 0; position: absolute; width: 1px; }
+.gh-note { align-items: flex-start; border-radius: 8px; display: flex; font-size: 13px; gap: 7px; padding: 9px 12px; }
+.gh-note svg { flex: none; margin-top: 2px; }
+.gh-note-warn { background: var(--amber-soft); border: 1px solid #f0d3a5; color: #7a4609; }
+.gh-note-error { background: #fdecec; border: 1px solid #f3c2c2; color: #8a1f1f; }
+.gh-note-ok { background: var(--green-soft); border: 1px solid #bfe3d1; color: #115c42; }
+.gh-detail { display: block; font-size: 12px; margin-top: 3px; opacity: 0.85; overflow-wrap: anywhere; }
+.gh-analyze { align-items: center; display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.gh-analyze-button { align-items: center; display: inline-flex; font-size: 11px; gap: 4px; padding: 4px 8px; }
+.gh-analyze-status { align-items: center; color: var(--muted); display: inline-flex; font-size: 12px; gap: 4px; }
+.gh-analyze-error { color: #8a1f1f; max-width: 360px; overflow-wrap: anywhere; }
+.gh-skipped { color: #7a4609; font-size: 12px; margin: 6px 0 0; padding-left: 18px; overflow-wrap: anywhere; }
+@media (max-width: 600px) { .gh-connect-form { align-items: stretch; flex-direction: column; } }

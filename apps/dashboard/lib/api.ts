@@ -1,3 +1,12 @@
+import {
+  analyzePullRequestRequest,
+  connectGitHubRequest,
+  rerunRequest,
+  summarizeSync,
+  syncPullRequestsRequest,
+  type SyncSummary,
+} from "./github-actions.ts";
+
 export type UUID = string;
 
 type ApiEnvelope<T> = {
@@ -339,28 +348,53 @@ export function listPullRequests(repositoryId: UUID) {
   return radiusFetch<PullRequest[]>(`/repositories/${repositoryId}/pull-requests`);
 }
 
-export function syncPullRequests(repositoryId: UUID, autoAnalyze = true) {
-  return radiusFetch<PullRequest[]>(
-    `/repositories/${repositoryId}/sync-pull-requests${buildQuery({
-      auto_analyze: autoAnalyze ? "true" : "false",
-    })}`,
-    { method: "POST" },
-  );
+export type SyncResult = {
+  pullRequests: PullRequest[];
+  summary: SyncSummary;
+};
+
+/** Pull open pull requests from GitHub; keeps `meta` (analysis ids, skipped reasons). */
+export async function syncPullRequestsDetailed(
+  repositoryId: UUID,
+  autoAnalyze = true,
+): Promise<SyncResult> {
+  const spec = syncPullRequestsRequest(repositoryId, autoAnalyze);
+  const result = await radiusRequest<PullRequest[]>(spec.path, { method: spec.method });
+  return {
+    pullRequests: result.data,
+    summary: summarizeSync(result.data.length, result.meta),
+  };
 }
 
+export async function syncPullRequests(repositoryId: UUID, autoAnalyze = true) {
+  return (await syncPullRequestsDetailed(repositoryId, autoAnalyze)).pullRequests;
+}
+
+export type ConnectGitHubResult = {
+  repository: Repository;
+  created: boolean;
+  installationId: number | null;
+};
+
 /** Connect a repository by "owner/name" through the GitHub App (no webhook needed). */
-export function connectGitHubRepository(repository: string) {
-  return radiusFetch<Repository>("/repositories/connect-github", {
-    method: "POST",
-    body: JSON.stringify({ repository }),
+export async function connectGitHubRepository(repository: string): Promise<ConnectGitHubResult> {
+  const spec = connectGitHubRequest(repository);
+  const result = await radiusRequest<Repository>(spec.path, {
+    method: spec.method,
+    body: spec.body,
   });
+  return {
+    repository: result.data,
+    created: result.meta.created === true,
+    installationId: typeof result.meta.installationId === "number" ? result.meta.installationId : null,
+  };
 }
 
 /** Fetch one pull request from GitHub by number and queue an analysis for its head commit. */
-export function analyzePullRequest(repositoryId: UUID, prNumber: number) {
-  return radiusFetch<Analysis>(`/repositories/${repositoryId}/pull-requests/${prNumber}/analyze`, {
-    method: "POST",
-  });
+export async function analyzePullRequest(repositoryId: UUID, prNumber: number) {
+  const spec = analyzePullRequestRequest(repositoryId, prNumber);
+  const result = await radiusRequest<Analysis>(spec.path, { method: spec.method });
+  return result.data;
 }
 
 export function disconnectRepository(repositoryId: UUID) {
@@ -394,11 +428,13 @@ export function getAnalysis(analysisId: UUID) {
   return radiusFetch<Analysis>(`/analyses/${analysisId}`);
 }
 
-export function rerunAnalysis(analysisId: UUID) {
-  return radiusFetch<Analysis>(`/analyses/${analysisId}/rerun`, {
-    method: "POST",
+export async function rerunAnalysis(analysisId: UUID) {
+  const spec = rerunRequest(analysisId);
+  const result = await radiusRequest<Analysis>(spec.path, {
+    method: spec.method,
     idempotencyKey: crypto.randomUUID(),
   });
+  return result.data;
 }
 
 export function startAnalysis(payload: {

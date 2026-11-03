@@ -1,7 +1,7 @@
 """Mutation-evidence prototype (EV-04/05/09/10 spike). Library only, flag-gated.
 
-Nothing here is wired into the worker pipeline. The feature flag
-``RADIUS_FEATURE_MUTATION`` (default OFF) gates any future caller; the library
+The worker's Stage A ``mutation`` producer (flag ``RADIUS_FEATURE_MUTATION``, default OFF)
+calls :func:`measure_mutation` with the sandbox backend only; the library
 functions themselves are pure and testable without it.
 
 SAFETY MODEL (full text in docs/research/design/MUTATION_EVIDENCE.md):
@@ -31,6 +31,17 @@ from radius_testing.mutation.matrix import (
     d_mut_per_test,
     wilson_interval,
 )
+from radius_testing.mutation.measure import (
+    ENGINE_VERSION,
+    MeasureConfig,
+    MeasuredMutant,
+    Measurement,
+    SymbolTarget,
+    collapse_results,
+    context_hash,
+    is_test_path,
+    measure_mutation,
+)
 from radius_testing.mutation.operators import (
     EXPERIMENTAL_OPERATOR_IDS,
     OPERATOR_IDS,
@@ -59,6 +70,15 @@ def mutation_enabled(environ: Mapping[str, str] | None = None) -> bool:
 
 
 __all__ = [
+    "ENGINE_VERSION",
+    "MeasureConfig",
+    "MeasuredMutant",
+    "Measurement",
+    "SymbolTarget",
+    "collapse_results",
+    "context_hash",
+    "is_test_path",
+    "measure_mutation",
     "EXPERIMENTAL_OPERATOR_IDS",
     "FLAG_ENV_NAME",
     "OPERATOR_IDS",

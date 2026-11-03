@@ -97,6 +97,55 @@ class CaseOutcomeInput(Serializable):
 
 
 @dataclass(frozen=True, slots=True)
+class MutantInput(Serializable):
+    """One mutant of a changed symbol and what the linked tests did with it.
+
+    Contract 5. Only the site (``path:line``) and the operator id are kept, never the
+    mutated code. ``status`` is ``killed`` / ``survived`` / ``timeout`` / ``error`` /
+    ``flaky`` / ``skipped_for_budget``. ``killed_by`` holds test ids as they appear in
+    ``symbol_test`` edges.
+    """
+
+    mutant_id: str
+    symbol_id: str
+    path: str
+    line: int
+    operator: str
+    status: str
+    killed_by: tuple[str, ...] = ()
+    equivalent_suspect: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class MutationInput(Serializable):
+    """Stage A mutation measurement (contract 5; absent when the flag is off).
+
+    ``status`` is ``measured`` (a kill matrix exists; whether a given test has enough
+    decided mutants is decided in Stage B) or ``unmeasured`` (``reason`` says why: the
+    static cap applies everywhere). ``symbol_tests`` maps each mutated symbol id to the
+    baseline-stable linked tests that were run against its mutants.
+    """
+
+    status: str
+    reason: str = ""
+    mutants: tuple[MutantInput, ...] = ()
+    symbol_tests: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    baseline_failed: tuple[str, ...] = ()
+    baseline_flaky: tuple[str, ...] = ()
+    generated: int = 0
+    sampled: int = 0
+    skipped_for_budget: int = 0
+    cache_hits: int = 0
+    seed: int = 0
+    min_decided: int = 5
+    #: Degradation steps taken, in order (``sampled``, ``tier_a_only``, ``budget_cut``, ...).
+    ladder: tuple[str, ...] = ()
+    engine: str = ""
+    operators: tuple[str, ...] = ()
+    image: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class StageAInput(Serializable):
     """Persisted inside the bundle after Stage A."""
 
@@ -126,6 +175,8 @@ class StageAInput(Serializable):
     #: Contract 3: raw ``.radius/policy.yml`` / ``waivers.yml`` captured at the BASE ref
     #: (``radius_evidence.policy.repo_config``). Empty = no repository config read.
     repo_config: dict[str, Any] = field(default_factory=dict)
+    #: Contract 5: mutation measurement (RADIUS_FEATURE_MUTATION). ``None`` = not run.
+    mutation: MutationInput | None = field(default=None, metadata={"omit_none": True})
 
 
 @dataclass(frozen=True, slots=True)

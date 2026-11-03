@@ -37,7 +37,7 @@ from radius_shared.verdict_v2_wording import presentation
 
 BUNDLE_SCHEMA = "verdict-v2-bundle-1"
 #: Mirrors ``radius_evidence.domain.versions.CONTRACT_VERSION`` (a test keeps them equal).
-CONTRACT_VERSION = "verdict-v2-contract-4"
+CONTRACT_VERSION = "verdict-v2-contract-5"
 STATES = ("proven", "weak", "unevidenced", "contradicted", "excluded")
 SEVERITIES = ("critical", "high", "medium", "low")
 
@@ -134,12 +134,16 @@ def derive_next_actions(criteria: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 _RULE_ID = re.compile(r"^[RP]\d[a-z]?$")
 
+_MUTATION_ITEM_KEYS = ("basis", "d_mut", "d_mut_lcb", "mutation_n", "mutation_killed")
+
 #: The documented per-item keys (``verdict_v2.schema.json``); bundle rows may carry more
 #: (``criterion_id``, ``lambda_kind``, ``cap_static`` ...) that are not part of the contract.
 _ITEM_KEYS = (
     "evidence_id", "test_id", "outcome", "a_static", "d_eff", "i", "f", "flaky_f",
     "tamper_penalty", "q", "l_cs", "l_st", "r_ct", "l", "term", "group_symbol",
     "rank_in_group", "discount", "contribution", "status",
+    # contract 5 (present only for mutation-measured rows)
+    "basis", "d_mut", "d_mut_lcb", "mutation_n", "mutation_killed",
 )
 
 
@@ -158,9 +162,21 @@ def _criterion(
         )
         data["test_id"] = test_id
         data["outcome"] = evidence.get("outcome") or data.get("outcome") or "not_run"
-        items.append({k: data[k] for k in _ITEM_KEYS if k in data})
+        row = {k: data[k] for k in _ITEM_KEYS if k in data}
+        if data.get("mutation_n") is None:  # contract 5: only mutation-measured rows carry these
+            for key in _MUTATION_ITEM_KEYS:
+                row.pop(key, None)
+        items.append(row)
     best = raw.get("best_link")
+    mutation = raw.get("mutation")
+    extra: dict[str, Any] = {}
+    if isinstance(mutation, Mapping) and mutation:  # contract 5, only with RADIUS_FEATURE_MUTATION
+        extra = {
+            "evidence_basis": str(mutation.get("basis") or "static_only"),
+            "mutation": dict(mutation),
+        }
     return {
+        **extra,
         "criterion_id": raw.get("criterion_id", ""),
         "text": raw.get("text", ""),
         "state": raw.get("state", "unevidenced"),
@@ -182,6 +198,48 @@ def _criterion(
         "best_link": dict(best) if isinstance(best, Mapping) and best else None,
         "items": items,
     }
+
+
+MAX_SUGGESTED_TESTS = 5
+MAX_SUGGESTED_CODE = 2500
+
+
+def suggested_tests(raw: Any) -> list[dict[str, Any]]:
+    """Sanitised ``suggested_tests`` (DEC-034): LLM-proposed, gated, never run, never evidence.
+
+    The flags are forced here, whatever the stored bundle says, so no reader can be told a
+    suggestion was executed or counts as evidence.
+    """
+
+    out: list[dict[str, Any]] = []
+    for item in _maps(raw)[:MAX_SUGGESTED_TESTS]:
+        code = item.get("test_code")
+        cid = item.get("criterion_id")
+        if not (isinstance(code, str) and isinstance(cid, str) and code.strip()):
+            continue
+        imports = item.get("imports")
+        out.append(
+            {
+                "criterion_id": cid,
+                "test_code": code[:MAX_SUGGESTED_CODE],
+                "a_static": item["a_static"]
+                if isinstance(item.get("a_static"), (int, float))
+                and not isinstance(item.get("a_static"), bool)
+                else 0.0,
+                "imports": {
+                    str(m): [str(n) for n in names if isinstance(n, str)]
+                    for m, names in imports.items()
+                    if isinstance(names, list)
+                }
+                if isinstance(imports, Mapping)
+                else {},
+                "model": item["model"] if isinstance(item.get("model"), str) else "",
+                "provenance": "llm_proposed",
+                "executed": False,
+                "evidence": False,
+            }
+        )
+    return out
 
 
 def build_payload(
@@ -266,6 +324,7 @@ def build_payload(
             author_hint_criteria=sum(
                 1 for c in criteria if "author_supplied_hint" in c["flags"]
             ),
+            evidence_basis=(verdict.get("evidence_basis") if ok else None) or "static_only",
         ),
         "summary": {
             "criteria_total": len(criteria),
@@ -297,12 +356,18 @@ def build_payload(
         "dashboard_url": dashboard_url,
         "error": None,
     }
+    if ok and isinstance(bundle.get("mutation"), Mapping) and bundle["mutation"]:
+        payload["mutation"] = dict(bundle["mutation"])
     if waived_raw:
         payload["summary"]["tamper_waived"] = len(waived_raw)
     if ok and isinstance(verdict.get("policy"), Mapping) and verdict["policy"]:
         payload["policy"] = dict(verdict["policy"])
     if ok and isinstance(verdict.get("waivers"), Mapping) and verdict["waivers"]:
         payload["waivers"] = dict(verdict["waivers"])
+    if ok:
+        suggestions = suggested_tests(bundle.get("suggested_tests"))
+        if suggestions:
+            payload["suggested_tests"] = suggestions
     if stored.status != "ok":
         payload["error"] = {
             "code": stored.reason_code or stored.status,

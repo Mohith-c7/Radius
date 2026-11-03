@@ -22,7 +22,13 @@ def encode(value: Any) -> Any:
     """Convert a contract value into plain JSON types."""
 
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
-        return {f.name: encode(getattr(value, f.name)) for f in dataclasses.fields(value)}
+        # fields marked ``omit_none`` (optional contract-5 additions) vanish when None, so
+        # payloads and digests of earlier contracts stay byte-identical
+        return {
+            f.name: encode(getattr(value, f.name))
+            for f in dataclasses.fields(value)
+            if not (f.metadata.get("omit_none") and getattr(value, f.name) is None)
+        }
     if isinstance(value, Enum):
         return value.value
     if isinstance(value, bool) or value is None or isinstance(value, (int, str)):

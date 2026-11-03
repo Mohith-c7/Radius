@@ -1,5 +1,6 @@
 import base64
 import subprocess
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -258,6 +259,7 @@ class FakeOrchestrator:
 class FakeRuntime:
     def __init__(self) -> None:
         self.ran = False
+        self.stop_event = threading.Event()
 
     def run_loop(self, *, poll_interval_seconds: float) -> None:
         self.ran = poll_interval_seconds > 0

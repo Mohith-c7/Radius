@@ -7,6 +7,8 @@ from pydantic import Field, field_validator, model_validator
 from radius_shared.database.session import DatabaseSettings
 from radius_shared.verdict_v2_flag import VerdictV2Mode, parse_verdict_v2_mode
 
+MIN_POLL_INTERVAL_SECONDS = 30.0
+
 
 class WorkerSettings(DatabaseSettings):
     """Runtime settings loaded from environment variables."""
@@ -77,6 +79,52 @@ class WorkerSettings(DatabaseSettings):
             "pipeline until LK-05, so it only gates the library entry point."
         ),
     )
+    mutation_enabled: bool = Field(
+        default=False,
+        alias="RADIUS_FEATURE_MUTATION",
+        description=(
+            "Verdict v2 mutation evidence (default OFF; zero cost when off). Measures how "
+            "well the linked tests detect small seeded faults in the changed Python "
+            "symbols and uses the measured detection power instead of the static "
+            "assertion cap. Mutants are generated code from the pull request: they run "
+            "ONLY in the hardened sandbox, so this needs WORKER_TEST_EXECUTION_MODE=sandbox "
+            "(otherwise the analysis records 'mutation unmeasured' and keeps the static "
+            "cap). Needs RADIUS_FEATURE_VERDICT_V2 shadow or on."
+        ),
+    )
+    mutation_max_mutants: int = Field(
+        default=50,
+        ge=5,
+        le=500,
+        alias="RADIUS_MUTATION_MAX_MUTANTS",
+        description=(
+            "Mutation evidence: hard cap on mutants run per analysis (seeded, stratified "
+            "sample when more exist). Each mutant costs about one sandbox container run."
+        ),
+    )
+    mutation_wall_clock_seconds: float = Field(
+        default=600.0,
+        ge=30.0,
+        le=3600.0,
+        alias="RADIUS_MUTATION_WALL_CLOCK_SECONDS",
+        description=(
+            "Mutation evidence: wall-clock budget for the whole mutation stage of one "
+            "analysis. The stage runs inside the analysis job, so this is added latency. "
+            "When it is too small for the sampled mutants the stage degrades (fewer "
+            "mutants, finally 'unmeasured, static cap')."
+        ),
+    )
+    mutation_mutant_timeout_seconds: float = Field(
+        default=60.0,
+        ge=5.0,
+        le=600.0,
+        alias="RADIUS_MUTATION_MUTANT_TIMEOUT_SECONDS",
+        description=(
+            "Mutation evidence: upper bound of the per-mutant sandbox timeout (the "
+            "effective timeout is 3x the median baseline run, clamped to 5-120 s and to "
+            "this value). A timed-out mutant is excluded from the detection score."
+        ),
+    )
     tamper_rules_enabled: bool = Field(
         default=False,
         alias="RADIUS_FEATURE_TAMPER_RULES",
@@ -117,6 +165,57 @@ class WorkerSettings(DatabaseSettings):
         default=None,
         alias="GITHUB_INSTALLATION_ID",
     )
+
+    def dashboard_analysis_url(self, analysis_id: object) -> str | None:
+        """Link to an analysis in the dashboard, from ``DASHBOARD_BASE_URL``.
+
+        ``None`` when the base URL is unset or not an http(s) URL, so the Check Run and PR
+        comment then carry no link instead of a broken one.
+        """
+
+        base = (self.dashboard_base_url or "").strip().rstrip("/")
+        if not base.lower().startswith(("http://", "https://")):
+            return None
+        return f"{base}/analyses/{analysis_id}"
+    github_poll_interval_seconds: float = Field(
+        default=0.0,
+        alias="RADIUS_GITHUB_POLL_INTERVAL_SECONDS",
+        description=(
+            "Opt-in pull-based trigger (no webhook needed): every this many seconds "
+            "(plus or minus 10 percent jitter) the worker lists the open, non-draft "
+            "pull requests of connected repositories whose GitHub App installation it "
+            "can reach and queues an analysis for every head commit that has none yet. "
+            "0 (default) = off. Values from 1 to 29 are raised to 30; negative = off. "
+            "Needs GITHUB_APP_ID and a private key in the worker."
+        ),
+    )
+    github_poll_max_analyses_per_tick: int = Field(
+        default=10,
+        ge=1,
+        le=200,
+        alias="RADIUS_GITHUB_POLL_MAX_ANALYSES_PER_TICK",
+        description=(
+            "Upper bound of analyses one poll tick may queue; the rest wait for the "
+            "next tick."
+        ),
+    )
+    github_poll_max_repositories_per_tick: int = Field(
+        default=25,
+        ge=1,
+        le=500,
+        alias="RADIUS_GITHUB_POLL_MAX_REPOSITORIES_PER_TICK",
+        description=(
+            "Upper bound of repositories one poll tick lists from GitHub (one API call "
+            "each); repositories take turns so none starves."
+        ),
+    )
+
+    @field_validator("github_poll_interval_seconds", mode="after")
+    @classmethod
+    def _clamp_poll_interval(cls, value: float) -> float:
+        if value <= 0:
+            return 0.0
+        return max(value, MIN_POLL_INTERVAL_SECONDS)
 
     @model_validator(mode="after")
     def _load_private_key_file(self) -> Self:
@@ -192,7 +291,27 @@ class WorkerSettings(DatabaseSettings):
             "summary (opt-in): additionally proposes low-weight criteria from a "
             "conventional-commit PR title and behavioural bullets under Summary/Changes/"
             "What/Why/Description headings; never confirmed, provenance author_pr_body. "
+            "llm (opt-in, DEC-034): summary plus guarded LLM proposals from the PR title and "
+            "body ONLY (the PR text is sent to a third-party model provider); needs "
+            "RADIUS_LLM_INTENT_ENABLED, RADIUS_LLM_INTENT_ORGS and ANTHROPIC_API_KEY, "
+            "otherwise it logs why and behaves as summary; proposals are llm_proposed, never "
+            "confirmed, and block verified until a human confirms them. "
             "Unknown values mean sections."
+        ),
+    )
+
+    suggest_tests_enabled: bool = Field(
+        default=False,
+        alias="RADIUS_FEATURE_SUGGEST_TESTS",
+        description=(
+            "Verdict v2 (DEC-034, opt-in, default off): for criteria that are unevidenced or "
+            "weak, ask an LLM for one pytest snippet and show it, after a deterministic gate "
+            "(parses, imports only the changed symbols, has an assertion rated strong), in a "
+            "separate 'Suggested tests (not run, not evidence)' block. Never executed, never "
+            "evidence, never changes the verdict. Criterion text and changed symbol NAMES "
+            "(no source code) are sent to a third-party model provider; needs "
+            "RADIUS_LLM_INTENT_ENABLED, RADIUS_LLM_INTENT_ORGS and ANTHROPIC_API_KEY, "
+            "otherwise nothing is sent."
         ),
     )
 

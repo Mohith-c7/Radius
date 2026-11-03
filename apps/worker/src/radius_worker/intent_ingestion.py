@@ -41,6 +41,8 @@ from radius_github.intent_sources import (
 from radius_intent.application import IntentSnapshotService
 from radius_intent.domain import IntentSourceKind
 from radius_intent.infrastructure import SqlAlchemyIntentRepository, default_extractors
+from radius_intent.infrastructure.extraction import normalize_mode
+from radius_intent.infrastructure.llm import build_llm_mode_extractors
 from radius_intent.infrastructure.testability import DeterministicTestabilityRater
 from radius_shared.database import enums as db_enums
 from radius_shared.database import models as db_models
@@ -142,6 +144,14 @@ def _ingest(
         return tokens[0]
 
     repo = SqlAlchemyIntentRepository(session)
+    mode = normalize_mode(settings.intent_extraction_mode)
+    extractors = default_extractors(mode)
+    llm_extractor = None
+    if mode == "llm":
+        # DEC-034: guarded, opt-in LLM proposals from the PR title/body (data leaves the
+        # machine). Falls back to the deterministic summary set, with a log line.
+        setup = build_llm_mode_extractors(extractors, str(repository.organization_id))
+        extractors, llm_extractor = setup.extractors, setup.llm
     service = IntentIngestionService(
         repo,
         # The rater makes criteria testable (docs/API_CONTRACTS.md: ratings are computed
@@ -149,7 +159,7 @@ def _ingest(
         # Verdict v2 rule R2a (no behavioral_testable criterion) fires for every PR.
         IntentSnapshotService(
             repo,
-            default_extractors(settings.intent_extraction_mode),
+            extractors,
             rater=DeterministicTestabilityRater(),
         ),
 
@@ -186,7 +196,33 @@ def _ingest(
             deadline_seconds=settings.intent_deadline_seconds,
         ),
     )
-    return service.apply(org_id, str(analysis_id), collection, trigger=TRIGGER)
+    report = service.apply(org_id, str(analysis_id), collection, trigger=TRIGGER)
+    if llm_extractor is not None:
+        _log_llm_trace(llm_extractor, str(analysis_id))
+    return report
+
+
+def _log_llm_trace(llm_extractor: Any, analysis_id: str) -> None:
+    """Record cost, latency and degradation of the LLM extraction (no text, no output)."""
+    for run in llm_extractor.runs:
+        LOGGER.info(
+            "intent_llm_trace",
+            extra={
+                "analysis_id": analysis_id,
+                "source": run.source_key,
+                "model": run.model,
+                "called_provider": run.called_provider,
+                "cache_hit": run.cache_hit,
+                "usage_in": run.input_tokens,
+                "usage_out": run.output_tokens,
+                "latency_ms": run.latency_ms,
+                "proposals": run.proposals,
+                "dropped": list(run.dropped_codes),
+                "degraded": run.degraded,
+                "degraded_reason": run.degraded_reason,
+                "fallback": run.fallback,
+            },
+        )
 
 
 def _recorded_pr_outcomes(

@@ -1,0 +1,237 @@
+name: Release
+
+# PRD-13 (partial). Triggered only by a pushed tag `v*` or a manual run.
+#
+# Default behaviour (nothing configured): check version consistency, build the
+# api/worker/dashboard images for linux/amd64, generate release notes from
+# changelog.d, scan with Trivy, generate CycloneDX SBOMs and upload them as workflow
+# artifacts. NOTHING is pushed to any registry and nothing is signed.
+#
+# The `publish` job runs only when ALL of these hold:
+#   - the event is a pushed tag `v*` (never workflow_dispatch),
+#   - `dry_run` is not true (a tag push has no such input),
+#   - the repository variable RADIUS_RELEASE_PUBLISH is exactly "true",
+#   - the repository variable RADIUS_COSIGN_IMAGE names a cosign image pinned by digest.
+# See docs/RELEASING.md and docs/security/CI_CHECKS.md ("Release workflow").
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run: build, scan and upload artifacts only (never publishes)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # aquasec/trivy pinned by digest, same as container-scan.yml.
+  TRIVY_IMAGE: aquasec/trivy@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+
+jobs:
+  prepare:
+    name: Version check and release notes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve version and tag
+        id: meta
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          else
+            v=$(python3 -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+            echo "version=$v" >> "$GITHUB_OUTPUT"
+            echo "tag=v$v" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Version consistency (tag, pyproject, package.json, Dockerfiles)
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: python3 scripts/release_notes.py check-versions --tag "$TAG"
+
+      - name: Release notes from changelog.d
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: python3 scripts/release_notes.py notes --version "$VERSION" > RELEASE_NOTES.md
+
+      - name: Upload release notes
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-notes
+          path: RELEASE_NOTES.md
+          retention-days: 30
+
+  build:
+    name: Build, scan, SBOM (${{ matrix.image }})
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: api
+            dockerfile: apps/api/Dockerfile
+          - image: worker
+            dockerfile: apps/worker/Dockerfile
+          - image: dashboard
+            dockerfile: apps/dashboard/Dockerfile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build image (linux/amd64, loaded locally, not pushed)
+        env:
+          DOCKERFILE: ${{ matrix.dockerfile }}
+          IMAGE: radius-${{ matrix.image }}:release
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          docker buildx build --platform linux/amd64 --load \
+            -f "$DOCKERFILE" -t "$IMAGE" \
+            --build-arg "RADIUS_VERSION=$VERSION" --build-arg "VCS_REF=$GITHUB_SHA" .
+          docker image ls "$IMAGE"
+
+      - name: Verify the container runs as non-root
+        env:
+          IMAGE: radius-${{ matrix.image }}:release
+        run: |
+          uid=$(docker run --rm --entrypoint id "$IMAGE" -u)
+          echo "uid=$uid"
+          test "$uid" != "0"
+
+      - name: CycloneDX SBOM (Trivy)
+        env:
+          IMAGE: radius-${{ matrix.image }}:release
+          NAME: ${{ matrix.image }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/trivy-cache"
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$RUNNER_TEMP/trivy-cache:/root/.cache" \
+            -v "$PWD:/work" -w /work "$TRIVY_IMAGE" image \
+            --format cyclonedx --output "/work/sbom-$NAME.cdx.json" "$IMAGE"
+
+      - name: Trivy gate (fail on fixable HIGH/CRITICAL)
+        env:
+          IMAGE: radius-${{ matrix.image }}:release
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$RUNNER_TEMP/trivy-cache:/root/.cache" \
+            -v "$PWD:/work:ro" -w /work "$TRIVY_IMAGE" image \
+            --severity HIGH,CRITICAL --ignore-unfixed --ignorefile /work/.trivyignore \
+            --exit-code 1 "$IMAGE"
+
+      - name: Upload SBOM
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom-${{ matrix.image }}
+          path: sbom-${{ matrix.image }}.cdx.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+  publish:
+    name: Publish, sign, attest (${{ matrix.image }})
+    needs: [prepare, build]
+    # Gate: tag push only, not a dry run, and the explicit opt-in variable.
+    if: >-
+      github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+      && inputs.dry_run != true && vars.RADIUS_RELEASE_PUBLISH == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write # push to GHCR
+      id-token: write # cosign keyless signing (OIDC)
+      attestations: write # reserved for a pinned build-provenance attestation step (see docs)
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: api
+            dockerfile: apps/api/Dockerfile
+          - image: worker
+            dockerfile: apps/worker/Dockerfile
+          - image: dashboard
+            dockerfile: apps/dashboard/Dockerfile
+    env:
+      COSIGN_IMAGE: ${{ vars.RADIUS_COSIGN_IMAGE }}
+    steps:
+      - name: Require a digest-pinned cosign image
+        run: |
+          case "$COSIGN_IMAGE" in
+            *@sha256:????????????????????????????????????????????????????????????????) ;;
+            *) echo "::error::Set repository variable RADIUS_COSIGN_IMAGE to a cosign image pinned by @sha256 digest"; exit 1 ;;
+          esac
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Log in to GHCR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+
+      - name: Build and push (amd64, BuildKit max provenance)
+        id: push
+        env:
+          DOCKERFILE: ${{ matrix.dockerfile }}
+          NAME: ${{ matrix.image }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          repo="ghcr.io/${GITHUB_REPOSITORY,,}"
+          ref="$repo/$NAME"
+          docker buildx build --platform linux/amd64 --push \
+            --provenance=mode=max --sbom=false \
+            -f "$DOCKERFILE" -t "$ref:$VERSION" \
+            --build-arg "RADIUS_VERSION=$VERSION" --build-arg "VCS_REF=$GITHUB_SHA" \
+            --metadata-file meta.json .
+          digest=$(jq -r '."containerimage.digest"' meta.json)
+          case "$digest" in sha256:*) ;; *) echo "::error::no digest in build metadata"; exit 1 ;; esac
+          echo "ref=$ref@$digest" >> "$GITHUB_OUTPUT"
+
+      - name: CycloneDX SBOM of the pushed image (Trivy)
+        env:
+          REF: ${{ steps.push.outputs.ref }}
+          NAME: ${{ matrix.image }}
+        run: |
+          docker run --rm \
+            -v "$HOME/.docker/config.json:/root/.docker/config.json:ro" \
+            -v "$PWD:/work" -w /work "$TRIVY_IMAGE" image \
+            --format cyclonedx --output "/work/sbom-$NAME.cdx.json" "$REF"
+
+      - name: Cosign keyless sign and attach SBOM attestation
+        env:
+          REF: ${{ steps.push.outputs.ref }}
+          NAME: ${{ matrix.image }}
+        run: |
+          run_cosign() {
+            docker run --rm \
+              -e ACTIONS_ID_TOKEN_REQUEST_URL -e ACTIONS_ID_TOKEN_REQUEST_TOKEN -e COSIGN_YES=true \
+              -v "$HOME/.docker/config.json:/root/.docker/config.json:ro" \
+              -v "$PWD:/work" -w /work "$COSIGN_IMAGE" "$@"
+          }
+          run_cosign sign "$REF"
+          run_cosign attest --type cyclonedx --predicate "sbom-$NAME.cdx.json" "$REF"
+          echo "Verify with: cosign verify $REF --certificate-identity-regexp 'https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@refs/tags/.*' --certificate-oidc-issuer https://token.actions.githubusercontent.com"

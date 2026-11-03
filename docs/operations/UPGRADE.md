@@ -8,7 +8,7 @@ database migrations. Read the changelog fragments between the two versions first
 ## How migrations are applied
 
 - Alembic, script location `infra/database/migrations` (`alembic.ini`), revisions
-  `infra/database/migrations/versions/` (14 revisions at the time of writing, head `20261102_0014`).
+  `infra/database/migrations/versions/` (16 revisions at the time of writing, head `20261103_0016`).
 - `infra/database/migrations/env.py` takes the URL from `DATABASE_URL` (falls back to `alembic.ini`) and normalises
   `postgres://` / `postgresql://` to `postgresql+psycopg://`.
 - Compose runs a one-shot `migrations` service (`alembic upgrade head`) before `api` and `worker` start.
@@ -76,6 +76,10 @@ Migrations `20261102_0013` and `20261102_0014` create the Verdict v2 alpha table
 `verdict_v2_requests` (the re-score outbox used after CI uploads). The tables exist even when the flag is `off`.
 Downgrading past them drops those tables and their rows, which are derived data (v1 results are stored separately and are
 unaffected), but still prefer a backup.
+
+Migration `20261103_0016` creates `mutation_result_cache` (final mutant results per organization and repository, used only
+with `RADIUS_FEATURE_MUTATION`, pruned after 30 days). The table exists even when the flag is off; downgrading drops it and
+its rows, which are a pure cache.
 
 ## Compatibility notes for flags
 

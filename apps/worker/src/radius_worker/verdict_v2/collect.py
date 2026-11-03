@@ -72,6 +72,9 @@ class CollectLimits:
     max_tests: int = 3000
     timeout_s: float = 120.0
     step_timeout_s: float = 60.0
+    #: Hard stop for the mutation producer (its own wall clock is smaller; this is the
+    #: watchdog that abandons it if the sandbox hangs). Set from the worker settings.
+    mutation_timeout_s: float = 660.0
 
 
 def guarded[T](fn: Callable[[], T], timeout_s: float) -> T:
@@ -326,6 +329,10 @@ class Producers:
     relevance: Callable[..., Any] | None = default_relevance
     #: LK-03 dynamic-coverage links (flag-gated); ``None`` = not produced.
     dynamic_links: Callable[..., Any] | None = None
+    #: Contract 5 mutation evidence (flag ``RADIUS_FEATURE_MUTATION``, default off):
+    #: ``(MutationRequest) -> MutationInput``. ``None`` = flag off, nothing runs and
+    #: ``StageAInput.mutation`` stays ``None``. Sandbox backend only (see ``mutation.py``).
+    mutation: Callable[[Any], Any] | None = None
     read_sources: Callable[[Path], tuple[dict[str, str], bool]] = read_python_sources
 
 
@@ -349,13 +356,34 @@ class _Run:
             if m not in self.degraded:
                 self.degraded.append(m)
 
-    def step[T](self, name: str, fn: Callable[[], T], default: T) -> T:
-        """Run a non-critical producer; degrade (never raise) on failure or timeout."""
+    def step[T](
+        self,
+        name: str,
+        fn: Callable[[], T],
+        default: T,
+        *,
+        timeout_s: float | None = None,
+        blocking_timeout: bool = True,
+    ) -> T:
+        """Run a non-critical producer; degrade (never raise) on failure or timeout.
 
+        ``timeout_s`` replaces the default step budget (the mutation producer has its own
+        wall clock). A timeout marks ``truncated`` (blocking) unless ``blocking_timeout``
+        is false: the mutation producer's evidence is optional, so its timeout only
+        records ``producer_timeout:mutation``.
+        """
+
+        budget = (
+            min(self.limits.step_timeout_s, self.remaining())
+            if timeout_s is None
+            else timeout_s
+        )
         try:
-            return guarded(fn, min(self.limits.step_timeout_s, self.remaining()))
+            return guarded(fn, budget)
         except ProducerTimeoutError:
-            self.mark(f"producer_timeout:{name}", TRUNCATED)
+            self.mark(f"producer_timeout:{name}")
+            if blocking_timeout:
+                self.mark(TRUNCATED)
         except Exception as exc:  # noqa: BLE001 - isolation by contract
             self.mark(f"producer_failed:{name}")
             LOGGER.warning(
@@ -546,6 +574,33 @@ class VerdictStageACollector:
             edges_st = tuple(e for e in edges_st if e.test_id in keep)
             run.mark(TRUNCATED)
 
+        mutation_input = None
+        if prod.mutation is not None and edges_st and crit_sym.items:
+            from radius_worker.verdict_v2.mutation import (
+                request_from_stage_a,
+                unmeasured_input,
+            )
+
+            request = request_from_stage_a(
+                Path(command.repository_path), changeset, sym_items, crit_sym.items, edges_st
+            )
+            mutation_input = run.step(
+                "mutation",
+                lambda: prod.mutation(request),
+                None,
+                timeout_s=self._limits.mutation_timeout_s,
+                blocking_timeout=False,
+            )
+            if mutation_input is None:
+                mutation_input = unmeasured_input("producer_failed")
+            elif getattr(mutation_input, "status", "") != "measured":
+                run.mark(f"mutation_unmeasured:{mutation_input.reason or 'unknown'}")
+        elif prod.mutation is not None:
+            from radius_worker.verdict_v2.mutation import unmeasured_input
+
+            mutation_input = unmeasured_input("no_linked_tests")
+            run.mark("mutation_unmeasured:no_linked_tests")
+
         changed_tests = adapters.changed_test_ids(sym_items)
         test_files = sorted(
             {t.split("::", 1)[0] for t in {*(e.test_id for e in edges_st), *changed_tests}}
@@ -608,6 +663,7 @@ class VerdictStageACollector:
             degraded=tuple(run.degraded),
             algo_versions=dict(sorted(run.algo.items())),
             repo_config=repo_config,
+            mutation=mutation_input,
         )
 
     @staticmethod

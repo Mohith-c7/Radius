@@ -152,7 +152,7 @@ def test_provenance_survives_the_stage_a_json_round_trip() -> None:
 
 
 def test_contract_version_is_three_and_shared_agrees() -> None:
-    assert CONTRACT_VERSION == SHARED_CONTRACT_VERSION == "verdict-v2-contract-4"
+    assert CONTRACT_VERSION == SHARED_CONTRACT_VERSION == "verdict-v2-contract-5"
 
 
 # ----------------------------------------------------------------------- the cap

@@ -141,10 +141,19 @@ class ItemView:
     l: float = 0.0  # noqa: E741
     term: float = 0.0
     contribution: float | None = None
+    #: Contract 5 (optional): ``mutation`` when d_eff is the Wilson lower bound of the
+    #: measured kill rate over ``mutation_n`` decided mutants; ``static`` / empty otherwise.
+    basis: str = ""
+    d_mut: float | None = None
+    d_mut_lcb: float | None = None
+    mutation_n: int | None = None
+    mutation_killed: int | None = None
 
     @classmethod
     def from_payload(cls, data: Mapping[str, Any]) -> ItemView:
         contribution = data.get("contribution")
+        n = data.get("mutation_n")
+        k = data.get("mutation_killed")
         return cls(
             _str(data.get("evidence_id")),
             _str(data.get("test_id")),
@@ -160,9 +169,26 @@ class ItemView:
             _num(data.get("l")),
             _num(data.get("term")),
             None if contribution is None else _num(contribution),
+            _str(data.get("basis")),
+            None if data.get("d_mut") is None else _num(data.get("d_mut")),
+            None if data.get("d_mut_lcb") is None else _num(data.get("d_mut_lcb")),
+            n if isinstance(n, int) and not isinstance(n, bool) else None,
+            k if isinstance(k, int) and not isinstance(k, bool) else None,
         )
 
     def to_dict(self) -> dict[str, Any]:
+        extra: dict[str, Any] = {}
+        if self.mutation_n is not None:
+            extra = {
+                "basis": self.basis,
+                "d_mut": self.d_mut,
+                "d_mut_lcb": self.d_mut_lcb,
+                "mutation_n": self.mutation_n,
+                "mutation_killed": self.mutation_killed,
+            }
+        return extra | self._base_dict()
+
+    def _base_dict(self) -> dict[str, Any]:
         return {
             "evidence_id": self.evidence_id,
             "test_id": self.test_id,
@@ -197,6 +223,10 @@ class CriterionView:
     items: tuple[ItemView, ...] = ()
     provenance: str = "author_pr_body"
     hints: tuple[dict[str, str], ...] = ()
+    #: Contract 5 (optional): ``static_only`` | ``mutation_measured`` | ``mutation_partial``
+    #: (empty when the mutation flag was off) and the mutation facts of the criterion.
+    evidence_basis: str = ""
+    mutation: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_payload(cls, data: Mapping[str, Any]) -> CriterionView:
@@ -216,9 +246,18 @@ class CriterionView:
             tuple(ItemView.from_payload(i) for i in _maps(data.get("items"))),
             _str(data.get("provenance"), "author_pr_body"),
             tuple({str(k): str(v) for k, v in h.items()} for h in _maps(data.get("hints"))),
+            _str(data.get("evidence_basis")),
+            _dict(data.get("mutation")),
         )
 
     def to_dict(self) -> dict[str, Any]:
+        out = self._base_dict()
+        if self.mutation:
+            out["evidence_basis"] = self.evidence_basis
+            out["mutation"] = dict(self.mutation)
+        return out
+
+    def _base_dict(self) -> dict[str, Any]:
         return {
             "criterion_id": self.criterion_id,
             "text": self.text,
@@ -338,6 +377,10 @@ class VerdictV2View:
     #: Contract 3: resolved repository policy and waiver audit (empty when none).
     policy: dict[str, Any] = field(default_factory=dict)
     waivers: dict[str, Any] = field(default_factory=dict)
+    #: DEC-034: LLM-proposed, gated, never executed, never evidence (rendered apart).
+    suggested_tests: tuple[Mapping[str, Any], ...] = ()
+    #: Contract 5: the mutation run of this analysis (empty when the flag was off).
+    mutation: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_payload(cls, payload: Mapping[str, Any]) -> VerdictV2View:
@@ -374,14 +417,20 @@ class VerdictV2View:
             computed_at=_opt_str(payload.get("computed_at")),
             policy=_dict(payload.get("policy")),
             waivers=_dict(payload.get("waivers")),
+            suggested_tests=_maps(payload.get("suggested_tests")),
+            mutation=_dict(payload.get("mutation")),
         )
 
     def to_dict(self) -> dict[str, Any]:
         out = self._base_dict()
+        if self.mutation:
+            out["mutation"] = dict(self.mutation)
         if self.policy:
             out["policy"] = dict(self.policy)
         if self.waivers:
             out["waivers"] = dict(self.waivers)
+        if self.suggested_tests:
+            out["suggested_tests"] = [dict(s) for s in self.suggested_tests]
         return out
 
     def _base_dict(self) -> dict[str, Any]:

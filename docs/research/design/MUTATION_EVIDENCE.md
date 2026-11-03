@@ -1,6 +1,6 @@
 # Mutation evidence service (EV-04, EV-05, EV-09, EV-10)
 
-**Status:** design plus a flag-gated spike (`packages/testing/src/radius_testing/mutation/`, `RADIUS_FEATURE_MUTATION`, default off, nothing wired into the worker). Date: 2026-11-03.
+**Status:** design plus a flag-gated spike (`packages/testing/src/radius_testing/mutation/`, `RADIUS_FEATURE_MUTATION`, default off). **Wired into the Verdict v2 pipeline by DEC-035** (Stage A producer, sandbox only; Stage B `d_eff`); D1 and D2 are decided there, D5/D6 stay open as stated. Date: 2026-11-03.
 **Reads:** `../DESIGN.md` (6.3 `q(e)`, 7 evidence quality), `../tasks/EV-evidence-quality.md` (EV-04, EV-05, EV-09, EV-10), `VERDICT_V2_SLICE.md` (3.5 `q(e,c)`), `../preregistration/PREREGISTRATION.md` (RQ2, mutation budgets), `../../security/EXECUTION_ISOLATION.md` (F-07), `../literature/related-work.md`, `../evaluation/MUTATION_FIXTURES.md` (fixture sanity run, not a research result).
 
 > Every number below is a hypothesis with a default, to be tuned by the evaluation plan. Cost figures are estimates until the pre-registered timing pilot (PREREGISTRATION 17.3) replaces them.

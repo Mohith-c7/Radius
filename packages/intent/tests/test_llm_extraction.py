@@ -162,7 +162,8 @@ def test_valid_output_becomes_proposed_low_weight_llm_criteria():
     assert src.text[c.span.start : c.span.end] == Q1
     ver = c.origin.extractor_version
     assert "intent-extract-llm-v1" in ver and "model=fake-model-1" in ver
-    assert f"prompt_sha256={out.prompt_hash}" in ver and len(out.prompt_hash) == 64
+    assert f"sha={out.prompt_hash[:12]}" in ver and len(out.prompt_hash) == 64
+    assert len(ver) <= 64  # fits the storage limit (a longer value was unstorable)
     assert out.input_tokens == 100 and out.output_tokens == 50
     assert ex.extract(src)[0].id == c.id  # port method
 

@@ -21,8 +21,9 @@ What "pull-based" means here:
 | A pull request starts an analysis | `pull_request` webhook | `POST /api/v1/repositories/{id}/pull-requests/{n}/analyze` or `.../sync-pull-requests` |
 | Worker clones, analyzes, publishes | same | same (outbound calls only) |
 
-Everything after "start analysis" is the unchanged worker path. There is no automatic trigger on push:
-you start each analysis yourself (a new commit needs a new `analyze` call).
+Everything after "start analysis" is the unchanged worker path. By default nothing triggers on push:
+you start each analysis yourself (dashboard button or `analyze`). To have new commits picked up
+automatically without a webhook, turn on the worker poller (section 7).
 
 ## 1. Create the GitHub App (webhook off)
 
@@ -166,11 +167,54 @@ curl -s "$API/analyses/<analysis-id>" -H "$H1" -H "$H2"                 # status
 curl -s "$API/analyses/<analysis-id>/verdict-v2" -H "$H1" -H "$H2"      # needs RADIUS_FEATURE_VERDICT_V2=on
 ```
 
-The dashboard (`http://localhost:3000`) lists the repository, its pull requests and the analysis once
-connected. It has no connect or analyze button yet; the `/api/radius` proxy allows the two new routes
-(`lib/api.ts` has `connectGitHubRepository` and `analyzePullRequest`) but no page calls them.
+The same steps are available in the dashboard (section 7).
 
-## 7. What you should see
+## 7. Demo from the dashboard, and automatic pickup of new commits
+
+Everything in section 6 works from the dashboard at `http://localhost:3000` (the browser never sees the
+API key; requests go through the same-origin proxy, which allows exactly these routes):
+
+1. **Repositories** > "Connect GitHub repository": type `your-user/your-test-repo` (a github.com URL
+   works too) and press Connect. Typos are caught in the form; API errors are shown in words with the
+   next step (for example "The Radius GitHub App is not installed on this repository"). On success a
+   link opens the repository. Connecting twice is safe ("already connected").
+2. **Repository page** or **Pull requests**: "Sync Open PRs from GitHub" pulls the open pull requests
+   and queues an analysis for each head commit that has none. The banner says how many pull requests
+   were synced, how many analyses were queued, and lists every pull request that was skipped with
+   the reason.
+3. Every open pull request has an **Analyze** button: it reads the current head commit from GitHub and
+   queues an analysis; "Open analysis" appears next to it.
+4. On the analysis page, **Re-run analysis** queues a new analysis of the same commit (for example
+   after you changed `.radius/intent.yml` or CI results). It shows API errors in the same way, for
+   example when the repository was disconnected. To analyze a newer commit use Analyze or the poller;
+   a re-run never moves to a newer head commit.
+
+### Automatic pickup (optional poller)
+
+Set in `.env` (the worker container) and restart the worker:
+
+```dotenv
+RADIUS_GITHUB_POLL_INTERVAL_SECONDS=60
+```
+
+`0` (default) is off; values below 30 are raised to 30. Every interval (plus or minus 10 percent
+jitter) the worker lists the open pull requests of each connected repository whose installation it can
+reach and queues an analysis for every head commit that has none yet. Drafts are not analyzed. It uses
+the same code as `sync-pull-requests`, with these differences: a head commit whose analysis *failed*
+is not retried automatically (use Re-run), and one tick queues at most
+`RADIUS_GITHUB_POLL_MAX_ANALYSES_PER_TICK` analyses (default 10) over at most
+`RADIUS_GITHUB_POLL_MAX_REPOSITORIES_PER_TICK` repositories (default 25); the rest wait for the next
+tick. One failing repository does not stop the others, an installation that GitHub rate limits is left
+alone until its reset, and SIGTERM ends the worker after the current job. The worker log shows
+`GitHub pull request poller enabled` at start and one `GitHub poll tick finished` line per tick (with
+`analyses_started`, `errors`, `deferred`). It needs `GITHUB_APP_ID` and the key in the **worker**
+container; without them it logs `poll_disabled` and stays off.
+Cost: one GitHub API call per polled repository per tick (conditional requests are not used yet).
+
+Push a commit to the test pull request, wait up to one interval, and the new commit gets an analysis;
+the existing pull request comment is updated in place and a Check Run appears on the new commit.
+
+## 8. What you should see
 
 The following was observed in `scripts/smoke_e2e.py` against the fake GitHub; on real GitHub the same
 structure is expected, which is exactly what this demo is meant to confirm.
@@ -193,7 +237,7 @@ structure is expected, which is exactly what this demo is meant to confirm.
   (Updating the existing comment and Check Run in place is verified for CI re-publishes in the smoke, not
   for a second `analyze` of an unchanged commit.)
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
@@ -208,13 +252,18 @@ structure is expected, which is exactly what this demo is meant to confirm.
 | `409 GITHUB_INSTALLATION_MISMATCH` | The organization is already linked to a different installation (another account's) | One Radius organization uses one installation. Use a repository under the same account, or a different organization id. |
 | Rate limit message (`GITHUB_RATE_LIMITED` / "rate limit hit") | Primary (5000/h per installation) or secondary limit | The client waits and retries within a budget; if it still fails the message says how long GitHub asks you to wait. Re-run after that. |
 | `sync-pull-requests` returns the stored PRs and `meta.github = not_configured` | The API has no App credentials | Same as the first row. |
-| `sync-pull-requests` skips a pull request (`meta.skipped`) | GitHub returned a shape Radius could not parse | The reason is in `meta.skipped[].reason`. |
+| `sync-pull-requests` skips a pull request (`meta.skipped`) | GitHub returned a shape Radius could not parse | The reason is in `meta.skipped[].reason`; the dashboard lists it under the sync banner. |
+| Poller never queues anything | `RADIUS_GITHUB_POLL_INTERVAL_SECONDS` is 0 or unset in the **worker**, or no App credentials there | `docker compose logs worker`: look for `poller enabled` / `poll_disabled` and the `poll tick finished` lines. |
 | Check Run link goes to `localhost:3000` | `DASHBOARD_BASE_URL` default | Expected for a local demo; set it to a reachable URL if you show the PR on another machine. |
 
-## 9. Limits (read before the demo)
+## 10. Limits (read before the demo)
 
-- Analyses start only when you call `analyze` or `sync-pull-requests`; a new commit on the pull request
-  is not picked up until you call it again.
+- Analyses start when you press Analyze / Sync (or call the routes), or, with
+  `RADIUS_GITHUB_POLL_INTERVAL_SECONDS` set, within one poll interval of a new commit. Without the poller
+  a new commit is not picked up until you ask. The poll interval is the latency: it is not instant like a
+  webhook.
+- The poller only sees repositories connected through Radius (dashboard or `connect-github`) whose
+  organization has an active installation id.
 - `sync-pull-requests` reads only the first 100 open pull requests and does not analyze drafts.
 - One Radius organization maps to one GitHub installation.
 - Verified only against a fake GitHub (see the status line). Real-GitHub behaviours the fake cannot

@@ -158,7 +158,8 @@
         },
         "evidence_basis": {
           "enum": [
-            "static_only"
+            "static_only",
+            "static_and_mutation"
           ]
         },
         "tamper_waived": {
@@ -238,7 +239,8 @@
                 "no_strong_assertion",
                 "needs_typed_evidence",
                 "no_linked_test",
-                "author_supplied_hint"
+                "author_supplied_hint",
+                "mutation_measured"
               ]
             }
           },
@@ -396,6 +398,39 @@
                 "status": {
                   "type": "string",
                   "description": "counted | gated:<reason>"
+                },
+                "basis": {
+                  "enum": [
+                    "static",
+                    "mutation"
+                  ],
+                  "description": "Contract 5 (optional): how d_eff was obtained."
+                },
+                "d_mut": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Contract 5 (optional): kill rate over decided non-equivalent mutants."
+                },
+                "d_mut_lcb": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Contract 5 (optional): Wilson lower bound, used as d_eff when basis is mutation."
+                },
+                "mutation_n": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "mutation_killed": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
                 }
               }
             }
@@ -440,6 +475,100 @@
                     "llm_proposed"
                   ]
                 }
+              }
+            }
+          },
+          "evidence_basis": {
+            "enum": [
+              "static_only",
+              "mutation_measured",
+              "mutation_partial"
+            ],
+            "description": "Contract 5 (optional): present when RADIUS_FEATURE_MUTATION was on."
+          },
+          "mutation": {
+            "type": "object",
+            "description": "Contract 5 (optional): mutation facts of the criterion. Gaps found, not a proof.",
+            "properties": {
+              "basis": {
+                "enum": [
+                  "static_only",
+                  "mutation_measured",
+                  "mutation_partial"
+                ]
+              },
+              "n_mutants": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "killed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "d_union": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "d_union_lcb": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "tests_measured": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "tests_total": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "survivors": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "mutant_id",
+                    "path",
+                    "line",
+                    "operator"
+                  ],
+                  "properties": {
+                    "mutant_id": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string",
+                      "description": "UNTRUSTED. Render as text only."
+                    },
+                    "line": {
+                      "type": "integer"
+                    },
+                    "operator": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "excluded": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer"
+                }
+              },
+              "d_reach": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "d_reach_reason": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
               }
             }
           }
@@ -869,7 +998,7 @@
     },
     "contract_version": {
       "type": "string",
-      "description": "Contract 4 (optional): data contract version."
+      "description": "Contract 5 (optional): data contract version."
     },
     "alpha": {
       "const": true,
@@ -880,8 +1009,11 @@
       "description": "Contract 4 (optional): always false; thresholds are uncalibrated."
     },
     "evidence_basis": {
-      "const": "static_only",
-      "description": "Contract 4 (optional): what the evidence is."
+      "enum": [
+        "static_only",
+        "static_and_mutation"
+      ],
+      "description": "Contract 5: what the evidence is. static_and_mutation only when RADIUS_FEATURE_MUTATION measured at least one criterion."
     },
     "presentation": {
       "type": "object",
@@ -901,6 +1033,63 @@
         },
         "summary_text": {
           "type": "string"
+        }
+      }
+    },
+    "mutation": {
+      "type": "object",
+      "description": "Contract 5 (optional): the mutation run of this analysis (present only when the flag was on).",
+      "properties": {
+        "status": {
+          "enum": [
+            "measured",
+            "unmeasured"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "engine": {
+          "type": "string"
+        },
+        "seed": {
+          "type": "integer"
+        },
+        "generated": {
+          "type": "integer"
+        },
+        "sampled": {
+          "type": "integer"
+        },
+        "decided": {
+          "type": "integer"
+        },
+        "killed": {
+          "type": "integer"
+        },
+        "equivalent_suspects": {
+          "type": "integer"
+        },
+        "skipped_for_budget": {
+          "type": "integer"
+        },
+        "cache_hits": {
+          "type": "integer"
+        },
+        "min_decided": {
+          "type": "integer"
+        },
+        "ladder": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "baseline_failed": {
+          "type": "integer"
+        },
+        "baseline_flaky": {
+          "type": "integer"
         }
       }
     }

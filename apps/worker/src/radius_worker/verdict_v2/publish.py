@@ -293,11 +293,7 @@ def publish_latest(
     pull_request = session.get(db_models.PullRequest, analysis.pull_request_id)
     if pull_request is None:
         return PublishOutcome("skipped", "analysis_not_found")
-    dashboard_url = (
-        f"{settings.dashboard_base_url.rstrip('/')}/analyses/{analysis_id}"
-        if settings.dashboard_base_url
-        else None
-    )
+    dashboard_url = settings.dashboard_analysis_url(analysis_id)
     payload = build_payload(
         stored, v1=v1_block(session, analysis_id), dashboard_url=dashboard_url
     )

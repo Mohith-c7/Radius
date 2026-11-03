@@ -53,8 +53,17 @@ from radius_evidence.domain.inputs import (
     StageBInput,
 )
 from radius_evidence.domain.model import EvidenceItem, Reason
+from radius_evidence.domain.mutation import (
+    BASIS_MEASURED,
+    BASIS_STATIC,
+    PR_BASIS_MUTATION,
+    CriterionMutation,
+    measure_criterion,
+    measure_test,
+)
 from radius_evidence.domain.quality import (
     EvidenceQuality,
+    MutationMeasure,
     evidence_quality_row,
     link_strength,
 )
@@ -75,6 +84,7 @@ from radius_evidence.domain.versions import (
     BUNDLE_SCHEMA,
     CONTRACT_VERSION,
     DEFAULT_COMPONENT_VERSIONS,
+    MUTATION_VERSION,
 )
 from radius_evidence.policy.apply import (
     CriterionFacts,
@@ -94,6 +104,7 @@ from radius_shared.verdict_v2_flag import VerdictV2Mode
 from radius_shared.verdict_v2_wording import presentation
 
 from radius_worker.verdict_v2.adapters import behavioral_symbols, failed_case_count
+from radius_worker.verdict_v2.suggested_tests import make_suggester
 
 LOGGER = get_logger(__name__)
 
@@ -175,8 +186,12 @@ def _best_rows(
     items_by_test: Mapping[str, EvidenceItem],
     severity_by_finding: Mapping[str, str],
     cfg: VerdictV2Config,
+    measure: Callable[[str], MutationMeasure | None] = lambda _test: None,
 ) -> tuple[list[EvidenceQuality], bool]:
-    """One quality row per (test, criterion) along the best path; tampered flag."""
+    """One quality row per (test, criterion) along the best path; tampered flag.
+
+    ``measure(test_id)`` gives the mutation-measured detection of a test for this
+    criterion (contract 5) or ``None`` (static cap)."""
 
     cid = criterion.criterion_id
     best: dict[str, tuple[float, str, Any]] = {}
@@ -212,6 +227,7 @@ def _best_rows(
                 tamper_severities=sev,
                 quality=cfg.quality,
                 mapping=cfg.link,
+                mutation=measure(test_id),
             )
         )
     # tests addressed by the criterion but with no symbol path: audit rows, gated
@@ -304,11 +320,24 @@ def compute_pipeline(
 
     supports: dict[str, SupportResult] = {}
     states: dict[str, CriterionStateResult] = {}
+    crit_mutation: dict[str, CriterionMutation] = {}
     for c in sa.criteria:
-        rows, tampered = _best_rows(c, index, items_by_test, severity, cfg)
+        c_symbols = frozenset(
+            e.symbol_id
+            for e in sa.criterion_symbol
+            if e.criterion_id == c.criterion_id and e.score >= cfg.link.link_min_cs - 1e-12
+        )
+        rows, tampered = _best_rows(
+            c,
+            index,
+            items_by_test,
+            severity,
+            cfg,
+            lambda test_id, _syms=c_symbols: measure_test(sa.mutation, _syms, test_id),
+        )
         sup = compute_support(c.criterion_id, rows, cfg.support)
         supports[c.criterion_id] = sup
-        states[c.criterion_id] = evaluate_criterion(
+        state = evaluate_criterion(
             c,
             sup,
             cfg,
@@ -316,6 +345,23 @@ def compute_pipeline(
             results_received=stage_b.results_received,
             n_addressed_tests=len(index.addressed_tests(c.criterion_id)),
         )
+        if sa.mutation is not None:
+            # tests that stand for the criterion: counted ones, plus tests whose measured
+            # detection came out as zero (gated:zero_quality) - they are measured evidence too
+            counted = [
+                r
+                for r in sup.items
+                if r.path and (r.status == "counted" or (r.status == "gated:zero_quality" and r.basis == "mutation"))
+            ]
+            cm = measure_criterion(
+                sa.mutation,
+                c_symbols,
+                [r.path.test_id for r in counted],
+                {r.path.test_id for r in counted if r.basis == "mutation"},
+            )
+            crit_mutation[c.criterion_id] = cm
+            state = replace(state, flags=_mutation_flags(state.flags, cm))
+        states[c.criterion_id] = state
     symbol_path = {s.symbol_id: s.path for s in sa.symbols}
     crit_paths = {
         c.criterion_id: tuple(
@@ -396,9 +442,13 @@ def compute_pipeline(
                     ",".join(reliant),
                 ),
             )
+        cm = crit_mutation.get(c.criterion_id)
         verdicts.append(
             build_criterion_verdict(
-                c, sup, CriterionStateResult(st.criterion_id, st.state, reasons, flags)
+                c,
+                sup,
+                CriterionStateResult(st.criterion_id, st.state, reasons, flags),
+                mutation=_criterion_block(cm) if cm is not None else None,
             )
         )
     unlinked = tuple(sorted(s.symbol_id for s in b_symbols if s.symbol_id not in covered))
@@ -455,8 +505,13 @@ def compute_pipeline(
         policy_unmet_required=unmet.required,
         policy_unmet_evidence=unmet.evidence,
     )
+    stage_b_digest: Any = original_stage_b
+    if original_sa.mutation is None:
+        # keep the digest of every flag-off computation identical to builds without the field
+        stage_b_digest = original_stage_b.to_dict()
+        stage_b_digest["stage_a"].pop("mutation", None)
     digest_inputs: dict[str, Any] = {
-        "stage_b": original_stage_b,
+        "stage_b": stage_b_digest,
         "config": cfg.digest(),
         "versions": DEFAULT_COMPONENT_VERSIONS,
     }
@@ -477,6 +532,11 @@ def compute_pipeline(
         unlinked_symbols=unlinked,
         inputs_digest=digest,
         versions=_versions(sa),
+        evidence_basis=(
+            PR_BASIS_MUTATION
+            if any(m.basis != BASIS_STATIC for m in crit_mutation.values())
+            else "static_only"
+        ),
         policy=policy_info,
         waivers=waiver_info,
         tamper_waived=finding_waivers.waived,
@@ -497,8 +557,75 @@ def _date_of(stamp: str) -> date:
         return date(1970, 1, 1)
 
 
+def _mutation_flags(flags: tuple[Flag, ...], cm: CriterionMutation) -> tuple[Flag, ...]:
+    """``mutation_measured`` replaces ``static_only`` only when every counted test is measured.
+
+    A criterion with some measured and some unmeasured counted tests carries both flags
+    (basis ``mutation_partial``); one with none keeps ``static_only`` alone."""
+
+    out = set(flags)
+    if cm.basis == BASIS_STATIC:
+        return tuple(sorted(out, key=lambda f: f.value))
+    out.add(Flag.MUTATION_MEASURED)
+    if cm.basis == BASIS_MEASURED:
+        out.discard(Flag.STATIC_ONLY)
+    return tuple(sorted(out, key=lambda f: f.value))
+
+
+def _criterion_block(cm: CriterionMutation) -> dict[str, Any]:
+    """Plain-data mutation facts of one criterion (payload and ``CriterionVerdict.mutation``)."""
+
+    return {
+        "basis": cm.basis,
+        "n_mutants": cm.n_mutants,
+        "killed": cm.killed,
+        "d_union": _r(cm.d_union),
+        "d_union_lcb": _r(cm.d_union_lcb),
+        "tests_measured": cm.tests_measured,
+        "tests_total": cm.tests_total,
+        "survivors": [
+            {"mutant_id": v.mutant_id, "path": v.path, "line": v.line, "operator": v.operator}
+            for v in cm.survivors
+        ],
+        "excluded": dict(sorted(cm.excluded.items())),
+        "d_reach": cm.d_reach,
+        "d_reach_reason": cm.d_reach_reason,
+        "reason": cm.reason,
+    }
+
+
+def _run_block(sa: StageAInput) -> dict[str, Any] | None:
+    """Run-level mutation summary for the payload (``None`` when the flag was off)."""
+
+    m = sa.mutation
+    if m is None:
+        return None
+    decided = [
+        x for x in m.mutants if x.status in ("killed", "survived") and not x.equivalent_suspect
+    ]
+    return {
+        "status": m.status,
+        "reason": m.reason,
+        "engine": m.engine,
+        "seed": m.seed,
+        "generated": m.generated,
+        "sampled": m.sampled,
+        "decided": len(decided),
+        "killed": sum(1 for x in decided if x.status == "killed"),
+        "equivalent_suspects": sum(1 for x in m.mutants if x.equivalent_suspect),
+        "skipped_for_budget": m.skipped_for_budget,
+        "cache_hits": m.cache_hits,
+        "min_decided": m.min_decided,
+        "ladder": list(m.ladder),
+        "baseline_failed": len(m.baseline_failed),
+        "baseline_flaky": len(m.baseline_flaky),
+    }
+
+
 def _versions(sa: StageAInput) -> dict[str, str]:
     out = dict(DEFAULT_COMPONENT_VERSIONS)
+    if sa.mutation is not None:
+        out["mutation"] = MUTATION_VERSION
     for key in ("symbol_changes", "criterion_symbol_links", "symbol_test_links", "tamper"):
         if sa.algo_versions.get(key):
             out[key] = sa.algo_versions[key]
@@ -590,6 +717,17 @@ def _item_rows(
                     "contribution": _r(q.contribution),
                     "status": q.status,
                 }
+                | (
+                    {
+                        "basis": q.basis,
+                        "d_mut": _r(q.d_mut),
+                        "d_mut_lcb": _r(q.d_mut_lcb),
+                        "mutation_n": q.mutation_n,
+                        "mutation_killed": q.mutation_killed,
+                    }
+                    if q.mutation_n is not None
+                    else {}
+                )
             )
         out[c.criterion_id] = rows
     return out
@@ -639,6 +777,14 @@ def build_payload(
             ),
             "items": rows[c.criterion_id],
         }
+        | (
+            {
+                "evidence_basis": c.mutation.get("basis", BASIS_STATIC),
+                "mutation": dict(c.mutation),
+            }
+            if c.mutation
+            else {}
+        )
         for c in v.criteria
     ]
     reasons = [
@@ -677,6 +823,7 @@ def build_payload(
             author_hint_criteria=sum(
                 1 for c in v.criteria if Flag.AUTHOR_SUPPLIED_HINT in c.flags
             ),
+            evidence_basis=v.evidence_basis,
         ),
         "summary": {
             "criteria_total": len(v.criteria),
@@ -699,6 +846,9 @@ def build_payload(
         "error": None,
         "degraded": list(stage_b.stage_a.degraded),
     }
+    run_block = _run_block(stage_b.stage_a)
+    if run_block is not None:
+        payload["mutation"] = run_block
     if v.tamper_waived:
         payload["summary"]["tamper_waived"] = len(v.tamper_waived)
     if v.policy:
@@ -743,6 +893,9 @@ def build_bundle(
         "fallback": None,
         "truncated": False,
     }
+    run_block = _run_block(stage_b.stage_a)
+    if run_block is not None:
+        bundle["mutation"] = run_block
     return cap_bundle(bundle, max_bytes)
 
 
@@ -826,6 +979,9 @@ class ScoringPipeline:
     clock: Callable[[], datetime] = lambda: datetime.now(UTC)  # noqa: E731
     v1: Mapping[str, Any] | None = None
     dashboard_url: str | None = None
+    #: Optional "suggested tests (not run, not evidence)" generator (DEC-034). Called AFTER
+    #: scoring, never an input of it: the verdict is identical with or without it.
+    suggester: Callable[[PipelineResult, StageBInput], Any] | None = None
 
     def score_full(self, stage_b: StageBInput) -> Scored:
         computed_at = self.clock().strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -835,18 +991,45 @@ class ScoringPipeline:
             revision=self.revision,
             collected_at=computed_at,
         )
-        return Scored(
+        bundle = build_bundle(result, stage_b, max_bytes=self.config.rules.max_bundle_bytes)
+        payload = build_payload(
             result,
-            build_bundle(result, stage_b, max_bytes=self.config.rules.max_bundle_bytes),
-            build_payload(
-                result,
-                stage_b,
-                mode=self.mode,
-                computed_at=computed_at,
-                v1=self.v1,
-                dashboard_url=self.dashboard_url,
-            ),
+            stage_b,
+            mode=self.mode,
+            computed_at=computed_at,
+            v1=self.v1,
+            dashboard_url=self.dashboard_url,
         )
+        suggested = self._suggest(result, stage_b)
+        if suggested:
+            bundle["suggested_tests"] = suggested
+            payload["suggested_tests"] = [dict(s) for s in suggested]
+        return Scored(result, bundle, payload)
+
+    def _suggest(self, result: PipelineResult, stage_b: StageBInput) -> list[dict[str, Any]]:
+        """Gated suggestions or ``[]``; any failure is swallowed (never affects scoring)."""
+
+        if self.suggester is None:
+            return []
+        try:
+            report = self.suggester(result, stage_b)
+            items = [dict(i) for i in getattr(report, "items", ())]
+            LOGGER.info(
+                "Suggested tests",
+                extra={
+                    "suggested": len(items),
+                    "rejected": len(getattr(report, "rejected", ())),
+                    "calls": getattr(report, "calls", 0),
+                    "usage_in": getattr(report, "input_tokens", 0),
+                    "usage_out": getattr(report, "output_tokens", 0),
+                    "latency_ms": getattr(report, "latency_ms", 0.0),
+                    "skipped_reason": getattr(report, "skipped_reason", None),
+                },
+            )
+            return items
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.warning("Suggested tests failed", extra={"reason_code": type(exc).__name__})
+            return []
 
     def score(self, stage_b: StageBInput) -> dict[str, Any]:
         return self.score_full(stage_b).bundle
@@ -881,6 +1064,7 @@ def run_verdict_v2_best_effort(
     revision: int = 1,
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     v1: Mapping[str, Any] | None = None,
+    suggester: Callable[[PipelineResult, StageBInput], Any] | None = None,
 ) -> RunReport:
     """Collect (Stage A), score (Stage B) and persist; never raises.
 
@@ -910,7 +1094,12 @@ def run_verdict_v2_best_effort(
             flaky_scores=facts.flaky_scores,
         )
         scored = ScoringPipeline(
-            config=cfg, mode=mode.value, revision=revision, clock=clock, v1=v1
+            config=cfg,
+            mode=mode.value,
+            revision=revision,
+            clock=clock,
+            v1=v1,
+            suggester=suggester,
         ).score_full(stage_b)
         status, code = STATUS_OK, None
         bundle: dict[str, Any] | None = scored.bundle
@@ -988,15 +1177,22 @@ def run_verdict_v2_for_analysis(
 
         intent = SqlIntentSource(session_factory)
         store = _sql_store(session_factory, mode)
+        org_id = intent.organization_id(analysis_id) if store else None
+        suggester = make_suggester(
+            bool(getattr(settings, "suggest_tests_enabled", False)),
+            str(org_id) if org_id else None,
+        )
+        producers, limits = _mutation_wiring(settings, session_factory, intent, analysis_id, command)
         return run_verdict_v2_best_effort(
             mode=mode,
             analysis_id=analysis_id,
             command=command,
-            collector=VerdictStageACollector(intent),
+            collector=VerdictStageACollector(intent, producers=producers, limits=limits),
             outcomes=SqlOutcomeSource(session_factory),
             store=store,
-            organization_id=intent.organization_id(analysis_id) if store else None,
+            organization_id=org_id,
             clock=clock,
+            suggester=suggester,
         )
     except Exception as exc:  # noqa: BLE001
         LOGGER.warning(
@@ -1004,6 +1200,41 @@ def run_verdict_v2_for_analysis(
             extra={"analysis_id": str(analysis_id), "reason_code": type(exc).__name__},
         )
         return RunReport(STATUS_ERROR, type(exc).__name__)
+
+
+def _mutation_wiring(
+    settings: Any,
+    session_factory: Callable[[], Any],
+    intent: Any,
+    analysis_id: UUID,
+    command: Any,
+) -> tuple[Any | None, Any | None]:
+    """``(Producers, CollectLimits)`` with the mutation producer, or ``(None, None)``.
+
+    Flag off (the default): nothing is imported and the collector keeps its defaults, so
+    behaviour is identical to a build without mutation evidence.
+    """
+
+    if not getattr(settings, "mutation_enabled", False):
+        return None, None
+    from radius_worker.verdict_v2.collect import CollectLimits, Producers
+    from radius_worker.verdict_v2.mutation import create_mutation_producer
+
+    org: UUID | None = None
+    repo: UUID | None = None
+    try:
+        org = intent.organization_id(analysis_id)
+        repo = getattr(command, "repository_id", None)
+    except Exception:  # noqa: BLE001 - no cache without a namespace; the producer still works
+        org = repo = None
+    producer = create_mutation_producer(
+        settings,
+        session_factory=session_factory,
+        organization_id=org if isinstance(org, UUID) else None,
+        repository_id=repo if isinstance(repo, UUID) else None,
+    )
+    wall = float(getattr(settings, "mutation_wall_clock_seconds", 600.0))
+    return Producers(mutation=producer), CollectLimits(mutation_timeout_s=wall + 60.0)
 
 
 def _sql_store(session_factory: Callable[[], Any], mode: VerdictV2Mode) -> Any | None:
@@ -1041,6 +1272,8 @@ class StageBRecomputer:
     mode: VerdictV2Mode
     config: VerdictV2Config = field(default_factory=VerdictV2Config)
     clock: Callable[[], datetime] = lambda: datetime.now(UTC)  # noqa: E731
+    #: ``organization_id -> suggester | None`` (DEC-034); ``None`` = feature off.
+    suggester_for: Callable[[UUID], Any] | None = None
 
     def recompute(
         self, session: Any, organization_id: UUID, analysis_id: UUID
@@ -1067,13 +1300,16 @@ class StageBRecomputer:
             flaky_scores=facts.flaky_scores,
         )
         bundle = ScoringPipeline(
-            config=self.config, mode=self.mode.value, clock=self.clock
+            config=self.config,
+            mode=self.mode.value,
+            clock=self.clock,
+            suggester=self.suggester_for(organization_id) if self.suggester_for else None,
         ).score(stage_b)
         return bool(self.store.save(organization_id, analysis_id, bundle))
 
 
 def create_recomputer(
-    session_factory: Callable[[], Any], mode: VerdictV2Mode
+    session_factory: Callable[[], Any], mode: VerdictV2Mode, settings: Any = None
 ) -> StageBRecomputer | None:
     """The outbox consumer's Stage B recomputer for the runtime (``None`` when off)."""
 
@@ -1082,4 +1318,14 @@ def create_recomputer(
     store = _sql_store(session_factory, mode)
     if store is None:
         return None
-    return StageBRecomputer(store=store, mode=mode)
+    suggester_for: Callable[[UUID], Any] | None = None
+    if bool(getattr(settings, "suggest_tests_enabled", False)):
+        suggesters: dict[str, Any] = {}
+
+        def suggester_for(org: UUID) -> Any:
+            key = str(org)
+            if key not in suggesters:  # one instance per org keeps its response cache
+                suggesters[key] = make_suggester(True, key)
+            return suggesters[key]
+
+    return StageBRecomputer(store=store, mode=mode, suggester_for=suggester_for)

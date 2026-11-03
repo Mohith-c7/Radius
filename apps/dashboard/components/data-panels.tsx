@@ -52,11 +52,13 @@ import {
   radiusConfig,
   rerunAnalysis,
   startAnalysis,
-  syncPullRequests,
+  syncPullRequestsDetailed,
   updateRepository,
   uploadTestResults,
 } from "../lib/api";
+import { errorText, type SyncSummary } from "../lib/github-actions";
 import { scoreKindLabel } from "../lib/score-kind";
+import { AnalyzePullRequestButton, ConnectGitHubRepositoryCard, SyncSummaryList } from "./github-actions";
 import { ConfidenceRing, OpenLink, PageHeading, Status } from "./ui";
 import { InteractiveGraphViewer } from "./interactive-graph";
 import { IntentPanel } from "./intent-panel";
@@ -325,6 +327,7 @@ export function RepositoriesData() {
           </Link>
         }
       />
+      <ConnectGitHubRepositoryCard onConnected={() => setRefreshKey((value) => value + 1)} />
       {state.data.length === 0 ? (
         <EmptyState
           title="No repositories connected"
@@ -513,7 +516,11 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
   const router = useRouter();
   const [refreshKey, setRefreshKey] = useState(0);
   const [syncingPrs, setSyncingPrs] = useState(false);
-  const [syncNotice, setSyncNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [syncNotice, setSyncNotice] = useState<{
+    type: "success" | "error";
+    text: string;
+    summary?: SyncSummary;
+  } | null>(null);
   const [targetBranchInput, setTargetBranchInput] = useState("");
   const [updatingBranch, setUpdatingBranch] = useState(false);
   const [triggerModalOpen, setTriggerModalOpen] = useState(false);
@@ -540,17 +547,15 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
     setSyncingPrs(true);
     setSyncNotice(null);
     try {
-      const prs = await syncPullRequests(repositoryId);
+      const { summary } = await syncPullRequestsDetailed(repositoryId);
       setSyncNotice({
-        type: "success",
-        text: `Successfully synced ${prs.length} pull request(s) from GitHub.`,
+        type: summary.kind === "not_configured" || summary.skipped.length > 0 ? "error" : "success",
+        text: summary.text,
+        summary,
       });
       setRefreshKey((k) => k + 1);
     } catch (err) {
-      setSyncNotice({
-        type: "error",
-        text: err instanceof Error ? err.message : String(err),
-      });
+      setSyncNotice({ type: "error", text: errorText(err) });
     } finally {
       setSyncingPrs(false);
     }
@@ -640,7 +645,10 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
             justifyContent: "space-between",
           }}
         >
-          <span style={{ fontSize: "14px" }}>{syncNotice.text}</span>
+          <span style={{ fontSize: "14px" }}>
+            {syncNotice.text}
+            {syncNotice.summary && <SyncSummaryList summary={syncNotice.summary} />}
+          </span>
           <button
             onClick={() => setSyncNotice(null)}
             style={{ background: "none", border: "none", color: "inherit", cursor: "pointer" }}
@@ -880,6 +888,13 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
                       <span className="muted" style={{ fontSize: "12px" }}>
                         No analysis yet
                       </span>
+                    )}
+                    {pr.status === "open" && (
+                      <AnalyzePullRequestButton
+                        repositoryId={repositoryId}
+                        prNumber={pr.github_pr_number}
+                        onQueued={() => setRefreshKey((k) => k + 1)}
+                      />
                     )}
                     <Link
                       href={`/pull-requests/${pr.id}`}
@@ -1292,7 +1307,12 @@ function AnalysisTable({
 }
 
 export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
-  const [rerunMessage, setRerunMessage] = useState<string | null>(null);
+  const [rerunMessage, setRerunMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+    analysisId?: string;
+  } | null>(null);
+  const [rerunning, setRerunning] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const state = useRadiusData(async () => {
     const [analysis, repositories] = await Promise.all([
@@ -1318,12 +1338,21 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
   }, [analysisId, refreshKey]);
 
   async function runAgain() {
+    if (rerunning) return;
+    setRerunning(true);
+    setRerunMessage(null);
     try {
       const next = await rerunAnalysis(analysisId);
-      setRerunMessage(`Queued rerun ${next.id}.`);
+      setRerunMessage({
+        type: "success",
+        text: "Queued a new analysis of the same commit.",
+        analysisId: next.id ?? undefined,
+      });
       setRefreshKey((value) => value + 1);
     } catch (error) {
-      setRerunMessage(error instanceof Error ? error.message : String(error));
+      setRerunMessage({ type: "error", text: errorText(error) });
+    } finally {
+      setRerunning(false);
     }
   }
 
@@ -1340,13 +1369,32 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
         title="Pull request verification"
         description={`${repo} / PR ${analysis.pull_request_id}`}
         action={
-          <button className="button secondary" onClick={() => void runAgain()} type="button">
-            <RefreshCw size={15} />
-            Re-run analysis
+          <button
+            className="button secondary"
+            disabled={rerunning}
+            onClick={() => void runAgain()}
+            type="button"
+          >
+            <RefreshCw size={15} className={rerunning ? "spin" : ""} />
+            {rerunning ? "Queuing..." : "Re-run analysis"}
           </button>
         }
       />
-      {rerunMessage && <p className="muted action-message">{rerunMessage}</p>}
+      {rerunMessage && (
+        <p
+          className={
+            rerunMessage.type === "error" ? "action-message gh-note gh-note-error" : "muted action-message"
+          }
+          role="status"
+        >
+          {rerunMessage.text}{" "}
+          {rerunMessage.analysisId && (
+            <Link href={`/analyses/${encodeURIComponent(rerunMessage.analysisId)}`}>
+              Open the new analysis
+            </Link>
+          )}
+        </p>
+      )}
       <section className="analysis-hero">
         <div>
           <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap", marginBottom: "8px" }}>
@@ -2419,6 +2467,7 @@ export function PullRequestsOverviewData() {
   const [analyses, setAnalyses] = useState<Analysis[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [syncReport, setSyncReport] = useState<{ ok: boolean; lines: string[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -2463,11 +2512,26 @@ export function PullRequestsOverviewData() {
   const handleSyncAll = async () => {
     try {
       setSyncing(true);
-      await Promise.all(
+      setSyncReport(null);
+      const results = await Promise.all(
         repositories
           .filter((repo): repo is Repository & { id: string } => Boolean(repo.id))
-          .map((repo) => syncPullRequests(repo.id).catch(() => []))
+          .map(async (repo) => {
+            try {
+              const { summary } = await syncPullRequestsDetailed(repo.id);
+              const lines = [`${repo.full_name}: ${summary.text}`];
+              for (const item of summary.skipped) {
+                lines.push(
+                  `${repo.full_name} ${item.number === null ? "" : `#${item.number} `}skipped: ${item.reason}`,
+                );
+              }
+              return { ok: summary.kind === "synced" && summary.skipped.length === 0, lines };
+            } catch (err) {
+              return { ok: false, lines: [`${repo.full_name}: ${errorText(err)}`] };
+            }
+          }),
       );
+      setSyncReport({ ok: results.every((r) => r.ok), lines: results.flatMap((r) => r.lines) });
       await loadData();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to sync pull requests.");
@@ -2552,6 +2616,23 @@ export function PullRequestsOverviewData() {
           {syncing ? "Syncing PRs..." : "Sync Open PRs from GitHub"}
         </button>
       </div>
+
+      {syncReport && (
+        <div
+          className="card"
+          role="status"
+          style={{
+            padding: "12px 16px",
+            borderLeft: `4px solid ${syncReport.ok ? "var(--green, #22c55e)" : "var(--red, #ef4444)"}`,
+          }}
+        >
+          {syncReport.lines.map((line, index) => (
+            <p key={index} style={{ fontSize: "13px", margin: index === 0 ? 0 : "4px 0 0" }}>
+              {line}
+            </p>
+          ))}
+        </div>
+      )}
 
       {filtered.length === 0 ? (
         <EmptyState
@@ -2684,6 +2765,13 @@ export function PullRequestsOverviewData() {
                           >
                             Verify
                           </Link>
+                        )}
+                        {pr.status === "open" && repo.id && (
+                          <AnalyzePullRequestButton
+                            repositoryId={repo.id}
+                            prNumber={pr.github_pr_number}
+                            onQueued={() => void loadData()}
+                          />
                         )}
                       </td>
                       <td className="subtext" style={{ fontSize: "12px" }}>

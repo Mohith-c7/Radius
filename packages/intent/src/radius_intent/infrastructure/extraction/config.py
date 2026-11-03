@@ -34,7 +34,10 @@ DEFAULT_TABLE_COLUMN_PATTERN = (
 
 #: Extraction modes. ``sections`` (default) is the original behaviour; ``summary``
 #: additionally proposes low-weight criteria from ordinary PR text (opt-in).
-EXTRACTION_MODES = ("sections", "summary")
+#: ``llm`` is ``summary`` plus a guarded LLM proposer (DEC-034); the deterministic part
+#: of this package treats it exactly like ``summary``, the LLM extractor is composed by
+#: the caller (``radius_intent.infrastructure.llm.pr_text``).
+EXTRACTION_MODES = ("sections", "summary", "llm")
 DEFAULT_EXTRACTION_MODE = "sections"
 
 

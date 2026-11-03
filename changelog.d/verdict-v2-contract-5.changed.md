@@ -1,0 +1,1 @@
+Verdict v2 payload `contract_version` is now `verdict-v2-contract-5`. With the mutation flag off nothing else changes: no new fields are emitted and the `inputs_digest` of existing computations is unchanged.
