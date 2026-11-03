@@ -14,7 +14,6 @@ from uuid import UUID
 
 from fastapi import Request
 from radius_shared.logging import get_logger
-from radius_shared.redaction import redact_secrets
 from radius_shared.verdict_v2_flag import VerdictV2Mode
 from radius_shared.verdict_v2_repository import VerdictV2Repository
 
@@ -49,9 +48,10 @@ def request_verdict_v2_recompute(
             delay_seconds=INTENT_DEBOUNCE_SECONDS,
         )
     except Exception as exc:
+        # Log the exception type only: its message can carry request-derived text (log injection).
         LOGGER.warning(
-            "Could not enqueue verdict v2 recompute: %s",
-            redact_secrets(exc),
+            "Could not enqueue verdict v2 recompute (%s)",
+            type(exc).__name__,
             extra={"analysis_id": str(analysis_id)},
         )
         return False
