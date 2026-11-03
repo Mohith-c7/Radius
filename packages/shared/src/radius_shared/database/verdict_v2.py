@@ -122,3 +122,41 @@ class VerdictV2RequestRow(UuidPrimaryKeyMixin, Base):
         Index("ix_verdict_v2_requests_organization_id", "organization_id"),
         Index("ix_verdict_v2_requests_available_at", "available_at"),
     )
+
+
+class MutationResultCacheRow(UuidPrimaryKeyMixin, Base):
+    """Final mutant results, keyed per repository (EV-09, contract 5).
+
+    ``cache_key`` is a sha256 over (mutant hash, linked tests, sandbox image digest,
+    repository context hash). Only final statuses (``killed`` / ``survived``) are ever
+    stored, never timeouts, errors or flaky results. The namespace is
+    ``(organization_id, repository_id)``: a hit never crosses tenants or repositories.
+    ``killed_by`` is a JSON array of test ids. Rows older than the retention window are
+    deleted on write.
+    """
+
+    __tablename__ = "mutation_result_cache"
+
+    organization_id: Mapped[UUID] = mapped_column(
+        ForeignKey("organizations.id"), nullable=False
+    )
+    repository_id: Mapped[UUID] = mapped_column(
+        ForeignKey("repositories.id"), nullable=False
+    )
+    cache_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    killed_by: Mapped[list] = mapped_column(JSON, nullable=False)
+    algo_version: Mapped[str] = mapped_column(String(48), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "repository_id",
+            "cache_key",
+            name="uq_mutation_result_cache_key",
+        ),
+        Index("ix_mutation_result_cache_created_at", "created_at"),
+    )

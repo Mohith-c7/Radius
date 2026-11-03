@@ -77,6 +77,52 @@ class WorkerSettings(DatabaseSettings):
             "pipeline until LK-05, so it only gates the library entry point."
         ),
     )
+    mutation_enabled: bool = Field(
+        default=False,
+        alias="RADIUS_FEATURE_MUTATION",
+        description=(
+            "Verdict v2 mutation evidence (default OFF; zero cost when off). Measures how "
+            "well the linked tests detect small seeded faults in the changed Python "
+            "symbols and uses the measured detection power instead of the static "
+            "assertion cap. Mutants are generated code from the pull request: they run "
+            "ONLY in the hardened sandbox, so this needs WORKER_TEST_EXECUTION_MODE=sandbox "
+            "(otherwise the analysis records 'mutation unmeasured' and keeps the static "
+            "cap). Needs RADIUS_FEATURE_VERDICT_V2 shadow or on."
+        ),
+    )
+    mutation_max_mutants: int = Field(
+        default=50,
+        ge=5,
+        le=500,
+        alias="RADIUS_MUTATION_MAX_MUTANTS",
+        description=(
+            "Mutation evidence: hard cap on mutants run per analysis (seeded, stratified "
+            "sample when more exist). Each mutant costs about one sandbox container run."
+        ),
+    )
+    mutation_wall_clock_seconds: float = Field(
+        default=600.0,
+        ge=30.0,
+        le=3600.0,
+        alias="RADIUS_MUTATION_WALL_CLOCK_SECONDS",
+        description=(
+            "Mutation evidence: wall-clock budget for the whole mutation stage of one "
+            "analysis. The stage runs inside the analysis job, so this is added latency. "
+            "When it is too small for the sampled mutants the stage degrades (fewer "
+            "mutants, finally 'unmeasured, static cap')."
+        ),
+    )
+    mutation_mutant_timeout_seconds: float = Field(
+        default=60.0,
+        ge=5.0,
+        le=600.0,
+        alias="RADIUS_MUTATION_MUTANT_TIMEOUT_SECONDS",
+        description=(
+            "Mutation evidence: upper bound of the per-mutant sandbox timeout (the "
+            "effective timeout is 3x the median baseline run, clamped to 5-120 s and to "
+            "this value). A timed-out mutant is excluded from the detection score."
+        ),
+    )
     tamper_rules_enabled: bool = Field(
         default=False,
         alias="RADIUS_FEATURE_TAMPER_RULES",

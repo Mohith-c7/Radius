@@ -66,6 +66,16 @@ DISCLAIMER = (
     "correctness; do not treat it as a merge gate on its own."
 )
 LEGEND = "supported = static assertion strength above threshold; not a proof of correctness"
+#: Contract 5: used instead of ``DISCLAIMER`` only when mutation measured at least one
+#: criterion (``summary.evidence_basis == "static_and_mutation"``).
+MUTATION_DISCLAIMER = (
+    "**Alpha - static assertion strength plus sampled mutation testing - uncalibrated.** "
+    "Where marked mutation-measured, how well a test detects faults was measured on a bounded "
+    "sample of seeded faults in the changed code; other criteria rest on static assertion "
+    "strength only. Neither is a proof of correctness; do not treat it as a merge gate on its own."
+)
+MUTATION_CHECK_TITLE_PREFIX = "Radius v2 alpha - static + sampled mutation evidence - uncalibrated"
+MAX_GAPS_PER_CRITERION = 5
 #: Check Run title prefix; the caveat is part of the title, not only of the body.
 CHECK_TITLE_PREFIX = "Radius v2 alpha - static evidence only - uncalibrated"
 
@@ -111,6 +121,7 @@ FLAG_TAGS = {
     "low_link_confidence": "weak link",
     "needs_typed_evidence": "needs typed evidence",
     "author_supplied_hint": "author-supplied hint",
+    "mutation_measured": "mutation-measured",
 }
 _STRONG = 0.8
 _PARTIAL = 0.3
@@ -194,6 +205,54 @@ def _strength_word(a_static: float) -> str:
     return "none"
 
 
+def uses_mutation(view: VerdictV2View) -> bool:
+    """True when mutation measured at least one criterion of this verdict."""
+
+    return view.summary.evidence_basis == "static_and_mutation"
+
+
+def disclaimer(view: VerdictV2View) -> str:
+    return MUTATION_DISCLAIMER if uses_mutation(view) else DISCLAIMER
+
+
+def check_title_prefix(view: VerdictV2View) -> str:
+    return MUTATION_CHECK_TITLE_PREFIX if uses_mutation(view) else CHECK_TITLE_PREFIX
+
+
+def _int_field(data: Mapping[str, Any], key: str) -> int:
+    value = data.get(key)
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
+def basis_phrase(c: CriterionView) -> str:
+    """Per-criterion basis, plain words (empty when the mutation flag was off)."""
+
+    if not c.mutation:
+        return ""
+    n = _int_field(c.mutation, "n_mutants")
+    if c.evidence_basis == "mutation_measured":
+        return f"mutation-measured ({_plural(n, 'mutant')})"
+    if c.evidence_basis == "mutation_partial":
+        return f"mutation-measured for some tests ({_plural(n, 'mutant')}), static for the rest"
+    return "static assertion strength only"
+
+
+def gap_lines(c: CriterionView) -> list[str]:
+    """'Gaps found by mutation': mutants no linked test killed (sampled, not exhaustive)."""
+
+    raw = c.mutation.get("survivors") if c.mutation else None
+    survivors = [s for s in raw if isinstance(s, Mapping)] if isinstance(raw, list) else []
+    if not survivors:
+        return []
+    lines = []
+    for s in survivors[:MAX_GAPS_PER_CRITERION]:
+        where = f"{escape.code(s.get('path'), 100)}:{_line(s.get('line'))}"
+        lines.append(f"- {where}, operator {escape.token(s.get('operator'), 12)}")
+    if len(survivors) > MAX_GAPS_PER_CRITERION:
+        lines.append(f"- +{len(survivors) - MAX_GAPS_PER_CRITERION} more, see the dashboard.")
+    return lines
+
+
 def _plural(n: int, word: str) -> str:
     return f"{n} {word}" if n == 1 else f"{n} {word}s"
 
@@ -228,6 +287,9 @@ def _evidence_cell(c: CriterionView, tau: float | None) -> str:
     skipped = len(c.items) - len(counted) - len(failing)
     if skipped > 0:
         parts.append(f"{skipped} not counted")
+    basis = basis_phrase(c)
+    if basis:
+        parts.append(basis)
     return "; ".join(parts)
 
 
@@ -286,6 +348,15 @@ def explain_criterion(
         sentences.append("The link between the criterion and the code is weak.")
     if "needs_typed_evidence" in c.flags:
         sentences.append("It needs typed evidence (for example a benchmark) that is not collected yet.")
+    if c.mutation and c.evidence_basis in ("mutation_measured", "mutation_partial"):
+        k = _int_field(c.mutation, "killed")
+        n = _int_field(c.mutation, "n_mutants")
+        sentences.append(
+            f"Mutation testing seeded {_plural(n, 'fault')} in the changed code of this criterion "
+            f"and the linked tests caught {k}; this is a bounded sample, not a proof."
+        )
+    elif c.mutation and c.evidence_basis == "static_only":
+        sentences.append("Mutation testing did not measure it, so only static assertion strength counts.")
     return " ".join(sentences)
 
 
@@ -295,11 +366,19 @@ def _stats_line(view: VerdictV2View) -> str:
     s = view.summary
     uim_max = _num(_thresholds(view).get("uim_max"))
     limit = f" (limit {_f2(uim_max)})" if uim_max is not None else ""
-    basis = (
-        STATIC_LABEL
-        if s.evidence_basis == "static_only"
-        else f"evidence basis: {escape.token(s.evidence_basis, 32)}"
-    )
+    measured = sum(1 for c in view.criteria if c.evidence_basis in ("mutation_measured", "mutation_partial"))
+    if s.evidence_basis == "static_only":
+        basis = STATIC_LABEL
+        if view.mutation:
+            why = escape.token(view.mutation.get("reason"), 40, fallback="not measured")
+            basis += f"; mutation enabled but not measured ({why.replace('_', ' ')})"
+    elif s.evidence_basis == "static_and_mutation":
+        basis = (
+            "evidence basis: static assertion strength plus sampled mutation testing "
+            f"({measured} of {s.criteria_total} criteria mutation-measured)"
+        )
+    else:
+        basis = f"evidence basis: {escape.token(s.evidence_basis, 32)}"
     min_cov = _num(_thresholds(view).get("min_intent_coverage"))
     low = (
         f" (below the minimum {_pct(min_cov)}: the criteria cover too little of the changed behavior)"
@@ -436,6 +515,11 @@ def _why(view: VerdictV2View, labels: Mapping[str, str]) -> str:
     if decided == "R4":
         if view.summary.criteria_total == 0:
             return "No behavioral change was detected and no criteria were stated."
+        if uses_mutation(view):
+            return (
+                "No rule found a problem. This rests on static assertion strength plus sampled "
+                "mutation testing for some criteria; it is not a proof of correctness."
+            )
         return (
             "No rule found a problem. This rests on static assertion strength only; no mutation "
             "testing was run."
@@ -619,7 +703,13 @@ def _item_line(i: ItemView) -> str:
     name = i.test_id.rsplit("::", 1)[-1] if i.test_id else ""
     parts = [f"outcome {escape.token(i.outcome, 16)}"]
     strength = f"assertion strength {_f2(i.a_static)}"
-    if i.d_eff < i.a_static:
+    if i.basis == "mutation" and i.mutation_n is not None:
+        strength += (
+            f"; measured detection {_f2(i.d_eff)} (lower bound, "
+            f"{i.mutation_killed if i.mutation_killed is not None else '?'} of {i.mutation_n} "
+            "mutants killed)"
+        )
+    elif i.d_eff < i.a_static:
         strength += f" capped at {_f2(i.d_eff)}"
     parts += [strength, f"independence {_f2(i.i)}", f"freshness {i.f:.1f}"]
     if i.flaky_f < 1.0:
@@ -644,9 +734,20 @@ def _evidence_section(view: VerdictV2View) -> str:
         head = f"**{label}** support {c.S:.3f} = {_plural(len(c.items), 'item')}. "
         head += explain_criterion(c, label=label, tau=tau)
         lines = [head, ""]
+        basis = basis_phrase(c)
+        if basis:
+            lines += [f"Evidence basis: {basis}.", ""]
         lines += [_item_line(i) for i in c.items[:MAX_ITEMS_PER_CRITERION]]
         if len(c.items) > MAX_ITEMS_PER_CRITERION:
             lines.append(f"- +{len(c.items) - MAX_ITEMS_PER_CRITERION} more items, see the dashboard.")
+        gaps = gap_lines(c)
+        if gaps:
+            lines += [
+                "",
+                "Gaps found by mutation (seeded faults that no linked test caught; "
+                "a sample, and some may be harmless equivalents):",
+                *gaps,
+            ]
         blocks.append("\n".join(lines))
     if len(candidates) > MAX_EVIDENCE_CRITERIA:
         blocks.append(f"+{len(candidates) - MAX_EVIDENCE_CRITERIA} more criteria, see the dashboard.")
@@ -735,7 +836,7 @@ def render_comment(view: VerdictV2View) -> str:
 
     labels = _labels(view)
     heading = f"## Radius verdict (v2 alpha): {verdict_label(view)}"
-    core = [DISCLAIMER, heading]
+    core = [disclaimer(view), heading]
     if _ok(view):
         core.append(_stats_line(view))
         policy_line = _policy_summary(view)
@@ -823,13 +924,13 @@ def check_conclusion(view: VerdictV2View, *, mode: str = "advisory") -> str:
 
 def check_title(view: VerdictV2View) -> str:
     if not _ok(view):
-        title = f"{CHECK_TITLE_PREFIX}: verdict unavailable"
+        title = f"{check_title_prefix(view)}: verdict unavailable"
     elif view.pending:
-        title = f"{CHECK_TITLE_PREFIX}: awaiting CI test results"
+        title = f"{check_title_prefix(view)}: awaiting CI test results"
     else:
         s = view.summary
         title = (
-            f"{CHECK_TITLE_PREFIX}: {VERDICT_LABELS[str(view.verdict)]} "
+            f"{check_title_prefix(view)}: {VERDICT_LABELS[str(view.verdict)]} "
             f"({s.proven}/{s.criteria_total} criteria supported)"
         )
     return title[:CHECK_TITLE_MAX]
@@ -839,7 +940,7 @@ def render_check_run(view: VerdictV2View, *, conclusions: str = "advisory") -> C
     """Check Run title, summary (disclaimer + stats + why) and text (the comment body)."""
 
     labels = _labels(view)
-    summary_lines = [DISCLAIMER]
+    summary_lines = [disclaimer(view)]
     if _ok(view):
         summary_lines.append(_stats_line(view))
         hint_line = _author_hint_line(view)

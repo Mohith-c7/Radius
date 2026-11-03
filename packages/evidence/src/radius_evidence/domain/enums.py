@@ -86,6 +86,10 @@ class Flag(StrEnum):
     #: Contract 3: a counted test is linked only by a hint the PR author supplied
     #: (head spec or PR body) that nobody independent confirmed; its link is capped.
     AUTHOR_SUPPLIED_HINT = "author_supplied_hint"
+    #: Contract 5: at least one counted test of the criterion has a measured (mutation)
+    #: detection power instead of the static assertion cap. ``static_only`` stays when
+    #: some counted test is still unmeasured.
+    MUTATION_MEASURED = "mutation_measured"
 
 
 class Provenance(StrEnum):

@@ -37,7 +37,7 @@ from radius_shared.verdict_v2_wording import presentation
 
 BUNDLE_SCHEMA = "verdict-v2-bundle-1"
 #: Mirrors ``radius_evidence.domain.versions.CONTRACT_VERSION`` (a test keeps them equal).
-CONTRACT_VERSION = "verdict-v2-contract-4"
+CONTRACT_VERSION = "verdict-v2-contract-5"
 STATES = ("proven", "weak", "unevidenced", "contradicted", "excluded")
 SEVERITIES = ("critical", "high", "medium", "low")
 
@@ -140,6 +140,8 @@ _ITEM_KEYS = (
     "evidence_id", "test_id", "outcome", "a_static", "d_eff", "i", "f", "flaky_f",
     "tamper_penalty", "q", "l_cs", "l_st", "r_ct", "l", "term", "group_symbol",
     "rank_in_group", "discount", "contribution", "status",
+    # contract 5 (present only for mutation-measured rows)
+    "basis", "d_mut", "d_mut_lcb", "mutation_n", "mutation_killed",
 )
 
 
@@ -160,7 +162,15 @@ def _criterion(
         data["outcome"] = evidence.get("outcome") or data.get("outcome") or "not_run"
         items.append({k: data[k] for k in _ITEM_KEYS if k in data})
     best = raw.get("best_link")
+    mutation = raw.get("mutation")
+    extra: dict[str, Any] = {}
+    if isinstance(mutation, Mapping) and mutation:  # contract 5, only with RADIUS_FEATURE_MUTATION
+        extra = {
+            "evidence_basis": str(mutation.get("basis") or "static_only"),
+            "mutation": dict(mutation),
+        }
     return {
+        **extra,
         "criterion_id": raw.get("criterion_id", ""),
         "text": raw.get("text", ""),
         "state": raw.get("state", "unevidenced"),
@@ -266,6 +276,7 @@ def build_payload(
             author_hint_criteria=sum(
                 1 for c in criteria if "author_supplied_hint" in c["flags"]
             ),
+            evidence_basis=(verdict.get("evidence_basis") if ok else None) or "static_only",
         ),
         "summary": {
             "criteria_total": len(criteria),
@@ -297,6 +308,8 @@ def build_payload(
         "dashboard_url": dashboard_url,
         "error": None,
     }
+    if ok and isinstance(bundle.get("mutation"), Mapping) and bundle["mutation"]:
+        payload["mutation"] = dict(bundle["mutation"])
     if waived_raw:
         payload["summary"]["tamper_waived"] = len(waived_raw)
     if ok and isinstance(verdict.get("policy"), Mapping) and verdict["policy"]:
