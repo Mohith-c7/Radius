@@ -1,0 +1,1 @@
+The dashboard link in the Check Run and PR comment is now built in one place from `DASHBOARD_BASE_URL` (trailing slashes and whitespace are tolerated); a value that is not an http(s) URL now produces no link instead of a broken one.

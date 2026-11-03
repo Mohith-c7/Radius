@@ -565,3 +565,149 @@ def test_verdict_command_gates_without_uploading(fake, capsys, status, strict_co
     assert code == strict_code
     assert f"Radius verdict: {status}" in captured.out
     assert SECRET not in captured.out + captured.err
+
+
+# --------------------------------------------------------------------------- run (laptop)
+
+
+def _mini_repo(tmp_path: Path, *, failing: bool = False, broken: bool = False) -> tuple[Path, str]:
+    """A tiny git repo with one pytest file; returns (path, HEAD sha)."""
+
+    import subprocess
+
+    repo = tmp_path / "repo"
+    (repo / "tests").mkdir(parents=True)
+    (repo / "pytest.ini").write_text("[pytest]\ntestpaths = tests\n", encoding="utf-8")
+    body = "def test_ok():\n    assert 1 + 1 == 2\n"
+    if failing:
+        body += "\ndef test_bad():\n    assert 1 == 2\n"
+    if broken:
+        body = "def test_broken(:\n"
+    (repo / "tests" / "test_mini.py").write_text(body, encoding="utf-8")
+    env = {
+        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.invalid",
+        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.invalid",
+        "PATH": __import__("os").environ["PATH"],
+        "SYSTEMROOT": __import__("os").environ.get("SYSTEMROOT", ""),
+    }
+    for cmd in (["init", "-q"], ["add", "-A"], ["commit", "-q", "-m", "x"]):
+        subprocess.run(["git", *cmd], cwd=repo, env=env, check=True)  # noqa: S603, S607
+    head = subprocess.run(  # noqa: S603, S607
+        ["git", "rev-parse", "HEAD"], cwd=repo, env=env, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    return repo, head
+
+
+def _run_argv(fake, repo: Path, *extra: str) -> list[str]:
+    return _base(fake, "run", "--analysis", ANALYSIS, "--repo-dir", str(repo), *extra)
+
+
+def test_run_executes_pytest_and_uploads_junit_for_git_head(fake, tmp_path, capsys) -> None:
+    repo, head = _mini_repo(tmp_path)
+    fake.on("GET", ANALYSIS_PATH, _analysis(sha=head))
+    fake.on("POST", RESULTS_PATH, _ingestion("verified"))
+
+    code, captured = _run(_run_argv(fake, repo), capsys)
+
+    assert code == 0
+    posts = [r for r in fake.requests if r["method"] == "POST"]
+    assert len(posts) == 1
+    assert posts[0]["query"] == {"commit_sha": head}
+    assert b"<testcase" in posts[0]["body"] and b"test_ok" in posts[0]["body"]
+    assert posts[0]["headers"]["Content-Type"] == "application/xml"
+    assert "Radius verdict: verified" in captured.out
+
+
+def test_run_uploads_failing_tests_as_evidence(fake, tmp_path, capsys) -> None:
+    repo, head = _mini_repo(tmp_path, failing=True)
+    fake.on("GET", ANALYSIS_PATH, _analysis(sha=head))
+    fake.on("POST", RESULTS_PATH, _ingestion("failed", failed=["tests/test_mini.py"]))
+
+    code, captured = _run(_run_argv(fake, repo), capsys)
+
+    assert code == radius_ci.EXIT_VERDICT_FAILED
+    body = [r for r in fake.requests if r["method"] == "POST"][0]["body"]
+    assert b"<failure" in body
+    assert "1 failed" in captured.err
+
+
+def test_run_dry_run_makes_no_network_call(fake, tmp_path, capsys) -> None:
+    repo, head = _mini_repo(tmp_path)
+
+    code, captured = _run(_run_argv(fake, repo, "--dry-run"), capsys)
+
+    assert code == 0
+    assert fake.requests == []
+    assert "DRY RUN" in captured.out and f"commit_sha={head}" in captured.out
+    assert "nothing was sent" in captured.out
+
+
+def test_run_does_not_upload_when_pytest_cannot_run_the_suite(fake, tmp_path, capsys) -> None:
+    repo, head = _mini_repo(tmp_path, broken=True)
+    fake.on("GET", ANALYSIS_PATH, _analysis(sha=head))
+
+    code, captured = _run(_run_argv(fake, repo), capsys)
+
+    assert code == 1
+    assert "nothing was uploaded" in captured.err
+    assert fake.paths("POST") == []
+
+
+def test_run_hides_the_api_key_from_the_test_process(fake, tmp_path, capsys) -> None:
+    repo, head = _mini_repo(tmp_path)
+    (repo / "tests" / "test_env.py").write_text(
+        "import os\n\ndef test_key_not_visible():\n    assert 'RADIUS_API_KEY' not in os.environ\n",
+        encoding="utf-8",
+    )
+    fake.on("GET", ANALYSIS_PATH, _analysis(sha=head))
+    fake.on("POST", RESULTS_PATH, _ingestion("verified"))
+
+    code, _ = _run(_run_argv(fake, repo), capsys)
+
+    assert code == 0
+    body = [r for r in fake.requests if r["method"] == "POST"][0]["body"]
+    assert b"test_key_not_visible" in body and b"<failure" not in body
+
+
+@pytest.mark.parametrize(
+    ("status", "hint"),
+    [(409, "stale analysis"), (422, "JUnit XML"), (403, "write scope")],
+)
+def test_run_reports_upload_rejections_clearly(fake, tmp_path, capsys, status, hint) -> None:
+    repo, head = _mini_repo(tmp_path)
+    fake.on("GET", ANALYSIS_PATH, _analysis(sha=head))
+    fake.on("POST", RESULTS_PATH, _error(status, "rejected by test"))
+
+    code, captured = _run(_run_argv(fake, repo), capsys)
+
+    assert code == 1
+    assert f"HTTP {status}: rejected by test" in captured.err
+    assert hint in captured.err
+
+
+def test_run_takes_api_and_org_from_the_environment(fake, tmp_path, capsys, monkeypatch) -> None:
+    repo, head = _mini_repo(tmp_path)
+    monkeypatch.setenv("RADIUS_API_URL", fake.url)
+    monkeypatch.setenv("RADIUS_ORG_ID", ORG)
+    fake.on("GET", ANALYSIS_PATH, _analysis(sha=head))
+    fake.on("POST", RESULTS_PATH, _ingestion("insufficient_evidence"))
+
+    code, captured = _run(
+        ["run", "--analysis", ANALYSIS, "--repo-dir", str(repo)], capsys
+    )
+
+    assert code == 0
+    assert fake.requests[0]["headers"]["X-Radius-Organization-Id"] == ORG
+    assert "insufficient_evidence" in captured.out
+
+
+def test_run_selected_only_passes_selected_files_to_pytest(fake, tmp_path, capsys) -> None:
+    repo, head = _mini_repo(tmp_path)
+    fake.on("GET", ANALYSIS_PATH, _analysis(sha=head))
+    fake.on("GET", TESTS_PATH, _selection("tests/test_mini.py"))
+    fake.on("POST", RESULTS_PATH, _ingestion("verified"))
+
+    code, _ = _run(_run_argv(fake, repo, "--selected-only"), capsys)
+
+    assert code == 0
+    assert TESTS_PATH in fake.paths("GET")

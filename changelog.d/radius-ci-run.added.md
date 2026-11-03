@@ -1,0 +1,1 @@
+`scripts/radius_ci.py run` runs the repository's pytest suite locally and uploads the JUnit report for the checked-out commit, for demos and machines that a CI runner cannot reach the API from (`--dry-run` makes no network call). `--api` and `--org` now default to `RADIUS_API_URL` and `RADIUS_ORG_ID`, and the 403 hint mentions read-only keys.
