@@ -48,3 +48,6 @@ bandit_report.json
 test_e2e.py
 ui-audit.md
 tmp/
+
+# Worker repository cache (cloned repos under analysis), wherever the worker runs from
+**/.radius/

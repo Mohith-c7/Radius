@@ -1,0 +1,46 @@
+flowchart LR
+    subgraph A["Pull request"]
+        direction TB
+        A1["Change in bottle.py<br/>JSONPlugin modified"]
+    end
+
+    subgraph B["Blast radius"]
+        direction TB
+        B1["Files importing<br/>the changed file"]
+        B2["Wide area,<br/>most of it untouched<br/>by the change"]
+        B1 --> B2
+    end
+
+    subgraph C["Narrowed by callers"]
+        direction TB
+        C1["Slice: 7 nodes, 6 edges"]
+        C2["4 callers kept<br/>Bottle.install, JSONPlugin,<br/>JSONPlugin.apply, .setup"]
+        C3["Callers with no path<br/>to the change dropped"]
+        C1 --> C2
+        C1 --> C3
+    end
+
+    subgraph D["Tests"]
+        direction TB
+        D1["2 tests selected<br/>test_outputfilter.py"]
+        D2["Rest of the suite<br/>not run"]
+        D1 --> D2
+    end
+
+    subgraph E["Score"]
+        direction TB
+        E1["Evidence: tests, coverage,<br/>affected files, depth"]
+        E2(["Confidence score,<br/>risk band and the<br/>reason behind it"])
+        E1 --> E2
+    end
+
+    A --> B -->|"narrow"| C -->|"select"| D -->|"score"| E
+
+    classDef wide fill:#fdecea,stroke:#c0392b,color:#5c1a13
+    classDef keep fill:#eef7ee,stroke:#2e7d32,color:#123d14
+    classDef drop fill:#e8f1fb,stroke:#2471a3,color:#0b2e4f
+    classDef out fill:#fff4e0,stroke:#d68910,color:#5a3a00
+    class B2 wide
+    class C2,D1 keep
+    class C3,D2 drop
+    class E2 out

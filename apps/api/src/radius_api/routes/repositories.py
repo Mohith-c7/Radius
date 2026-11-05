@@ -1,5 +1,7 @@
 """Repository API routes."""
 
+import os
+import re
 from typing import Annotated
 from uuid import UUID
 
@@ -25,6 +27,7 @@ from radius_api.idempotency import (
 )
 from radius_api.schemas.repositories import (
     ConnectRepositoryRequest,
+    ImportPullRequestRequest,
     UpdateRepositoryRequest,
 )
 
@@ -289,3 +292,130 @@ def sync_pull_requests(
         synced_prs = service.list_pull_requests(repository_id)
 
     return success_response(synced_prs)
+
+
+_PR_URL = re.compile(
+    r"^(?:https?://)?(?:www\.)?github\.com/([\w.-]+)/([\w.-]+?)(?:\.git)?/pull/(\d+)(?:/[\w-]+)*/?(?:[?#].*)?$"
+)
+
+
+@router.post("/import-pull-request", status_code=status.HTTP_202_ACCEPTED)
+def import_public_pull_request(
+    request: ImportPullRequestRequest,
+    service: Annotated[
+        RepositoryApplicationService,
+        Depends(get_repository_service),
+    ],
+    analysis_service: Annotated[
+        AnalysisApplicationService,
+        Depends(get_analysis_service),
+    ],
+    principal: Annotated[ApiPrincipal, Depends(get_api_principal)],
+):
+    """Connect a public GitHub repo from a PR link and queue an analysis of that PR.
+
+    Works without the GitHub App: repo and PR are read from the public GitHub API
+    (set GITHUB_TOKEN to raise the 60 requests/hour unauthenticated limit).
+    """
+
+    from radius_analysis.dto import StartAnalysisCommand
+    from radius_repository.dto import UpsertPullRequestCommand
+    from radius_shared.errors import ValidationError
+
+    from radius_api.schemas.github_webhooks import (
+        GitHubPullRequestPayload,
+        GitHubRepositoryPayload,
+    )
+
+    match = _PR_URL.match(request.url.strip())
+    if match is None:
+        msg = "Paste a pull request link like https://github.com/OWNER/REPO/pull/123."
+        raise ValidationError(msg)
+    owner, name, number = match.group(1), match.group(2), int(match.group(3))
+
+    repo_json = _github_get(f"/repos/{owner}/{name}")
+    pr_json = _github_get(f"/repos/{owner}/{name}/pulls/{number}")
+    repo_payload = GitHubRepositoryPayload.model_validate(repo_json)
+    pr_payload = GitHubPullRequestPayload.model_validate(pr_json)
+    if repo_payload.private:
+        msg = "This repository is private. Private repositories need the GitHub App."
+        raise ValidationError(msg)
+
+    repository = service.get_by_github_repository_id(repo_payload.id)
+    if repository is None:
+        repository = service.connect_repository(
+            ConnectRepositoryCommand(
+                organization_id=principal.organization_id,
+                github_repository_id=repo_payload.id,
+                name=repo_payload.name,
+                owner=repo_payload.owner.login,
+                default_branch=repo_payload.default_branch,
+                clone_url=repo_payload.clone_url,
+                visibility=RepositoryVisibility.PUBLIC,
+            )
+        )
+    else:
+        ensure_same_organization(principal, repository.organization_id)
+
+    if pr_payload.merged:
+        pr_status = "merged"
+    elif pr_payload.state == "closed":
+        pr_status = "closed"
+    else:
+        pr_status = "open"
+    pull_request = service.upsert_pull_request(
+        UpsertPullRequestCommand(
+            repository_id=UUID(str(repository.id)),
+            github_pr_number=pr_payload.number,
+            title=pr_payload.title,
+            source_branch=pr_payload.head.ref,
+            target_branch=pr_payload.base.ref,
+            author=pr_payload.user.login,
+            status=pr_status,
+            opened_at=pr_payload.created_at,
+            merged_at=pr_payload.merged_at,
+        )
+    )
+    analysis = analysis_service.start_analysis(
+        StartAnalysisCommand(
+            repository_id=UUID(str(repository.id)),
+            pull_request_id=UUID(str(pull_request.id)),
+            commit_sha=pr_payload.head.sha,
+        )
+    )
+    return success_response(
+        {
+            "repositoryId": str(repository.id),
+            "pullRequestId": str(pull_request.id),
+            "analysisId": str(analysis.id),
+            "repository": f"{repo_payload.owner.login}/{repo_payload.name}",
+            "pullRequestNumber": pr_payload.number,
+            "title": pr_payload.title,
+            "commitSha": pr_payload.head.sha,
+        }
+    )
+
+
+def _github_get(path: str) -> dict:
+    import httpx
+    from radius_shared.errors import ValidationError
+
+    headers = {"Accept": "application/vnd.github+json", "User-Agent": "radius"}
+    token = os.environ.get("GITHUB_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    try:
+        response = httpx.get(f"https://api.github.com{path}", headers=headers, timeout=20)
+    except httpx.HTTPError as exc:
+        msg = f"Could not reach GitHub: {exc}"
+        raise ValidationError(msg) from exc
+    if response.status_code == 404:
+        msg = "GitHub says this repository or pull request does not exist (or is private)."
+        raise ValidationError(msg)
+    if response.status_code == 403:
+        msg = "GitHub rate limit reached. Set GITHUB_TOKEN on the API, or try again later."
+        raise ValidationError(msg)
+    if response.status_code != 200:
+        msg = f"GitHub returned HTTP {response.status_code} for {path}."
+        raise ValidationError(msg)
+    return response.json()

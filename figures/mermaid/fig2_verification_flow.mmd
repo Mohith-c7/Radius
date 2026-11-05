@@ -1,0 +1,73 @@
+---
+config:
+  theme: base
+  themeVariables:
+    fontFamily: "Helvetica, Arial, sans-serif"
+    primaryColor: "#eef4ff"
+    primaryBorderColor: "#4a6fa5"
+    primaryTextColor: "#12263f"
+    lineColor: "#4a6fa5"
+    actorBkg: "#eef4ff"
+    actorBorder: "#4a6fa5"
+    actorTextColor: "#12263f"
+    actorLineColor: "#b9c9de"
+    signalColor: "#33507a"
+    signalTextColor: "#1c2e4a"
+    labelBoxBkgColor: "#fff4e0"
+    labelBoxBorderColor: "#d68910"
+    labelTextColor: "#5a3a00"
+    loopTextColor: "#5a3a00"
+    noteBkgColor: "#ffffff"
+    noteBorderColor: "#9db6d6"
+    noteTextColor: "#12263f"
+  sequence:
+    mirrorActors: false
+    actorMargin: 52
+    width: 150
+    height: 40
+    boxMargin: 10
+    boxTextMargin: 8
+    noteMargin: 14
+    messageMargin: 34
+    messageFontSize: 15
+    actorFontSize: 16
+    noteFontSize: 14
+    wrap: true
+---
+sequenceDiagram
+    autonumber
+    actor D as Developer
+    participant G as GitHub
+    participant A as Radius API
+    participant Q as Job store
+    participant W as Worker
+
+    D->>G: opens a pull request
+    G->>A: sends the event
+    A->>Q: checks it is new, then stores the job
+
+    rect rgb(238, 247, 238)
+        Note over Q,W: understand the change
+        W->>Q: claims the next job
+        W->>W: reads the diff, parses the code, builds<br/>the graph, follows it back for the blast radius
+    end
+
+    rect rgb(255, 244, 224)
+        Note over W: narrow it down
+        loop per caller
+            W->>W: keeps it unless clearly unaffected
+        end
+    end
+
+    rect rgb(238, 244, 255)
+        Note over W: check and score
+        W->>W: runs the tests linked to what is left,<br/>then scores the evidence
+    end
+
+    alt every stage passed
+        W->>Q: stores the score, evidence and reasons
+        Q-->>D: report on the dashboard and the pull request
+    else a stage failed
+        W->>Q: marks it failed and records the error
+        Q-->>D: failure notice
+    end

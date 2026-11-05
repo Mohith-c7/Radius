@@ -1,12 +1,16 @@
 """Runtime configuration loaded from environment variables."""
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
+
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=str(PROJECT_ROOT / ".env"), extra="ignore")
     database_url: str = "sqlite:///./radius.db"
     session_secret: str = Field(default="super_secret_radius_session_key_32bytes_min", min_length=32)
     frontend_origin: str = "http://127.0.0.1:3000"

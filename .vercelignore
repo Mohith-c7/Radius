@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+node_modules
+**/node_modules
+**/tests
+**/.next
+docs
+figures
+figures (Copy)
+main.tex
