@@ -11,6 +11,12 @@ Tests can pass without ever touching the code a pull request changed, and pull r
 
 > **Early days.** Radius is an alpha (`0.1.0`) built as a capstone project. There are no releases yet, the 0–100 score is a rough heuristic rather than a probability, and it hasn't been run against a real GitHub installation. Details in [Known limitations](docs/KNOWN_LIMITATIONS.md).
 
+
+
+## Leaking pslq credentials 
+DATABASE_URL="postgresql://neondb_owner:npg_PSahcpr0OY7q@ep-bold-night-axieolcl-pooler.c-4.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+
+
 ## How it works
 
 Radius reads a pull request, works out every part of the code the change can reach, and picks only the tests that cover it.
