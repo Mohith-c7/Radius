@@ -2,6 +2,7 @@
 import os
 import re
 from functools import lru_cache
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from pydantic import Field, field_validator, model_validator
@@ -17,8 +18,11 @@ KNOWN_PUBLIC_SESSION_SECRETS = frozenset(
 EMAIL_DELIVERY_MODES = ("smtp", "log")
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
+
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
+    model_config = SettingsConfigDict(env_file=str(PROJECT_ROOT / ".env"), extra="ignore", populate_by_name=True)
     runtime_env: str = Field(default="development", alias="RADIUS_ENV")
     database_url: str = "sqlite:///./radius.db"
     session_secret: str = Field(default="super_secret_radius_session_key_32bytes_min", min_length=32)

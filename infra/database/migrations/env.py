@@ -6,6 +6,7 @@ from alembic import context
 from radius_shared.database import coverage, intent, models, verdict_v2  # noqa: F401
 from radius_shared.database.base import metadata
 from radius_shared.database.migration_lock import acquire_migration_lock
+from radius_shared.database.session import normalize_database_url
 from sqlalchemy import engine_from_config, pool
 
 config = context.config
@@ -21,16 +22,13 @@ def get_database_url() -> str:
 
     from os import getenv
 
-    url = getenv(
-        "DATABASE_URL",
-        config.get_main_option("sqlalchemy.url"),
-    )
-    if url:
-        if url.startswith("postgres://"):
-            url = url.replace("postgres://", "postgresql+psycopg://", 1)
-        elif url.startswith("postgresql://") and not url.startswith("postgresql+"):
-            url = url.replace("postgresql://", "postgresql+psycopg://", 1)
-    return url
+    url = getenv("DATABASE_URL")
+    if not url:
+        # Same source as the API and worker: DATABASE_URL in the project-root .env.
+        from radius_shared.database.session import DatabaseSettings
+
+        url = DatabaseSettings().database_url
+    return normalize_database_url(url or config.get_main_option("sqlalchemy.url"))
 
 
 def run_migrations_offline() -> None:

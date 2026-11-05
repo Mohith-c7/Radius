@@ -4,10 +4,10 @@
   "license": "Apache-2.0",
   "private": true,
   "scripts": {
-    "build": "python -m compileall src",
-    "dev": "cross-env PYTHONPATH=src;../api/src;../../packages/analysis/src;../../packages/confidence/src;../../packages/graph/src;../../packages/github/src;../../packages/parser/src;../../packages/repository/src;../../packages/shared/src;../../packages/testing/src python -m radius_worker",
-    "lint": "python -m ruff check src tests",
-    "test": "python -m pytest tests",
-    "typecheck": "python -m compileall src tests"
+    "build": "cross-env PYTHONPATH=src python -m compileall src",
+    "dev": "cross-env PYTHONPATH=src:../api/src:../../packages/analysis/src:../../packages/confidence/src:../../packages/graph/src:../../packages/github/src:../../packages/parser/src:../../packages/repository/src:../../packages/shared/src:../../packages/testing/src python -m radius_worker",
+    "lint": "cross-env PYTHONPATH=src python -m ruff check src tests",
+    "test": "cross-env PYTHONPATH=src python -m pytest tests",
+    "typecheck": "cross-env PYTHONPATH=src python -m compileall src tests"
   }
 }

@@ -69,6 +69,7 @@ dev = [
 
 [tool.setuptools]
 py-modules = []
+packages = []
 
 [tool.black]
 line-length = 88

@@ -37,6 +37,7 @@ import {
   TestRunResult,
   TestSelection,
   connectRepository,
+  importPullRequest,
   disconnectRepository,
   getAnalysis,
   getBlastRadius,
@@ -61,6 +62,7 @@ import { scoreKindLabel } from "../lib/score-kind";
 import { AnalyzePullRequestButton, ConnectGitHubRepositoryCard, SyncSummaryList } from "./github-actions";
 import { ConfidenceRing, OpenLink, PageHeading, Status } from "./ui";
 import { InteractiveGraphViewer } from "./interactive-graph";
+import { ImpactGraph } from "./impact-graph";
 import { IntentPanel } from "./intent-panel";
 import { VerdictV2Panel } from "./verdict-v2-panel";
 import {
@@ -216,7 +218,7 @@ export function DashboardOverviewData() {
         action={
           <Link href="/repositories/connect" className="button">
             <Plus size={16} />
-            Connect repository
+            Add repository or PR
           </Link>
         }
       />
@@ -330,7 +332,7 @@ export function RepositoriesData() {
         action={
           <Link href="/repositories/connect" className="button">
             <Plus size={16} />
-            Connect repository
+            Add repository or PR
           </Link>
         }
       />
@@ -404,6 +406,52 @@ export function RepositoriesData() {
   );
 }
 
+function ImportPullRequestCard() {
+  const router = useRouter();
+  const [url, setUrl] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitting(true);
+    setMessage(null);
+    try {
+      const result = await importPullRequest(url);
+      setMessage(`Queued analysis of ${result.repository} #${result.pullRequestNumber}. Opening it...`);
+      router.push(`/analyses/${result.analysisId}`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="card" style={{ marginBottom: "2rem", padding: "2rem", border: "1px solid var(--border-color)" }}>
+      <h2 style={{ marginBottom: "0.5rem" }}>Analyze a public pull request</h2>
+      <p className="muted" style={{ marginBottom: "1.25rem" }}>
+        Paste a link to a pull request in any public GitHub repository. Radius connects the
+        repository and queues an analysis; the worker must be running to process it.
+      </p>
+      <form onSubmit={submit} style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+        <input
+          name="url"
+          value={url}
+          onChange={(event) => setUrl(event.target.value)}
+          placeholder="https://github.com/OWNER/REPO/pull/123"
+          required
+          style={{ flex: "1 1 360px" }}
+        />
+        <button className="button primary" disabled={submitting} type="submit">
+          <Plus size={16} />
+          {submitting ? "Queuing..." : "Analyze PR"}
+        </button>
+      </form>
+      {message ? <p className="muted" style={{ marginTop: "0.75rem" }}>{message}</p> : null}
+    </div>
+  );
+}
+
 export function ConnectRepositoryForm() {
   const [message, setMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -436,9 +484,11 @@ export function ConnectRepositoryForm() {
     <>
       <PageHeading
         eyebrow="Repository management"
-        title="Connect a repository"
-        description="Create a backend repository record Radius can synchronize and analyze."
+        title="Add a repository or pull request"
+        description="Analyze a public pull request in one step, install the GitHub App, or register a repository by hand."
       />
+
+      <ImportPullRequestCard />
       
       <div className="card" style={{ marginBottom: "2rem", padding: "2rem", display: "flex", flexDirection: "column", alignItems: "center", border: "1px solid var(--border-color)" }}>
         <h2 style={{ marginBottom: "0.5rem" }}>Install GitHub App</h2>
@@ -1523,12 +1573,11 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
       <div id="impact" style={{ marginTop: "24px", display: "grid", gap: "20px" }}>
         <BlastRadiusVisualizerCard blast={blast} graph={graph} analysisId={analysisId} />
         {graph && graph.nodes.length > 0 && (
-          <InteractiveGraphViewer
+          <ImpactGraph
             nodes={graph.nodes}
             edges={graph.edges}
-            title={`Interactive CPG Slice & Dependency Visualizer (${graph.node_count} nodes, ${graph.edge_count} edges)`}
-            subtitle="Explore directly modified entrypoints, caller traversal, and targeted tests."
-            height={520}
+            changedFiles={analysis.changed_files ?? []}
+            selectedTestPaths={(tests?.selected_tests ?? []).map((item) => item.test.path)}
           />
         )}
       </div>
@@ -2199,33 +2248,89 @@ export function BlastRadiusData({ analysisId }: { analysisId: string }) {
 
 export function GraphOverviewData() {
   const state = useRadiusData(async () => {
-    const analyses = await listAnalyses();
-    const latest = analyses.find((analysis) => analysis.id);
-    const graph = latest?.id ? await getGraph(latest.id) : null;
-    return { latest, graph };
+    const [analyses, repositories] = await Promise.all([listAnalyses(), listRepositories()]);
+    // Most recently finished first, so a fresh real analysis is the default
+    // rather than a seeded demo fixture.
+    const completed = analyses
+      .filter((a) => a.id && a.status === "completed")
+      .sort((a, b) => (b.completed_at ?? b.created_at).localeCompare(a.completed_at ?? a.created_at))
+      // One entry per repository + commit: re-runs of the same PR head are duplicates here.
+      .filter((a, i, all) => all.findIndex((o) => o.repository_id === a.repository_id && o.commit_sha === a.commit_sha) === i);
+    return { analyses: completed, repositories, initialId: completed.length ? String(completed[0].id) : null };
   }, []);
-  if (state.status === "loading") return <LoadingState label="Loading dependency graph" />;
+  if (state.status === "loading") return <LoadingState label="Loading analyses" />;
   if (state.status === "error") return <ErrorState message={state.error} />;
-  if (!state.data.latest || !state.data.graph) {
+  if (state.data.analyses.length === 0) {
     return (
       <EmptyState
         title="No dependency graph available"
-        detail="Run an analysis with worker execution to build graph artifacts."
+        detail="Analyze a pull request (Repositories → Add repository or PR) and keep the worker running to build one."
       />
     );
   }
-  return <GraphCard graph={state.data.graph} />;
+  return (
+    <GraphExplorer
+      analyses={state.data.analyses}
+      repositories={state.data.repositories}
+      initialId={state.data.initialId ?? String(state.data.analyses[0].id)}
+    />
+  );
 }
 
-function GraphCard({ graph }: { graph: GraphSnapshot }) {
+function GraphExplorer({
+  analyses,
+  repositories,
+  initialId,
+}: {
+  analyses: Analysis[];
+  repositories: Repository[];
+  initialId: string;
+}) {
+  const [analysisId, setAnalysisId] = useState<string>(initialId);
+  const state = useRadiusData(async () => {
+    const [analysis, graph, tests] = await Promise.all([
+      getAnalysis(analysisId),
+      getGraph(analysisId).catch(() => null),
+      getTests(analysisId).catch(() => null),
+    ]);
+    return { analysis, graph, tests };
+  }, [analysisId]);
+
   return (
-    <InteractiveGraphViewer
-      nodes={graph.nodes}
-      edges={graph.edges}
-      title="Dependency Graph & Module Relationships"
-      subtitle={`Snapshot version ${graph.graph_version} / created ${formatDate(graph.created_at)} (${graph.node_count} nodes, ${graph.edge_count} edges)`}
-      height={600}
-    />
+    <div style={{ display: "grid", gap: "16px" }}>
+      <div className="card" style={{ alignItems: "center", display: "flex", flexWrap: "wrap", gap: "12px", padding: "14px 18px" }}>
+        <label style={{ alignItems: "center", display: "flex", fontSize: "12px", fontWeight: 700, gap: "10px" }}>
+          Analysis
+          <select
+            value={analysisId}
+            onChange={(event) => setAnalysisId(event.target.value)}
+            style={{ border: "1px solid var(--line)", borderRadius: "8px", font: "inherit", fontWeight: 600, padding: "7px 10px", minWidth: "340px" }}
+          >
+            {analyses.map((a) => (
+              <option key={String(a.id)} value={String(a.id)}>
+                {repositoryName(repositories, a.repository_id)} · {a.commit_sha.slice(0, 7)} · {formatDate(a.completed_at ?? a.created_at)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <Link className="text-link" href={`/analyses/${analysisId}`}>
+          Open full analysis <ArrowRight size={13} />
+        </Link>
+      </div>
+      {state.status === "loading" && <LoadingState label="Loading dependency graph" />}
+      {state.status === "error" && <ErrorState message={state.error} />}
+      {state.status === "ready" && (state.data.graph && state.data.graph.nodes.length > 0 ? (
+        <ImpactGraph
+          nodes={state.data.graph.nodes}
+          edges={state.data.graph.edges}
+          changedFiles={state.data.analysis.changed_files ?? []}
+          selectedTestPaths={(state.data.tests?.selected_tests ?? []).map((item) => item.test.path)}
+          height={680}
+        />
+      ) : (
+        <EmptyState title="No graph for this analysis" detail="This analysis did not produce a graph snapshot." />
+      ))}
+    </div>
   );
 }
 

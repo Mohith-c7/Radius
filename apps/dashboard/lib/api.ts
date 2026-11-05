@@ -446,6 +446,24 @@ export async function rerunAnalysis(analysisId: UUID) {
   return result.data;
 }
 
+export type ImportedPullRequest = {
+  repositoryId: UUID;
+  pullRequestId: UUID;
+  analysisId: UUID;
+  repository: string;
+  pullRequestNumber: number;
+  title: string;
+  commitSha: string;
+};
+
+/** Connect a public GitHub repo from a PR link and queue an analysis of that PR. */
+export function importPullRequest(url: string) {
+  return radiusFetch<ImportedPullRequest>("/repositories/import-pull-request", {
+    method: "POST",
+    body: JSON.stringify({ url }),
+  });
+}
+
 export function startAnalysis(payload: {
   repositoryId: UUID;
   pullRequestId?: UUID;

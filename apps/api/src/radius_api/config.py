@@ -5,7 +5,7 @@ import re
 from functools import lru_cache
 from uuid import UUID
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from radius_repository.domain.clone_url import GitUrlPolicy, parse_allowed_hosts
 from radius_shared.config import RuntimeEnvironment
 from radius_shared.database.session import DatabaseSettings
@@ -105,7 +105,10 @@ class ApiSettings(DatabaseSettings):
     def _parse_verdict_v2_mode(cls, value: object) -> VerdictV2Mode:
         return parse_verdict_v2_mode(value)
 
-    cors_origins: str = ""
+    cors_origins: str = Field(
+        default="",
+        validation_alias=AliasChoices("CORS_ORIGINS", "CORS_ALLOW_ORIGINS", "cors_origins"),
+    )
     """Comma separated browser origins allowed by CORS (``CORS_ORIGINS``).
 
     Local dashboard origins are added automatically outside production. In

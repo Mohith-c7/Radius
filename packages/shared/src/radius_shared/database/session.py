@@ -3,11 +3,20 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from radius_shared.config import RadiusBaseSettings
+
+
+def normalize_database_url(url: str) -> str:
+    """Force the psycopg driver for plain Postgres URLs (e.g. from Neon)."""
+
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url.removeprefix(prefix)
+    return url
 
 
 class DatabaseSettings(RadiusBaseSettings):
@@ -18,14 +27,10 @@ class DatabaseSettings(RadiusBaseSettings):
         alias="DATABASE_URL",
     )
 
-
-def normalize_database_url(url: str) -> str:
-    """Normalize PostgreSQL scheme to psycopg driver."""
-    if url.startswith("postgres://"):
-        return url.replace("postgres://", "postgresql+psycopg://", 1)
-    if url.startswith("postgresql://") and not url.startswith("postgresql+"):
-        return url.replace("postgresql://", "postgresql+psycopg://", 1)
-    return url
+    @field_validator("database_url")
+    @classmethod
+    def _normalize_database_url(cls, value: str) -> str:
+        return normalize_database_url(value)
 
 
 def create_database_engine(settings: DatabaseSettings) -> Engine:

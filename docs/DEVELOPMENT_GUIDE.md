@@ -64,6 +64,35 @@ make lint           # ruff
 
 `dev-local` runs `pnpm dev` (turbo) with the project `.venv` first on `PATH`, so the Python services use it. The in-memory backend needs no database. Run `make setup` first.
 
+## Run against your own Postgres (three terminals, no Docker)
+
+Use this when `DATABASE_URL` in `.env` points at an external PostgreSQL (Neon, Aiven, a server) and `STORAGE_BACKEND=sql`. Apply migrations once with `alembic upgrade head` from the repository root (it reads `DATABASE_URL` from `.env`). Start each block from the repository root, in its own terminal; replace `.venv` with your own virtualenv if you use one.
+
+**Terminal 1: API** (http://localhost:8000)
+
+```bash
+source .venv/bin/activate
+cd apps/api
+export PYTHONPATH=src:../worker/src:$(ls -d ../../packages/*/src | paste -sd:)
+uvicorn radius_api.main:app --reload --app-dir src --port 8000
+```
+
+**Terminal 2: Dashboard** (http://localhost:3000)
+
+```bash
+cd apps/dashboard
+pnpm dev
+```
+
+**Terminal 3: Worker** (processes queued analyses)
+
+```bash
+source .venv/bin/activate
+cd apps/worker
+export PYTHONPATH=src:../api/src:$(ls -d ../../packages/*/src | paste -sd:)
+python -m radius_worker
+```
+
 ## Compose profiles
 
 | Profile | Services | Notes |

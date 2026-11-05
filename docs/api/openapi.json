@@ -1554,6 +1554,20 @@
         "title": "HintsView",
         "type": "object"
       },
+      "ImportPullRequestRequest": {
+        "description": "Request to analyse a pull request from a public GitHub repository.",
+        "properties": {
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "ImportPullRequestRequest",
+        "type": "object"
+      },
       "Login": {
         "description": "Sign-in body. Deliberately NOT subject to the signup password-strength rule:\naccounts created under an older or weaker policy must still be able to sign in.",
         "properties": {
@@ -6592,6 +6606,66 @@
           }
         ],
         "summary": "Connect Github Repository",
+        "tags": [
+          "repositories"
+        ],
+        "x-stability": "stable"
+      }
+    },
+    "/api/v1/repositories/import-pull-request": {
+      "post": {
+        "description": "Connect a public GitHub repo from a PR link and queue an analysis of that PR.\n\nWorks without the GitHub App: repo and PR are read from the public GitHub API\n(set GITHUB_TOKEN to raise the 60 requests/hour unauthenticated limit).",
+        "operationId": "import_public_pull_request",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportPullRequestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Import Public Pull Request",
         "tags": [
           "repositories"
         ],

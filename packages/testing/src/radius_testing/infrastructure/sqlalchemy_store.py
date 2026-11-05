@@ -163,7 +163,9 @@ class SqlAlchemyTestStore:
                 key=lambda item: item.test_case.path,
             )
         )
-        all_tests = self.list_test_cases()
+        # Only this analysis's repository: other repositories' tests are neither
+        # "skipped" nor part of this run's total.
+        all_tests = self.list_test_cases(self._analysis_repository_id(analysis_id))
         selected_paths = {selected.test_case.path.value for selected in selected_tests}
         skipped_tests = tuple(t for t in all_tests if t.path.value not in selected_paths)
         total_count = max(len(all_tests), len(selected_tests))
