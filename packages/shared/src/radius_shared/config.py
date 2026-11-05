@@ -1,9 +1,13 @@
 """Shared configuration primitives."""
 
 from enum import StrEnum
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
 
 
 class RuntimeEnvironment(StrEnum):
@@ -53,7 +57,7 @@ class RadiusBaseSettings(BaseSettings):
         }
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(PROJECT_ROOT / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
         populate_by_name=True,

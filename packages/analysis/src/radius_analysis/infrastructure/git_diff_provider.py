@@ -47,4 +47,53 @@ class SubprocessGitDiffProvider:
         if result.returncode != 0:
             msg = result.stderr.strip() or "Unable to collect git diff."
             raise ValidationError(msg)
+        if not result.stdout.strip():
+            merged_diff = self._diff_of_merged_head(repository_path, base_ref, head_ref)
+            if merged_diff is not None:
+                return merged_diff
         return result.stdout
+
+    def _diff_of_merged_head(
+        self, repository_path: Path, base_ref: str, head_ref: str
+    ) -> str | None:
+        """Diff a head that is already merged into base (merge-commit merges).
+
+        Once a pull request is merged with a merge commit, its head is an
+        ancestor of the base branch, so ``base...head`` is empty. The changes the
+        pull request introduced are the head compared with the first parent of
+        the merge commit that brought it in (the base branch just before merging).
+        """
+
+        for base in (base_ref, base_ref.removeprefix("origin/")):
+            merges = subprocess.run(
+                ["git", "rev-list", "--ancestry-path", "--merges", "--reverse", f"{head_ref}..{base}"],
+                cwd=repository_path,
+                capture_output=True,
+                check=False,
+                text=True,
+            )
+            if merges.returncode != 0:
+                continue
+            for merge in merges.stdout.split():
+                parents = subprocess.run(
+                    ["git", "rev-list", "--parents", "-n", "1", merge],
+                    cwd=repository_path,
+                    capture_output=True,
+                    check=False,
+                    text=True,
+                ).stdout.split()
+                # parents = [merge, first_parent, second_parent, ...]; the merge
+                # that brought head in has head reachable from a non-first parent.
+                if len(parents) < 3:
+                    continue
+                diff = subprocess.run(
+                    ["git", "diff", "--find-renames", "--find-copies", f"{parents[1]}...{head_ref}"],
+                    cwd=repository_path,
+                    capture_output=True,
+                    check=False,
+                    text=True,
+                )
+                if diff.returncode == 0 and diff.stdout.strip():
+                    return diff.stdout
+            return None
+        return None

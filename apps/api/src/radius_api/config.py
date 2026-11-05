@@ -3,7 +3,7 @@
 from functools import lru_cache
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from radius_shared.database.session import DatabaseSettings
 
 
@@ -22,7 +22,11 @@ class ApiSettings(DatabaseSettings):
     (default), deliveries from installations not linked to an organization are
     rejected instead of being filed under the default organization.
     """
-    cors_origins: str = ""
+    cors_origins: str = Field(
+        default="",
+        validation_alias=AliasChoices("CORS_ORIGINS", "CORS_ALLOW_ORIGINS", "cors_origins"),
+    )
+    """Extra comma-separated CORS origins (CORS_ORIGINS or CORS_ALLOW_ORIGINS)."""
     seed_demo_data: bool = Field(default=False, alias="RADIUS_SEED_DEMO_DATA")
     """Seed illustrative demo fixtures and a demo login at startup.
 

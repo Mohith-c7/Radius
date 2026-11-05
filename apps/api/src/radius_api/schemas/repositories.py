@@ -25,3 +25,9 @@ class UpdateRepositoryRequest(BaseModel):
     default_branch: str = Field(min_length=1, max_length=255, alias="defaultBranch")
 
     model_config = {"populate_by_name": True}
+
+
+class ImportPullRequestRequest(BaseModel):
+    """Request to analyse a pull request from a public GitHub repository."""
+
+    url: str

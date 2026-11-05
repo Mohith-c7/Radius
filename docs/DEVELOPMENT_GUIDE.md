@@ -16,6 +16,37 @@ It establishes the project structure, coding workflow, branching strategy, quali
 
 ---
 
+# Running Locally
+
+Run each command from the repository root, in its own terminal.
+
+**Terminal 1: API** (http://localhost:8000)
+
+```bash
+source /home/nithin/venv/bin/activate
+cd /home/nithin/Radius/apps/api
+export PYTHONPATH=src:../worker/src:$(ls -d ../../packages/*/src | paste -sd:)
+uvicorn radius_api.main:app --reload --app-dir src --port 8000
+```
+
+**Terminal 2: Dashboard** (http://localhost:3000)
+
+```bash
+cd /home/nithin/Radius/apps/dashboard
+pnpm dev
+```
+
+**Terminal 3: Worker** (processes queued analyses)
+
+```bash
+source /home/nithin/venv/bin/activate
+cd /home/nithin/Radius/apps/worker
+export PYTHONPATH=src:../api/src:$(ls -d ../../packages/*/src | paste -sd:)
+python -m radius_worker
+```
+
+---
+
 # Development Principles
 
 Every contribution to Radius should follow these principles:

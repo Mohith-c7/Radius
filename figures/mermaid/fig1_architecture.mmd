@@ -1,0 +1,36 @@
+flowchart TB
+    subgraph L1["Interfaces"]
+        direction LR
+        GH["GitHub App<br/>pull request events"]
+        API["REST API"]
+        DASH["Dashboard"]
+        GH ~~~ API ~~~ DASH
+    end
+
+    subgraph L2["Analysis domains, run by the worker"]
+        direction LR
+        REPO["Repository<br/>fetch and diff"]
+        PARSE["Parser<br/>symbols and imports"]
+        GRAPH["Graph<br/>dependencies and calls"]
+        IMPACT["Impact<br/>blast radius, narrowing"]
+        TEST["Testing<br/>select and run"]
+        CONF["Confidence<br/>rules and score"]
+        REPO ~~~ PARSE ~~~ GRAPH ~~~ IMPACT ~~~ TEST ~~~ CONF
+    end
+
+    subgraph L3["Storage"]
+        direction LR
+        JOBS[("Job queue")]
+        REC[("Analyses, graphs,<br/>test runs, reports")]
+        JOBS ~~~ REC
+    end
+
+    L1 --> L2
+    L2 --> L3
+
+    classDef iface fill:#e8f1fb,stroke:#2471a3,color:#0b2e4f
+    classDef domain fill:#eef7ee,stroke:#2e7d32,color:#123d14
+    classDef store fill:#f3eefa,stroke:#6c3483,color:#2e1245
+    class GH,API,DASH iface
+    class REPO,PARSE,GRAPH,IMPACT,TEST,CONF domain
+    class JOBS,REC store

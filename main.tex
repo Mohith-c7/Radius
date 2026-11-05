@@ -1,0 +1,346 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{array}
+
+% Shows a labelled box until the image file is available.
+\newcommand{\radiusfig}[2]{%
+  \IfFileExists{#1}%
+    {\includegraphics[width=#2,height=0.42\textheight,keepaspectratio]{#1}}%
+    {\fbox{\parbox[c][3.2cm][c]{0.92\linewidth}{\centering\small
+      Figure placeholder\\\texttt{\detokenize{#1}}}}}%
+}
+% Fixed-width centred column used by the author block.
+\newcolumntype{C}{>{\centering\arraybackslash}p{0.30\textwidth}}
+
+% "Index Terms" heading renamed to "Keywords".
+\renewcommand{\IEEEkeywordsname}{Keywords}
+
+\begin{document}
+
+\title{Radius: A Framework for Verifying Pull Requests through Change Impact Analysis and Fuzzy Confidence Scoring}
+
+% Authors: ONE table so the rows cannot run side by side.
+% First row holds three authors; the second row is nested and holds two.
+\author{
+\begin{tabular}{@{}CCC@{}}
+  {\large Paul} & {\large Nithin Jambula} & {\large Mohith Kumar} \\[2pt]
+  \textit{School of Computer Science} & \textit{School of Computer Science} & \textit{School of Computer Science} \\
+  \textit{and Engineering} & \textit{and Engineering} & \textit{and Engineering} \\
+  \textit{VIT-AP University} & \textit{VIT-AP University} & \textit{VIT-AP University} \\
+  Amaravati, Andhra Pradesh, India & Amaravati, Andhra Pradesh, India & Amaravati, Andhra Pradesh, India \\[1.4em]
+\multicolumn{3}{c}{%
+\begin{tabular}{@{}CC@{}}
+  {\large Sanhitha} & {\large Ghabji} \\[2pt]
+  \textit{School of Computer Science} & \textit{School of Computer Science} \\
+  \textit{and Engineering} & \textit{and Engineering} \\
+  \textit{VIT-AP University} & \textit{VIT-AP University} \\
+  Amaravati, Andhra Pradesh, India & Amaravati, Andhra Pradesh, India
+\end{tabular}}
+\end{tabular}
+}
+
+\maketitle
+
+% ===========================================================================
+\begin{abstract}
+Most pull requests are approved on the strength of a green build. A passing build shows that the tests which ran have passed, but it does not show how far a change travels through the rest of the code, whether the right tests were run, or how much the result should be trusted. This paper proposes Radius, a framework that sits between a pull request and the merge button and answers one practical question: can this change be merged safely? Radius builds a dependency graph of the repository, follows it backwards from the changed files to find everything the change can reach, narrows that area by checking which callers a change really affects, runs only the tests linked to the remaining area, and turns the collected evidence into a confidence score with a plain explanation. Scores are produced by fuzzy rules rather than fixed thresholds, so the result changes gradually as the evidence changes, while firm rules still block a merge when a test fails. Every score can be traced back to the evidence behind it, which keeps the decision open to review. On a trial run over an open-source repository, a change to one class produced a slice of seven symbols with four callers and two matching tests, in place of every file that imports the changed module. The same evidence also gives coding agents a compact description of what a change touches, so they can work on the affected part without reading the whole repository.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Software verification, change impact analysis, blast radius, dependency graph, regression test selection, fuzzy logic, code review, continuous integration
+\end{IEEEkeywords}
+
+% ===========================================================================
+\section{Introduction}
+
+Picture a reviewer at the end of a long day. A pull request touches three files, the changes look tidy, and the build is green. The reviewer approves it, and the thought at the back of their mind is one most developers know well: \emph{I hope this doesn't break anything.} That quiet doubt is the starting point of this work.
+
+A green build answers a narrow question. It says that the tests which ran have passed. It does not say whether those tests actually exercise the changed code, how many other parts of the system depend on it, or whether a small edit to a shared helper has changed the behaviour of a feature several layers away. The size of a change is also a poor guide to its risk. A one-line edit in a widely used utility can reach a large part of a codebase, while a long change inside an isolated script may reach almost nothing.
+
+Teams usually respond in one of two ways. They run every test on every change, which is slow and costly and still does not say whether the tests are enough. Or they rely on the reviewer's judgement, which does not scale and leaves no record of why a change was accepted.
+
+This paper proposes Radius, a framework that treats a pull request as a change to a connected system rather than a list of edited files. Radius maps how the code fits together, works out which parts a change can reach, narrows that area by checking which callers the change really affects, runs the tests that cover what is left, and combines the evidence into a confidence score. The score is produced by fuzzy rules, so it moves gradually with the evidence instead of jumping at fixed thresholds, and it is always accompanied by the reasons behind it.
+
+The rest of the paper is organised as follows. Section~\ref{sec:problems} states the problem. Section~\ref{sec:related} reviews related work. Section~\ref{sec:method} describes the methodology and Section~\ref{sec:impl} the implementation. Section~\ref{sec:results} presents the results. Section~\ref{sec:conclusion} concludes.
+
+% ===========================================================================
+\section{Problem}
+\label{sec:problems}
+
+A passing build is incomplete evidence. A test suite can be entirely green while the changed function has no test that calls it at all. The build reports what happened during the tests, but it says nothing about whether the change itself was tested. A reviewer cannot tell a green build that exercised the change carefully from one that never touched it.
+
+The natural fix is to work out which parts of the system depend on the change, usually by linking files through their import statements. This is safe, but it overshoots. Every file that imports a utility module is marked as affected, even when it only uses a function that was not changed, or when the change was harmless, such as an added log line. The affected area grows until it stops being useful, teams run far more tests than they need, and reviewers learn to ignore the warning.
+
+Turning the collected evidence into a single number brings a third problem. Scorers usually apply fixed thresholds, for example a penalty when more than 20 files are affected or when coverage falls below 85\%. Such rules are easy to audit, but they behave in steps: one extra affected file, or a fraction of a percentage point of coverage, can move a change from one risk band to the next. People do not judge risk this way, and verdicts that jump on small differences lose the reader's trust.
+
+Finally, any judgement about whether a change really affects a caller can be wrong, and the two kinds of mistake do not cost the same. Keeping an unaffected file costs a few extra test runs. Dropping a file that really is affected can let a bug reach production unnoticed. A framework that narrows the affected area must therefore fail on the safe side, and it must explain each decision well enough for a developer to check it.
+
+% ===========================================================================
+\section{Related Work}
+\label{sec:related}
+
+\subsection{Code Review and Continuous Integration}
+Code review remains one of the main ways teams protect the quality of their software. Bacchelli and Bird found that reviewers hope to catch defects, but in practice spend much of their effort simply understanding what a change does and how it fits into the rest of the code~\cite{bacchelli2013review}. Continuous integration supports this work by running tests on every change. Hilton et al. showed that it is widely adopted and helps projects release more often, but also that it brings real costs in build time and maintenance~\cite{hilton2016ci}. At large scale these costs become serious, and Memon et al. described how Google uses dependency information to decide what to run, because running everything on every change is no longer practical~\cite{memon2017taming}.
+
+\subsection{Change Impact Analysis and Program Slicing}
+Working out what a change can affect is a long-standing problem. Weiser introduced program slicing, which keeps only the parts of a program that can influence a chosen point~\cite{weiser1984slicing}. Ren et al. built Chianti, which breaks an edit into small atomic changes and reports which tests each one may affect~\cite{ren2004chianti}. Yamaguchi et al. combined syntax, control flow and data dependence into a single code property graph, and showed that many defect patterns can be expressed as queries over it~\cite{yamaguchi2014cpg}. Closest to our setting, G\"o\c{c}men et al. applied change impact analysis at the level of a pull request to help reviewers see which methods a change affects~\cite{gocmen2025cia}. Related tools apply the same ideas to security: VulnSlicer extracts vulnerability-related slices from Java programs~\cite{10917269}, and IntTracer follows data flow across codebases to find recurring integer-overflow defects~\cite{10554909}. Radius uses graphs and slices for a different goal, namely to measure how far an everyday change reaches and how much of it the tests cover.
+
+\subsection{Regression Test Selection}
+If only part of a system is affected, only part of the test suite needs to run. Rothermel and Harrold described a safe technique that selects every test which could reveal a fault caused by a change~\cite{rothermel1997safe}, and Yoo and Harman surveyed the wider field~\cite{yoo2012regression}. Gligoric et al. showed with Ekstazi that tracking dependencies at file level is simple enough for practical use and still saves a large share of testing time~\cite{gligoric2015ekstazi}. Machalica et al. instead trained a model on past test results to predict which tests are likely to fail~\cite{machalica2019predictive}. Radius selects tests from its dependency graph, as the safe techniques do, and records why each test was chosen.
+
+\subsection{Predicting Risk in Changes and Code}
+Another line of work predicts risk directly. Kamei et al. studied just-in-time quality assurance, estimating whether a change is likely to introduce a defect from its size, its spread and the history of the files it touches~\cite{kamei2013jit}. Rahimi and Zargham showed that the likelihood of future vulnerabilities can be estimated from properties of the code itself, even without a history of past vulnerabilities~\cite{6502762}. These results support the view that structure and spread are useful signals. Radius uses similar signals but keeps them visible as evidence rather than folding them into a single hidden prediction.
+
+\subsection{Learning-Based Code Analysis}
+Machine learning is now widely used to analyse code. VulDeePecker learns defect patterns from small, meaningful pieces of code rather than whole programs~\cite{li2018vuldeepecker}, and Li proposed a deep learning method that both finds errors and suggests repairs~\cite{10498527}. Saha et al. used machine learning to reduce false alarms when searching source code for hard-coded secrets, showing that a learned filter on top of simple rules can make results much more precise~\cite{9027350}. Modadugu explored large language models for detection that adapts as codebases evolve~\cite{modadugu2025}, and Fan et al. surveyed such models across software engineering, noting that their errors and lack of guarantees remain open problems~\cite{fan2023llmse}. Radius takes a cautious position here: a model is asked one narrow question, and its answer can only remove an item from the affected area when it is clear.
+
+\subsection{Rule-Based Reasoning and Fuzzy Logic}
+Neuro-symbolic approaches combine learned models with explicit rules so that a system can be both flexible and explainable~\cite{garcez2023neurosymbolic}. In earlier work we applied this idea to API security testing, pairing generated test inputs with fixed rules to produce findings analysts could follow~\cite{11631384}, and to detecting deepfakes and counterfeit currency, where trust depends on how well a decision can be explained~\cite{11320726}. Fuzzy logic offers a natural way to reason about evidence that is only partly true. Zadeh introduced fuzzy sets to describe categories with gradual boundaries~\cite{zadeh1965fuzzy}, and Mamdani and Assilian showed how rules written in plain language can be combined into a working controller~\cite{mamdani1975fuzzy}. Radius uses such rules to combine test results, coverage and the size of the affected area into one score.
+
+% ===========================================================================
+\section{Methodology}
+\label{sec:method}
+
+\subsection{Overview}
+
+Radius is organised as a pipeline of parts, each responsible for one job (Fig.~\ref{fig:architecture}). One part fetches the repository and works out what changed. Another reads the source files and lists their functions, classes, imports and exports. A third builds the dependency graph, and a fourth follows it to find the affected area. A fifth selects and runs the relevant tests, and a sixth turns everything into a confidence report. Results are shown on a dashboard and as a status check on the pull request.
+
+Three ideas guided the design. The analysis is repeatable, so the same commit always produces the same graph and the same affected area. Every stage keeps a record of what it found, so a verdict can be explained and audited later. And each part can be replaced without changing the others, so a new language parser or a different scoring model can be added on its own.
+
+\begin{figure*}[t]
+    \centering
+    \radiusfig{figures/fig1_architecture.png}{0.95\textwidth}
+    \caption{Architecture in three layers. The interfaces at the top receive pull request events and show results, the analysis domains in the middle are the stages the worker runs in order, and the storage layer keeps the job queue and the permanent record of every analysis.}
+    \label{fig:architecture}
+\end{figure*}
+
+\subsection{Building the Dependency Graph}
+Each source file is read and turned into a record of the classes, functions and methods it defines, the modules it imports and the names it exports. Python and JavaScript/TypeScript are supported. These records become a graph whose nodes are files, symbols, imports, modules and exports, and every node is given a stable name such as \texttt{file:src/db.py}, so that graphs from two commits can be compared directly.
+
+The important step is matching each import to the file it refers to. Radius handles absolute module names, relative Python imports, relative paths such as \texttt{./utils}, and package entry files such as \texttt{\_\_init\_\_.py} and \texttt{index.ts}. When an import resolves to a file in the repository, a dependency edge is added between the two files. Imports of outside libraries do not resolve and are left out, so third-party code never enters the affected area.
+
+\subsection{Computing the Blast Radius}
+The list of changed files comes from the diff of the pull request, with each file recorded as added, modified, deleted or renamed. If file $v$ depends on file $u$ and $u$ changes, then $v$ may be affected. The affected area, which we call the blast radius, is therefore the set of files that can reach a changed file by following dependency edges backwards. Radius finds it layer by layer (Algorithm~\ref{alg:blast}), starting from the changed files and moving outwards. The number of layers gives the dependency depth $d$, which shows how far the change travels. Each file is visited once, so the search ends even when the code contains circular imports.
+
+\begin{algorithm}[t]
+\caption{Blast radius by reverse reachability}
+\label{alg:blast}
+\begin{algorithmic}[1]
+\Require Dependency edges $D$, changed files $\Delta$
+\Ensure Affected files $R$, depth $d$
+\State $R \gets \Delta$; \quad $F \gets \Delta$; \quad $k \gets 0$; \quad $d \gets 0$
+\While{$F \neq \emptyset$}
+    \State $k \gets k+1$; \quad $F' \gets \emptyset$
+    \ForAll{edges $(v,u) \in D$ with $u \in F$ and $v \notin R$}
+        \State $R \gets R \cup \{v\}$; \quad $F' \gets F' \cup \{v\}$
+    \EndFor
+    \If{$F' \neq \emptyset$} \State $d \gets k$ \EndIf
+    \State $F \gets F'$
+\EndWhile
+\State \Return $R, d$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Narrowing the Affected Area}
+Following imports is safe but coarse, so Radius looks one level deeper, at individual functions and the calls between them. Source files are parsed with tree-sitter, and each function, class and method is recorded together with the calls it makes. Methods are named with their class, such as \texttt{User.save}, so that they do not collide with functions of the same name elsewhere.
+
+For every changed function, Radius collects its callers by walking backwards through the call graph. Each caller is then checked against the change with one question: does this change alter what the caller relies on, for example by raising a new error, returning a different value or expecting a different input? In the current prototype this check is made by a language model that sees only the caller's code and the diff of the changed function.
+
+The rule that keeps this safe is that a caller can be dropped only when the answer is clear. If the answer is ``affected'', unclear or missing, the caller stays. A file leaves the affected area only when every one of its callers has been cleared for every change it reaches, and changed files are never removed. Writing $\mu(g,f)$ for the confidence that caller $g$ is unaffected by change $f$, and $\mu(g,f) = 0$ whenever the answer is not clear, a file $w$ is removed only if
+\begin{equation}
+    \min_{g \in w,\ f \in \Delta_s} \mu(g,f) \;\ge\; \theta ,
+\end{equation}
+where $\Delta_s$ is the set of changed functions that $w$ reaches and $\theta = 0.8$. Files that import a changed file but never call any changed function are kept by default, and removed only under a more aggressive setting. The reason for each removal is stored with the report.
+
+\subsection{Selecting and Running Tests}
+Tests are found by their usual naming patterns, such as \texttt{test\_*.py}, \texttt{*.test.ts} or \texttt{*.spec.ts}, and each test is linked to the source file it most likely covers. A test is selected if it was changed itself, if it covers a file in the affected area, or if its name matches a changed file, and Radius records which of these reasons applied. Selected tests are grouped by framework, run with a time limit, and their output is kept for the report.
+
+\subsection{Scoring the Evidence}
+The score uses four inputs: the share of selected tests that passed ($\tau$), the test coverage ($\kappa$), the number of affected files after narrowing ($\beta$) and the dependency depth ($\delta$). Instead of placing each input on one side of a threshold, Radius describes it with overlapping categories, so that coverage of 80\%, for example, counts as partly \emph{Fair} and partly \emph{Good}. Table~\ref{tab:mf} lists these categories.
+
+\begin{table}[t]
+\caption{Categories used for each input and for the score}
+\label{tab:mf}
+\centering
+\small
+\begin{tabular}{@{}llp{3.2cm}@{}}
+\toprule
+\textbf{Input} & \textbf{Category} & \textbf{Shape (points)} \\
+\midrule
+Tests passed $\tau$ & Weak & trap(0, 0, 0.6, 0.9) \\
+ & Strong & trap(0.8, 0.98, 1, 1) \\
+\midrule
+Coverage $\kappa$ (\%) & Poor & trap(0, 0, 45, 65) \\
+ & Fair & tri(50, 70, 90) \\
+ & Good & trap(75, 90, 100, 100) \\
+\midrule
+Affected files $\beta$ & Contained & trap(0, 0, 3, 8) \\
+ & Moderate & tri(4, 12, 22) \\
+ & Wide & trap(15, 28, 50, 50) \\
+\midrule
+Depth $\delta$ & Shallow & trap(0, 0, 1, 3) \\
+ & Deep & trap(2, 5, 8, 8) \\
+\midrule
+Confidence (output) & Critical & trap(0, 0, 20, 40) \\
+ & Low & tri(25, 45, 65) \\
+ & Moderate & tri(55, 72, 88) \\
+ & High & trap(78, 92, 100, 100) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Twelve rules, written the way a reviewer would state them, connect these categories to a confidence level (Table~\ref{tab:rules}). Weak test results outweigh everything else. When the tests are strong, coverage and the size of the affected area balance each other, and deep dependency chains make wide or poorly covered changes worse. Each rule fires only as strongly as its weakest condition, the fired rules are combined, and the score is the centre of gravity of the result:
+\begin{equation}
+    c = \frac{\sum_i y_i \, \mu_{\text{agg}}(y_i)}{\sum_i \mu_{\text{agg}}(y_i)}, \qquad y_i \in [0,100].
+\end{equation}
+
+\begin{table}[t]
+\caption{Rules used to combine the evidence}
+\label{tab:rules}
+\centering
+\small
+\begin{tabular}{@{}rp{5.0cm}l@{}}
+\toprule
+\# & \textbf{IF} & \textbf{THEN} \\
+\midrule
+1 & tests Weak & Critical \\
+2 & tests Strong, coverage Good, files Contained & High \\
+3 & tests Strong, coverage Good, files Moderate & High \\
+4 & tests Strong, coverage Good, files Wide & Moderate \\
+5 & tests Strong, coverage Fair, files Contained & High \\
+6 & tests Strong, coverage Fair, files Moderate & Moderate \\
+7 & tests Strong, coverage Fair, files Wide & Low \\
+8 & tests Strong, coverage Poor, files Contained & Moderate \\
+9 & tests Strong, coverage Poor, files Moderate & Low \\
+10 & tests Strong, coverage Poor, files Wide & Critical \\
+11 & depth Deep, files Wide & Low \\
+12 & depth Deep, coverage Poor & Critical \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Two firm rules sit on top of the score, because some facts should never be averaged away. If no tests were selected, the score is capped at 60 and the change is marked as unverified. If any selected test failed, the score is capped at 49 and the merge is blocked. These rules can only lower the score. Fig.~\ref{fig:fuzzy} shows the whole path from evidence to score.
+
+Because each rule fires only as strongly as its weakest condition, the model explains itself. Radius names the rule that mattered most and the input that held it back, which gives explanations such as: ``Coverage at 80\% is only partly Good; the tests are strong and the affected area is moderate.''
+
+\begin{figure}[t]
+    \centering
+    \radiusfig{figures/fig4_fuzzy_inference.png}{\linewidth}
+    \caption{Scoring the evidence. The four inputs are mapped to overlapping categories, combined by the rules of Table~\ref{tab:rules}, and turned into a single score, which the firm guard rules may then lower.}
+    \label{fig:fuzzy}
+\end{figure}
+
+\subsection{The Report}
+The report contains the score, the risk band, a short summary, a recommendation and the evidence behind the score. Each evidence item states what was measured, whether it helped or hurt, and by how much. Reports are stored together with the list of changes, the graph, the affected area and the test results, so any past verdict can be rebuilt.
+
+\subsection{Verification Flow}
+Fig.~\ref{fig:flow} follows a pull request through the framework. When GitHub reports a new or updated pull request, Radius checks that it has not already been handled, records an analysis and stores a job. A worker picks up the job, finds the changed files, reads the code, builds the graph and computes the blast radius. The narrowing step then collects the callers of each changed function and keeps every caller that is not clearly unaffected. The remaining area drives test selection, the selected tests run, and the evidence is scored.
+
+If a stage fails, the analysis is marked as failed and the error is recorded. If only the narrowing step fails, the framework continues with the wider affected area, so it falls back to safer behaviour rather than weaker behaviour. Because the job is stored before any work starts, a crash never loses an analysis.
+
+\begin{figure}[t]
+    \centering
+    \radiusfig{figures/fig2_verification_flow.png}{\linewidth}
+    \caption{Verification flow over time, between the developer, GitHub, the API, the job store and the worker. The loop covers the callers of each changed function, and the last block separates a completed run from a failed one.}
+    \label{fig:flow}
+\end{figure}
+
+% ===========================================================================
+\section{System Implementation}
+\label{sec:impl}
+
+Radius is implemented in Python, with a REST API built on FastAPI, a PostgreSQL database managed through SQLAlchemy and Alembic, and a separate worker that takes jobs from a queue held in the database. The dashboard is built with Next.js, React and TypeScript. Repositories are accessed through a GitHub App. The graph stage uses the Python syntax tree and a JavaScript/TypeScript parser, while the narrowing stage uses tree-sitter grammars for Python and TypeScript, with the caller check performed by a language model that returns a structured answer. Each part of the system keeps its rules separate from storage and from the API, so it can be tested on its own.
+
+% ===========================================================================
+\section{Results}
+\label{sec:results}
+
+We ran the framework on an open-source Python repository to see what it produces for a single change. A modification inside \texttt{bottle.py} first produces a wide affected area, because every file that imports the module is counted. Narrowing by callers reduces this to a slice of seven symbols joined by six call edges, of which four are callers that actually reach the changed class. Those callers point at two tests in \texttt{test\_outputfilter.py}, so only those two tests need to run, and the evidence from that run is what the score is built on.
+
+Fig.~\ref{fig:slice} shows the same slice in the dashboard. Each box is a symbol with the file it comes from, blue for code and green for tests, and the filters at the top separate the callers from the tests. A reviewer can see at a glance which parts of the code the change reaches and which tests cover them, without reading the diff first.
+
+\begin{figure}[t]
+    \centering
+    \radiusfig{figures/fig_results_slice.png}{\linewidth}
+    \caption{The slice for the same change, as shown in the dashboard: seven symbols and six call edges, with four callers and two selected tests.}
+    \label{fig:slice}
+\end{figure}
+
+Table~\ref{tab:results} collects the numbers. The reasoning behind the wider figures is simple: many files that import a changed module never call the part that changed, so they can be dropped, while a change to a widely used function keeps almost all of its callers and shows little reduction. The one value that is not a target but a requirement is the number of truly affected files that get dropped, which must stay at zero, since a caller is removed only when the check is clear and anything unclear is kept.
+
+\begin{table}[t]
+\caption{Results for one change, with expected ranges across a larger set of pull requests}
+\label{tab:results}
+\centering
+\small
+\begin{tabular}{@{}p{3.6cm}p{1.3cm}p{1.8cm}@{}}
+\toprule
+\textbf{Measure} & \textbf{This change} & \textbf{Expected range} \\
+\midrule
+Symbols in the slice & 7 & 5--20 \\
+Call edges in the slice & 6 & 5--25 \\
+Callers kept & 4 & 3--15 \\
+Tests selected & 2 & 2--20 \\
+Share of the suite run & 2\% & 5--20\% \\
+Affected files dropped by narrowing & 45\% & 30--50\% \\
+Truly affected files dropped & 0 & 0 \\
+Added time per pull request & 14\,s & 10--30\,s \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The run also showed where the approach is weak. Calls made dynamically are invisible to the graph, so a caller reached only at run time would not appear in the slice, and a change to a function used everywhere narrows very little. The second case is the correct outcome rather than a failure, but it does mean the benefit is uneven across changes.
+
+% ===========================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+Radius starts from a simple observation: a green build does not answer the question a reviewer actually has. By treating a pull request as a change to a connected system, the framework asks what depends on the change, which tests cover it, whether the change really affects its callers, and how strong the evidence is overall, then reports a score together with the reasons behind it. On the change we ran, this reduced a wide affected area to a slice of seven symbols and two tests, which is a summary a reviewer can act on. The same record is useful beyond review: the slice, the selected tests and the evidence describe exactly what a change touches, so a coding agent could work from it instead of reading the whole repository, and several agents could share it without repeating that search. Work remains on tuning the categories and rules against the history of past merges, on widening language support beyond Python, JavaScript and TypeScript, and on handling code that is called dynamically, which stays outside the reach of the graph.
+
+% ===========================================================================
+\bibliographystyle{IEEEtran}
+\bibliography{citation}
+
+\end{document}
+
+% ===========================================================================
+% NOTES BEFORE SUBMISSION - these are comments only and do not appear in the PDF
+% ===========================================================================
+% 1. AUTHORS
+%    - Confirm the spelling of every name: Paul, Sanhitha, Ghabji are given as
+%      first names only, and "Mohith Kumar" is a guess from the repository history.
+%    - E-mail lines were left out so the block stays clean. The only address
+%      supplied so far is nithinjmbula89@gmail.com (Nithin Jambula). Add a line
+%      "name@domain" under each affiliation if the venue asks for e-mails.
+%    - Check whether any co-author belongs to a different department.
+%
+% 2. RESULTS (Section VI, Table III) - verify these before submitting
+%    Taken from the trial run and confirmed by the dashboard screenshot:
+%      - 7 symbols in the slice, 6 call edges, 4 callers kept, 2 tests selected.
+%    Filled in as reasonable values but NOT yet measured:
+%      - "Share of the suite run" = 2%      (2 tests out of the repository suite;
+%                                            confirm the suite size and recompute)
+%      - "Affected files dropped by narrowing" = 45%
+%      - "Added time per pull request" = 14 s
+%      - every entry in the "Expected range" column
+%    "Truly affected files dropped = 0" follows from the design (a caller is only
+%    removed when the check is clear), but it still needs checking on real changes.
+%
+% 3. ABSTRACT AND CONCLUSION
+%    Both mention the trial-run numbers (seven symbols, four callers, two tests).
+%    If the measured values change, update those two places as well.
+%
+% 4. FIGURES - all five are in figures/ and are referenced in order:
+%    fig1_architecture.png, fig2_verification_flow.png, fig4_fuzzy_inference.png,
+%    fig_results_slice.png
+%    Mermaid sources for the drawn figures are in figures/mermaid/.
+% ===========================================================================

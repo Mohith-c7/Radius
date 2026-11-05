@@ -609,3 +609,62 @@
 
 
 
+
+/* ---- Impact map (components/impact-graph.tsx) ---- */
+.impact-graph{overflow:hidden}
+.impact-head{display:flex;gap:24px;justify-content:space-between;align-items:flex-start;padding:20px 22px 14px}
+.impact-head h2{font-size:16px;letter-spacing:-.3px;margin:0 0 5px}
+.impact-head p{font-size:12px;line-height:1.55;max-width:620px}
+.impact-stats{display:grid;grid-template-columns:repeat(4,auto);gap:6px 22px;margin:0}
+.impact-stats div{min-width:72px}
+.impact-stats dt{color:var(--muted);font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.impact-stats dd{font-size:22px;font-weight:800;letter-spacing:-1px;margin:3px 0 0}
+.impact-toolbar{align-items:center;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;gap:10px 14px;padding:10px 22px}
+.impact-search{align-items:center;background:#fff;border:1px solid var(--line);border-radius:8px;color:var(--muted);display:flex;gap:6px;padding:6px 10px}
+.impact-search input{border:0;font:inherit;font-size:12px;outline:0;width:170px}
+.impact-btn{align-items:center;background:#fff;border:1px solid var(--line);border-radius:8px;color:var(--ink);cursor:pointer;display:inline-flex;font:600 12px Manrope,Arial,sans-serif;gap:6px;padding:6px 10px}
+.impact-btn:hover{border-color:#9CCFB7;background:var(--green-soft)}
+.impact-btn.icon{height:28px;justify-content:center;padding:0;width:28px}
+.impact-legend{display:flex;flex-wrap:wrap;gap:12px;margin-left:auto}
+.impact-legend span{align-items:center;color:var(--muted);display:flex;font-size:11px;gap:5px}
+.impact-legend i{border-radius:3px;display:inline-block;height:10px;width:10px}
+.impact-legend i.impact-legend-line{background:#9FB3AA;border-radius:1px;height:2px;width:16px}
+.impact-zoom{align-items:center;display:flex;gap:6px}
+.impact-zoom>span{color:var(--muted);font-family:'DM Mono',monospace;font-size:11px;min-width:38px;text-align:center}
+.impact-body{border-top:1px solid var(--line);display:flex;position:relative}
+.impact-viewport{background:radial-gradient(#DCE6E0 1px,transparent 1px) 0 0/18px 18px,#FBFCFB;cursor:grab;flex:1;min-width:0;overflow:hidden;position:relative;user-select:none}
+.impact-viewport:active{cursor:grabbing}
+.impact-col-bg{fill:#ffffff;fill-opacity:.6;stroke:#E7ECE8}
+.impact-col-title{fill:var(--ink);font:800 13px Manrope,Arial,sans-serif;letter-spacing:-.2px}
+.impact-col-hint{fill:var(--muted);font:600 10.5px Manrope,Arial,sans-serif}
+.impact-node-name{fill:var(--ink);font:700 12.5px Manrope,Arial,sans-serif}
+.impact-node-dir{fill:var(--muted);font:500 10px 'DM Mono',monospace}
+.impact-node-badge{font:700 10.5px 'DM Mono',monospace}
+.impact-note{background:#fff;border:1px solid var(--line);border-left:4px solid var(--amber);border-radius:9px;top:14px;right:14px;box-shadow:0 6px 18px #13231E10;font-size:12px;line-height:1.5;margin:0;max-width:420px;padding:10px 14px;position:absolute}
+.impact-note strong{display:block;margin-bottom:2px}
+.impact-details{background:#fff;border-left:1px solid var(--line);max-height:100%;overflow:auto;padding:18px 18px 22px;width:330px;flex-shrink:0}
+.impact-details-head{align-items:center;display:flex;justify-content:space-between}
+.impact-kind{border:1px solid;border-radius:20px;font-size:10px;font-weight:800;letter-spacing:.05em;padding:3px 9px;text-transform:uppercase}
+.impact-details h3{font-size:16px;letter-spacing:-.4px;margin:12px 0 4px;word-break:break-all}
+.impact-path{align-items:center;color:var(--muted);display:flex;font-family:'DM Mono',monospace;font-size:10.5px;gap:5px;margin:0;word-break:break-all}
+.impact-status{background:var(--canvas);border-radius:8px;font-size:12px;font-weight:600;margin:12px 0 4px;padding:8px 10px}
+.impact-section{margin-top:16px}
+.impact-section h4{color:var(--muted);font-size:10px;font-weight:800;letter-spacing:.06em;margin:0 0 8px;text-transform:uppercase}
+.impact-chain{list-style:none;margin:0;padding:0}
+.impact-chain li{display:grid}
+.impact-chain button,.impact-links button{background:none;border:0;cursor:pointer;font:inherit;text-align:left}
+.impact-chain button{border:1px solid var(--line);border-radius:8px;display:grid;font-size:12px;font-weight:700;padding:6px 9px}
+.impact-chain button:hover{border-color:#DC8C6D}
+.impact-chain button.current{background:#FFF4EF;border-color:#DC8C6D}
+.impact-chain small,.impact-links small{color:var(--muted);font:500 9.5px 'DM Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.impact-chain-arrow{align-items:center;color:#C2603A;display:flex;font-size:10px;font-weight:700;gap:3px;padding:3px 0 3px 12px}
+.impact-links{list-style:none;margin:0;padding:0}
+.impact-links button{align-items:center;border-radius:7px;display:grid;gap:0 7px;grid-template-columns:9px 1fr;padding:5px 6px;width:100%}
+.impact-links button:hover{background:var(--canvas)}
+.impact-links i{border-radius:3px;grid-row:span 2;height:9px;width:9px}
+.impact-links span{font-size:12px;font-weight:700}
+.impact-symbols{display:flex;flex-wrap:wrap;gap:5px}
+.impact-symbols code{background:var(--canvas);border:1px solid var(--line);border-radius:6px;font-size:10.5px;max-width:100%;overflow:hidden;padding:2px 6px;text-overflow:ellipsis;white-space:nowrap}
+.impact-more{background:none;border:0;color:var(--green);cursor:pointer;font:700 11px Manrope,Arial,sans-serif}
+.muted.small{font-size:11px}
+@media(max-width:1100px){.impact-head{flex-direction:column}.impact-details{position:absolute;right:0;top:0;bottom:0;box-shadow:-8px 0 24px #13231E14}}

@@ -123,3 +123,41 @@ def test_same_test_path_in_two_repositories_is_stored_independently(tmp_path) ->
         assert [t.id for t in store.list_test_cases(repo_a)] == [found_a[0].id]
         assert [t.id for t in store.list_test_cases(repo_b)] == [found_b[0].id]
         assert len(store.list_test_cases()) == 2
+
+
+def test_selection_totals_only_count_the_analysed_repository() -> None:
+    """Another repository's tests are neither skipped nor counted for this run."""
+
+    repo_a, repo_b, analysis_id = uuid4(), uuid4(), uuid4()
+
+    def case(path: str) -> RadiusTestCase:
+        return RadiusTestCase(
+            id=uuid4(),
+            name=RadiusTestName(path.rsplit("/", 1)[-1].removesuffix(".py")),
+            path=RadiusTestPath(path),
+            framework=RadiusTestFramework.PYTEST,
+        )
+
+    with _session() as session:
+        store = SqlAlchemyTestStore(session)
+        a_tests = store.save_test_cases(
+            (case("tests/test_core.py"), case("tests/test_cli.py")), repo_a
+        )
+        store.save_test_cases(
+            (case("tests/test_other.py"), case("tests/test_more.py"), case("tests/test_x.py")),
+            repo_b,
+        )
+        store._analysis_repository_id = lambda _: repo_a  # analysis belongs to repo A
+        selected = next(t for t in a_tests if t.path.value == "tests/test_core.py")
+        store.save_selection(
+            RadiusTestSelection(
+                analysis_id=analysis_id,
+                selected_tests=(SelectedTest(selected, RadiusTestSelectionReason.AFFECTED_FILE),),
+            )
+        )
+
+        loaded = store.get_selection(analysis_id)
+
+    assert loaded is not None
+    assert [t.path.value for t in loaded.skipped_tests] == ["tests/test_cli.py"]
+    assert loaded.total_discovered_count == 2
