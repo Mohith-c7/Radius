@@ -1,3 +1,12 @@
+import {
+  analyzePullRequestRequest,
+  connectGitHubRequest,
+  rerunRequest,
+  summarizeSync,
+  syncPullRequestsRequest,
+  type SyncSummary,
+} from "./github-actions.ts";
+
 export type UUID = string;
 
 type ApiEnvelope<T> = {
@@ -73,6 +82,8 @@ export type ConfidenceReport = {
   id: UUID | null;
   analysis_id: UUID;
   confidence_score: number;
+  /** "heuristic_uncalibrated" until calibration ships (F-12). */
+  score_kind?: string | null;
   risk_level: string;
   summary: string;
   evidence: ConfidenceEvidence[];
@@ -156,13 +167,21 @@ export const radiusConfig = {
   apiBaseUrl:
     process.env.NEXT_PUBLIC_RADIUS_API_BASE_URL ?? "http://localhost:8000",
   organizationId: process.env.NEXT_PUBLIC_RADIUS_ORGANIZATION_ID ?? "",
-  apiKey: process.env.NEXT_PUBLIC_RADIUS_API_KEY ?? "",
 };
 
+// The browser never talks to the Radius API directly and never holds the API
+// key. Requests go to the same-origin proxy (app/api/radius), which attaches
+// the server-only RADIUS_API_KEY. During SSR (no window) the absolute
+// dashboard URL is needed; RADIUS_DASHBOARD_INTERNAL_URL provides it.
+const PROXY_PREFIX = "/api/radius";
+
 function apiUrl(path: string) {
-  const base = radiusConfig.apiBaseUrl.replace(/\/$/, "");
   const normalized = path.startsWith("/") ? path : `/${path}`;
-  return `${base}/api/v1${normalized}`;
+  const origin =
+    typeof window === "undefined"
+      ? (process.env.RADIUS_DASHBOARD_INTERNAL_URL ?? "http://localhost:3000")
+      : "";
+  return `${origin}${PROXY_PREFIX}${normalized}`;
 }
 
 function buildQuery(params: Record<string, string | undefined>) {
@@ -189,8 +208,7 @@ export async function radiusFetch<T>(
 ): Promise<T> {
   const { idempotencyKey, headers, body, ...requestInit } = init;
   const requestHeaders = new Headers(headers);
-  requestHeaders.set("X-Radius-Organization-Id", requireOrganizationId());
-  if (radiusConfig.apiKey) requestHeaders.set("X-Radius-API-Key", radiusConfig.apiKey);
+  requireOrganizationId();
   if (idempotencyKey) requestHeaders.set("Idempotency-Key", idempotencyKey);
   if (body && !requestHeaders.has("Content-Type")) {
     requestHeaders.set("Content-Type", "application/json");
@@ -214,8 +232,90 @@ export async function radiusFetch<T>(
   return envelope.data;
 }
 
+/** Error from the Radius API (through the proxy) with the API error code, e.g. INTENT_STALE. */
+export class RadiusApiError extends Error {
+  readonly status: number;
+  readonly code: string | null;
+  /** Envelope `meta` of the error response (for example `{ reason: "disabled" }`). */
+  readonly meta: Record<string, unknown>;
+  constructor(
+    message: string,
+    status: number,
+    code: string | null,
+    meta: Record<string, unknown> = {},
+  ) {
+    super(message);
+    this.name = "RadiusApiError";
+    this.status = status;
+    this.code = code;
+    this.meta = meta;
+  }
+}
+
+export type RadiusResult<T> = {
+  data: T;
+  status: number;
+  /** Strong ETag of the response, when the API sent one (intent routes). */
+  etag: string | null;
+  meta: Record<string, unknown>;
+};
+
+/**
+ * Like radiusFetch but keeps the status, ETag and meta, accepts the intent
+ * concurrency/audit headers, and throws a RadiusApiError carrying the API
+ * error code (INTENT_STALE, INTENT_NOT_FOUND, ...). `ifMatch` and `actor` are
+ * forwarded by the server proxy only after validation (lib/proxy.ts).
+ */
+export async function radiusRequest<T>(
+  path: string,
+  init: RequestInit & { idempotencyKey?: string; ifMatch?: string | null; actor?: string | null } = {},
+): Promise<RadiusResult<T>> {
+  const { idempotencyKey, ifMatch, actor, headers, body, ...requestInit } = init;
+  const requestHeaders = new Headers(headers);
+  requireOrganizationId();
+  if (idempotencyKey) requestHeaders.set("Idempotency-Key", idempotencyKey);
+  if (ifMatch) requestHeaders.set("If-Match", ifMatch);
+  if (actor) requestHeaders.set("X-Radius-Actor", actor);
+  if (body && !requestHeaders.has("Content-Type")) {
+    requestHeaders.set("Content-Type", "application/json");
+  }
+  const response = await fetch(apiUrl(path), {
+    cache: "no-store",
+    ...requestInit,
+    body,
+    headers: requestHeaders,
+  });
+  let envelope: ApiEnvelope<T> | null = null;
+  try {
+    envelope = (await response.json()) as ApiEnvelope<T>;
+  } catch {
+    envelope = null;
+  }
+  if (!response.ok || !envelope || !envelope.success) {
+    const apiError = envelope?.error;
+    throw new RadiusApiError(
+      apiError?.message || `Radius API request failed (${response.status})`,
+      response.status,
+      typeof apiError?.code === "string" ? apiError.code : null,
+      envelope?.meta ?? {},
+    );
+  }
+  if (envelope.data === null) {
+    throw new RadiusApiError("Radius API returned an empty data payload.", response.status, null);
+  }
+  return {
+    data: envelope.data,
+    status: response.status,
+    etag: response.headers.get("ETag"),
+    meta: envelope.meta ?? {},
+  };
+}
+
+/** API list endpoints are paginated (default 100, hard maximum 500); ask for the maximum page. */
+export const LIST_PAGE_SIZE = 500;
+
 export function listRepositories() {
-  return radiusFetch<Repository[]>("/repositories");
+  return radiusFetch<Repository[]>(`/repositories?limit=${LIST_PAGE_SIZE}`);
 }
 
 export function getRepository(repositoryId: UUID) {
@@ -248,16 +348,58 @@ export function getPullRequestByNumber(repositoryId: UUID, prNumber: number) {
 }
 
 export function listPullRequests(repositoryId: UUID) {
-  return radiusFetch<PullRequest[]>(`/repositories/${repositoryId}/pull-requests`);
+  return radiusFetch<PullRequest[]>(
+    `/repositories/${repositoryId}/pull-requests?limit=${LIST_PAGE_SIZE}`,
+  );
 }
 
-export function syncPullRequests(repositoryId: UUID, autoAnalyze = true) {
-  return radiusFetch<PullRequest[]>(
-    `/repositories/${repositoryId}/sync-pull-requests${buildQuery({
-      auto_analyze: autoAnalyze ? "true" : "false",
-    })}`,
-    { method: "POST" },
-  );
+export type SyncResult = {
+  pullRequests: PullRequest[];
+  summary: SyncSummary;
+};
+
+/** Pull open pull requests from GitHub; keeps `meta` (analysis ids, skipped reasons). */
+export async function syncPullRequestsDetailed(
+  repositoryId: UUID,
+  autoAnalyze = true,
+): Promise<SyncResult> {
+  const spec = syncPullRequestsRequest(repositoryId, autoAnalyze);
+  const result = await radiusRequest<PullRequest[]>(spec.path, { method: spec.method });
+  return {
+    pullRequests: result.data,
+    summary: summarizeSync(result.data.length, result.meta),
+  };
+}
+
+export async function syncPullRequests(repositoryId: UUID, autoAnalyze = true) {
+  return (await syncPullRequestsDetailed(repositoryId, autoAnalyze)).pullRequests;
+}
+
+export type ConnectGitHubResult = {
+  repository: Repository;
+  created: boolean;
+  installationId: number | null;
+};
+
+/** Connect a repository by "owner/name" through the GitHub App (no webhook needed). */
+export async function connectGitHubRepository(repository: string): Promise<ConnectGitHubResult> {
+  const spec = connectGitHubRequest(repository);
+  const result = await radiusRequest<Repository>(spec.path, {
+    method: spec.method,
+    body: spec.body,
+  });
+  return {
+    repository: result.data,
+    created: result.meta.created === true,
+    installationId: typeof result.meta.installationId === "number" ? result.meta.installationId : null,
+  };
+}
+
+/** Fetch one pull request from GitHub by number and queue an analysis for its head commit. */
+export async function analyzePullRequest(repositoryId: UUID, prNumber: number) {
+  const spec = analyzePullRequestRequest(repositoryId, prNumber);
+  const result = await radiusRequest<Analysis>(spec.path, { method: spec.method });
+  return result.data;
 }
 
 export function disconnectRepository(repositoryId: UUID) {
@@ -277,12 +419,16 @@ export function listAnalyses(params: {
   repositoryId?: UUID;
   pullRequestId?: UUID;
   status?: string;
+  limit?: number;
+  offset?: number;
 } = {}) {
   return radiusFetch<Analysis[]>(
     `/analyses${buildQuery({
       repositoryId: params.repositoryId,
       pullRequestId: params.pullRequestId,
       status: params.status,
+      limit: String(Math.min(Math.max(params.limit ?? LIST_PAGE_SIZE, 1), LIST_PAGE_SIZE)),
+      offset: params.offset ? String(Math.max(params.offset, 0)) : undefined,
     })}`,
   );
 }
@@ -291,11 +437,13 @@ export function getAnalysis(analysisId: UUID) {
   return radiusFetch<Analysis>(`/analyses/${analysisId}`);
 }
 
-export function rerunAnalysis(analysisId: UUID) {
-  return radiusFetch<Analysis>(`/analyses/${analysisId}/rerun`, {
-    method: "POST",
+export async function rerunAnalysis(analysisId: UUID) {
+  const spec = rerunRequest(analysisId);
+  const result = await radiusRequest<Analysis>(spec.path, {
+    method: spec.method,
     idempotencyKey: crypto.randomUUID(),
   });
+  return result.data;
 }
 
 export type ImportedPullRequest = {
@@ -352,12 +500,23 @@ export async function getTestRunResult(analysisId: UUID): Promise<TestRunResult 
   }
 }
 
+/** Path of the results upload. The API binds results to a revision, so it requires the head commit. */
+export function testResultsUploadPath(analysisId: UUID, commitSha: string): string {
+  return `/analyses/${analysisId}/tests/results?commit_sha=${encodeURIComponent(commitSha.trim())}`;
+}
+
 export function uploadTestResults(
   analysisId: UUID,
   payload: string,
   isXml = true,
+  commitSha = "",
 ): Promise<TestRunResult> {
-  return radiusFetch<TestRunResult>(`/analyses/${analysisId}/tests/results`, {
+  if (!commitSha.trim()) {
+    return Promise.reject(
+      new Error("The analysis has no commit to bind the results to; re-run the analysis and try again."),
+    );
+  }
+  return radiusFetch<TestRunResult>(testResultsUploadPath(analysisId, commitSha), {
     method: "POST",
     headers: {
       "Content-Type": isXml ? "application/xml" : "application/json",

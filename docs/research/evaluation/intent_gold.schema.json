@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "radius.intent.gold/1",
+  "title": "Radius intent-extraction gold set (harness input contract, IN-10)",
+  "description": "Minimal contract the IN-10 metrics harness reads. The real IN-09 gold set plugs in through an adapter that emits this shape. Offsets are half-open [start, end) in code points unless offset_unit says otherwise. The Python validator (radius_intent.evaluation.gold.parse_gold) is authoritative; this file documents it.",
+  "type": "object",
+  "required": ["schema", "name", "version", "split", "cases"],
+  "properties": {
+    "schema": {"const": "radius.intent.gold/1"},
+    "name": {"type": "string", "minLength": 1},
+    "version": {"type": "string", "minLength": 1},
+    "split": {"type": "string", "minLength": 1, "description": "dev | test | pilot | synthetic ..."},
+    "synthetic": {"type": "boolean", "default": false, "description": "true marks every report 'SYNTHETIC - not a research result'"},
+    "offset_unit": {"enum": ["codepoint", "utf16", "utf8"], "default": "codepoint"},
+    "notes": {"type": "array", "items": {"type": "string"}},
+    "cases": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/case"}}
+  },
+  "$defs": {
+    "span": {
+      "type": "object",
+      "required": ["source_id", "start", "end"],
+      "properties": {
+        "source_id": {"type": "string"},
+        "start": {"type": "integer", "minimum": 0},
+        "end": {"type": "integer", "minimum": 1, "description": "exclusive; must be > start and <= length of the source text"}
+      }
+    },
+    "criterion": {
+      "type": "object",
+      "required": ["id", "span"],
+      "properties": {
+        "id": {"type": "string", "description": "unique within the case"},
+        "span": {"$ref": "#/$defs/span"},
+        "alt_spans": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/span"},
+          "description": "other acceptable annotations of the same criterion (a split of a compound statement, or the same requirement in another source)"
+        },
+        "testability": {
+          "enum": [
+            "behavioral_testable", "structural_checkable", "non_functional_measurable",
+            "subjective_or_vague", "untestable_external",
+            "testable", "vague", "non_functional", null
+          ],
+          "description": "gold label; legacy IN-01 names are accepted; 'unrated' is not a valid gold label"
+        },
+        "text": {"type": ["string", "null"], "description": "annotator's atomic restatement, used by the text-similarity metrics in addition to the span text"}
+      }
+    },
+    "case": {
+      "type": "object",
+      "required": ["case_id", "sources"],
+      "properties": {
+        "case_id": {"type": "string", "description": "one PR; the bootstrap cluster"},
+        "well_specified": {"type": ["boolean", "null"], "description": "annotator's pre-annotation judgement (PREREGISTRATION 5.1); null = unknown"},
+        "author_type": {"type": ["string", "null"], "description": "e.g. human | agent"},
+        "group": {"type": ["string", "null"], "description": "e.g. repository"},
+        "offset_unit": {"enum": ["codepoint", "utf16", "utf8"]},
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["source_id", "kind", "text"],
+            "properties": {
+              "source_id": {"type": "string"},
+              "kind": {"enum": ["pr_body", "pr_title", "issue", "commit_message", "spec_file", "agent_prompt", "comment"]},
+              "text": {"type": "string", "description": "the sanitized text the offsets index into"}
+            }
+          }
+        },
+        "criteria": {"type": "array", "items": {"$ref": "#/$defs/criterion"}, "description": "empty list = a PR with no gold criteria"}
+      }
+    }
+  }
+}

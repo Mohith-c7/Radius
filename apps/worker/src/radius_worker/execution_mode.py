@@ -20,10 +20,12 @@ from enum import StrEnum
 from radius_shared.config import RuntimeEnvironment
 from radius_shared.errors import ValidationError
 from radius_shared.logging import get_logger
+from radius_testing.domain.flakiness import RerunPolicy
 from radius_testing.infrastructure import (
     ContainerSandboxRunner,
     DisabledTestRunner,
     SandboxConfig,
+    SandboxUnavailableError,
     SubprocessTestRunner,
 )
 from radius_testing.interfaces.runner import TestRunner
@@ -120,8 +122,42 @@ def build_test_runner(
                 pids_limit=settings.sandbox_pids_limit,
                 tmpfs_size=settings.sandbox_tmpfs_size,
                 timeout_seconds=timeout,
-            )
+                nofile_limit=settings.sandbox_nofile_limit,
+                max_file_size_bytes=settings.sandbox_max_file_size_bytes,
+                max_output_bytes=settings.sandbox_max_output_bytes,
+                seccomp_profile=settings.sandbox_seccomp_profile or None,
+            ),
+            rerun_policy=RerunPolicy(reruns=settings.test_reruns),
         )
     if mode == TestExecutionMode.UNSAFE_IN_PROCESS:
         return SubprocessTestRunner(timeout_seconds=timeout)
     return DisabledTestRunner()
+
+
+class SandboxMisconfiguredError(ValidationError):
+    """Raised when sandbox mode is selected but the sandbox cannot be used."""
+
+    code = "SANDBOX_UNAVAILABLE"
+
+
+def require_sandbox_ready(mode: TestExecutionMode, settings: WorkerSettings | None) -> None:
+    """Fail closed at startup: sandbox mode with an unusable sandbox is refused.
+
+    Invalid limits, a missing runtime binary, an unreachable daemon, a missing
+    image or a missing seccomp profile all raise instead of silently falling
+    back to another mode. (``ContainerSandboxRunner.run`` re-checks before every
+    run, so a later outage yields ``error`` results, never execution.)
+    """
+
+    if mode != TestExecutionMode.SANDBOX:
+        return
+    try:
+        runner = build_test_runner(mode, settings)
+        if isinstance(runner, ContainerSandboxRunner):
+            runner.check_ready()
+    except (ValueError, SandboxUnavailableError) as exc:
+        msg = (
+            "Refusing to start with WORKER_TEST_EXECUTION_MODE=sandbox: "
+            f"{exc}. Fix the sandbox or set WORKER_TEST_EXECUTION_MODE=disabled."
+        )
+        raise SandboxMisconfiguredError(msg) from exc

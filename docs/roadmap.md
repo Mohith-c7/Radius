@@ -274,3 +274,9 @@ If a feature does not contribute to these goals, it should be reconsidered.
 This roadmap is a living document. As Radius evolves, milestones may be refined, but the guiding vision remains unchanged:
 
 > Build the most reliable and explainable software verification platform that enables engineering teams to ship code with confidence.
+
+---
+
+# Research and Product Plan
+
+The next phase of Radius (intent-to-evidence verification, calibrated trust, and the market plan) is specified in [docs/research/](research/README.md). Ratified decisions are in [decisions.md](decisions.md) (DEC-006 to DEC-015).

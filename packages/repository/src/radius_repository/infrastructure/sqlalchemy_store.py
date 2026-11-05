@@ -186,6 +186,12 @@ class SqlAlchemyRepositoryStore:
         )
         return self._pull_request_to_domain(row) if row is not None else None
 
+    def get_pull_request_by_id(self, pull_request_id: UUID) -> PullRequest | None:
+        """Return one pull request by its Radius id."""
+
+        row = self._session.get(db_models.PullRequest, pull_request_id)
+        return self._pull_request_to_domain(row) if row is not None else None
+
     def list_pull_requests(self, repository_id: UUID) -> list[PullRequest]:
         """Return all pull requests for a repository ordered by opened_at desc."""
 

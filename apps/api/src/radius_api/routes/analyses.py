@@ -16,7 +16,7 @@ from radius_analysis.dto import (
 from radius_repository.application import RepositoryApplicationService
 from radius_repository.dto import RepositoryListQuery
 from radius_shared.dto import success_response
-from radius_shared.errors import NotFoundError, ValidationError
+from radius_shared.errors import ConflictError, NotFoundError, ValidationError
 
 from radius_api.auth import ApiPrincipal, ensure_same_organization, get_api_principal
 from radius_api.dependencies import (
@@ -29,6 +29,7 @@ from radius_api.idempotency import (
     replay_or_validate,
     request_hash,
 )
+from radius_api.pagination import PageParams
 from radius_api.schemas.analyses import StartAnalysisRequest
 
 router = APIRouter(prefix="/analyses", tags=["analyses"])
@@ -59,6 +60,13 @@ async def start_analysis(
 
     repository = repository_service.get_repository(request.repository_id)
     ensure_same_organization(principal, repository.organization_id)
+    # A-06: the pull request must belong to this repository. A pull request of
+    # another repository (or tenant) is indistinguishable from a missing one.
+    pr_repository_id = repository_service.pull_request_repository_id(
+        request.pull_request_id
+    )
+    if pr_repository_id is not None and pr_repository_id != request.repository_id:
+        raise NotFoundError("Pull request not found.", code="PULL_REQUEST_NOT_FOUND")
     body_hash = await request_hash(http_request)
     existing = replay_or_validate(
         idempotency_store,
@@ -105,39 +113,41 @@ def list_analyses(
         Depends(get_repository_service),
     ],
     principal: Annotated[ApiPrincipal, Depends(get_api_principal)],
+    page: PageParams,
     repository_id: Annotated[UUID | None, Query(alias="repositoryId")] = None,
     pull_request_id: Annotated[UUID | None, Query(alias="pullRequestId")] = None,
     status_filter: Annotated[str | None, Query(alias="status")] = None,
 ):
-    """List analyses with optional filters."""
+    """List analyses with optional filters, newest first (paginated: ``limit``/``offset``)."""
 
-    repository_ids = (
-        [repository_id]
-        if repository_id is not None
-        else [
-            repository.id
-            for repository in repository_service.list_repositories(
-                RepositoryListQuery(organization_id=principal.organization_id)
-            )
-            if repository.id is not None
-        ]
-    )
-    for candidate_repository_id in repository_ids:
-        repository = repository_service.get_repository(candidate_repository_id)
+    if repository_id is not None:
+        repository = repository_service.get_repository(repository_id)
         ensure_same_organization(principal, repository.organization_id)
-
-    analyses = []
-    for candidate_repository_id in repository_ids:
-        analyses.extend(
-            service.list_analyses(
-                AnalysisListQuery(
-                    repository_id=candidate_repository_id,
-                    pull_request_id=pull_request_id,
-                    status=status_filter,
+        scope: dict[str, object] = {"repository_id": repository_id}
+    else:
+        # Repositories listed for this organization are its own by construction:
+        # no per-repository lookup (that was the N+1).
+        scope = {
+            "repository_ids": tuple(
+                repository.id
+                for repository in repository_service.list_repositories(
+                    RepositoryListQuery(organization_id=principal.organization_id)
                 )
+                if repository.id is not None
             )
-        )
-    return success_response(analyses)
+        }
+    query = AnalysisListQuery(
+        pull_request_id=pull_request_id,
+        status=status_filter,
+        limit=page.limit,
+        offset=page.offset,
+        **scope,
+    )
+    analyses = service.list_analyses(query)
+    total = service.count_analyses(query)
+    return success_response(
+        analyses, meta=page.meta(total=total, returned=len(analyses))
+    )
 
 
 @router.get("/lookup")
@@ -275,6 +285,11 @@ async def rerun_analysis(
     existing_analysis = service.get_analysis(analysis_id)
     repository = repository_service.get_repository(existing_analysis.repository_id)
     ensure_same_organization(principal, repository.organization_id)
+    if repository.status == "disconnected":
+        raise ConflictError(
+            "Repository is disconnected. Connect it again before re-running an analysis.",
+            code="REPOSITORY_DISCONNECTED",
+        )
     body_hash = await request_hash(http_request)
     scope = f"rerun_analysis:{analysis_id}"
     existing = replay_or_validate(

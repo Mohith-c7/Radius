@@ -1,0 +1,84 @@
+{
+  "id": "radius-f14-intent-fixtures",
+  "name": "Radius F-14 intent-to-evidence golden fixtures (8 scenarios)",
+  "kind": "fixture",
+  "source": {
+    "type": "local",
+    "url": "benchmarks/fixtures/intent",
+    "revision": "repository commit containing this manifest",
+    "revision_kind": "commit"
+  },
+  "license": {
+    "name": "Radius internal - no licence granted (DEC-012: licence undecided, no LICENSE file)",
+    "url": "docs/decisions.md",
+    "verdict": "internal",
+    "evidence": "docs/decisions.md DEC-012."
+  },
+  "redistribution": {
+    "allowed": "no",
+    "notes": "No licence chosen yet (DEC-012); do not release until decided."
+  },
+  "status": "available",
+  "size": "8 fixtures",
+  "rqs": [
+    "RQ1",
+    "RQ2"
+  ],
+  "labels": [
+    "criteria, links, evidence quality, tamper findings, expected verdict, per-test outcomes (hand-authored ground truth)"
+  ],
+  "risks": [
+    "tiny and hand-authored: development and regression data, not evidence of generalisation",
+    "author is the system designer: risk of circularity"
+  ],
+  "obtain": "in repo; python benchmarks/fixtures/intent/loader.py verify",
+  "files": [
+    {
+      "path": "benchmarks/fixtures/intent/01_correct_strong_tests/expected.json",
+      "size": 4137,
+      "sha256": "b72939ebaa168fc4b5f69edac6a16f4325837b888f93889d62f5fbf21d08a3c8"
+    },
+    {
+      "path": "benchmarks/fixtures/intent/02_correct_weak_tests/expected.json",
+      "size": 3000,
+      "sha256": "32161e931664ddf622d9cf236239f310157c090e591f4b27b3ad42e07394c481"
+    },
+    {
+      "path": "benchmarks/fixtures/intent/03_incorrect_passes_weak_tests/expected.json",
+      "size": 3502,
+      "sha256": "347aa37fea93cdb84cb808dc9d91df4ad0a5a10d9215d93ba9a3c97b4d7fc779"
+    },
+    {
+      "path": "benchmarks/fixtures/intent/04_test_tampering/expected.json",
+      "size": 4932,
+      "sha256": "d199cd360779334f42e37d54ad5069a6ada1446fbf8982e466bf44e7e5ccd0bf"
+    },
+    {
+      "path": "benchmarks/fixtures/intent/05_scope_creep/expected.json",
+      "size": 3781,
+      "sha256": "800f3d6dab52e1a8adaa23571531836dba5b0237f29d91bf8646ff5415773272"
+    },
+    {
+      "path": "benchmarks/fixtures/intent/06_hallucinated_dependency/expected.json",
+      "size": 3638,
+      "sha256": "caa797fdc1dfaf4455722fabd56863c12d9239e7b9e17553eeeb7724416317e0"
+    },
+    {
+      "path": "benchmarks/fixtures/intent/07_vague_intent/expected.json",
+      "size": 1956,
+      "sha256": "2d530fb05c1acb042f055756bf07162b2ea4baaea0a15d3058eb8194def78633"
+    },
+    {
+      "path": "benchmarks/fixtures/intent/08_multi_criterion_partial_evidence/expected.json",
+      "size": 4888,
+      "sha256": "623e63c5a0d56392d9eb0fdb76d260bc7d9ecc57298322089f7d17498bfd094e"
+    },
+    {
+      "path": "benchmarks/fixtures/intent/expected.schema.json",
+      "size": 4732,
+      "sha256": "92307c9a19bd0d23b89d3395d6426f2d6fc81ab2117c0faf6291011610ed872d"
+    }
+  ],
+  "schema_version": 1,
+  "accessed": "2026-11-02"
+}

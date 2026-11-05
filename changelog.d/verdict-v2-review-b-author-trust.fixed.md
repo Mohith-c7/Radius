@@ -1,0 +1,1 @@
+Verdict v2: author-set criterion weights, `paths:` hints and path mentions can no longer hide unproven criteria or cover the whole change; the verdict shows who confirmed a criterion and ignores a confirmation by the pull request author.

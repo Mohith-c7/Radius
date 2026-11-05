@@ -9,7 +9,6 @@ from app.database import Base as AuthBase
 from app.database import engine as auth_engine
 from app.routes_auth import router as auth_router
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from radius_shared.config import RuntimeEnvironment
 from radius_shared.database.base import Base as DomainBase
@@ -22,17 +21,28 @@ from radius_shared.errors import (
     ValidationError,
 )
 from radius_shared.logging import configure_logging, get_logger
+from radius_shared.observability import ObservabilitySettings
+from radius_shared.observability import metrics as obs_metrics
+from radius_shared.verdict_v2_flag import VerdictV2Mode
 
 from radius_api.config import get_api_settings
 from radius_api.dependencies import AppContainer, configure_sql_storage
+from radius_api.middleware.hardening import install_http_hardening
+from radius_api.middleware.security_headers import SecurityHeadersMiddleware
+from radius_api.observability import configure_api_observability
+from radius_api.openapi_contract import install_openapi_contract
 from radius_api.routes.analyses import router as analyses_router
+from radius_api.routes.api_keys import router as api_keys_router
 from radius_api.routes.confidence import router as confidence_router
 from radius_api.routes.coverage import router as coverage_router
 from radius_api.routes.github_webhooks import router as github_webhooks_router
 from radius_api.routes.graph import router as graph_router
+from radius_api.routes.health import queue_depth_provider
 from radius_api.routes.health import router as health_router
+from radius_api.routes.intent import router as intent_router
 from radius_api.routes.repositories import router as repositories_router
 from radius_api.routes.tests import router as tests_router
+from radius_api.routes.verdict_v2 import create_router as create_verdict_v2_router
 
 LOGGER = get_logger(__name__)
 
@@ -48,6 +58,17 @@ def should_seed_demo_data(settings) -> bool:
         )
         return False
     return True
+
+
+def warn_deprecated_api_keys(settings) -> None:
+    """Log (never print key material) that env-var API keys are deprecated."""
+
+    if getattr(settings, "api_keys", "").strip():
+        LOGGER.warning(
+            "API_KEYS is DEPRECATED: static, unscoped, unhashed keys. Create "
+            "managed keys via /api/v1/api-keys (set RADIUS_API_KEY_PEPPER) and "
+            "remove API_KEYS. See docs/security/API_KEYS.md."
+        )
 
 
 async def radius_error_handler(
@@ -79,6 +100,7 @@ def create_app() -> FastAPI:
 
     settings = get_api_settings()
     configure_logging(settings.log_level)
+    warn_deprecated_api_keys(settings)
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         DomainBase.metadata.create_all(bind=auth_engine)
@@ -95,28 +117,20 @@ def create_app() -> FastAPI:
         description="Software verification API for Radius.",
         lifespan=lifespan,
     )
-    allow_origins = [
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3001",
-    ]
-    if settings.cors_origins:
-        allow_origins.extend(
-            [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
-        )
-
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=allow_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
     app.state.settings = settings
+    install_http_hardening(app, settings)
     app.state.container = AppContainer()
     if settings.storage_backend == "sql":
         configure_sql_storage(app.state.container, settings)
+    configure_api_observability(app, ObservabilitySettings())
+    # Added last = outermost, so even correlation-id and 429/413 replies get
+    # the security headers.
+    app.add_middleware(
+        SecurityHeadersMiddleware,
+        hsts_enabled=settings.hsts_enabled,
+        hsts_max_age=settings.hsts_max_age,
+    )
+    obs_metrics.set_queue_depth_provider(queue_depth_provider(app.state.container))
     app.add_exception_handler(RadiusError, radius_error_handler)
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(repositories_router, prefix="/api/v1")
@@ -125,8 +139,15 @@ def create_app() -> FastAPI:
     app.include_router(tests_router, prefix="/api/v1")
     app.include_router(confidence_router, prefix="/api/v1")
     app.include_router(coverage_router, prefix="/api/v1")
+    app.include_router(intent_router, prefix="/api/v1")
+    app.include_router(
+        create_verdict_v2_router(documented=settings.verdict_v2_mode != VerdictV2Mode.OFF),
+        prefix="/api/v1",
+    )
+    app.include_router(api_keys_router, prefix="/api/v1")
     app.include_router(github_webhooks_router, prefix="/api/v1")
     app.include_router(auth_router)
+    install_openapi_contract(app)
 
     return app
 

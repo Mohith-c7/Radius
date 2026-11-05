@@ -1,0 +1,40 @@
+{
+  "id": "utboost",
+  "name": "UTBoost augmented tests (UTGenerator)",
+  "kind": "label-source",
+  "source": {
+    "type": "arxiv",
+    "url": "https://arxiv.org/abs/2506.09289",
+    "revision": "arXiv v1 / ACL 2025",
+    "revision_kind": "version",
+    "paper": "arXiv 2506.09289"
+  },
+  "license": {
+    "name": "UNKNOWN - no artifact located (paper is CC BY 4.0, which does not cover data)",
+    "url": "https://arxiv.org/abs/2506.09289",
+    "verdict": "unknown",
+    "evidence": "arXiv page and search 2026-11-02: no repository link confirmed."
+  },
+  "redistribution": {
+    "allowed": "no",
+    "notes": "UNKNOWN - do not redistribute. Owner must ask authors (Yu, Zhu, He, Kang)."
+  },
+  "status": "blocked",
+  "size": "n/a",
+  "rqs": [
+    "RQ2",
+    "RQ3"
+  ],
+  "labels": [
+    "instances with insufficient tests (arXiv v1 HTML via search: 23/300 Lite, 26/500 Verified; EVALUATION_PLAN says 36 instances: reconcile)",
+    "erroneous patches labelled passed (345)"
+  ],
+  "risks": [
+    "no artifact",
+    "count discrepancy between sources"
+  ],
+  "obtain": "email authors; re-check the arXiv 'Code, Data and Media' section",
+  "schema_version": 1,
+  "accessed": "2026-11-02",
+  "files": []
+}

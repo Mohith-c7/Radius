@@ -1,0 +1,1 @@
+Dashboard dependencies were upgraded to patched releases (Next.js 15.5.28 and patched transitive packages), clearing all known critical and high `pnpm audit` advisories. Rebuild and redeploy the dashboard image to pick this up.

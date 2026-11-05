@@ -1,0 +1,13 @@
+{
+  "_comment": "Accepted pnpm audit findings. CI fails on any high/critical advisory NOT listed here, and fails once an entry passes its 'expires' date. Remove entries as they are fixed; never extend an expiry without a written reason.",
+  "entries": [
+    {
+      "id": "GHSA-g3hv-75wg-m249",
+      "package": "minimatch",
+      "severity": "moderate",
+      "added": "2026-11-02",
+      "expires": "2027-01-31",
+      "reason": "minimatch 3.1.5 (via @eslint/eslintrc and @eslint/config-array, ESLint 9 lint tooling only, never shipped or run on untrusted globs). First patched release is 11.0.1, which drops the CommonJS default export that @eslint/eslintrc imports, so an override breaks `eslint .`. Remove when ESLint/@eslint/eslintrc move to a patched minimatch."
+    }
+  ]
+}

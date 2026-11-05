@@ -128,3 +128,21 @@ def _graph_snapshot(analysis_id: UUID) -> GraphSnapshot:
             ),
         ),
     )
+
+
+def test_symbol_scope_limits_affected_files_and_symbols() -> None:
+    service = AnalysisApplicationService(InMemoryAnalysisStore())
+    analysis = service.start_analysis(
+        StartAnalysisCommand(uuid4(), uuid4(), "a" * 40)
+    )
+    response = service.compute_blast_radius(
+        ComputeBlastRadiusCommand(
+            analysis_id=analysis.id,
+            graph_snapshot=_graph_snapshot(analysis.id),
+            changed_file_paths=("src/core.py",),
+            symbol_affected_file_paths=("src/core.py",),
+        )
+    )
+
+    assert response.affected_files == 1
+    assert response.affected_symbols == 0

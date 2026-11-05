@@ -1,0 +1,54 @@
+{
+  "id": "swe-bench-full",
+  "name": "SWE-bench full (test + dev)",
+  "kind": "benchmark",
+  "source": {
+    "type": "huggingface",
+    "url": "https://huggingface.co/datasets/SWE-bench/SWE-bench",
+    "revision": "c6fe717fd7a4c3ac1daa4055a4fd082c6a1d28a2",
+    "revision_kind": "commit",
+    "paper": "arXiv 2310.06770"
+  },
+  "license": {
+    "name": "UNKNOWN - no licence declared on the Hugging Face dataset card or API metadata",
+    "url": "https://huggingface.co/datasets/SWE-bench/SWE-bench",
+    "verdict": "unknown",
+    "evidence": "HF API metadata fetched 2026-11-02: no license tag. GitHub code repo is MIT (github.com/SWE-bench/SWE-bench); that licence is stated for the repository, not the dataset. Instances derive from public GitHub repos with their own licences."
+  },
+  "redistribution": {
+    "allowed": "no",
+    "notes": "UNKNOWN - do not redistribute. Reference by manifest only."
+  },
+  "status": "available",
+  "size": "test parquet 33,293,897 bytes; dev 3,299,303 bytes (row counts UNVERIFIED here; paper says 2,294)",
+  "rqs": [
+    "RQ2",
+    "RQ3"
+  ],
+  "labels": [
+    "FAIL_TO_PASS / PASS_TO_PASS",
+    "gold patch"
+  ],
+  "risks": [
+    "contamination",
+    "weak tests",
+    "12 repos: repo-based splits are coarse"
+  ],
+  "obtain": "python scripts/datasets.py fetch --id swe-bench-full --yes",
+  "files": [
+    {
+      "path": "data/dev-00000-of-00001.parquet",
+      "url": "https://huggingface.co/datasets/SWE-bench/SWE-bench/resolve/c6fe717fd7a4c3ac1daa4055a4fd082c6a1d28a2/data/dev-00000-of-00001.parquet",
+      "size": 3299303,
+      "sha256": "7812438935be9cbe36049b93c73412d523fb07251bd255813168c38c5fc92454"
+    },
+    {
+      "path": "data/test-00000-of-00001.parquet",
+      "url": "https://huggingface.co/datasets/SWE-bench/SWE-bench/resolve/c6fe717fd7a4c3ac1daa4055a4fd082c6a1d28a2/data/test-00000-of-00001.parquet",
+      "size": 33293897,
+      "sha256": "d4f5a245c75319fa8240c540674958c4d491e82edf274b144d43836bdcbc4567"
+    }
+  ],
+  "schema_version": 1,
+  "accessed": "2026-11-02"
+}

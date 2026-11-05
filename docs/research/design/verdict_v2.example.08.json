@@ -1,0 +1,452 @@
+{
+  "_example_note": "Illustrative payload for fixture 08 in gold-bundle mode (links confirmed via .radius/intent.yml hints). Digests, ids, timestamps and the v1 block are placeholders; support values are the normative results of the formula in VERDICT_V2_SLICE.md 3.9.",
+  "verdict_version": 2,
+  "algo_version": "verdict-v2-alpha-1",
+  "profile": "alpha-static",
+  "mode": "on",
+  "status": "ok",
+  "analysis_id": "5b0b9c6e-0000-4000-8000-000000000008",
+  "head_sha": "4f2a9d1c0b7e6a53f8c1d2e3b4a59687c0d1e2f3",
+  "revision": 2,
+  "computed_at": "2026-11-02T10:16:04Z",
+  "verdict": "insufficient_evidence",
+  "pending": false,
+  "reasons": [
+    {
+      "code": "unproven_intent_mass",
+      "rule_id": "R2b",
+      "detail": "unsupported intent mass 0.75 exceeds 0.20"
+    }
+  ],
+  "score": null,
+  "score_kind": "none",
+  "trust_probability": null,
+  "contract_version": "verdict-v2-contract-4",
+  "alpha": true,
+  "calibrated": false,
+  "evidence_basis": "static_only",
+  "presentation": {
+    "verdict_label": "Not verified - insufficient evidence",
+    "state_labels": {
+      "proven": "SUPPORTED",
+      "weak": "WEAK",
+      "unevidenced": "UNSUPPORTED",
+      "contradicted": "CONTRADICTED",
+      "excluded": "EXCLUDED"
+    },
+    "legend": "supported = static assertion strength above threshold; not a proof of correctness",
+    "disclaimer": "Alpha: static evidence only (assertion strength, no mutation testing); thresholds are uncalibrated. This is not a proof of correctness.",
+    "summary_text": "Not verified - insufficient evidence: 1 of 4 stated criteria supported by static evidence."
+  },
+  "summary": {
+    "criteria_total": 4,
+    "proven": 1,
+    "weak": 1,
+    "unevidenced": 2,
+    "contradicted": 0,
+    "excluded": 0,
+    "uim": 0.75,
+    "intent_coverage": 1.0,
+    "tamper": {
+      "critical": 0,
+      "high": 0,
+      "medium": 0,
+      "low": 0
+    },
+    "evidence_basis": "static_only",
+    "author_hint_criteria": 0
+  },
+  "criteria": [
+    {
+      "criterion_id": "c_5e19d0",
+      "text": "a password needs at least 8 characters",
+      "state": "proven",
+      "S": 0.603763,
+      "S_raw": 0.603763,
+      "weight": 1.0,
+      "testability": "behavioral_testable",
+      "lifecycle": "confirmed",
+      "flags": [
+        "static_only"
+      ],
+      "reasons": [],
+      "best_link": {
+        "symbol_id": "python:src/validators.py::validate_password#function@981c887bac80",
+        "l_cs": 1.0,
+        "l_st": 0.9,
+        "r_ct": 1.0
+      },
+      "items": [
+        {
+          "evidence_id": "ev_e471c2ef945c7c88ae16",
+          "test_id": "tests/test_validators.py::test_rejects_seven_characters",
+          "outcome": "passed",
+          "a_static": 1.0,
+          "d_eff": 0.6,
+          "i": 0.8,
+          "f": 1.0,
+          "flaky_f": 1.0,
+          "tamper_penalty": 0.0,
+          "q": 0.48,
+          "l_cs": 1.0,
+          "l_st": 0.9,
+          "r_ct": 1.0,
+          "l": 0.9,
+          "term": 0.432,
+          "group_symbol": "python:src/validators.py::validate_password#function@981c887bac80",
+          "rank_in_group": 0,
+          "discount": 1.0,
+          "contribution": 0.432,
+          "status": "counted"
+        },
+        {
+          "evidence_id": "ev_8ceceb295253b459ab4f",
+          "test_id": "tests/test_validators.py::test_accepts_eight_characters",
+          "outcome": "passed",
+          "a_static": 1.0,
+          "d_eff": 0.6,
+          "i": 0.8,
+          "f": 1.0,
+          "flaky_f": 1.0,
+          "tamper_penalty": 0.0,
+          "q": 0.48,
+          "l_cs": 1.0,
+          "l_st": 0.9,
+          "r_ct": 1.0,
+          "l": 0.9,
+          "term": 0.432,
+          "group_symbol": "python:src/validators.py::validate_password#function@981c887bac80",
+          "rank_in_group": 1,
+          "discount": 0.7,
+          "contribution": 0.3024,
+          "status": "counted"
+        }
+      ],
+      "provenance": "human_confirmed",
+      "hints": []
+    },
+    {
+      "criterion_id": "c_2f6a11",
+      "text": "a password needs at least one digit",
+      "state": "weak",
+      "S": 0.432,
+      "S_raw": 0.432,
+      "weight": 1.0,
+      "testability": "behavioral_testable",
+      "lifecycle": "confirmed",
+      "flags": [
+        "static_only"
+      ],
+      "reasons": [
+        {
+          "code": "below_threshold",
+          "detail": "S 0.432 < tau_support 0.5"
+        }
+      ],
+      "best_link": {
+        "symbol_id": "python:src/validators.py::validate_password#function@981c887bac80",
+        "l_cs": 1.0,
+        "l_st": 0.9,
+        "r_ct": 1.0
+      },
+      "items": [
+        {
+          "evidence_id": "ev_3e1fd047650b0683fb8b",
+          "test_id": "tests/test_validators.py::test_rejects_missing_digit",
+          "outcome": "passed",
+          "a_static": 1.0,
+          "d_eff": 0.6,
+          "i": 0.8,
+          "f": 1.0,
+          "flaky_f": 1.0,
+          "tamper_penalty": 0.0,
+          "q": 0.48,
+          "l_cs": 1.0,
+          "l_st": 0.9,
+          "r_ct": 1.0,
+          "l": 0.9,
+          "term": 0.432,
+          "group_symbol": "python:src/validators.py::validate_password#function@981c887bac80",
+          "rank_in_group": 0,
+          "discount": 1.0,
+          "contribution": 0.432,
+          "status": "counted"
+        }
+      ],
+      "provenance": "human_confirmed",
+      "hints": []
+    },
+    {
+      "criterion_id": "c_81b0c4",
+      "text": "a password needs at least one uppercase letter",
+      "state": "unevidenced",
+      "S": 0.144,
+      "S_raw": 0.144,
+      "weight": 1.0,
+      "testability": "behavioral_testable",
+      "lifecycle": "confirmed",
+      "flags": [
+        "static_only",
+        "no_strong_assertion"
+      ],
+      "reasons": [
+        {
+          "code": "weak_assertion",
+          "detail": "strongest linked assertion is type_check (a_static 0.20)"
+        }
+      ],
+      "best_link": {
+        "symbol_id": "python:src/validators.py::validate_password#function@981c887bac80",
+        "l_cs": 1.0,
+        "l_st": 0.9,
+        "r_ct": 1.0
+      },
+      "items": [
+        {
+          "evidence_id": "ev_3a290c4602e244e95e11",
+          "test_id": "tests/test_validators.py::test_uppercase_rule_runs",
+          "outcome": "passed",
+          "a_static": 0.2,
+          "d_eff": 0.2,
+          "i": 0.8,
+          "f": 1.0,
+          "flaky_f": 1.0,
+          "tamper_penalty": 0.0,
+          "q": 0.16,
+          "l_cs": 1.0,
+          "l_st": 0.9,
+          "r_ct": 1.0,
+          "l": 0.9,
+          "term": 0.144,
+          "group_symbol": "python:src/validators.py::validate_password#function@981c887bac80",
+          "rank_in_group": 0,
+          "discount": 1.0,
+          "contribution": 0.144,
+          "status": "counted"
+        }
+      ],
+      "provenance": "human_confirmed",
+      "hints": []
+    },
+    {
+      "criterion_id": "c_d3a2f7",
+      "text": "a password must not be on the common-password list (case-insensitive)",
+      "state": "unevidenced",
+      "S": 0.0,
+      "S_raw": 0.0,
+      "weight": 1.0,
+      "testability": "behavioral_testable",
+      "lifecycle": "confirmed",
+      "flags": [
+        "static_only",
+        "no_linked_test"
+      ],
+      "reasons": [
+        {
+          "code": "no_linked_test",
+          "detail": "no test is linked to this criterion"
+        }
+      ],
+      "best_link": null,
+      "items": [],
+      "provenance": "human_confirmed",
+      "hints": []
+    }
+  ],
+  "tamper_findings": [],
+  "unlinked_symbols": [],
+  "next_actions": [
+    {
+      "criterion_id": "c_d3a2f7",
+      "code": "no_linked_test",
+      "text": "No test checks the common-password rule. Add a test that a listed password is rejected, in a different letter case, or add a tests hint in .radius/intent.yml."
+    },
+    {
+      "criterion_id": "c_81b0c4",
+      "code": "weak_assertion",
+      "text": "test_uppercase_rule_runs would pass for any boolean result. Assert the exact value for a password without an uppercase letter."
+    },
+    {
+      "criterion_id": "c_2f6a11",
+      "code": "single_test",
+      "text": "Add a second case for the digit rule, or a boundary case."
+    }
+  ],
+  "justification": {
+    "schema": "verdict-v2-justification-1",
+    "verdict": "insufficient_evidence",
+    "decided_by": "R2b",
+    "rules": [
+      {
+        "id": "R1a",
+        "label": "contradicted criterion",
+        "fired": false,
+        "inputs": {
+          "contradicted": []
+        }
+      },
+      {
+        "id": "R1b",
+        "label": "failing CI case",
+        "fired": false,
+        "inputs": {
+          "failed_cases": 0
+        }
+      },
+      {
+        "id": "R1c",
+        "label": "high tamper finding",
+        "fired": false,
+        "inputs": {
+          "threshold": "high",
+          "max_severity": null,
+          "finding_ids": []
+        }
+      },
+      {
+        "id": "R2p",
+        "label": "awaiting CI results",
+        "fired": false,
+        "inputs": {
+          "results_received": true
+        }
+      },
+      {
+        "id": "R2a",
+        "label": "intent missing or untestable",
+        "fired": false,
+        "inputs": {
+          "testable_criteria": 4
+        }
+      },
+      {
+        "id": "R2e",
+        "label": "no intent criteria",
+        "fired": false,
+        "inputs": {
+          "non_excluded_criteria": 4,
+          "behavioral_symbols": 1,
+          "not_applicable": false
+        }
+      },
+      {
+        "id": "R2b",
+        "label": "unproven intent mass",
+        "fired": true,
+        "inputs": {
+          "uim": 0.75,
+          "uim_max": 0.2,
+          "criteria": [
+            {
+              "criterion_id": "c_5e19d0",
+              "S": 0.603763,
+              "state": "proven"
+            },
+            {
+              "criterion_id": "c_2f6a11",
+              "S": 0.432,
+              "state": "weak"
+            },
+            {
+              "criterion_id": "c_81b0c4",
+              "S": 0.144,
+              "state": "unevidenced"
+            },
+            {
+              "criterion_id": "c_d3a2f7",
+              "S": 0.0,
+              "state": "unevidenced"
+            }
+          ]
+        },
+        "refs": {
+          "criterion_ids": [
+            "c_2f6a11",
+            "c_81b0c4",
+            "c_d3a2f7"
+          ],
+          "evidence_ids": []
+        }
+      },
+      {
+        "id": "R2c",
+        "label": "intent coverage",
+        "fired": false,
+        "inputs": {
+          "intent_coverage": 1.0,
+          "min": 0.5
+        }
+      },
+      {
+        "id": "R2d",
+        "label": "analysis degraded",
+        "fired": false,
+        "inputs": {
+          "degraded": []
+        }
+      },
+      {
+        "id": "R3a",
+        "label": "medium tamper finding",
+        "fired": false,
+        "inputs": {
+          "threshold": "medium",
+          "finding_ids": []
+        }
+      },
+      {
+        "id": "R3b",
+        "label": "flaky dependency",
+        "fired": false,
+        "inputs": {
+          "flaky_tests": []
+        }
+      },
+      {
+        "id": "R3c",
+        "label": "weak link for a proven criterion",
+        "fired": false,
+        "inputs": {
+          "criterion_ids": []
+        }
+      },
+      {
+        "id": "R4",
+        "label": "all rules passed",
+        "fired": false,
+        "inputs": {}
+      }
+    ],
+    "thresholds": {
+      "tau_support": 0.5,
+      "uim_max": 0.2,
+      "min_intent_coverage": 0.5,
+      "fail_on_tamper_at_least": "high",
+      "review_on_tamper_at_least": "medium"
+    },
+    "versions": {
+      "verdict": "verdict-v2-alpha-1",
+      "evidence_quality": "evq-static-1",
+      "support": "support-noisyor-1",
+      "ieg": "ieg-1",
+      "assertions": "test-assertions-v1",
+      "relevance": "test-relevance-1",
+      "freshness": "fresh-1",
+      "independence": "indep-lite-1",
+      "symbol_changes": "symbol-changes-v1",
+      "criterion_symbol_links": "criterion-symbol-links-v1",
+      "symbol_test_links": "link-combine-v1",
+      "tamper": "tamper-rules-v1"
+    },
+    "config_digest": "sha256:example-config-digest",
+    "profile": "alpha-static",
+    "inputs_digest": "sha256:example-inputs-digest"
+  },
+  "v1": {
+    "verification_status": "insufficient_evidence",
+    "confidence_score": 40.0,
+    "score_kind": "heuristic_uncalibrated",
+    "risk_level": "medium"
+  },
+  "dashboard_url": "https://dashboard.example/analyses/5b0b9c6e-0000-4000-8000-000000000008"
+}

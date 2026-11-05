@@ -139,6 +139,9 @@ def test_phase1_artifact_endpoints_return_graph_tests_and_confidence() -> None:
     assert confidence.status_code == 200
     assert confidence.json()["data"]["risk_level"] == "low"
     assert confidence.json()["data"]["verification_status"] == "verified"
+    # F-12: the 0-100 score is explicitly labelled; existing fields are unchanged.
+    assert confidence.json()["data"]["score_kind"] == "heuristic_uncalibrated"
+    assert isinstance(confidence.json()["data"]["confidence_score"], (int, float))
 
 
 def test_missing_graph_artifact_uses_not_found_envelope() -> None:

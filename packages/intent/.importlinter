@@ -1,0 +1,137 @@
+[importlinter]
+root_package = radius_intent
+include_external_packages = True
+
+[importlinter:contract:domain-is-pure]
+name = Intent domain imports only the standard library and itself
+type = forbidden
+source_modules =
+    radius_intent.domain
+forbidden_modules =
+    radius_intent.interfaces
+    radius_intent.application
+    radius_intent.infrastructure
+    sqlalchemy
+    fastapi
+    pydantic
+    httpx
+    requests
+    psycopg
+    alembic
+    google
+    anthropic
+    openai
+
+[importlinter:contract:extraction-is-offline]
+name = Deterministic extraction has no web, database or LLM dependencies
+type = forbidden
+source_modules =
+    radius_intent.infrastructure.extraction
+forbidden_modules =
+    radius_intent.application
+    radius_intent.interfaces
+    sqlalchemy
+    fastapi
+    pydantic
+    httpx
+    requests
+    psycopg
+    alembic
+    google
+    anthropic
+    openai
+    yaml
+
+[importlinter:contract:application-uses-domain-and-ports-only]
+name = Intent application depends on domain and ports only
+type = forbidden
+source_modules =
+    radius_intent.application
+forbidden_modules =
+    radius_intent.infrastructure
+
+[importlinter:contract:llm-core-has-no-sdk]
+name = LLM extraction core imports no provider SDK or HTTP client (only anthropic_provider may, lazily)
+type = forbidden
+source_modules =
+    radius_intent.infrastructure.llm.config
+    radius_intent.infrastructure.llm.extractor
+    radius_intent.infrastructure.llm.fake
+    radius_intent.infrastructure.llm.merge
+    radius_intent.infrastructure.llm.provider
+    radius_intent.infrastructure.llm.resilience
+forbidden_modules =
+    anthropic
+    openai
+    google
+    httpx
+    requests
+    sqlalchemy
+    fastapi
+    psycopg
+    radius_intent.application
+    radius_intent.interfaces
+
+[importlinter:contract:testability-is-offline]
+name = Deterministic testability rating has no web, database or LLM dependencies
+type = forbidden
+source_modules =
+    radius_intent.infrastructure.testability
+forbidden_modules =
+    radius_intent.application
+    radius_intent.interfaces
+    sqlalchemy
+    fastapi
+    pydantic
+    httpx
+    requests
+    psycopg
+    alembic
+    google
+    anthropic
+    openai
+    yaml
+
+[importlinter:contract:evaluation-core-is-pure]
+name = Evaluation metrics core is pure computation (no infrastructure, web, database or LLM SDKs)
+type = forbidden
+source_modules =
+    radius_intent.evaluation.gold
+    radius_intent.evaluation.matching
+    radius_intent.evaluation.stats
+    radius_intent.evaluation.metrics
+    radius_intent.evaluation.config
+    radius_intent.evaluation.compare
+    radius_intent.evaluation.report
+forbidden_modules =
+    radius_intent.infrastructure
+    radius_intent.application
+    radius_intent.interfaces
+    radius_intent.evaluation.loader
+    radius_intent.evaluation.extractors
+    radius_intent.evaluation.runner
+    radius_intent.evaluation.provenance
+    radius_intent.evaluation.cli
+    sqlalchemy
+    fastapi
+    pydantic
+    httpx
+    requests
+    psycopg
+    alembic
+    google
+    anthropic
+    openai
+    yaml
+    subprocess
+
+[importlinter:contract:nothing-depends-on-evaluation]
+name = Product code never imports the research evaluation harness
+type = forbidden
+source_modules =
+    radius_intent.domain
+    radius_intent.application
+    radius_intent.interfaces
+    radius_intent.infrastructure
+forbidden_modules =
+    radius_intent.evaluation

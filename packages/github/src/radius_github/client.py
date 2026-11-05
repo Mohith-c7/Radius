@@ -3,18 +3,47 @@
 from __future__ import annotations
 
 import json
+import random
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import jwt
-from pydantic import Field
+from pydantic import Field, field_validator, model_validator
 from radius_shared.config import RadiusBaseSettings
 from radius_shared.errors import AccessDeniedError, ValidationError
+
+from radius_github.rate_limit import (
+    IDEMPOTENT_METHODS,
+    TRANSIENT_STATUSES,
+    GitHubRateLimitError,
+    RateLimitInfo,
+    RetryPolicy,
+    backoff,
+    classify_rate_limit,
+    parse_rate_limit,
+    short_message,
+    wait_for_rate_limit,
+)
+
+
+def _seg(value: object) -> str:
+    """One URL path segment from caller data: percent-encoded, never ``.``/``..``.
+
+    ``urllib.parse.urljoin`` collapses dot segments, so an owner or repository of
+    ``..`` would steer the request to a different GitHub API path (A-13).
+    """
+
+    text = str(value)
+    if not text or text in {".", ".."}:
+        msg = f"Invalid GitHub path segment: {text!r}."
+        raise ValueError(msg)
+    return urllib.parse.quote(text, safe="")
 
 
 class GitHubAppSettings(RadiusBaseSettings):
@@ -22,6 +51,15 @@ class GitHubAppSettings(RadiusBaseSettings):
 
     github_app_id: str = Field(default="", alias="GITHUB_APP_ID")
     github_app_private_key: str = Field(default="", alias="GITHUB_APP_PRIVATE_KEY")
+    github_app_private_key_path: str = Field(
+        default="",
+        alias="GITHUB_APP_PRIVATE_KEY_PATH",
+        description=(
+            "Path to the GitHub App private key (.pem). Used when "
+            "`GITHUB_APP_PRIVATE_KEY` is empty, so the key never has to be pasted "
+            "into an environment variable or committed."
+        ),
+    )
     github_installation_id: int | None = Field(
         default=None,
         alias="GITHUB_INSTALLATION_ID",
@@ -39,11 +77,60 @@ class GitHubAppSettings(RadiusBaseSettings):
         alias="GITHUB_TIMEOUT_SECONDS",
     )
 
+    @field_validator("github_installation_id", mode="before")
+    @classmethod
+    def _blank_installation_id(cls, value):
+        if value is None or value in ("", 0, "0"):
+            return None
+        return value
+
+    @model_validator(mode="after")
+    def _load_private_key_file(self) -> GitHubAppSettings:
+        if not self.github_app_private_key and self.github_app_private_key_path:
+            self.github_app_private_key = read_private_key_file(
+                self.github_app_private_key_path
+            )
+        return self
+
     @property
     def enabled(self) -> bool:
         """Return whether enough app credentials are configured."""
 
         return bool(self.github_app_id and self.github_app_private_key)
+
+
+def read_private_key_file(path: str) -> str:
+    """Read a PEM private key file; the error never contains key material."""
+
+    try:
+        return Path(path).expanduser().read_text(encoding="utf-8")
+    except OSError as exc:
+        msg = (
+            f"GITHUB_APP_PRIVATE_KEY_PATH ({path}) cannot be read: "
+            f"{type(exc).__name__}."
+        )
+        raise ValueError(msg) from exc
+
+
+def normalize_private_key(raw: str) -> str:
+    """Return a PEM string from an env-style value.
+
+    Accepts a real multi-line PEM, a single line with literal backslash-n
+    escapes (the usual ``.env`` form) and either of them wrapped in quotes.
+    """
+
+    key = raw.strip()
+    if len(key) >= 2 and key[0] == key[-1] and key[0] in {"'", '"'}:
+        key = key[1:-1].strip()
+    return key.replace("\\n", "\n")
+
+
+class GitHubHTTPError(AccessDeniedError):
+    """A GitHub API error response; ``status`` is the HTTP status code."""
+
+    def __init__(self, message: str, *, status: int) -> None:
+        super().__init__(message)
+        self.status = status
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +139,9 @@ class InstallationToken:
 
     token: str
     expires_at: datetime | None = None
+    #: Permissions GitHub granted the token (``{"checks": "write", ...}``).
+    permissions: dict[str, str] | None = None
+    repository_selection: str | None = None
 
 
 class GitHubAppClient:
@@ -63,10 +153,26 @@ class GitHubAppClient:
         *,
         opener=None,
         clock=time.time,
+        retry_policy: RetryPolicy | None = None,
+        sleep=time.sleep,
+        rng=random.random,
     ) -> None:
         self._settings = settings
         self._opener = opener or urllib.request.urlopen
         self._clock = clock
+        self._retry = retry_policy or RetryPolicy()
+        self._sleep = sleep
+        self._rng = rng
+        #: Rate-limit headers of the most recent response that carried them.
+        self.last_rate_limit: RateLimitInfo | None = None
+        #: ``Date`` header of the most recent response (clock-skew diagnostics).
+        self.last_server_date: str | None = None
+
+    @property
+    def settings(self) -> GitHubAppSettings:
+        """The settings this client signs and addresses requests with."""
+
+        return self._settings
 
     def create_installation_token(
         self,
@@ -98,7 +204,51 @@ class GitHubAppClient:
                 if expires_at
                 else None
             ),
+            permissions=(
+                {str(k): str(v) for k, v in response["permissions"].items()}
+                if isinstance(response.get("permissions"), dict)
+                else None
+            ),
+            repository_selection=(
+                str(response["repository_selection"])
+                if response.get("repository_selection")
+                else None
+            ),
         )
+
+    def get_app(self) -> dict[str, Any]:
+        """Return the authenticated App (``GET /app``); proves the JWT is valid."""
+
+        response = self._request("GET", "/app", token=self._jwt())
+        return response if isinstance(response, dict) else {}
+
+    def get_repository_installation(self, owner: str, repo: str) -> dict[str, Any]:
+        """Return the App installation covering a repository (App JWT auth).
+
+        Lets a pull-only deployment discover the installation id without any
+        ``installation`` webhook.
+        """
+
+        response = self._request(
+            "GET", f"/repos/{_seg(owner)}/{_seg(repo)}/installation", token=self._jwt()
+        )
+        return response if isinstance(response, dict) else {}
+
+    def get_repository(self, *, token: str, owner: str, repo: str) -> dict[str, Any]:
+        """Return repository metadata (id, default branch, clone URL, visibility)."""
+
+        response = self._request("GET", f"/repos/{_seg(owner)}/{_seg(repo)}", token=token)
+        return response if isinstance(response, dict) else {}
+
+    def get_pull_request(
+        self, *, token: str, owner: str, repo: str, number: int
+    ) -> dict[str, Any]:
+        """Return one pull request (head sha, title, body, author, state)."""
+
+        response = self._request(
+            "GET", f"/repos/{_seg(owner)}/{_seg(repo)}/pulls/{int(number)}", token=token
+        )
+        return response if isinstance(response, dict) else {}
 
     def create_check_run(
         self,
@@ -119,7 +269,7 @@ class GitHubAppClient:
 
         return self._request(
             "POST",
-            f"/repos/{owner}/{repo}/check-runs",
+            f"/repos/{_seg(owner)}/{_seg(repo)}/check-runs",
             token=token,
             body=_check_run_payload(
                 name=name,
@@ -153,7 +303,7 @@ class GitHubAppClient:
 
         return self._request(
             "PATCH",
-            f"/repos/{owner}/{repo}/check-runs/{check_run_id}",
+            f"/repos/{_seg(owner)}/{_seg(repo)}/check-runs/{check_run_id}",
             token=token,
             body=_check_run_payload(
                 name=name,
@@ -181,7 +331,7 @@ class GitHubAppClient:
         query = urllib.parse.urlencode({"check_name": check_name, "per_page": 100})
         response = self._request(
             "GET",
-            f"/repos/{owner}/{repo}/commits/{ref}/check-runs?{query}",
+            f"/repos/{_seg(owner)}/{_seg(repo)}/commits/{_seg(ref)}/check-runs?{query}",
             token=token,
         )
         if not isinstance(response, dict):
@@ -202,7 +352,7 @@ class GitHubAppClient:
 
         return self._request(
             "POST",
-            f"/repos/{owner}/{repo}/issues/{issue_number}/comments",
+            f"/repos/{_seg(owner)}/{_seg(repo)}/issues/{issue_number}/comments",
             token=token,
             body={"body": body},
         )
@@ -220,7 +370,7 @@ class GitHubAppClient:
 
         return self._request(
             "PATCH",
-            f"/repos/{owner}/{repo}/issues/comments/{comment_id}",
+            f"/repos/{_seg(owner)}/{_seg(repo)}/issues/comments/{comment_id}",
             token=token,
             body={"body": body},
         )
@@ -237,7 +387,7 @@ class GitHubAppClient:
 
         response = self._request(
             "GET",
-            f"/repos/{owner}/{repo}/issues/{issue_number}/comments?per_page=100",
+            f"/repos/{_seg(owner)}/{_seg(repo)}/issues/{issue_number}/comments?per_page=100",
             token=token,
         )
         return response if isinstance(response, list) else []
@@ -255,7 +405,7 @@ class GitHubAppClient:
         query = urllib.parse.urlencode({"state": state, "per_page": 100})
         response = self._request(
             "GET",
-            f"/repos/{owner}/{repo}/pulls?{query}",
+            f"/repos/{_seg(owner)}/{_seg(repo)}/pulls?{query}",
             token=token,
         )
         return response if isinstance(response, list) else []
@@ -263,7 +413,7 @@ class GitHubAppClient:
     def _jwt(self) -> str:
         issued_at = int(self._clock()) - 60
         expires_at = issued_at + 9 * 60
-        private_key = self._settings.github_app_private_key.replace("\\n", "\n")
+        private_key = normalize_private_key(self._settings.github_app_private_key)
         return jwt.encode(
             {
                 "iat": issued_at,
@@ -299,18 +449,138 @@ class GitHubAppClient:
                 "X-GitHub-Api-Version": self._settings.github_api_version,
             },
         )
+        attempt = 0
+        waited = 0.0
+        while True:
+            attempt += 1
+            try:
+                with self._opener(
+                    request,
+                    timeout=self._settings.github_timeout_seconds,
+                ) as response:
+                    self._note_rate_limit(getattr(response, "headers", None))
+                    payload = response.read().decode("utf-8")
+                return json.loads(payload) if payload else {}
+            except urllib.error.HTTPError as exc:
+                body = _read_error_body(exc)
+                self._note_rate_limit(exc.headers)
+                delay = self._decide_http_retry(method, exc, body, attempt, waited)
+                if delay is None:
+                    raise self._http_error(
+                        method, path, exc, body, attempt, waited
+                    ) from exc
+            except urllib.error.URLError as exc:
+                delay = self._decide_network_retry(method, attempt, waited)
+                if delay is None:
+                    raise ValidationError(
+                        f"GitHub API request failed: {exc.reason}"
+                    ) from exc
+            waited += delay
+            self._sleep(delay)
+
+    def _note_rate_limit(self, headers) -> None:
+        self._note_date(headers)
+        info = parse_rate_limit(headers)
+        if info.remaining is not None or info.retry_after is not None:
+            self.last_rate_limit = info
+
+    def _note_date(self, headers) -> None:
+        if headers is None:
+            return
         try:
-            with self._opener(
-                request,
-                timeout=self._settings.github_timeout_seconds,
-            ) as response:
-                payload = response.read().decode("utf-8")
-        except urllib.error.HTTPError as exc:
-            message = exc.read().decode("utf-8") or str(exc)
-            raise AccessDeniedError(f"GitHub API request failed: {message}") from exc
-        except urllib.error.URLError as exc:
-            raise ValidationError(f"GitHub API request failed: {exc.reason}") from exc
-        return json.loads(payload) if payload else {}
+            value = headers.get("Date") or headers.get("date")
+        except AttributeError:
+            return
+        if value:
+            self.last_server_date = str(value)
+
+    def _jittered(self, seconds: float) -> float:
+        return seconds + seconds * self._retry.jitter_fraction * self._rng()
+
+    def _fits(self, delay: float, attempt: int, waited: float) -> bool:
+        return (
+            attempt < self._retry.max_attempts
+            and waited + delay <= self._retry.max_total_wait_seconds
+        )
+
+    def _decide_http_retry(
+        self,
+        method: str,
+        exc: urllib.error.HTTPError,
+        body: str,
+        attempt: int,
+        waited: float,
+    ) -> float | None:
+        """Seconds to sleep before retrying, or ``None`` to give up."""
+
+        kind = classify_rate_limit(exc.code, exc.headers, body)
+        if kind is not None:
+            # Rejected before any work was done, so retrying is safe even for POST.
+            info = parse_rate_limit(exc.headers)
+            delay = self._jittered(
+                wait_for_rate_limit(kind, info, self._clock(), attempt)
+            )
+            return delay if self._fits(delay, attempt, waited) else None
+        if (
+            exc.code in TRANSIENT_STATUSES
+            and self._retry.retry_server_errors
+            and method.upper() in IDEMPOTENT_METHODS
+        ):
+            info = parse_rate_limit(exc.headers)
+            delay = self._jittered(
+                max(backoff(self._retry, attempt), info.retry_after or 0.0)
+            )
+            return delay if self._fits(delay, attempt, waited) else None
+        return None
+
+    def _decide_network_retry(
+        self, method: str, attempt: int, waited: float
+    ) -> float | None:
+        # A dropped connection or timeout may have happened after the server acted: only
+        # idempotent methods are repeated.
+        if (
+            not self._retry.retry_server_errors
+            or method.upper() not in IDEMPOTENT_METHODS
+        ):
+            return None
+        delay = self._jittered(backoff(self._retry, attempt))
+        return delay if self._fits(delay, attempt, waited) else None
+
+    def _http_error(
+        self,
+        method: str,
+        path: str,
+        exc: urllib.error.HTTPError,
+        body: str,
+        attempt: int,
+        waited: float,
+    ) -> AccessDeniedError:
+        kind = classify_rate_limit(exc.code, exc.headers, body)
+        if kind is None:
+            return GitHubHTTPError(
+                f"GitHub API request failed (HTTP {exc.code}) on "
+                f"{method} {path.split('?', 1)[0]}: {short_message(body) or exc}",
+                status=exc.code,
+            )
+        info = parse_rate_limit(exc.headers)
+        wanted = wait_for_rate_limit(kind, info, self._clock(), attempt)
+        return GitHubRateLimitError(
+            f"GitHub {kind} rate limit hit on {method} {path.split('?', 1)[0]} "
+            f"(HTTP {exc.code}, {attempt} attempt(s), waited {waited:.1f}s, GitHub asks for "
+            f"{wanted:.0f}s, retry budget {self._retry.max_total_wait_seconds:.0f}s): "
+            f"{short_message(body)}",
+            kind=kind,
+            retry_after_seconds=wanted,
+            attempts=attempt,
+            waited_seconds=waited,
+        )
+
+
+def _read_error_body(exc: urllib.error.HTTPError) -> str:
+    try:
+        return exc.read().decode("utf-8", "replace")
+    except (OSError, ValueError):
+        return ""
 
 
 def _check_run_payload(

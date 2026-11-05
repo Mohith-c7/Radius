@@ -1,0 +1,5 @@
+# OWASP ZAP baseline rule configuration (tab separated: <rule id>	<IGNORE|WARN|FAIL>	<comment>).
+# Only add a line for a documented false positive, with the reason and a review date
+# in the comment. Keep this file empty of entries until a finding has been triaged.
+# The DAST gate (scripts/ci/zap_gate.py) fails only on HIGH alerts that are not
+# listed here as IGNORE. See docs/security/CI_CHECKS.md ("DAST").

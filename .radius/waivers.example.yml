@@ -1,0 +1,27 @@
+# Sample .radius/waivers.yml. Read from the BASE branch only, so a pull request cannot
+# waive its own findings. Waivers expire (at most 90 days from `created`) and are
+# listed in the PR comment and stored in the verdict's audit record. A contradicted
+# criterion and a failed CI case can never be waived. Guide: docs/policy.md
+version: 1
+waivers:
+  - id: W-2026-001
+    finding: tf_0e4c6939a63e008c          # stable tamper finding id from the comment
+    reason: "Legacy fixture is regenerated nightly, tracked in SEC-42"
+    owner: alice
+    created: 2026-10-30
+    expires: 2026-12-01
+
+  - id: W-2026-002
+    rule: T002                            # a whole rule needs a path scope
+    paths: ["tests/legacy/**"]
+    reason: "Legacy suite is skipped on purpose until the 2027 migration"
+    owner: "@acme/qa"                     # quote values that start with @
+    created: 2026-10-30
+    expires: 2027-01-15
+
+  - id: W-2026-003
+    criterion: crit_billing_rounding      # shown as EXCLUDED with reason "waived"
+    reason: "Accepted by product for this release, follow-up ticket BILL-77"
+    owner: bob@example.com
+    created: 2026-10-30
+    expires: 2026-11-30

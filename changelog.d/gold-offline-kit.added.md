@@ -1,0 +1,1 @@
+Gold-set tooling for a second annotator: `scripts/gold_pack.py` exports a blinded, self-contained offline kit and imports the completed annotations after strict validation, `scripts/gold_to_eval.py` feeds adjudicated gold to the extraction metrics harness, and the agreement report now also shows percent agreement with intervals. Tooling only; no real annotations exist.

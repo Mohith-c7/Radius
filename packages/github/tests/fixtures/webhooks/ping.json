@@ -1,0 +1,36 @@
+{
+  "zen": "Keep it logically awesome.",
+  "hook_id": 600100200,
+  "hook": {
+    "type": "App",
+    "id": 600100200,
+    "name": "web",
+    "active": true,
+    "events": [
+      "check_run",
+      "issue_comment",
+      "issues",
+      "pull_request",
+      "push"
+    ],
+    "config": {
+      "content_type": "json",
+      "insecure_ssl": "0",
+      "url": "https://example.smee.io"
+    },
+    "updated_at": "2026-11-02T08:00:00Z",
+    "created_at": "2026-11-02T08:00:00Z",
+    "app_id": 1234567,
+    "deliveries_url": "https://api.github.com/app/hook/deliveries"
+  },
+  "sender": {
+    "login": "radius-sandbox-app[bot]",
+    "id": 2000,
+    "node_id": "U_2000",
+    "avatar_url": "https://avatars.githubusercontent.com/u/2000?v=4",
+    "url": "https://api.github.com/users/radius-sandbox-app[bot]",
+    "html_url": "https://github.com/radius-sandbox-app[bot]",
+    "type": "Bot",
+    "site_admin": false
+  }
+}

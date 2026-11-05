@@ -49,6 +49,9 @@ class TestStore(Protocol):
     def get_test_history(self, analysis_id: UUID) -> list[dict]:
         """Return test execution history for an analysis."""
 
+    def list_test_samples(self, repository_id: UUID, limit: int = 5000) -> list[dict]:
+        """Return a repository's newest history rows, oldest first (F-11 flakiness)."""
+
     def get_test_statistics(self, analysis_id: UUID) -> dict:
         """Return test execution statistics for an analysis."""
 

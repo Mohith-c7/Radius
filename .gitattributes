@@ -1,0 +1,2 @@
+Makefile text eol=lf
+docs/api/openapi.json text eol=lf

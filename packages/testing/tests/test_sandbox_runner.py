@@ -20,7 +20,11 @@ from radius_testing.domain import TestName as RadiusTestName
 from radius_testing.domain import TestPath as RadiusTestPath
 from radius_testing.domain import TestRunPlan as RadiusTestRunPlan
 from radius_testing.domain import TestRunStatus as RadiusTestRunStatus
-from radius_testing.infrastructure import ContainerSandboxRunner, SandboxConfig
+from radius_testing.infrastructure import (
+    ContainerSandboxRunner,
+    SandboxConfig,
+    SandboxUnavailableError,
+)
 from radius_testing.infrastructure.sandbox_runner import (
     CONTAINER_JUNIT_PATH,
     SANDBOX_ENV,
@@ -206,6 +210,36 @@ def test_pytest_command_writes_junit_only_to_results_mount() -> None:
     )
 
 
+def test_container_argv_applies_ulimits_and_default_seccomp() -> None:
+    argv = _argv()
+    pairs = _pairs(argv)
+
+    assert ("--ulimit", "nofile=1024:1024") in pairs
+    assert ("--ulimit", f"fsize={64 * 1024 * 1024}:{64 * 1024 * 1024}") in pairs
+    assert ("--ulimit", "core=0:0") in pairs
+    # Default seccomp profile is kept: no override and never unconfined.
+    assert not any(a.startswith("seccomp=") for a in argv)
+    assert not any("unconfined" in a for a in argv)
+
+
+def test_custom_seccomp_profile_is_passed_and_unconfined_is_rejected() -> None:
+    argv = build_container_argv(
+        SandboxConfig(seccomp_profile="/etc/radius/seccomp.json"),
+        runtime_path="/usr/bin/docker",
+        container_name="radius-sbx-abc123",
+        workspace_dir=Path("/w"),
+        results_dir=Path("/r"),
+        command=["python", "-V"],
+    )
+    assert ("--security-opt", "seccomp=/etc/radius/seccomp.json") in _pairs(argv)
+    for bad in ("unconfined", "", "a.json,b"):
+        with pytest.raises(ValueError):
+            SandboxConfig(seccomp_profile=bad)
+    for kwargs in ({"nofile_limit": 0}, {"max_file_size_bytes": 0}, {"max_output_bytes": 0}):
+        with pytest.raises(ValueError):
+            SandboxConfig(**kwargs)
+
+
 # --------------------------------------------------------------------------
 # Runner behaviour with an injected fake launcher
 # --------------------------------------------------------------------------
@@ -268,12 +302,19 @@ class AuxRecorder:
         return subprocess.CompletedProcess(argv, 0)
 
 
-def _runner(launcher, aux=None, which=lambda name: "/usr/bin/docker", **config):
+def _ready_probe(argv, **kwargs):
+    """Stand-in for the readiness probes (docker version / image inspect)."""
+
+    return subprocess.CompletedProcess(argv, 0)
+
+
+def _runner(launcher, aux=None, which=lambda name: "/usr/bin/docker", probe=_ready_probe, **config):
     return ContainerSandboxRunner(
         SandboxConfig(**config),
         launcher=launcher,
         aux_runner=aux or AuxRecorder(),
         which=which,
+        probe=probe,
     )
 
 
@@ -517,3 +558,94 @@ def test_real_container_timeout_kills_container(tmp_path: Path) -> None:
         check=False,
     )
     assert leftover.stdout.strip() == ""
+
+
+# --------------------------------------------------------------------------
+# Fail closed: an unusable sandbox must never execute anything
+# --------------------------------------------------------------------------
+
+
+def _probe_failing_on(fragment: str):
+    def probe(argv, **kwargs):
+        return subprocess.CompletedProcess(argv, 1 if fragment in argv else 0)
+
+    return probe
+
+
+@pytest.mark.parametrize(
+    ("probe", "expected"),
+    [
+        (_probe_failing_on("version"), "daemon is not reachable"),
+        (_probe_failing_on("inspect"), "is not present locally"),
+        (lambda argv, **kw: (_ for _ in ()).throw(OSError("boom")), "check failed"),
+        (
+            lambda argv, **kw: (_ for _ in ()).throw(
+                subprocess.TimeoutExpired(cmd="docker", timeout=30)
+            ),
+            "check failed",
+        ),
+    ],
+)
+def test_unready_sandbox_refuses_to_execute(tmp_path: Path, probe, expected: str) -> None:
+    launcher = FakeLauncher(FakeProcess())
+
+    result = _runner(launcher, probe=probe).run(_plan(PYTEST_PLAN), _repo(tmp_path))
+
+    assert result.status == RadiusTestRunStatus.ERROR
+    assert result.passed == 0
+    assert "refusing to execute" in result.output
+    assert expected in result.output
+    assert launcher.calls == []  # nothing was started
+
+
+def test_missing_seccomp_profile_refuses_to_execute(tmp_path: Path) -> None:
+    launcher = FakeLauncher(FakeProcess())
+
+    result = _runner(launcher, seccomp_profile=str(tmp_path / "nope.json")).run(
+        _plan(PYTEST_PLAN), _repo(tmp_path)
+    )
+
+    assert result.status == RadiusTestRunStatus.ERROR
+    assert "seccomp profile file not found" in result.output
+    assert launcher.calls == []
+
+
+def test_check_ready_raises_for_missing_runtime() -> None:
+    runner = _runner(FakeLauncher(FakeProcess()), which=lambda name: None)
+    with pytest.raises(SandboxUnavailableError):
+        runner.check_ready()
+
+
+@pytest.mark.parametrize("code", [137, 152, 153])
+def test_signal_exit_codes_are_contained_errors(tmp_path: Path, code: int) -> None:
+    for index, plan in enumerate((PYTEST_PLAN, (("python", ("tests/test_ok.py",)),))):
+        result = _runner(FakeLauncher(FakeProcess(returncode=code), junit=None)).run(
+            _plan(plan), _repo(tmp_path / str(index))
+        )
+        assert result.status == RadiusTestRunStatus.ERROR
+        assert result.passed == 0
+        assert "killed by SIG" in result.output
+
+
+def test_output_flood_kills_container_and_reports_error(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "radius_testing.infrastructure.sandbox_runner._WATCHDOG_INTERVAL_SECONDS", 0.01
+    )
+
+    class Flooder(FakeLauncher):
+        def __call__(self, argv, **kwargs):
+            process = super().__call__(argv, **kwargs)
+            kwargs["stdout"].write(b"x" * 4096)
+            kwargs["stdout"].flush()
+            process.hang = True
+            return process
+
+    process = FakeProcess(hang=True)
+    aux = AuxRecorder()
+    result = _runner(Flooder(process), aux=aux, max_output_bytes=1024, timeout_seconds=3).run(
+        _plan(PYTEST_PLAN), _repo(tmp_path)
+    )
+
+    assert result.status == RadiusTestRunStatus.ERROR
+    assert result.passed == 0
+    assert aux.calls and aux.calls[0][1] == "kill"

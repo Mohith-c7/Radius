@@ -1,6 +1,7 @@
 {
   "name": "radius",
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "private": true,
   "description": "AI-native software verification platform.",
   "packageManager": "pnpm@9.15.0",
@@ -9,6 +10,10 @@
     "db:migrate": "alembic upgrade head",
     "db:revision": "alembic revision --autogenerate",
     "dev": "turbo run dev --parallel",
+    "dev:stack": "python scripts/gen_dev_env.py && docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build -d --wait --wait-timeout 300 postgres migrations api worker dashboard",
+    "dev:down": "docker compose -f docker-compose.yml -f docker-compose.dev.yml down",
+    "dev:logs": "docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f api worker dashboard",
+    "seed:demo": "cross-env STORAGE_BACKEND=sql DATABASE_URL=postgresql+psycopg://radius:radius@localhost:5432/radius uv run --frozen python scripts/seed_demo.py --yes",
     "lint": "turbo run lint",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
@@ -19,5 +24,17 @@
     "prettier": "^3.4.2",
     "turbo": "^2.3.3",
     "typescript": "^5.7.2"
+  },
+  "pnpm": {
+    "overrides": {
+      "postcss@<8.5.23": "^8.5.23",
+      "nanoid@<3.3.18": "^3.3.18",
+      "source-map-js@<1.2.2": "^1.2.2",
+      "sharp@<0.35.5": "^0.35.5",
+      "js-yaml@<4.3.2": "^4.3.2",
+      "brace-expansion@<1.1.21": "^1.1.21",
+      "brace-expansion@>=4.0.0 <5.0.12": "^5.0.12",
+      "minimatch@>=10.0.0 <11.0.1": "^11.0.1"
+    }
   }
 }

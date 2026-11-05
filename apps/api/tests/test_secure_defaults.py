@@ -46,6 +46,13 @@ def _keyless_call(client: TestClient):
     ],
 )
 def test_missing_secrets_are_rejected(monkeypatch, env, allow) -> None:
+    if env in {"uat", "production"}:
+        # A-09: with neither API_KEYS nor RADIUS_API_KEY_PEPPER the API refuses to
+        # start at all (it used to start and answer 401/403 to everything).
+        monkeypatch.setenv("RADIUS_API_KEY_PEPPER", "")
+        with pytest.raises(ValueError, match="RADIUS_API_KEY_PEPPER"):
+            _client(monkeypatch, env=env, allow=allow)
+        return
     client = _client(monkeypatch, env=env, allow=allow)
 
     assert _webhook(client).status_code in (401, 403)

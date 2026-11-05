@@ -20,8 +20,22 @@ class AnalysisStore(Protocol):
         repository_id: UUID | None = None,
         pull_request_id: UUID | None = None,
         status: AnalysisStatus | None = None,
+        *,
+        repository_ids: tuple[UUID, ...] | None = None,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> list[Analysis]:
-        """Return analyses matching optional filters."""
+        """Return analyses matching optional filters, newest first, optionally one page."""
+
+    def count(
+        self,
+        repository_id: UUID | None = None,
+        pull_request_id: UUID | None = None,
+        status: AnalysisStatus | None = None,
+        *,
+        repository_ids: tuple[UUID, ...] | None = None,
+    ) -> int:
+        """Return how many analyses match the filters (for pagination)."""
 
     def find_active(
         self,

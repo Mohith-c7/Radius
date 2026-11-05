@@ -1,0 +1,41 @@
+{
+  "id": "aidev-zenodo",
+  "name": "AIDev (Zenodo v3 release, 975.4 MB)",
+  "kind": "pr-corpus",
+  "source": {
+    "type": "zenodo",
+    "url": "https://zenodo.org/records/16899501",
+    "revision": "v3 (2025-11-05)",
+    "revision_kind": "version",
+    "doi": "10.5281/zenodo.16919272",
+    "paper": "arXiv 2602.09185"
+  },
+  "license": {
+    "name": "Creative Commons Attribution 4.0 International",
+    "url": "https://creativecommons.org/licenses/by/4.0/",
+    "spdx": "CC-BY-4.0",
+    "verdict": "open",
+    "evidence": "Zenodo record page fetched 2026-11-02 (displayed DOI 10.5281/zenodo.16919272 for record 16899501; a search result cited 10.5281/zenodo.16899501: confirm concept vs version DOI). Zenodo lists MD5 only, so no sha256 recorded."
+  },
+  "redistribution": {
+    "allowed": "conditional",
+    "notes": "As aidev-hf: embedded repo content keeps original licences."
+  },
+  "status": "requested",
+  "size": "975.4 MB total (Zenodo listing)",
+  "rqs": [
+    "RQ4",
+    "RQ3 (CA-01 labels)"
+  ],
+  "labels": [
+    "same tables as aidev-hf plus pr_task_type and human_pull_request (human baseline PRs)"
+  ],
+  "risks": [
+    "differs from HF snapshot",
+    "MD5 only: compute sha256 on first download and record it"
+  ],
+  "obtain": "download from https://zenodo.org/records/16899501, then add sha256 entries (MD5 of all_pull_request.parquet: f8e0ac3839e41f0be9c3475996f29224)",
+  "schema_version": 1,
+  "accessed": "2026-11-02",
+  "files": []
+}

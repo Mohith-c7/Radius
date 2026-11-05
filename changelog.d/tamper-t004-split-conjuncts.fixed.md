@@ -1,0 +1,1 @@
+Tamper rule T004 no longer reports `conjunct_dropped` (high) when an `assert a and b` was split into separate asserts: the clause totals of the whole test are compared, not only the positionally paired assertion. Found by the 2026-11 replay re-run on PR #109.

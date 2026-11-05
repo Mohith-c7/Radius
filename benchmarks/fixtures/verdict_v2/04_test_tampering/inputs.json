@@ -1,0 +1,1412 @@
+{
+  "contracts": "radius_evidence.domain.inputs (StageAInput, StageBInput)",
+  "expected_verdict": "failed",
+  "fixture": "04_test_tampering",
+  "generated_by": "scripts/verdict_v2_make_fixtures.py",
+  "modes": {
+    "auto": {
+      "mode": "auto",
+      "provenance": {
+        "assertions": {
+          "note": "LK-04 (radius_testing.assertions) emits a different record shape (AssertionRecord/TestSummary); this is a hand-built AssertionFeatures per design 3.2/3.6, one per test function at head",
+          "origin": "hand_built",
+          "producer": "scripts/verdict_v2_make_fixtures.py: ast classifier (fixture-ast-v1)"
+        },
+        "changed_test_ids": {
+          "origin": "derived",
+          "producer": "LK-01 symbols that are test functions present at head"
+        },
+        "criteria": {
+          "note": "weight 1.0, lifecycle confirmed",
+          "origin": "derived",
+          "producer": "expected.json criteria[]"
+        },
+        "criterion_symbol": {
+          "note": "combined links, no reranker",
+          "origin": "real",
+          "producer": "radius_linking.infrastructure.pipeline.link_changeset (LK-02)"
+        },
+        "criterion_test": {
+          "note": "VS-04 (test relevance) does not exist yet; VS-02 adds the real snapshot",
+          "origin": "hand_built",
+          "producer": "empty"
+        },
+        "ids": {
+          "note": "uuid5/sha1 of the fixture name; head_sha is a PLACEHOLDER, not a git sha",
+          "origin": "derived",
+          "producer": "scripts/verdict_v2_make_fixtures.py"
+        },
+        "stage_b": {
+          "note": "outcomes copied per scenario",
+          "origin": "hand_built",
+          "producer": "expected.json test_outcomes"
+        },
+        "symbol_test": {
+          "note": "head python sources; no dynamic coverage",
+          "origin": "real",
+          "producer": "radius_testing.linking StaticLinker + NamingLinker + combine_links (LK-03)"
+        },
+        "symbols": {
+          "note": "base/head snapshots + pr.patch",
+          "origin": "real",
+          "producer": "radius_analysis.symbol_changes.extract_symbol_changes (LK-01)"
+        },
+        "tamper": {
+          "note": "offline StaticPackageRegistry lacking pytimeparse-ultra; default (no registry) result in tamper_variants",
+          "origin": "real",
+          "producer": "radius_analysis.tamper.analyze_tampering (EV-02)"
+        }
+      },
+      "stage_a": {
+        "added_test_ids": [],
+        "agent_signal": false,
+        "agent_signal_by_test": {},
+        "algo_versions": {
+          "assertions": "test-assertions-v1",
+          "assertions_producer": "fixture-ast-v1",
+          "criterion_symbol_links": "criterion-symbol-links-v1",
+          "criterion_test": "pending-vs04",
+          "symbol_changes": "symbol-changes-v1",
+          "symbol_test_links": "link-combine-v1",
+          "tamper": "tamper-rules-v1"
+        },
+        "analysis_id": "c3da2793-e6b7-5091-9733-bd9d265be346",
+        "assertions": [
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
+                "kind": "value_equality",
+                "line": 21,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": []
+              }
+            ],
+            "called_symbol_refs": [
+              "src/stock.py::release"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 21,
+            "line_start": 20,
+            "literal_terms": [
+              "10",
+              "7",
+              "3"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "release",
+              "restore"
+            ],
+            "path": "tests/test_stock.py",
+            "test_id": "tests/test_stock.py::test_release_restores"
+          },
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": false,
+                "dead": false,
+                "in_loop": false,
+                "kind": "tautology",
+                "line": 11,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": [
+                  "python:src/stock.py::reserve#function@a48d0d633b96"
+                ]
+              }
+            ],
+            "called_symbol_refs": [
+              "src/stock.py::reserve"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 11,
+            "line_start": 10,
+            "literal_terms": [
+              "5"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "reserve",
+              "exact",
+              "stock"
+            ],
+            "path": "tests/test_stock.py",
+            "test_id": "tests/test_stock.py::test_reserve_exact_stock"
+          },
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
+                "kind": "none_check",
+                "line": 7,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": [
+                  "python:src/stock.py::reserve#function@a48d0d633b96"
+                ]
+              }
+            ],
+            "called_symbol_refs": [
+              "src/stock.py::reserve"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 7,
+            "line_start": 6,
+            "literal_terms": [
+              "10",
+              "3"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "reserve",
+              "reduce",
+              "stock"
+            ],
+            "path": "tests/test_stock.py",
+            "test_id": "tests/test_stock.py::test_reserve_reduces_stock"
+          },
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
+                "kind": "exception_type",
+                "line": 16,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": [
+                  "python:src/stock.py::reserve#function@a48d0d633b96"
+                ]
+              }
+            ],
+            "called_symbol_refs": [
+              "src/stock.py::reserve"
+            ],
+            "expects_exception": true,
+            "has_skip_marker": true,
+            "is_parametrized": false,
+            "line_end": 17,
+            "line_start": 14,
+            "literal_terms": [
+              "flaky",
+              "10",
+              "0"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "reserve",
+              "reject",
+              "non",
+              "positive"
+            ],
+            "path": "tests/test_stock.py",
+            "test_id": "tests/test_stock.py::test_reserve_rejects_non_positive"
+          },
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
+                "kind": "value_equality",
+                "line": 25,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": []
+              }
+            ],
+            "called_symbol_refs": [
+              "src/stock.py::stock_value"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 25,
+            "line_start": 24,
+            "literal_terms": [
+              "7.5",
+              "3",
+              "2.5"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "stock",
+              "value"
+            ],
+            "path": "tests/test_stock.py",
+            "test_id": "tests/test_stock.py::test_stock_value"
+          }
+        ],
+        "changed_test_ids": [
+          "tests/test_stock.py::test_reserve_exact_stock",
+          "tests/test_stock.py::test_reserve_reduces_stock",
+          "tests/test_stock.py::test_reserve_rejects_non_positive"
+        ],
+        "changeset_ref": "symbol-changes-v1:2cbf63cd9810a1d3",
+        "criteria": [
+          {
+            "criterion_id": "C1",
+            "hints_paths": [],
+            "hints_provenance": "author_pr_body",
+            "hints_tests": [],
+            "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
+            "testability": "behavioral_testable",
+            "text": "reserve still returns the remaining stock for valid input",
+            "weight": 1.0
+          },
+          {
+            "criterion_id": "C2",
+            "hints_paths": [],
+            "hints_provenance": "author_pr_body",
+            "hints_tests": [],
+            "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
+            "testability": "behavioral_testable",
+            "text": "reserve still raises OutOfStock when qty exceeds stock",
+            "weight": 1.0
+          },
+          {
+            "criterion_id": "C3",
+            "hints_paths": [],
+            "hints_provenance": "author_pr_body",
+            "hints_tests": [],
+            "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
+            "testability": "behavioral_testable",
+            "text": "reserve still raises ValueError for non-positive qty",
+            "weight": 1.0
+          }
+        ],
+        "criterion_symbol": [
+          {
+            "by_linker": {
+              "change_prior": 0.95,
+              "lexical": 0.472705
+            },
+            "criterion_id": "C1",
+            "rank": 1,
+            "reasons": [
+              {
+                "code": "bm25_summary",
+                "detail": "lexical: matched 2/6 query terms in src/stock.py::reserve; coverage=0.33",
+                "ref": null,
+                "rule_id": null
+              },
+              {
+                "code": "bm25_term",
+                "detail": "lexical: term 'stock' bm25=0.510",
+                "ref": null,
+                "rule_id": null
+              },
+              {
+                "code": "bm25_term",
+                "detail": "lexical: term 'reserve' bm25=0.487",
+                "ref": null,
+                "rule_id": null
+              },
+              {
+                "code": "change_kind",
+                "detail": "change_prior: modified_body (behavioural)",
+                "ref": null,
+                "rule_id": null
+              }
+            ],
+            "score": 0.36871,
+            "symbol_id": "python:src/stock.py::reserve#function@a48d0d633b96"
+          },
+          {
+            "by_linker": {
+              "change_prior": 0.95,
+              "lexical": 0.502481
+            },
+            "criterion_id": "C2",
+            "rank": 1,
+            "reasons": [
+              {
+                "code": "bm25_summary",
+                "detail": "lexical: matched 3/7 query terms in src/stock.py::reserve; coverage=0.43",
+                "ref": null,
+                "rule_id": null
+              },
+              {
+                "code": "bm25_term",
+                "detail": "lexical: term 'stock' bm25=0.510",
+                "ref": null,
+                "rule_id": null
+              },
+              {
+                "code": "bm25_term",
+                "detail": "lexical: term 'qty' bm25=0.487",
+                "ref": null,
+                "rule_id": null
+              },
+              {
+                "code": "bm25_term",
+                "detail": "lexical: term 'reserve' bm25=0.487",
+                "ref": null,
+                "rule_id": null
+              },
+              {
+                "code": "change_kind",
+                "detail": "change_prior: modified_body (behavioural)",
+                "ref": null,
+                "rule_id": null
+              }
+            ],
+            "score": 0.391935,
+            "symbol_id": "python:src/stock.py::reserve#function@a48d0d633b96"
+          },
+          {
+            "by_linker": {
+              "change_prior": 0.95,
+              "lexical": 0.432692
+            },
+            "criterion_id": "C3",
+            "rank": 1,
+            "reasons": [
+              {
+                "code": "bm25_summary",
+                "detail": "lexical: matched 2/8 query terms in src/stock.py::reserve; coverage=0.25",
+                "ref": null,
+                "rule_id": null
+              },
+              {
+                "code": "bm25_term",
+                "detail": "lexical: term 'qty' bm25=0.487",
+                "ref": null,
+                "rule_id": null
+              },
+              {
+                "code": "bm25_term",
+                "detail": "lexical: term 'reserve' bm25=0.487",
+                "ref": null,
+                "rule_id": null
+              },
+              {
+                "code": "change_kind",
+                "detail": "change_prior: modified_body (behavioural)",
+                "ref": null,
+                "rule_id": null
+              }
+            ],
+            "score": 0.3375,
+            "symbol_id": "python:src/stock.py::reserve#function@a48d0d633b96"
+          }
+        ],
+        "criterion_test": [],
+        "degraded": [],
+        "head_sha": "67020164931dcd29a548682213dbbfc5ce422df7",
+        "repo_config": {},
+        "repository_id": "da83f3ee-e3c7-530f-b630-9ccc4b3123d5",
+        "symbol_test": [
+          {
+            "depth": null,
+            "kind": "direct_call",
+            "score": 0.9,
+            "symbol_id": "python:src/stock.py::reserve#function@a48d0d633b96",
+            "test_id": "tests/test_stock.py::test_reserve_exact_stock"
+          },
+          {
+            "depth": null,
+            "kind": "direct_call",
+            "score": 0.9,
+            "symbol_id": "python:src/stock.py::reserve#function@a48d0d633b96",
+            "test_id": "tests/test_stock.py::test_reserve_reduces_stock"
+          },
+          {
+            "depth": null,
+            "kind": "direct_call",
+            "score": 0.9,
+            "symbol_id": "python:src/stock.py::reserve#function@a48d0d633b96",
+            "test_id": "tests/test_stock.py::test_reserve_rejects_non_positive"
+          },
+          {
+            "depth": null,
+            "kind": "import_reference",
+            "score": 0.25,
+            "symbol_id": "python:src/stock.py::reserve#function@a48d0d633b96",
+            "test_id": "tests/test_stock.py::test_release_restores"
+          },
+          {
+            "depth": null,
+            "kind": "import_reference",
+            "score": 0.25,
+            "symbol_id": "python:src/stock.py::reserve#function@a48d0d633b96",
+            "test_id": "tests/test_stock.py::test_stock_value"
+          }
+        ],
+        "symbols": [
+          {
+            "change_kind": "modified_body",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": false,
+            "kind": "function",
+            "language": "python",
+            "path": "src/stock.py",
+            "qualified_name": "reserve",
+            "symbol_id": "python:src/stock.py::reserve#function@a48d0d633b96"
+          },
+          {
+            "change_kind": "modified_body",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": true,
+            "kind": "function",
+            "language": "python",
+            "path": "tests/test_stock.py",
+            "qualified_name": "test_reserve_reduces_stock",
+            "symbol_id": "python:tests/test_stock.py::test_reserve_reduces_stock#function@f9065fa73897"
+          },
+          {
+            "change_kind": "modified_body",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": true,
+            "kind": "function",
+            "language": "python",
+            "path": "tests/test_stock.py",
+            "qualified_name": "test_reserve_exact_stock",
+            "symbol_id": "python:tests/test_stock.py::test_reserve_exact_stock#function@f9065fa73897"
+          },
+          {
+            "change_kind": "removed",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": true,
+            "kind": "function",
+            "language": "python",
+            "path": "tests/test_stock.py",
+            "qualified_name": "test_reserve_more_than_stock_raises",
+            "symbol_id": "python:tests/test_stock.py::test_reserve_more_than_stock_raises#function@f9065fa73897"
+          },
+          {
+            "change_kind": "decorator_or_annotation_changed",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": true,
+            "kind": "function",
+            "language": "python",
+            "path": "tests/test_stock.py",
+            "qualified_name": "test_reserve_rejects_non_positive",
+            "symbol_id": "python:tests/test_stock.py::test_reserve_rejects_non_positive#function@f9065fa73897"
+          }
+        ],
+        "tamper": [
+          {
+            "check": "strength_reduced",
+            "confidence": 0.9,
+            "finding_id": "tf_0e4c6939a63e008c",
+            "new_snippet": "reserve(10, 3) is not None",
+            "old_snippet": "reserve(10, 3) == 7",
+            "path": "tests/test_stock.py",
+            "reason": "in `test_reserve_reduces_stock`: `reserve(10, 3) == 7` -> `reserve(10, 3) is not None`: exact check weakened to not_none check",
+            "rule_id": "T004",
+            "severity": "high",
+            "symbol": "test_reserve_reduces_stock",
+            "test_id": "tests/test_stock.py::test_reserve_reduces_stock"
+          },
+          {
+            "check": "self_comparison",
+            "confidence": 0.8,
+            "finding_id": "tf_8ae2ee46580b4be5",
+            "new_snippet": "reserve(5, 5) == reserve(5, 5)",
+            "old_snippet": null,
+            "path": "tests/test_stock.py",
+            "reason": "in `test_reserve_exact_stock`: `reserve(5, 5) == reserve(5, 5)` can never fail: `reserve(5, 5)` is compared with itself",
+            "rule_id": "T005",
+            "severity": "high",
+            "symbol": "test_reserve_exact_stock",
+            "test_id": "tests/test_stock.py::test_reserve_exact_stock"
+          },
+          {
+            "check": "test_deleted",
+            "confidence": 0.85,
+            "finding_id": "tf_aa5f338e13d5081a",
+            "new_snippet": null,
+            "old_snippet": "def test_reserve_more_than_stock_raises():\n    with pytest.raises(OutOfStock):\n        reserve(2, 3)",
+            "path": "tests/test_stock.py",
+            "reason": "test `test_reserve_more_than_stock_raises` was deleted while `reserve` still exist(s)",
+            "rule_id": "T001",
+            "severity": "high",
+            "symbol": "test_reserve_more_than_stock_raises",
+            "test_id": "tests/test_stock.py::test_reserve_more_than_stock_raises"
+          },
+          {
+            "check": "skip",
+            "confidence": 0.95,
+            "finding_id": "tf_abf0afaab9b35fd5",
+            "new_snippet": "@pytest.mark.skip(reason='flaky')",
+            "old_snippet": null,
+            "path": "tests/test_stock.py",
+            "reason": "`@pytest.mark.skip(reason='flaky')` was added to test `test_reserve_rejects_non_positive`; it no longer provides passing evidence",
+            "rule_id": "T002",
+            "severity": "high",
+            "symbol": "test_reserve_rejects_non_positive",
+            "test_id": "tests/test_stock.py::test_reserve_rejects_non_positive"
+          }
+        ],
+        "tamper_unanalyzable": [],
+        "tamper_waived": 0
+      },
+      "status": "criterion_test_pending_vs04"
+    },
+    "gold": {
+      "mode": "gold",
+      "provenance": {
+        "assertions": {
+          "note": "LK-04 (radius_testing.assertions) emits a different record shape (AssertionRecord/TestSummary); this is a hand-built AssertionFeatures per design 3.2/3.6, one per test function at head",
+          "origin": "hand_built",
+          "producer": "scripts/verdict_v2_make_fixtures.py: ast classifier (fixture-ast-v1)"
+        },
+        "changed_test_ids": {
+          "origin": "derived",
+          "producer": "LK-01 symbols that are test functions present at head"
+        },
+        "criteria": {
+          "note": "weight 1.0, lifecycle confirmed",
+          "origin": "derived",
+          "producer": "expected.json criteria[]"
+        },
+        "criterion_symbol": {
+          "note": "score 1.0, rank 1",
+          "origin": "hand_built",
+          "producer": "expected.json links[]"
+        },
+        "criterion_test": {
+          "note": "ADDRESSED_BY weight 1.0, method gold_expected_json",
+          "origin": "hand_built",
+          "producer": "expected.json links[].tests"
+        },
+        "ids": {
+          "note": "uuid5/sha1 of the fixture name; head_sha is a PLACEHOLDER, not a git sha",
+          "origin": "derived",
+          "producer": "scripts/verdict_v2_make_fixtures.py"
+        },
+        "stage_b": {
+          "note": "outcomes copied per scenario",
+          "origin": "hand_built",
+          "producer": "expected.json test_outcomes"
+        },
+        "symbol_test": {
+          "note": "ADDRESSED tests as EXERCISED_BY edges, score 0.9 (l_st), kind gold",
+          "origin": "hand_built",
+          "producer": "expected.json links[].tests"
+        },
+        "symbols": {
+          "note": "base/head snapshots + pr.patch",
+          "origin": "real",
+          "producer": "radius_analysis.symbol_changes.extract_symbol_changes (LK-01)"
+        },
+        "tamper": {
+          "note": "offline StaticPackageRegistry lacking pytimeparse-ultra; default (no registry) result in tamper_variants",
+          "origin": "real",
+          "producer": "radius_analysis.tamper.analyze_tampering (EV-02)"
+        }
+      },
+      "stage_a": {
+        "added_test_ids": [],
+        "agent_signal": false,
+        "agent_signal_by_test": {},
+        "algo_versions": {
+          "assertions": "test-assertions-v1",
+          "assertions_producer": "fixture-ast-v1",
+          "links": "verdict-v2-fixture-gold-1",
+          "symbol_changes": "symbol-changes-v1",
+          "tamper": "tamper-rules-v1"
+        },
+        "analysis_id": "c3da2793-e6b7-5091-9733-bd9d265be346",
+        "assertions": [
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
+                "kind": "value_equality",
+                "line": 21,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": []
+              }
+            ],
+            "called_symbol_refs": [
+              "src/stock.py::release"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 21,
+            "line_start": 20,
+            "literal_terms": [
+              "10",
+              "7",
+              "3"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "release",
+              "restore"
+            ],
+            "path": "tests/test_stock.py",
+            "test_id": "tests/test_stock.py::test_release_restores"
+          },
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": false,
+                "dead": false,
+                "in_loop": false,
+                "kind": "tautology",
+                "line": 11,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": [
+                  "python:src/stock.py::reserve#function@a48d0d633b96"
+                ]
+              }
+            ],
+            "called_symbol_refs": [
+              "src/stock.py::reserve"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 11,
+            "line_start": 10,
+            "literal_terms": [
+              "5"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "reserve",
+              "exact",
+              "stock"
+            ],
+            "path": "tests/test_stock.py",
+            "test_id": "tests/test_stock.py::test_reserve_exact_stock"
+          },
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
+                "kind": "none_check",
+                "line": 7,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": [
+                  "python:src/stock.py::reserve#function@a48d0d633b96"
+                ]
+              }
+            ],
+            "called_symbol_refs": [
+              "src/stock.py::reserve"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 7,
+            "line_start": 6,
+            "literal_terms": [
+              "10",
+              "3"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "reserve",
+              "reduce",
+              "stock"
+            ],
+            "path": "tests/test_stock.py",
+            "test_id": "tests/test_stock.py::test_reserve_reduces_stock"
+          },
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
+                "kind": "exception_type",
+                "line": 16,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": [
+                  "python:src/stock.py::reserve#function@a48d0d633b96"
+                ]
+              }
+            ],
+            "called_symbol_refs": [
+              "src/stock.py::reserve"
+            ],
+            "expects_exception": true,
+            "has_skip_marker": true,
+            "is_parametrized": false,
+            "line_end": 17,
+            "line_start": 14,
+            "literal_terms": [
+              "flaky",
+              "10",
+              "0"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "reserve",
+              "reject",
+              "non",
+              "positive"
+            ],
+            "path": "tests/test_stock.py",
+            "test_id": "tests/test_stock.py::test_reserve_rejects_non_positive"
+          },
+          {
+            "algo_version": "test-assertions-v1",
+            "assertions": [
+              {
+                "circular": false,
+                "compares_computed_value": true,
+                "dead": false,
+                "in_loop": false,
+                "kind": "value_equality",
+                "line": 25,
+                "mock_only": false,
+                "note": null,
+                "property_based": false,
+                "swallowed": false,
+                "target_symbol_ids": []
+              }
+            ],
+            "called_symbol_refs": [
+              "src/stock.py::stock_value"
+            ],
+            "expects_exception": false,
+            "has_skip_marker": false,
+            "is_parametrized": false,
+            "line_end": 25,
+            "line_start": 24,
+            "literal_terms": [
+              "7.5",
+              "3",
+              "2.5"
+            ],
+            "n_assertions": 1,
+            "n_param_cases": null,
+            "name_terms": [
+              "stock",
+              "value"
+            ],
+            "path": "tests/test_stock.py",
+            "test_id": "tests/test_stock.py::test_stock_value"
+          }
+        ],
+        "changed_test_ids": [
+          "tests/test_stock.py::test_reserve_exact_stock",
+          "tests/test_stock.py::test_reserve_reduces_stock",
+          "tests/test_stock.py::test_reserve_rejects_non_positive"
+        ],
+        "changeset_ref": "symbol-changes-v1:2cbf63cd9810a1d3",
+        "criteria": [
+          {
+            "criterion_id": "C1",
+            "hints_paths": [],
+            "hints_provenance": "author_pr_body",
+            "hints_tests": [],
+            "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
+            "testability": "behavioral_testable",
+            "text": "reserve still returns the remaining stock for valid input",
+            "weight": 1.0
+          },
+          {
+            "criterion_id": "C2",
+            "hints_paths": [],
+            "hints_provenance": "author_pr_body",
+            "hints_tests": [],
+            "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
+            "testability": "behavioral_testable",
+            "text": "reserve still raises OutOfStock when qty exceeds stock",
+            "weight": 1.0
+          },
+          {
+            "criterion_id": "C3",
+            "hints_paths": [],
+            "hints_provenance": "author_pr_body",
+            "hints_tests": [],
+            "lifecycle": "confirmed",
+            "provenance": "author_pr_body",
+            "testability": "behavioral_testable",
+            "text": "reserve still raises ValueError for non-positive qty",
+            "weight": 1.0
+          }
+        ],
+        "criterion_symbol": [
+          {
+            "by_linker": {
+              "gold": 1.0
+            },
+            "criterion_id": "C1",
+            "rank": 1,
+            "reasons": [
+              {
+                "code": "gold_label",
+                "detail": "expected.json links[]",
+                "ref": "src/stock.py::reserve",
+                "rule_id": null
+              }
+            ],
+            "score": 1.0,
+            "symbol_id": "python:src/stock.py::reserve#function@a48d0d633b96"
+          },
+          {
+            "by_linker": {
+              "gold": 1.0
+            },
+            "criterion_id": "C2",
+            "rank": 1,
+            "reasons": [
+              {
+                "code": "gold_label",
+                "detail": "expected.json links[]",
+                "ref": "src/stock.py::reserve",
+                "rule_id": null
+              }
+            ],
+            "score": 1.0,
+            "symbol_id": "python:src/stock.py::reserve#function@a48d0d633b96"
+          },
+          {
+            "by_linker": {
+              "gold": 1.0
+            },
+            "criterion_id": "C3",
+            "rank": 1,
+            "reasons": [
+              {
+                "code": "gold_label",
+                "detail": "expected.json links[]",
+                "ref": "src/stock.py::reserve",
+                "rule_id": null
+              }
+            ],
+            "score": 1.0,
+            "symbol_id": "python:src/stock.py::reserve#function@a48d0d633b96"
+          }
+        ],
+        "criterion_test": [
+          {
+            "bm25_raw": null,
+            "criterion_id": "C1",
+            "method": "gold_expected_json",
+            "provenance": "",
+            "test_id": "tests/test_stock.py::test_reserve_exact_stock",
+            "weight": 1.0
+          },
+          {
+            "bm25_raw": null,
+            "criterion_id": "C1",
+            "method": "gold_expected_json",
+            "provenance": "",
+            "test_id": "tests/test_stock.py::test_reserve_reduces_stock",
+            "weight": 1.0
+          },
+          {
+            "bm25_raw": null,
+            "criterion_id": "C2",
+            "method": "gold_expected_json",
+            "provenance": "",
+            "test_id": "tests/test_stock.py::test_reserve_more_than_stock_raises",
+            "weight": 1.0
+          },
+          {
+            "bm25_raw": null,
+            "criterion_id": "C3",
+            "method": "gold_expected_json",
+            "provenance": "",
+            "test_id": "tests/test_stock.py::test_reserve_rejects_non_positive",
+            "weight": 1.0
+          }
+        ],
+        "degraded": [],
+        "head_sha": "67020164931dcd29a548682213dbbfc5ce422df7",
+        "repo_config": {},
+        "repository_id": "da83f3ee-e3c7-530f-b630-9ccc4b3123d5",
+        "symbol_test": [
+          {
+            "depth": null,
+            "kind": "gold",
+            "score": 0.9,
+            "symbol_id": "python:src/stock.py::reserve#function@a48d0d633b96",
+            "test_id": "tests/test_stock.py::test_reserve_exact_stock"
+          },
+          {
+            "depth": null,
+            "kind": "gold",
+            "score": 0.9,
+            "symbol_id": "python:src/stock.py::reserve#function@a48d0d633b96",
+            "test_id": "tests/test_stock.py::test_reserve_more_than_stock_raises"
+          },
+          {
+            "depth": null,
+            "kind": "gold",
+            "score": 0.9,
+            "symbol_id": "python:src/stock.py::reserve#function@a48d0d633b96",
+            "test_id": "tests/test_stock.py::test_reserve_reduces_stock"
+          },
+          {
+            "depth": null,
+            "kind": "gold",
+            "score": 0.9,
+            "symbol_id": "python:src/stock.py::reserve#function@a48d0d633b96",
+            "test_id": "tests/test_stock.py::test_reserve_rejects_non_positive"
+          }
+        ],
+        "symbols": [
+          {
+            "change_kind": "modified_body",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": false,
+            "kind": "function",
+            "language": "python",
+            "path": "src/stock.py",
+            "qualified_name": "reserve",
+            "symbol_id": "python:src/stock.py::reserve#function@a48d0d633b96"
+          },
+          {
+            "change_kind": "modified_body",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": true,
+            "kind": "function",
+            "language": "python",
+            "path": "tests/test_stock.py",
+            "qualified_name": "test_reserve_reduces_stock",
+            "symbol_id": "python:tests/test_stock.py::test_reserve_reduces_stock#function@f9065fa73897"
+          },
+          {
+            "change_kind": "modified_body",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": true,
+            "kind": "function",
+            "language": "python",
+            "path": "tests/test_stock.py",
+            "qualified_name": "test_reserve_exact_stock",
+            "symbol_id": "python:tests/test_stock.py::test_reserve_exact_stock#function@f9065fa73897"
+          },
+          {
+            "change_kind": "removed",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": true,
+            "kind": "function",
+            "language": "python",
+            "path": "tests/test_stock.py",
+            "qualified_name": "test_reserve_more_than_stock_raises",
+            "symbol_id": "python:tests/test_stock.py::test_reserve_more_than_stock_raises#function@f9065fa73897"
+          },
+          {
+            "change_kind": "decorator_or_annotation_changed",
+            "is_behavioral": true,
+            "is_pseudo": false,
+            "is_test": true,
+            "kind": "function",
+            "language": "python",
+            "path": "tests/test_stock.py",
+            "qualified_name": "test_reserve_rejects_non_positive",
+            "symbol_id": "python:tests/test_stock.py::test_reserve_rejects_non_positive#function@f9065fa73897"
+          }
+        ],
+        "tamper": [
+          {
+            "check": "strength_reduced",
+            "confidence": 0.9,
+            "finding_id": "tf_0e4c6939a63e008c",
+            "new_snippet": "reserve(10, 3) is not None",
+            "old_snippet": "reserve(10, 3) == 7",
+            "path": "tests/test_stock.py",
+            "reason": "in `test_reserve_reduces_stock`: `reserve(10, 3) == 7` -> `reserve(10, 3) is not None`: exact check weakened to not_none check",
+            "rule_id": "T004",
+            "severity": "high",
+            "symbol": "test_reserve_reduces_stock",
+            "test_id": "tests/test_stock.py::test_reserve_reduces_stock"
+          },
+          {
+            "check": "self_comparison",
+            "confidence": 0.8,
+            "finding_id": "tf_8ae2ee46580b4be5",
+            "new_snippet": "reserve(5, 5) == reserve(5, 5)",
+            "old_snippet": null,
+            "path": "tests/test_stock.py",
+            "reason": "in `test_reserve_exact_stock`: `reserve(5, 5) == reserve(5, 5)` can never fail: `reserve(5, 5)` is compared with itself",
+            "rule_id": "T005",
+            "severity": "high",
+            "symbol": "test_reserve_exact_stock",
+            "test_id": "tests/test_stock.py::test_reserve_exact_stock"
+          },
+          {
+            "check": "test_deleted",
+            "confidence": 0.85,
+            "finding_id": "tf_aa5f338e13d5081a",
+            "new_snippet": null,
+            "old_snippet": "def test_reserve_more_than_stock_raises():\n    with pytest.raises(OutOfStock):\n        reserve(2, 3)",
+            "path": "tests/test_stock.py",
+            "reason": "test `test_reserve_more_than_stock_raises` was deleted while `reserve` still exist(s)",
+            "rule_id": "T001",
+            "severity": "high",
+            "symbol": "test_reserve_more_than_stock_raises",
+            "test_id": "tests/test_stock.py::test_reserve_more_than_stock_raises"
+          },
+          {
+            "check": "skip",
+            "confidence": 0.95,
+            "finding_id": "tf_abf0afaab9b35fd5",
+            "new_snippet": "@pytest.mark.skip(reason='flaky')",
+            "old_snippet": null,
+            "path": "tests/test_stock.py",
+            "reason": "`@pytest.mark.skip(reason='flaky')` was added to test `test_reserve_rejects_non_positive`; it no longer provides passing evidence",
+            "rule_id": "T002",
+            "severity": "high",
+            "symbol": "test_reserve_rejects_non_positive",
+            "test_id": "tests/test_stock.py::test_reserve_rejects_non_positive"
+          }
+        ],
+        "tamper_unanalyzable": [],
+        "tamper_waived": 0
+      },
+      "status": "complete"
+    }
+  },
+  "schema": "verdict-v2-fixture-inputs-1",
+  "stage_b": {
+    "base": {
+      "cases": [
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_stock",
+          "raw_file": "tests/test_stock.py",
+          "raw_name": "test_release_restores",
+          "test_id": "tests/test_stock.py::test_release_restores"
+        },
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_stock",
+          "raw_file": "tests/test_stock.py",
+          "raw_name": "test_reserve_exact_stock",
+          "test_id": "tests/test_stock.py::test_reserve_exact_stock"
+        },
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_stock",
+          "raw_file": "tests/test_stock.py",
+          "raw_name": "test_reserve_more_than_stock_raises",
+          "test_id": "tests/test_stock.py::test_reserve_more_than_stock_raises"
+        },
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_stock",
+          "raw_file": "tests/test_stock.py",
+          "raw_name": "test_reserve_reduces_stock",
+          "test_id": "tests/test_stock.py::test_reserve_reduces_stock"
+        },
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_stock",
+          "raw_file": "tests/test_stock.py",
+          "raw_name": "test_reserve_rejects_non_positive",
+          "test_id": "tests/test_stock.py::test_reserve_rejects_non_positive"
+        },
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_stock",
+          "raw_file": "tests/test_stock.py",
+          "raw_name": "test_stock_value",
+          "test_id": "tests/test_stock.py::test_stock_value"
+        }
+      ],
+      "ci_failed_cases": 0,
+      "flaky_scores": {},
+      "flaky_test_ids": [],
+      "results_received": true,
+      "uploads": 1
+    },
+    "head": {
+      "cases": [
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_stock",
+          "raw_file": "tests/test_stock.py",
+          "raw_name": "test_release_restores",
+          "test_id": "tests/test_stock.py::test_release_restores"
+        },
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_stock",
+          "raw_file": "tests/test_stock.py",
+          "raw_name": "test_reserve_exact_stock",
+          "test_id": "tests/test_stock.py::test_reserve_exact_stock"
+        },
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_stock",
+          "raw_file": "tests/test_stock.py",
+          "raw_name": "test_reserve_reduces_stock",
+          "test_id": "tests/test_stock.py::test_reserve_reduces_stock"
+        },
+        {
+          "outcome": "skipped",
+          "raw_classname": "tests.test_stock",
+          "raw_file": "tests/test_stock.py",
+          "raw_name": "test_reserve_rejects_non_positive",
+          "test_id": "tests/test_stock.py::test_reserve_rejects_non_positive"
+        },
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_stock",
+          "raw_file": "tests/test_stock.py",
+          "raw_name": "test_stock_value",
+          "test_id": "tests/test_stock.py::test_stock_value"
+        }
+      ],
+      "ci_failed_cases": 0,
+      "flaky_scores": {},
+      "flaky_test_ids": [],
+      "results_received": true,
+      "uploads": 1
+    },
+    "head_with_probes": {
+      "cases": [
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_stock",
+          "raw_file": "tests/test_stock.py",
+          "raw_name": "test_release_restores",
+          "test_id": "tests/test_stock.py::test_release_restores"
+        },
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_stock",
+          "raw_file": "tests/test_stock.py",
+          "raw_name": "test_reserve_exact_stock",
+          "test_id": "tests/test_stock.py::test_reserve_exact_stock"
+        },
+        {
+          "outcome": "failed",
+          "raw_classname": "tests.test_stock",
+          "raw_file": "tests/test_stock.py",
+          "raw_name": "test_reserve_more_than_stock_raises",
+          "test_id": "tests/test_stock.py::test_reserve_more_than_stock_raises"
+        },
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_stock",
+          "raw_file": "tests/test_stock.py",
+          "raw_name": "test_reserve_reduces_stock",
+          "test_id": "tests/test_stock.py::test_reserve_reduces_stock"
+        },
+        {
+          "outcome": "failed",
+          "raw_classname": "tests.test_stock",
+          "raw_file": "tests/test_stock.py",
+          "raw_name": "test_reserve_rejects_non_positive",
+          "test_id": "tests/test_stock.py::test_reserve_rejects_non_positive"
+        },
+        {
+          "outcome": "passed",
+          "raw_classname": "tests.test_stock",
+          "raw_file": "tests/test_stock.py",
+          "raw_name": "test_stock_value",
+          "test_id": "tests/test_stock.py::test_stock_value"
+        }
+      ],
+      "ci_failed_cases": 2,
+      "flaky_scores": {},
+      "flaky_test_ids": [],
+      "results_received": true,
+      "uploads": 1
+    }
+  },
+  "tamper": {
+    "catalog_version": "tamper-rules-v1",
+    "findings": [
+      {
+        "check": "strength_reduced",
+        "confidence": 0.9,
+        "finding_id": "tf_0e4c6939a63e008c",
+        "new_snippet": "reserve(10, 3) is not None",
+        "old_snippet": "reserve(10, 3) == 7",
+        "path": "tests/test_stock.py",
+        "reason": "in `test_reserve_reduces_stock`: `reserve(10, 3) == 7` -> `reserve(10, 3) is not None`: exact check weakened to not_none check",
+        "rule_id": "T004",
+        "severity": "high",
+        "symbol": "test_reserve_reduces_stock",
+        "test_id": "tests/test_stock.py::test_reserve_reduces_stock"
+      },
+      {
+        "check": "self_comparison",
+        "confidence": 0.8,
+        "finding_id": "tf_8ae2ee46580b4be5",
+        "new_snippet": "reserve(5, 5) == reserve(5, 5)",
+        "old_snippet": null,
+        "path": "tests/test_stock.py",
+        "reason": "in `test_reserve_exact_stock`: `reserve(5, 5) == reserve(5, 5)` can never fail: `reserve(5, 5)` is compared with itself",
+        "rule_id": "T005",
+        "severity": "high",
+        "symbol": "test_reserve_exact_stock",
+        "test_id": "tests/test_stock.py::test_reserve_exact_stock"
+      },
+      {
+        "check": "test_deleted",
+        "confidence": 0.85,
+        "finding_id": "tf_aa5f338e13d5081a",
+        "new_snippet": null,
+        "old_snippet": "def test_reserve_more_than_stock_raises():\n    with pytest.raises(OutOfStock):\n        reserve(2, 3)",
+        "path": "tests/test_stock.py",
+        "reason": "test `test_reserve_more_than_stock_raises` was deleted while `reserve` still exist(s)",
+        "rule_id": "T001",
+        "severity": "high",
+        "symbol": "test_reserve_more_than_stock_raises",
+        "test_id": "tests/test_stock.py::test_reserve_more_than_stock_raises"
+      },
+      {
+        "check": "skip",
+        "confidence": 0.95,
+        "finding_id": "tf_abf0afaab9b35fd5",
+        "new_snippet": "@pytest.mark.skip(reason='flaky')",
+        "old_snippet": null,
+        "path": "tests/test_stock.py",
+        "reason": "`@pytest.mark.skip(reason='flaky')` was added to test `test_reserve_rejects_non_positive`; it no longer provides passing evidence",
+        "rule_id": "T002",
+        "severity": "high",
+        "symbol": "test_reserve_rejects_non_positive",
+        "test_id": "tests/test_stock.py::test_reserve_rejects_non_positive"
+      }
+    ],
+    "rule_errors": [],
+    "unanalyzable": [],
+    "waived": 0
+  },
+  "tamper_variants": {
+    "no_registry": {
+      "catalog_version": "tamper-rules-v1",
+      "findings": [
+        {
+          "check": "strength_reduced",
+          "confidence": 0.9,
+          "finding_id": "tf_0e4c6939a63e008c",
+          "new_snippet": "reserve(10, 3) is not None",
+          "old_snippet": "reserve(10, 3) == 7",
+          "path": "tests/test_stock.py",
+          "reason": "in `test_reserve_reduces_stock`: `reserve(10, 3) == 7` -> `reserve(10, 3) is not None`: exact check weakened to not_none check",
+          "rule_id": "T004",
+          "severity": "high",
+          "symbol": "test_reserve_reduces_stock",
+          "test_id": "tests/test_stock.py::test_reserve_reduces_stock"
+        },
+        {
+          "check": "self_comparison",
+          "confidence": 0.8,
+          "finding_id": "tf_8ae2ee46580b4be5",
+          "new_snippet": "reserve(5, 5) == reserve(5, 5)",
+          "old_snippet": null,
+          "path": "tests/test_stock.py",
+          "reason": "in `test_reserve_exact_stock`: `reserve(5, 5) == reserve(5, 5)` can never fail: `reserve(5, 5)` is compared with itself",
+          "rule_id": "T005",
+          "severity": "high",
+          "symbol": "test_reserve_exact_stock",
+          "test_id": "tests/test_stock.py::test_reserve_exact_stock"
+        },
+        {
+          "check": "test_deleted",
+          "confidence": 0.85,
+          "finding_id": "tf_aa5f338e13d5081a",
+          "new_snippet": null,
+          "old_snippet": "def test_reserve_more_than_stock_raises():\n    with pytest.raises(OutOfStock):\n        reserve(2, 3)",
+          "path": "tests/test_stock.py",
+          "reason": "test `test_reserve_more_than_stock_raises` was deleted while `reserve` still exist(s)",
+          "rule_id": "T001",
+          "severity": "high",
+          "symbol": "test_reserve_more_than_stock_raises",
+          "test_id": "tests/test_stock.py::test_reserve_more_than_stock_raises"
+        },
+        {
+          "check": "skip",
+          "confidence": 0.95,
+          "finding_id": "tf_abf0afaab9b35fd5",
+          "new_snippet": "@pytest.mark.skip(reason='flaky')",
+          "old_snippet": null,
+          "path": "tests/test_stock.py",
+          "reason": "`@pytest.mark.skip(reason='flaky')` was added to test `test_reserve_rejects_non_positive`; it no longer provides passing evidence",
+          "rule_id": "T002",
+          "severity": "high",
+          "symbol": "test_reserve_rejects_non_positive",
+          "test_id": "tests/test_stock.py::test_reserve_rejects_non_positive"
+        }
+      ],
+      "rule_errors": [],
+      "unanalyzable": [],
+      "waived": 0
+    }
+  }
+}

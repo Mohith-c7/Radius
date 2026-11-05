@@ -1,16 +1,19 @@
 """SQLAlchemy database setup for Radius application services."""
+from radius_shared.database.session import normalize_database_url
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
-
-from radius_shared.database.session import normalize_database_url
 
 from .config import get_settings
 
 settings = get_settings()
-database_url = normalize_database_url(settings.database_url)
+# C-14: the same URL normalisation as the domain engine, the worker and Alembic
+# (``postgres://`` -> ``postgresql+psycopg://``), and connection health checks so
+# a database restart does not leave sign-in returning 500s until the pool recycles.
+DATABASE_URL = normalize_database_url(settings.database_url)
 engine = create_engine(
-    database_url,
-    connect_args={"check_same_thread": False} if database_url.startswith("sqlite") else {},
+    DATABASE_URL,
+    pool_pre_ping=True,
+    connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {},
 )
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 

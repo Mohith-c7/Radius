@@ -1,0 +1,1 @@
+New `packages/linking` ranks the changed symbols that plausibly implement each criterion, with a score and reasons per link (explicit path hints, BM25, identifier matching, structural proximity). An optional LLM re-ranker exists but is off by default (`RADIUS_LLM_LINK_RERANK_ENABLED`) and sends only the criterion text and symbol names and paths, never code.

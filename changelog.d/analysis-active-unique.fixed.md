@@ -1,0 +1,1 @@
+A partial unique index allows at most one pending or running analysis per pull request head commit; concurrent triggers get the existing analysis. Migration `20261103_0018` cancels (never deletes) existing duplicate active analyses first.

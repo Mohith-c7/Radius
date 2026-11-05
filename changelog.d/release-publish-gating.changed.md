@@ -1,0 +1,1 @@
+The release publish job needs the GitHub environment `release`, refuses a tag that is not on `main`, and pushes the image by digest, scans that digest, then tags it and signs the same digest. Publishing stays off unless `RADIUS_RELEASE_PUBLISH=true`.

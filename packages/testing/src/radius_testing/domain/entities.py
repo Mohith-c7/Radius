@@ -120,6 +120,10 @@ class TestRunResult:
     duration_ms: int
     coverage_percent: float | None = None
     output: str = ""
+    flaky: int = 0
+    """Cases that failed then passed on rerun (F-11). Not in ``passed`` or ``failed``."""
+    flaky_tests: tuple[str, ...] = ()
+    """Identities (``file::name``) of the flaky cases, sorted."""
 
 
 class CaseOutcome:

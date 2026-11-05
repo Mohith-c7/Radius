@@ -1,0 +1,62 @@
+{
+  "pr": {
+    "agent_name": null,
+    "author_login_sha256": "f6bd0410527d6ea9a1e60637a73f97679f49abea307385de587080d18dd63d03",
+    "author_type": "human",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "language": "python",
+    "license": "SYNTHETIC",
+    "number": 100,
+    "repo": "synth-org/repo0",
+    "role": "test",
+    "size": {
+      "bucket": "S"
+    },
+    "stratum": {
+      "author_type": "human",
+      "richness": "structured_template"
+    },
+    "url": "https://example.invalid/synth-org__repo0__pr100"
+  },
+  "pr_id": "synth-org__repo0__pr100",
+  "sanitizer": "canonicalize_text",
+  "schema_version": "radius-intent-gold-sources-v1",
+  "sources": [
+    {
+      "fetched_at": "2026-01-01T00:00:00+00:00",
+      "kind": "pr_title",
+      "length": 23,
+      "raw_text_sha256": "7f8f9b4193cc814fb1dfb209406251b006206a8661261eabd1c9cb97cd6ec034",
+      "source_id": "pr-title",
+      "suspicious_content_removed": false,
+      "text": "Add synthetic feature 0",
+      "text_sha256": "7f8f9b4193cc814fb1dfb209406251b006206a8661261eabd1c9cb97cd6ec034",
+      "truncated": false
+    },
+    {
+      "fetched_at": "2026-01-01T00:00:00+00:00",
+      "kind": "pr_body",
+      "length": 269,
+      "raw_text_sha256": "4df86d72af79e46f03d10ed7ef41f60de26c91f0596a60512524b893f7508fca",
+      "source_id": "pr-body",
+      "suspicious_content_removed": false,
+      "text": "## Summary\nSynthetic change 0. Not a real pull request.\n\n## Acceptance Criteria\n- [ ] The p95 latency of search stays under 200 ms\n- [ ] Duplicate emails are rejected with status 422\n- [ ] Legal approves the new wording\n- [ ] The partner team confirms the rollout date\n",
+      "text_sha256": "4df86d72af79e46f03d10ed7ef41f60de26c91f0596a60512524b893f7508fca",
+      "truncated": false
+    },
+    {
+      "fetched_at": "2026-01-01T00:00:00+00:00",
+      "kind": "commit_message",
+      "length": 53,
+      "raw_text_sha256": "43cb216234aa8c79542c51e6553a100b35402bea8a375351dd89647529539d2a",
+      "source_id": "commit-0000000000a1",
+      "suspicious_content_removed": false,
+      "text": "synthetic commit for change 0\n\nNo behavior described.",
+      "text_sha256": "43cb216234aa8c79542c51e6553a100b35402bea8a375351dd89647529539d2a",
+      "truncated": false
+    }
+  ],
+  "sources_digest": "f70c194e757a4b1c98631a9299859e14cd10db968cf79963f04e99fc62e8ecf8",
+  "synthetic": true,
+  "text_redistributable": true
+}

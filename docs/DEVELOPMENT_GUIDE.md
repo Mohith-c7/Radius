@@ -16,15 +16,63 @@ It establishes the project structure, coding workflow, branching strategy, quali
 
 ---
 
-# Running Locally
+# Quickstart
 
-Run each command from the repository root, in its own terminal.
+Goal: from a fresh clone to a running dashboard, API and worker in under 15 minutes. The first `make dev` is dominated by the Docker image build (about 10 minutes on a cold cache in the reference run; later starts take under a minute).
+
+## Prerequisites
+
+| Tool | Version | Used for |
+|---|---|---|
+| Docker (Desktop on Windows/macOS) with Compose v2 | tested with Docker 29.7 / Compose 5.3 | the one-command stack |
+| [uv](https://docs.astral.sh/uv/) | tested with 0.12 | Python 3.12 environment and tests |
+| Node.js | CI uses 22; tested with 24 | dashboard and the pnpm/turbo workspace |
+| pnpm | 9.15.0 (pinned in `package.json`) | via `corepack`, see Windows notes |
+| GNU make | optional | `make` targets; Windows users can use `scripts/dev.ps1` instead |
+
+## One command
+
+```bash
+git clone https://github.com/Mohith-c7/Radius.git && cd Radius
+make dev            # Linux, macOS, WSL, Git Bash
+```
+
+```powershell
+.\scripts\dev.ps1 dev     # Windows PowerShell, no make required
+```
+
+`dev` runs `scripts/gen_dev_env.py` to create `.env` from `.env.example` with **random** local secrets (`SESSION_SECRET`, a dev `RADIUS_API_KEY`, the dev organization id; it never overwrites an existing file), then layers `docker-compose.dev.yml` over `docker-compose.yml` (`docker compose -f docker-compose.yml -f docker-compose.dev.yml`), builds the images and starts Postgres, the migrations job, the API, the worker and the dashboard, waiting until they are healthy.
+
+The dev override is what makes the quickstart work: it sets `RADIUS_ENV=development` for the API, allows the `http://localhost:3000` origin (the browser calls the API directly for sign-in), auto-verifies new accounts, sets `EMAIL_DELIVERY_MODE=log` (the verification link is printed in `make logs`, no mail server needed) and registers the random dev key as `API_KEYS` for the dev organization, which the dashboard proxy sends server-side. Plain `docker compose up` stays production-like (`RADIUS_ENV=production`) and stops with a clear message if `SESSION_SECRET` is unset. Never expose the dev profile to a network. If you have an older `.env`, delete it and run `make env`. **Unverified:** a full-stack run of this flow (image build, browser sign-up, dashboard data) has not been performed; the Compose files are checked with `docker compose config` and `scripts/check_compose.py`.
+
+| What | URL |
+|---|---|
+| Dashboard | http://localhost:3000 |
+| API docs | http://localhost:8000/docs |
+| Health | http://localhost:8000/api/v1/health |
+
+Stop with `make down` (or `.\scripts\dev.ps1 down`). `pnpm dev:stack`, `pnpm dev:down` and `pnpm dev:logs` do the same through pnpm. Every target is listed by `make help` or `.\scripts\dev.ps1 help`.
+
+## Develop with hot reload (no Docker for the app)
+
+```bash
+make setup          # uv sync --frozen --extra dev, corepack enable, pnpm install
+make dev-local      # API + worker + dashboard natively, in-memory storage
+make test           # python -m pytest
+make lint           # ruff
+```
+
+`dev-local` runs `pnpm dev` (turbo) with the project `.venv` first on `PATH`, so the Python services use it. The in-memory backend needs no database. Run `make setup` first.
+
+## Run against your own Postgres (three terminals, no Docker)
+
+Use this when `DATABASE_URL` in `.env` points at an external PostgreSQL (Neon, Aiven, a server) and `STORAGE_BACKEND=sql`. Apply migrations once with `alembic upgrade head` from the repository root (it reads `DATABASE_URL` from `.env`). Start each block from the repository root, in its own terminal; replace `.venv` with your own virtualenv if you use one.
 
 **Terminal 1: API** (http://localhost:8000)
 
 ```bash
-source /home/nithin/venv/bin/activate
-cd /home/nithin/Radius/apps/api
+source .venv/bin/activate
+cd apps/api
 export PYTHONPATH=src:../worker/src:$(ls -d ../../packages/*/src | paste -sd:)
 uvicorn radius_api.main:app --reload --app-dir src --port 8000
 ```
@@ -32,18 +80,73 @@ uvicorn radius_api.main:app --reload --app-dir src --port 8000
 **Terminal 2: Dashboard** (http://localhost:3000)
 
 ```bash
-cd /home/nithin/Radius/apps/dashboard
+cd apps/dashboard
 pnpm dev
 ```
 
 **Terminal 3: Worker** (processes queued analyses)
 
 ```bash
-source /home/nithin/venv/bin/activate
-cd /home/nithin/Radius/apps/worker
+source .venv/bin/activate
+cd apps/worker
 export PYTHONPATH=src:../api/src:$(ls -d ../../packages/*/src | paste -sd:)
 python -m radius_worker
 ```
+
+## Compose profiles
+
+| Profile | Services | Notes |
+|---|---|---|
+| core (default) | `postgres`, `migrations`, `api`, `worker`, `dashboard` | Carries no `profiles:` key so the documented `docker compose up -d --build` still works. `docker-compose.yml` alone is production-like; `make dev` adds `docker-compose.dev.yml`. |
+| `sandbox` | `sandbox-image` | One-shot build of the image used when `WORKER_TEST_EXECUTION_MODE=sandbox`. The worker starts per-command containers itself and needs a container runtime, so run the worker natively (`make dev-local`) for sandbox mode. See `docs/security/EXECUTION_ISOLATION.md`. |
+| `observability` | `jaeger`, `prometheus` | Local tracing and metrics backends. Build api/worker with `RADIUS_EXTRAS=[observability]` to emit data. See `docs/OBSERVABILITY.md`. |
+
+```bash
+make sandbox          # docker compose --profile sandbox up --build sandbox-image
+make observability    # docker compose --profile observability up jaeger prometheus
+```
+
+## Demo data (opt-in)
+
+Nothing is seeded by default. Demo data is illustrative: hand-written fixtures for two open-source targets plus a demo login (`demo@radius.dev`) with a publicly documented password. It is **not real analysis output**, is ignored when `RADIUS_ENV=production`, and must only be used on disposable local databases.
+
+```bash
+make dev-local-demo   # in-memory API, seeded at start-up
+make seed-demo        # into the Docker Postgres from `make dev` (STORAGE_BACKEND=sql)
+```
+
+`make seed-demo` runs `scripts/seed_demo.py --yes`, which prints a "DEMO DATA" banner and refuses to run without `--yes` or with `RADIUS_ENV=production`. Neither Compose profile seeds on its own (the dev profile does not set `RADIUS_SEED_DEMO_DATA`); the script writes into the same Postgres database from your host (the database port is published on `127.0.0.1`), into the dev organization `00000000-0000-4000-8000-000000000001`, which is the organization the dev dashboard loads.
+
+## End-to-end smoke test
+
+`scripts/smoke_e2e.py` runs the real services together against PostgreSQL, with no external network and no real GitHub. It needs only a running Postgres (about 15 s once dependencies are installed):
+
+```bash
+docker compose up -d postgres
+DATABASE_URL=postgresql+psycopg://radius:radius@localhost:5432/radius python scripts/smoke_e2e.py
+# or through pytest (skipped unless RADIUS_SMOKE=1 and a PostgreSQL DATABASE_URL):
+RADIUS_SMOKE=1 DATABASE_URL=postgresql+psycopg://radius:radius@localhost:5432/radius python -m pytest tests/test_smoke_e2e.py
+```
+
+It creates a throw-away database (`radius_smoke_<random>`) beside the one in `DATABASE_URL`, drops it at the end, and generates the webhook secret, API keys, key pepper and GitHub App RSA key at run time. Set `SMOKE_DEBUG=1` to print the final verdict payload.
+
+What it proves, on the `01_correct_strong_tests` fixture in gold mode with `RADIUS_FEATURE_VERDICT_V2=on`:
+
+- `alembic upgrade head` builds the schema on PostgreSQL; `/health` and `/ready` are healthy; secure defaults hold (no key, wrong key, other organization, wrong scope are refused with 403); authenticated responses carry `RateLimit-*` headers; a managed API key is created through the admin API and used.
+- A signed `pull_request` webhook is accepted (a bad or missing signature is rejected; a replayed delivery is idempotent) and creates an analysis and a queue job.
+- The real worker loop (`run_loop`) claims the job, clones the repository with the real `LocalGitRepositoryClient`, ingests intent (`.radius/intent.yml` hints, identical on the base ref so they count as `base_spec`), runs the v1 analysis and Verdict v2 Stage A/B, and publishes through the real `GitHubAppClient` (RS256 JWT verified by the fake).
+- `GET /analyses/{id}/verdict-v2` returns the expected verdict (`insufficient_evidence` before CI results), an ETag and 304; the Check Run and the single PR comment come from the renderer and carry the alpha disclaimer and the v2 marker.
+- Uploading a JUnit report (wrong commit 409, malformed 422, read-only key 403) triggers the outbox: the worker recomputes Stage B and updates the same comment and Check Run in place (`verified`, revision 2); an identical replay changes nothing; a later failing test removes `verified`.
+
+What it does **not** prove: anything about real GitHub (the REST API is an in-memory fake; permissions, rate limits, webhook delivery, App installation and token behaviour are unverified until the live validation in `docs/github-app-validation/`), a browser or the Next.js dashboard (the dashboard is built and tested by the `Validate` job in `ci.yml`), Docker images or Compose wiring (`scripts/check_compose.py` and `container-scan.yml` cover those statically), the test sandbox (`WORKER_EXECUTE_TESTS` stays off; CI results are uploaded), multi-process deployment (API and worker share one process here, though each uses its own database sessions), or other fixtures and languages.
+
+## Windows notes
+
+- **pnpm via corepack.** `package.json` pins `pnpm@9.15.0`. Run `corepack enable` once. If Node is installed under `C:\Program Files` this fails with `EPERM: operation not permitted, open 'C:\Program Files\nodejs\pnpm'` unless the shell is elevated. Without administrator rights run `corepack enable --install-directory "$env:USERPROFILE\bin"` and put that directory first on `PATH`; `pnpm -v` then prints `9.15.0`. Use PowerShell or cmd for pnpm: the shims are `.cmd`/`.ps1` files that Git Bash does not find by the bare name `pnpm`.
+- **No make.** Use `.\scripts\dev.ps1 <target>`; targets match the Makefile. If script execution is blocked: `powershell -ExecutionPolicy Bypass -File scripts\dev.ps1 dev`. Alternatively `winget install ezwinports.make`, or work inside WSL.
+- **Docker Desktop** must be running (`docker info` succeeds). Use the WSL 2 backend and keep the clone on a path without spaces.
+- **Hot-reload on Linux/macOS.** The per-app `dev` scripts build `PYTHONPATH` with `;`, which is the Windows separator, so `make dev-local` has only been exercised on Windows. On Linux/macOS prefer `make dev` (Docker).
+- **`uv`**: install with `winget install astral-sh.uv`.
 
 ---
 
@@ -161,26 +264,28 @@ Merge
 Radius uses an enterprise promotion flow.
 
 ```text
-feature/* -> develop -> uat -> main
+feature/* | fix/* | docs/*  ->  develop  ->  dev (UAT)  ->  main
 ```
+
+The GitHub default branch is `develop`, so new pull requests target it unless you pick another base.
+
+Nobody commits directly to `develop`, `dev` or `main`; every change arrives through a pull request that passes the required status checks. Never push test or throwaway commits to `dev` or `main`. Settings and rationale are in `docs/github-branch-protection.md`; the decision is DEC-005 (flow) and DEC-010 (default branch) in `docs/decisions.md`.
 
 ## Main
 
 `main` is the release branch.
 
-Only release-ready code should reach `main`.
-
-Direct commits to `main` should be reserved for repository setup, approved maintenance, or emergency release repair.
+Only release-ready code should reach `main`, promoted from `dev` by an owner.
 
 ---
 
 ## UAT
 
-`uat` is the UAT branch.
+`dev` is the UAT branch.
 
-Only work promoted from `develop` should merge into `uat`.
+Only work promoted from `develop` should merge into `dev`.
 
-Feature branches must not merge directly into `uat`.
+Feature branches must not merge directly into `dev`.
 
 ---
 
@@ -242,7 +347,7 @@ Release stabilization branches are optional and created only for named release p
 release/<version>
 ```
 
-Release branches may be created from `uat` when UAT is complete but final release stabilization is needed before `main`.
+Release branches may be created from `dev` when UAT is complete but final release stabilization is needed before `main`.
 
 ---
 
@@ -254,7 +359,9 @@ Urgent production fixes use:
 hotfix/<summary>
 ```
 
-Every Pull Request must:
+Promotion (`develop` -> `dev` -> `main`) uses pull requests and merge commits, so the same commits flow forward and the branches stay comparable.
+
+Every Pull Request must (the PR template at `.github/pull_request_template.md` carries this checklist):
 
 - Build successfully
 - Pass all tests
@@ -364,6 +471,7 @@ Use structured logging.
 - Never store secrets in code.
 - Use environment variables for configuration.
 - Apply least-privilege access.
+- Anything that sends repository or PR text to an LLM must use `radius_shared.llm_guard` and register in the prompt-injection suite: see `docs/security/PROMPT_INJECTION.md` (`python -m pytest tests/security/prompt_injection -q`).
 
 ---
 
@@ -423,6 +531,25 @@ Merge
 
 Deploy
 ```
+
+---
+
+# Troubleshooting
+
+
+| Symptom | Fix |
+|---|---|
+| `port is already allocated` on 5432 | Another Postgres uses it. Set `POSTGRES_HOST_PORT=5433` (any free port) in `.env`. Ports 3000 and 8000 are fixed (CORS and the dashboard build assume them): stop whatever else uses them. |
+| `make: command not found` | Use `.\scripts\dev.ps1` (Windows) or install make. |
+| `docker compose up --wait` times out | `make logs` and `docker compose ps -a`. The `migrations` job must exit 0 before the API starts; a failing migration shows in `docker compose logs migrations`. |
+| API unhealthy right after start | It waits for Postgres and migrations; give it up to a minute on a cold start. `curl http://localhost:8000/api/v1/ready`. |
+| `The lockfile at uv.lock needs to be updated` / `uv sync` rewrites `uv.lock` | `uv.lock` must match `pyproject.toml`: check with `uv lock --check`. Always install with `uv sync --frozen --extra dev` (never plain `uv sync`). If the check fails, run `uv lock` and commit the result in a dedicated dependency PR. CI installs with pip (`pip install -e ".[dev]"`), so `uv.lock` is for local reproducibility only; a stale lock shows up as missing `defusedxml` / `tree_sitter*` imports.
+| `pnpm: command not found` | `corepack enable` (see Windows notes). |
+| `Access is denied` while `uv sync` replaces `.venv` files (Windows) | A Python process (pytest, uvicorn, an IDE) still has the venv loaded. Stop it and rerun. |
+| Dashboard cannot reach the API | `NEXT_PUBLIC_RADIUS_API_BASE_URL` is baked in at build time. Edit `.env`, then `make dev` (it rebuilds). |
+| Fresh start / reset the database | `make clean-volumes` (destructive: deletes the Postgres volume). |
+| Tests behave differently (or hang on `smtp.gmail.com`) when a `.env` copied from `.env.example` exists | The root `conftest.py` makes all settings classes ignore `.env` during tests, so this should not happen; if you add a new `BaseSettings` class with its own `env_file`, register it in `_ignore_local_dotenv()`. Blank values such as `GITHUB_DEFAULT_ORGANIZATION_ID=` are treated as unset (`env_ignore_empty`). Passing `_env_file=None` to a settings constructor is the per-test equivalent.
+| Other test failures on Windows | Seen on a Windows 11 run of `develop`: `test_sandbox_runner.py` (POSIX path assumptions, symlink privilege `WinError 1314`) and `test_subprocess_runner.py::test_subprocess_runner_executes_pytest_plan`. `benchmarks/test_benchmarks.py::test_confidence_scoring_completeness_and_verification_status` failed when run alone but passed in the full run. Treat these as known issues, not setup problems. |
 
 ---
 

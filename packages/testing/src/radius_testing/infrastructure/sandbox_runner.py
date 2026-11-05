@@ -18,7 +18,14 @@ Isolation applied to every command (see ``build_container_argv``):
   (JUnit XML).
 * ``--user 65534:65534`` (nobody), ``--cap-drop ALL``,
   ``--security-opt no-new-privileges``, ``--ipc none``.
-* ``--pids-limit``, ``--memory`` (+ equal ``--memory-swap``), ``--cpus``.
+* ``--pids-limit``, ``--memory`` (+ equal ``--memory-swap``), ``--cpus``,
+  and ``--ulimit`` for open files, single-file size and core dumps.
+* The runtime's default seccomp profile stays on (``unconfined`` is rejected);
+  an operator may supply a stricter custom profile.
+* Output is capped: a watchdog kills the container if either stream grows past
+  ``max_output_bytes`` on the host, and only the first 500 KB is retained.
+* Fail closed: ``check_ready`` / every ``run`` verifies the runtime, daemon, image
+  and seccomp profile *before* anything is executed; otherwise ``ERROR``.
 * ``--pull never``: images are provisioned by operators, never fetched at
   analysis time.
 * Environment: only the fixed ``SANDBOX_ENV`` allowlist, always passed as
@@ -43,6 +50,7 @@ import shutil
 import stat
 import subprocess
 import tempfile
+import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -50,8 +58,12 @@ from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
 
-from radius_testing.domain.entities import TestRunPlan, TestRunResult
+from radius_shared.observability.metrics import record_sandbox_kill
+
+from radius_testing.domain.entities import CaseOutcome, TestRunPlan, TestRunResult
+from radius_testing.domain.flakiness import RerunPolicy
 from radius_testing.infrastructure.junit_parser import JUnitReportParser
+from radius_testing.infrastructure.result_matching import report_cases
 from radius_testing.infrastructure.subprocess_runner import (
     _CommandOutcome,
     build_run_result,
@@ -83,6 +95,16 @@ RUNTIME_EXIT_CODES = {
     126: "test command in the sandbox image could not be invoked",
     127: "test command was not found in the sandbox image",
 }
+# 128 + signal: the sandboxed process was terminated by a resource limit or the
+# kernel. Reported as ERROR (contained), never as a test failure or pass.
+CONTAINED_EXIT_CODES = {
+    137: "killed by SIGKILL (memory limit / OOM kill or forced termination)",
+    152: "killed by SIGXCPU (CPU time limit)",
+    153: "killed by SIGXFSZ (file size limit)",
+}
+DEFAULT_MAX_OUTPUT_BYTES = 5 * 1024 * 1024
+DEFAULT_MAX_ARTIFACT_BYTES = 64 * 1024 * 1024
+_WATCHDOG_INTERVAL_SECONDS = 0.2
 _MEMORY_RE = re.compile(r"^[1-9][0-9]*[kmg]?$", re.IGNORECASE)
 _CPUS_RE = re.compile(r"^(?:[0-9]+(?:\.[0-9]+)?)$")
 _IMAGE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/:@+-]*$")
@@ -100,6 +122,10 @@ class SandboxConfig:
     pids_limit: int = 256
     tmpfs_size: str = "256m"
     timeout_seconds: int = 600
+    nofile_limit: int = 1024
+    max_file_size_bytes: int = 64 * 1024 * 1024
+    max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES
+    seccomp_profile: str | None = None
 
     def __post_init__(self) -> None:
         if Path(self.runtime).name not in SUPPORTED_RUNTIMES:
@@ -116,6 +142,19 @@ class SandboxConfig:
             raise ValueError("sandbox pids_limit must be positive")
         if self.timeout_seconds <= 0:
             raise ValueError("sandbox timeout_seconds must be positive")
+        for label, number in (
+            ("nofile_limit", self.nofile_limit),
+            ("max_file_size_bytes", self.max_file_size_bytes),
+            ("max_output_bytes", self.max_output_bytes),
+        ):
+            if number <= 0:
+                raise ValueError(f"sandbox {label} must be positive")
+        if self.seccomp_profile is not None and (
+            not self.seccomp_profile.strip()
+            or self.seccomp_profile.strip().lower() == "unconfined"
+            or "," in self.seccomp_profile
+        ):
+            raise ValueError("sandbox seccomp_profile must be a profile file path, not unconfined")
 
 
 def build_container_argv(
@@ -160,6 +199,17 @@ def build_container_argv(
         "ALL",
         "--security-opt",
         "no-new-privileges",
+    ]
+    if config.seccomp_profile:
+        # Replaces (never disables) the runtime's default profile; read client-side.
+        argv.extend(["--security-opt", f"seccomp={config.seccomp_profile}"])
+    argv += [
+        "--ulimit",
+        f"nofile={config.nofile_limit}:{config.nofile_limit}",
+        "--ulimit",
+        f"fsize={config.max_file_size_bytes}:{config.max_file_size_bytes}",
+        "--ulimit",
+        "core=0:0",
         "--pids-limit",
         str(config.pids_limit),
         "--memory",
@@ -200,6 +250,10 @@ def sandbox_command(command: str, args: tuple[str, ...]) -> tuple[list[str], boo
     return [command, *args], False
 
 
+class SandboxUnavailableError(RuntimeError):
+    """The sandbox cannot be used safely; execution must not proceed."""
+
+
 class _Process(Protocol):
     def wait(self, timeout: float | None = None) -> int: ...
 
@@ -208,6 +262,15 @@ class _Process(Protocol):
 
 ProcessLauncher = Callable[..., _Process]
 AuxRunner = Callable[..., object]
+
+
+def _private_scratch_root() -> Path:
+    """Create the per-run scratch directory, owner-only (0700) on POSIX hosts."""
+
+    root = Path(tempfile.mkdtemp(prefix="radius-sandbox-"))
+    if os.name == "posix":
+        root.chmod(0o700)
+    return root
 
 
 @dataclass(slots=True)
@@ -229,31 +292,109 @@ class ContainerSandboxRunner:
         *,
         launcher: ProcessLauncher | None = None,
         aux_runner: AuxRunner | None = None,
-        which: Callable[[str], str | None] = shutil.which,
+        which: Callable[[str], str | None] | None = None,
+        probe: AuxRunner | None = None,
+        rerun_policy: RerunPolicy | None = None,
     ) -> None:
         self._config = config or SandboxConfig()
+        self._rerun = rerun_policy or RerunPolicy()
         self._launch = launcher or subprocess.Popen
         self._aux = aux_runner or subprocess.run
-        self._which = which
+        self._which = which or (lambda name: shutil.which(name))
+        self._probe = probe or subprocess.run
         self._junit = JUnitReportParser()
 
     @property
     def config(self) -> SandboxConfig:
         return self._config
 
+    def check_ready(self) -> str:
+        """Verify the sandbox is usable; return the runtime path or raise.
+
+        Checks the runtime binary, that its daemon answers, that the image is
+        already present (images are never pulled) and that a custom seccomp
+        profile exists. Any failure raises ``SandboxUnavailableError``.
+        """
+
+        runtime_path = self._which(self._config.runtime)
+        if runtime_path is None:
+            raise SandboxUnavailableError(
+                f"container runtime '{self._config.runtime}' not found"
+            )
+        profile = self._config.seccomp_profile
+        if profile and not Path(profile).is_file():
+            raise SandboxUnavailableError("configured seccomp profile file not found")
+        for label, argv in (
+            ("container runtime daemon is not reachable", [runtime_path, "version"]),
+            (
+                f"sandbox image '{self._config.image}' is not present locally",
+                [runtime_path, "image", "inspect", self._config.image],
+            ),
+        ):
+            try:
+                done = self._probe(  # noqa: S603 - argv list, no shell
+                    argv,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    stdin=subprocess.DEVNULL,
+                    env=_runtime_cli_env(),
+                    timeout=30,
+                    check=False,
+                )
+            except (OSError, subprocess.SubprocessError) as exc:
+                raise SandboxUnavailableError(
+                    f"container runtime check failed ({exc.__class__.__name__})"
+                ) from exc
+            if getattr(done, "returncode", 1) != 0:
+                raise SandboxUnavailableError(label)
+        return runtime_path
+
     def run(self, plan: TestRunPlan, repository_path: Path) -> TestRunResult:
         """Execute all commands of ``plan`` against a snapshot of the checkout."""
 
+        return self.run_collecting(plan, repository_path)[0]
+
+    def run_collecting(
+        self,
+        plan: TestRunPlan,
+        repository_path: Path,
+        artifacts: Sequence[str] = (),
+        *,
+        max_artifact_bytes: int = DEFAULT_MAX_ARTIFACT_BYTES,
+    ) -> tuple[TestRunResult, dict[str, bytes]]:
+        """``run`` plus named files the sandboxed commands wrote to ``/results``.
+
+        Used by LK-03 to retrieve a ``.coverage`` database. Artifacts are keyed
+        ``"<command index>/<name>"``. The files are written by untrusted code, so
+        only plain files (never symlinks) up to ``max_artifact_bytes`` are read;
+        anything else is silently absent. ``artifacts`` names must be plain file
+        names (no separators).
+        """
+
+        for name in artifacts:
+            if not name or name != Path(name).name or name in {".", ".."}:
+                raise ValueError(f"invalid artifact name {name!r}")
+        collected: dict[str, bytes] = {}
+        result = self._run_plan(plan, repository_path, artifacts, max_artifact_bytes, collected)
+        return result, collected
+
+    def _run_plan(
+        self,
+        plan: TestRunPlan,
+        repository_path: Path,
+        artifacts: Sequence[str],
+        max_artifact_bytes: int,
+        collected: dict[str, bytes],
+    ) -> TestRunResult:
         started = time.monotonic()
         outputs: list[str] = []
-        runtime_path = self._which(self._config.runtime)
-        if runtime_path is None:
-            error = _CommandOutcome(
-                error=f"container runtime '{self._config.runtime}' not found"
-            )
+        try:
+            runtime_path = self.check_ready()
+        except SandboxUnavailableError as exc:
+            error = _CommandOutcome(error=f"sandbox unavailable, refusing to execute: {exc}")
             return build_run_result(plan, [error], outputs, started)
 
-        root = Path(tempfile.mkdtemp(prefix="radius-sandbox-"))
+        root = _private_scratch_root()
         try:
             workspace = root / "workspace"
             try:
@@ -269,6 +410,13 @@ class ContainerSandboxRunner:
                 )
                 for index, (command, args) in enumerate(plan.command_plan)
             ]
+            for index in range(len(plan.command_plan)):
+                for name in artifacts:
+                    data = _read_artifact(
+                        root / f"cmd-{index}" / "results" / name, max_artifact_bytes
+                    )
+                    if data is not None:
+                        collected[f"{index}/{name}"] = data
             return build_run_result(plan, outcomes, outputs, started)
         finally:
             shutil.rmtree(root, ignore_errors=True)
@@ -282,9 +430,100 @@ class ContainerSandboxRunner:
         scratch: Path,
         outputs: list[str],
     ) -> _CommandOutcome:
+        outcome, results_dir, is_pytest = self._run_once(
+            runtime_path, command, args, workspace, scratch, outputs
+        )
+        if not (
+            self._rerun.enabled and is_pytest and outcome.error is None and outcome.failed > 0
+        ):
+            return outcome
+        return self._rerun_failures(
+            runtime_path, command, args, workspace, scratch, outputs, outcome, results_dir
+        )
+
+    def _rerun_failures(
+        self,
+        runtime_path: str,
+        command: str,
+        args: tuple[str, ...],
+        workspace: Path,
+        scratch: Path,
+        outputs: list[str],
+        outcome: _CommandOutcome,
+        first_results: Path,
+    ) -> _CommandOutcome:
+        """Rerun failed cases (F-11); reclassify those that pass as ``flaky``.
+
+        Each rerun is a fresh hardened container with the same limits and
+        timeout as the first run. A sandbox/runtime error (including exit codes
+        137/152/153) aborts the reruns and leaves the original failures as
+        failures: an error is never evidence of flakiness. Worst case wall time
+        per command is ``(1 + reruns) * timeout_seconds``.
+        """
+
+        failed_cases = [
+            case
+            for case in _junit_cases(first_results / "junit.xml")
+            if case.outcome == CaseOutcome.FAILED
+        ]
+        if not failed_cases or len(failed_cases) != outcome.failed:
+            return outcome  # cannot identify the failures precisely: stay failed
+        files = {case.key: resolve_case_file(case, workspace) for case in failed_cases}
+        if all(files.values()):
+            test_files = set(planned_test_files(args))
+            rerun_args = tuple(a for a in args if a not in test_files) + tuple(
+                sorted({f for f in files.values() if f})
+            )
+        else:
+            rerun_args = args
+        ids = {
+            case.key: f"{files[case.key] or case.classname or ''}::{case.name or ''}"
+            for case in failed_cases
+        }
+        recovered: set[tuple[str, str, str]] = set()
+        attempts = 0
+        for attempt in range(1, self._rerun.reruns + 1):
+            rerun_outcome, rerun_dir, _ = self._run_once(
+                runtime_path,
+                command,
+                rerun_args,
+                workspace,
+                scratch.parent / f"{scratch.name}-rerun-{attempt}",
+                outputs,
+            )
+            if rerun_outcome.error is not None:
+                outputs.append(f"Radius rerun {attempt} aborted: {rerun_outcome.error}")
+                break
+            attempts += 1
+            for case in _junit_cases(rerun_dir / "junit.xml"):
+                if case.key in ids and case.outcome == CaseOutcome.PASSED:
+                    recovered.add(case.key)
+            if recovered == set(ids):
+                break
+        outputs.append(
+            f"Radius rerun policy: {len(ids)} failing test(s), {attempts} rerun(s) "
+            f"completed, {len(recovered)} flaky, {len(ids) - len(recovered)} stable_fail."
+        )
+        outcome.failed -= len(recovered)
+        outcome.flaky += len(recovered)
+        outcome.flaky_tests = tuple(sorted(ids[key] for key in recovered))
+        return outcome
+
+    def _run_once(
+        self,
+        runtime_path: str,
+        command: str,
+        args: tuple[str, ...],
+        workspace: Path,
+        scratch: Path,
+        outputs: list[str],
+    ) -> tuple[_CommandOutcome, Path, bool]:
         results_dir = scratch / "results"
         results_dir.mkdir(parents=True)
-        # The container runs as nobody; it must be able to write its report here.
+        # The container runs as nobody (a uid that does not own this directory), so it
+        # needs write access here. Other local users cannot reach it: the scratch root
+        # above is created 0700 (``_private_scratch_root``), so this mode is only
+        # reachable through the bind mount. Residual: a host user who is root.
         results_dir.chmod(0o777)
         inner_argv, is_pytest = sandbox_command(command, args)
         container_name = f"radius-sbx-{uuid4().hex[:16]}"
@@ -301,21 +540,24 @@ class ContainerSandboxRunner:
             if stream:
                 outputs.append(stream)
         if execution.failure is not None:
-            return _CommandOutcome(error=f"{command}: {execution.failure}")
-        if execution.returncode in RUNTIME_EXIT_CODES:
-            return _CommandOutcome(
-                error=f"{command}: {RUNTIME_EXIT_CODES[execution.returncode]}"
-            )
+            error = f"{command}: {execution.failure}"
+            return _CommandOutcome(error=error), results_dir, is_pytest
+        for table in (RUNTIME_EXIT_CODES, CONTAINED_EXIT_CODES):
+            if execution.returncode in table:
+                error = f"{command}: {table[execution.returncode]}"
+                return _CommandOutcome(error=error), results_dir, is_pytest
         if is_pytest:
-            return pytest_outcome(
+            outcome = pytest_outcome(
                 self._junit, execution.returncode, results_dir / "junit.xml"
             )
-        return exit_code_outcome(
-            command,
-            execution.returncode,
-            execution.stdout + execution.stderr,
-            planned_test_files(args),
-        )
+        else:
+            outcome = exit_code_outcome(
+                command,
+                execution.returncode,
+                execution.stdout + execution.stderr,
+                planned_test_files(args),
+            )
+        return outcome, results_dir, is_pytest
 
     def _execute(
         self,
@@ -328,6 +570,9 @@ class ContainerSandboxRunner:
         err_path = scratch / "stderr.txt"
         result = _Execution()
         process: _Process | None = None
+        stop = threading.Event()
+        overflow = threading.Event()
+        watchdog: threading.Thread | None = None
         try:
             with out_path.open("w+b") as out_f, err_path.open("w+b") as err_f:
                 try:
@@ -350,6 +595,12 @@ class ContainerSandboxRunner:
                         f"could not start container runtime ({exc.__class__.__name__})"
                     )
                     return result
+                watchdog = threading.Thread(
+                    target=self._watch_output,
+                    args=(stop, overflow, (out_path, err_path), runtime_path, container_name),
+                    daemon=True,
+                )
+                watchdog.start()
                 try:
                     result.returncode = process.wait(
                         timeout=self._config.timeout_seconds
@@ -359,15 +610,44 @@ class ContainerSandboxRunner:
                         f"timed out after {self._config.timeout_seconds} seconds"
                     )
                     self._kill_container(runtime_path, container_name)
+                    record_sandbox_kill("timeout")
                     process.kill()
                     _wait_quietly(process)
         finally:
+            stop.set()
+            if watchdog is not None:
+                watchdog.join(timeout=5)
+            if overflow.is_set() and result.failure is None:
+                result.failure = (
+                    f"output exceeded {self._config.max_output_bytes} bytes; container killed"
+                )
             if result.failure is not None and process is not None:
                 # --rm covers normal exits; make sure nothing is left behind.
                 self._remove_container(runtime_path, container_name)
         result.stdout = _read_capped(out_path, self.MAX_OUTPUT_SIZE)
         result.stderr = _read_capped(err_path, self.MAX_OUTPUT_SIZE)
         return result
+
+    def _watch_output(
+        self,
+        stop: threading.Event,
+        overflow: threading.Event,
+        paths: tuple[Path, Path],
+        runtime_path: str,
+        container_name: str,
+    ) -> None:
+        """Kill the container if its captured output outgrows the host-side cap."""
+
+        limit = self._config.max_output_bytes
+        while not stop.wait(_WATCHDOG_INTERVAL_SECONDS):
+            try:
+                oversized = any(path.stat().st_size > limit for path in paths)
+            except OSError:
+                continue
+            if oversized:
+                overflow.set()
+                self._kill_container(runtime_path, container_name)
+                return
 
     def _kill_container(self, runtime_path: str, container_name: str) -> None:
         self._aux_call([runtime_path, "kill", container_name])
@@ -391,6 +671,34 @@ class ContainerSandboxRunner:
                 "sandbox container cleanup failed",
                 extra={"argv": argv[1:], "error": exc.__class__.__name__},
             )
+
+
+def _junit_cases(path: Path) -> tuple:
+    """Parse the cases of a JUnit report written by the sandbox, or ``()``."""
+
+    try:
+        if not path.is_file() or path.is_symlink() or path.stat().st_size > 20 * 1024 * 1024:
+            return ()
+        return report_cases(path.read_bytes())
+    except Exception:  # noqa: BLE001 - an unreadable report means "no evidence"
+        return ()
+
+
+def resolve_case_file(case, workspace: Path) -> str | None:
+    """Map a JUnit case to a repo-relative ``.py`` file in the snapshot, if any."""
+
+    candidates: list[str] = []
+    if case.file:
+        candidates.append(case.file.replace("\\", "/"))
+    parts = [p for p in (case.classname or "").split(".") if p]
+    for end in range(len(parts), 0, -1):
+        candidates.append("/".join(parts[:end]) + ".py")
+    for candidate in candidates:
+        if candidate.startswith(("-", "/")) or ".." in candidate.split("/"):
+            continue
+        if (workspace / candidate).is_file():
+            return candidate
+    return None
 
 
 def _runtime_cli_env() -> dict[str, str]:
@@ -419,6 +727,17 @@ def _snapshot_repository(source: Path, destination: Path) -> None:
             path = Path(dirpath) / name
             if not path.is_symlink():
                 path.chmod(path.stat().st_mode | stat.S_IROTH)
+
+
+def _read_artifact(path: Path, limit: int) -> bytes | None:
+    """Read a file written by the sandboxed command; ``None`` if absent or unsafe."""
+
+    try:
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > limit:
+            return None
+        return path.read_bytes()
+    except OSError:
+        return None
 
 
 def _read_capped(path: Path, limit: int) -> str:

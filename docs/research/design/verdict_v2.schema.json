@@ -1,0 +1,1249 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://radius.invalid/schemas/verdict_v2.schema.json",
+  "title": "Verdict v2 payload (data of GET /api/v1/analyses/{id}/verdict-v2; also the stored verdict_v2.* summary)",
+  "description": "Contract of docs/research/design/VERDICT_V2_SLICE.md. Consumers must ignore unknown properties. All text fields derived from PR or issue content are untrusted.",
+  "type": "object",
+  "required": [
+    "verdict_version",
+    "algo_version",
+    "profile",
+    "mode",
+    "status",
+    "analysis_id",
+    "head_sha",
+    "revision",
+    "verdict",
+    "pending",
+    "reasons",
+    "score",
+    "score_kind",
+    "summary",
+    "criteria",
+    "justification"
+  ],
+  "properties": {
+    "verdict_version": {
+      "const": 2
+    },
+    "algo_version": {
+      "type": "string"
+    },
+    "profile": {
+      "type": "string"
+    },
+    "mode": {
+      "enum": [
+        "shadow",
+        "on"
+      ]
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "error",
+        "skipped"
+      ]
+    },
+    "analysis_id": {
+      "type": "string"
+    },
+    "head_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "computed_at": {
+      "type": "string"
+    },
+    "verdict": {
+      "enum": [
+        "verified",
+        "failed",
+        "insufficient_evidence",
+        "needs_review",
+        null
+      ]
+    },
+    "pending": {
+      "type": "boolean"
+    },
+    "reasons": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code",
+          "detail"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "rule_id": {
+            "type": "string"
+          },
+          "ref": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "score": {
+      "type": "null",
+      "description": "v2 has no number until calibration exists"
+    },
+    "score_kind": {
+      "const": "none"
+    },
+    "trust_probability": {
+      "type": "null"
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "criteria_total",
+        "proven",
+        "weak",
+        "unevidenced",
+        "contradicted",
+        "excluded",
+        "uim",
+        "intent_coverage",
+        "evidence_basis"
+      ],
+      "properties": {
+        "criteria_total": {
+          "type": "integer"
+        },
+        "proven": {
+          "type": "integer"
+        },
+        "weak": {
+          "type": "integer"
+        },
+        "unevidenced": {
+          "type": "integer"
+        },
+        "contradicted": {
+          "type": "integer"
+        },
+        "excluded": {
+          "type": "integer"
+        },
+        "uim": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "intent_coverage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "tamper": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer"
+          }
+        },
+        "evidence_basis": {
+          "enum": [
+            "static_only",
+            "static_and_mutation"
+          ]
+        },
+        "tamper_waived": {
+          "type": "integer",
+          "description": "Contract 3: findings accepted by a waiver."
+        },
+        "author_hint_criteria": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Contract 4 (optional): criteria relying on an unconfirmed author-supplied hint."
+        }
+      }
+    },
+    "criteria": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "criterion_id",
+          "text",
+          "state",
+          "S",
+          "S_raw",
+          "weight",
+          "flags",
+          "items"
+        ],
+        "properties": {
+          "criterion_id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string",
+            "description": "UNTRUSTED text. Render as text only."
+          },
+          "state": {
+            "enum": [
+              "proven",
+              "weak",
+              "unevidenced",
+              "contradicted",
+              "excluded"
+            ]
+          },
+          "S": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "S_raw": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "weight": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1
+          },
+          "testability": {
+            "type": "string"
+          },
+          "lifecycle": {
+            "type": "string"
+          },
+          "flags": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "tampered",
+                "flaky_evidence",
+                "stale_evidence",
+                "low_link_confidence",
+                "unconfirmed",
+                "pending_results",
+                "static_only",
+                "no_strong_assertion",
+                "needs_typed_evidence",
+                "no_linked_test",
+                "author_supplied_hint",
+                "mutation_measured"
+              ]
+            }
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "code",
+                "detail"
+              ],
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "detail": {
+                  "type": "string"
+                },
+                "rule_id": {
+                  "type": "string"
+                },
+                "ref": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "refs": {
+                  "type": "array",
+                  "description": "B-01: every reference (one id per element) when a reason concerns several, e.g. all failing evidence ids; absent for a single reference.",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "best_link": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "evidence_id",
+                "test_id",
+                "outcome",
+                "a_static",
+                "d_eff",
+                "i",
+                "f",
+                "q",
+                "l",
+                "term",
+                "status"
+              ],
+              "properties": {
+                "evidence_id": {
+                  "type": "string"
+                },
+                "test_id": {
+                  "type": "string"
+                },
+                "outcome": {
+                  "enum": [
+                    "passed",
+                    "failed",
+                    "error",
+                    "skipped",
+                    "flaky",
+                    "not_run"
+                  ]
+                },
+                "a_static": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "d_eff": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "i": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "f": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "flaky_f": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "tamper_penalty": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "q": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "l_cs": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "l_st": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "r_ct": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "l": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "term": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "group_symbol": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "rank_in_group": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "discount": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "contribution": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "description": "counted | gated:<reason>"
+                },
+                "basis": {
+                  "enum": [
+                    "static",
+                    "mutation"
+                  ],
+                  "description": "Contract 5 (optional): how d_eff was obtained."
+                },
+                "d_mut": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Contract 5 (optional): kill rate over decided non-equivalent mutants."
+                },
+                "d_mut_lcb": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Contract 5 (optional): Wilson lower bound, used as d_eff when basis is mutation."
+                },
+                "mutation_n": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "mutation_killed": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                }
+              }
+            }
+          },
+          "provenance": {
+            "type": "string",
+            "enum": [
+              "author_pr_body",
+              "author_head_spec",
+              "base_spec",
+              "human_confirmed",
+              "llm_proposed"
+            ],
+            "description": "Contract 4 (optional): who supplied the criterion."
+          },
+          "hints": {
+            "type": "array",
+            "description": "Contract 4 (optional): tests/paths hints with provenance.",
+            "items": {
+              "type": "object",
+              "required": [
+                "kind",
+                "value",
+                "provenance"
+              ],
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "paths",
+                    "tests"
+                  ]
+                },
+                "value": {
+                  "type": "string"
+                },
+                "provenance": {
+                  "enum": [
+                    "author_pr_body",
+                    "author_head_spec",
+                    "base_spec",
+                    "human_confirmed",
+                    "llm_proposed"
+                  ]
+                }
+              }
+            }
+          },
+          "evidence_basis": {
+            "enum": [
+              "static_only",
+              "mutation_measured",
+              "mutation_partial"
+            ],
+            "description": "Contract 5 (optional): present when RADIUS_FEATURE_MUTATION was on."
+          },
+          "mutation": {
+            "type": "object",
+            "description": "Contract 5 (optional): mutation facts of the criterion. Gaps found, not a proof.",
+            "properties": {
+              "basis": {
+                "enum": [
+                  "static_only",
+                  "mutation_measured",
+                  "mutation_partial"
+                ]
+              },
+              "n_mutants": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "killed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "d_union": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "d_union_lcb": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "tests_measured": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "tests_total": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "survivors": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "mutant_id",
+                    "path",
+                    "line",
+                    "operator"
+                  ],
+                  "properties": {
+                    "mutant_id": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string",
+                      "description": "UNTRUSTED. Render as text only."
+                    },
+                    "line": {
+                      "type": "integer"
+                    },
+                    "operator": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "excluded": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer"
+                }
+              },
+              "d_reach": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "d_reach_reason": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "link_gaps": {
+                "type": "array",
+                "description": "Optional (DEC-036, stage 2): mutants killed only by tests not linked to the criterion; left out of n_mutants. The unlinked tests are not evidence.",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "mutant_id",
+                    "path",
+                    "line",
+                    "operator",
+                    "tests"
+                  ],
+                  "properties": {
+                    "mutant_id": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string",
+                      "description": "UNTRUSTED. Render as text only."
+                    },
+                    "line": {
+                      "type": "integer"
+                    },
+                    "operator": {
+                      "type": "string"
+                    },
+                    "tests": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "UNTRUSTED. Render as text only."
+                    }
+                  }
+                }
+              },
+              "link_gap_tests": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Optional (DEC-036): distinct unlinked killing tests (capped). UNTRUSTED. Render as text only."
+              }
+            }
+          },
+          "confirmed_by": {
+            "type": "string",
+            "description": "B-07 (optional, DEC-040): who confirmed or edited the criterion, taken from the authenticated principal (a GitHub login when the signed-in user is linked to one, else a user or API key handle). A suffix says '(unverified confirmer)' when the GitHub link is unknown, or why the confirmation was not counted. Render as text only."
+          }
+        }
+      }
+    },
+    "tamper_findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "finding_id",
+          "rule_id",
+          "severity",
+          "path",
+          "reason"
+        ],
+        "properties": {
+          "finding_id": {
+            "type": "string"
+          },
+          "rule_id": {
+            "type": "string"
+          },
+          "check": {
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "info",
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ]
+          },
+          "confidence": {
+            "type": "number"
+          },
+          "path": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "test_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "old_snippet": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "new_snippet": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "waived": {
+            "type": "boolean",
+            "description": "Contract 3: a valid waiver accepts this finding; it is still listed."
+          },
+          "waiver": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Contract 3: id, reason (UNTRUSTED), owner, expires.",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "owner": {
+                "type": "string"
+              },
+              "expires": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "unlinked_symbols": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "next_actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code",
+          "text"
+        ],
+        "properties": {
+          "criterion_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "code": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "justification": {
+      "type": "object",
+      "required": [
+        "schema",
+        "verdict",
+        "decided_by",
+        "rules",
+        "thresholds",
+        "versions",
+        "config_digest",
+        "profile",
+        "inputs_digest"
+      ],
+      "properties": {
+        "schema": {
+          "const": "verdict-v2-justification-1"
+        },
+        "verdict": {
+          "enum": [
+            "verified",
+            "failed",
+            "insufficient_evidence",
+            "needs_review"
+          ]
+        },
+        "decided_by": {
+          "type": "string"
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "label",
+              "fired",
+              "inputs"
+            ],
+            "properties": {
+              "id": {
+                "enum": [
+                  "R1a",
+                  "R1b",
+                  "R1c",
+                  "R2p",
+                  "R2a",
+                  "R2e",
+                  "R2b",
+                  "R2c",
+                  "R2d",
+                  "P1",
+                  "P2",
+                  "R3a",
+                  "R3b",
+                  "R3c",
+                  "R4"
+                ]
+              },
+              "label": {
+                "type": "string"
+              },
+              "fired": {
+                "type": "boolean"
+              },
+              "inputs": {
+                "type": "object"
+              },
+              "refs": {
+                "type": "object",
+                "properties": {
+                  "criterion_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "evidence_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "finding_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "minItems": 1
+        },
+        "thresholds": {
+          "type": "object"
+        },
+        "versions": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "config_digest": {
+          "type": "string"
+        },
+        "profile": {
+          "type": "string"
+        },
+        "inputs_digest": {
+          "type": "string"
+        }
+      }
+    },
+    "v1": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Copy of the v1 result with its own honest score_kind; null when v1 is absent",
+      "properties": {
+        "verification_status": {
+          "type": "string"
+        },
+        "confidence_score": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "score_kind": {
+          "type": "string"
+        },
+        "risk_level": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "dashboard_url": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "error": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "present when status is error or skipped",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "fallback": {
+          "type": "string"
+        }
+      }
+    },
+    "policy": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Contract 3: resolved .radius/policy.yml (read from the base branch); absent when the repo has none.",
+      "properties": {
+        "present": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "advisory",
+            "blocking",
+            null
+          ]
+        },
+        "source": {
+          "type": "object"
+        },
+        "head_policy": {
+          "enum": [
+            "ignore",
+            "tighten_only"
+          ]
+        },
+        "thresholds": {
+          "type": "object"
+        },
+        "provenance": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "value": {},
+              "origin": {
+                "enum": [
+                  "base",
+                  "head"
+                ]
+              },
+              "file": {
+                "type": "string"
+              },
+              "line": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "ignored_head": {
+          "type": "array"
+        },
+        "requirements": {
+          "type": "array"
+        },
+        "exclude_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tamper": {
+          "type": "object"
+        },
+        "unmet": {
+          "type": "object"
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "waivers": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Contract 3: waiver audit record of this verdict (read from the base branch).",
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "source": {
+          "type": "object"
+        },
+        "applied": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "ignored": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "line": {
+                "type": "integer"
+              },
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "audit_digest": {
+          "type": "string"
+        },
+        "evaluated_on": {
+          "type": "string"
+        }
+      }
+    },
+    "contract_version": {
+      "type": "string",
+      "description": "Contract 5 (optional): data contract version."
+    },
+    "alpha": {
+      "const": true,
+      "description": "Contract 4 (optional): always true while v2 is an alpha."
+    },
+    "calibrated": {
+      "const": false,
+      "description": "Contract 4 (optional): always false; thresholds are uncalibrated."
+    },
+    "evidence_basis": {
+      "enum": [
+        "static_only",
+        "static_and_mutation"
+      ],
+      "description": "Contract 5: what the evidence is. static_and_mutation only when RADIUS_FEATURE_MUTATION measured at least one criterion."
+    },
+    "presentation": {
+      "type": "object",
+      "description": "Contract 4 (optional): user-facing wording; internal enum values are unchanged.",
+      "properties": {
+        "verdict_label": {
+          "type": "string"
+        },
+        "state_labels": {
+          "type": "object"
+        },
+        "legend": {
+          "type": "string"
+        },
+        "disclaimer": {
+          "type": "string"
+        },
+        "summary_text": {
+          "type": "string"
+        }
+      }
+    },
+    "mutation": {
+      "type": "object",
+      "description": "Contract 5 (optional): the mutation run of this analysis (present only when the flag was on).",
+      "properties": {
+        "status": {
+          "enum": [
+            "measured",
+            "unmeasured"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "engine": {
+          "type": "string"
+        },
+        "seed": {
+          "type": "integer"
+        },
+        "generated": {
+          "type": "integer"
+        },
+        "sampled": {
+          "type": "integer"
+        },
+        "decided": {
+          "type": "integer"
+        },
+        "killed": {
+          "type": "integer"
+        },
+        "equivalent_suspects": {
+          "type": "integer"
+        },
+        "skipped_for_budget": {
+          "type": "integer"
+        },
+        "cache_hits": {
+          "type": "integer"
+        },
+        "min_decided": {
+          "type": "integer"
+        },
+        "ladder": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "baseline_failed": {
+          "type": "integer"
+        },
+        "baseline_flaky": {
+          "type": "integer"
+        },
+        "stage2": {
+          "type": "object",
+          "description": "Optional (DEC-036): stage 2 summary; killed_outside_linked = link-gap mutants.",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "survivors": {
+              "type": "integer"
+            },
+            "run": {
+              "type": "integer"
+            },
+            "killed_outside_linked": {
+              "type": "integer"
+            },
+            "unconfirmed": {
+              "type": "integer"
+            },
+            "no_wider_tests": {
+              "type": "integer"
+            },
+            "skipped_for_budget": {
+              "type": "integer"
+            },
+            "errors": {
+              "type": "integer"
+            },
+            "cache_hits": {
+              "type": "integer"
+            },
+            "tests_considered": {
+              "type": "integer"
+            },
+            "ladder": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "degraded": {
+      "type": "array",
+      "description": "B-20 (optional): analysis degradation markers (blocking ones such as truncated, unsupported_language:<lang>, unanalyzed_files:<n>, tamper_unanalyzed:<what>, unconfirmed_inferred_intent, policy_*; non-blocking ones such as adapter_dropped:<what>).",
+      "items": {
+        "type": "string"
+      }
+    },
+    "suggested_tests": {
+      "type": "array",
+      "description": "DEC-034 (optional): LLM-proposed test snippets. Never run, never evidence (executed and evidence are always false).",
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "required": [
+          "criterion_id",
+          "test_code",
+          "provenance",
+          "executed",
+          "evidence"
+        ],
+        "properties": {
+          "criterion_id": {
+            "type": "string"
+          },
+          "test_code": {
+            "type": "string",
+            "description": "UNTRUSTED. Render as text only."
+          },
+          "a_static": {
+            "type": "number"
+          },
+          "imports": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "model": {
+            "type": "string"
+          },
+          "provenance": {
+            "const": "llm_proposed"
+          },
+          "executed": {
+            "const": false
+          },
+          "evidence": {
+            "const": false
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}

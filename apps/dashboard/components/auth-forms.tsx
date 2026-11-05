@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Check, Eye, EyeOff, Github, LoaderCircle } from "lucide-react";
-import { authRequest, oauthUrl } from "../lib/auth";
+import { authRequest, oauthUrl, type AuthUser } from "../lib/auth";
+import { postSignupPath } from "../lib/post-signup";
+import { isVerifyCheck, validateNewPassword, verifyEmailBody } from "../lib/verify-email";
 import { useAuth } from "./auth-provider";
 
 function GoogleIcon() {
@@ -119,6 +121,18 @@ function passwordIsValid(value: string) {
   return /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(value);
 }
 
+const OAUTH_ERRORS: Record<string, string> = {
+  oauth: "We couldn't complete sign in with this provider. Please try again.",
+  oauth_denied: "Sign in with the provider was cancelled or denied.",
+  oauth_email_unverified: "The provider has not verified your email address. Verify it with the provider and try again.",
+  oauth_link_refused:
+    "This email already has a Radius account that is not verified, so the provider cannot be linked automatically. Sign in with your password or verify your email first."
+};
+
+function oauthErrorMessage(code: string | null): string {
+  return code && Object.hasOwn(OAUTH_ERRORS, code) ? OAUTH_ERRORS[code] : "";
+}
+
 export function LoginForm() {
   const router = useRouter();
   const query = useSearchParams();
@@ -126,11 +140,7 @@ export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
-  const [error, setError] = useState(
-    query.get("error") === "oauth"
-      ? "We couldn't complete sign in with this provider. Please try again."
-      : ""
-  );
+  const [error, setError] = useState(oauthErrorMessage(query.get("error")));
   const [loading, setLoading] = useState(false);
 
   async function submit(event: FormEvent) {
@@ -143,7 +153,9 @@ export function LoginForm() {
         body: JSON.stringify({ email, password, remember }),
       });
       await refresh();
-      router.replace("/");
+      // A full navigation, not router.replace: while signed out the client router may have prefetched
+      // "/" and cached the redirect to /login, and a soft navigation would reuse that stale result.
+      window.location.assign("/");
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -251,12 +263,13 @@ export function SignupForm() {
     setLoading(true);
     setError("");
     try {
-      await authRequest("/auth/signup", {
+      const user = await authRequest<AuthUser>("/auth/signup", {
         method: "POST",
         body: JSON.stringify({ name, email, password }),
       });
       await refresh();
-      router.replace("/verify-email");
+      // Already verified (dev auto-verify) -> dashboard; otherwise ask to verify.
+      router.replace(postSignupPath(user));
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -493,22 +506,67 @@ export function ResetPasswordForm() {
 
 export function VerifyEmailPage() {
   const query = useSearchParams();
+  const router = useRouter();
+  const { user } = useAuth();
   const [status, setStatus] = useState<"ready" | "loading" | "done" | "error">(
     "ready"
   );
   const token = query.get("token");
+  // A-07: null while the API is asked, then whether a password must be chosen here.
+  const [passwordRequired, setPasswordRequired] = useState<boolean | null>(null);
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [formError, setFormError] = useState("");
 
-  async function verify() {
+  // A signed-in, already verified account has nothing to check: go to the dashboard.
+  useEffect(() => {
+    if (!token && user?.email_verified) router.replace(postSignupPath(user));
+  }, [router, token, user]);
+
+  // Ask whether a password is needed; this does not use the one-time link up.
+  useEffect(() => {
     if (!token) return;
+    let active = true;
+    authRequest<unknown>("/auth/verify-email/check", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    })
+      .then((answer) => {
+        if (!active) return;
+        if (isVerifyCheck(answer)) setPasswordRequired(answer.password_required);
+        else setStatus("error");
+      })
+      .catch(() => {
+        if (active) setStatus("error");
+      });
+    return () => {
+      active = false;
+    };
+  }, [token]);
+
+  async function verify(event?: FormEvent) {
+    event?.preventDefault();
+    if (!token || passwordRequired === null) return;
+    if (passwordRequired) {
+      const problem = validateNewPassword(password, confirm);
+      if (problem) return setFormError(problem);
+    }
+    setFormError("");
     setStatus("loading");
     try {
       await authRequest("/auth/verify-email", {
         method: "POST",
-        body: JSON.stringify({ token }),
+        body: verifyEmailBody(token, passwordRequired, password),
       });
       setStatus("done");
-    } catch {
-      setStatus("error");
+    } catch (reason) {
+      if (passwordRequired && reason instanceof Error && reason.message) {
+        // the link is still usable after a rejected password: show why and let them retry
+        setFormError(reason.message);
+        setStatus("ready");
+      } else {
+        setStatus("error");
+      }
     }
   }
 
@@ -529,20 +587,51 @@ export function VerifyEmailPage() {
         subtitle={
           status === "done"
             ? "Your email is verified. You can continue to Radius."
+            : passwordRequired
+            ? "Confirm your email address and choose the password for your Radius account."
             : "Confirm your email address to secure your Radius account."
         }
       >
-        <button
-          className="auth-submit"
-          onClick={verify}
-          disabled={status === "loading" || status === "done"}
-        >
-          {status === "done"
-            ? "Email verified"
-            : status === "loading"
-            ? "Verifying…"
-            : "Verify email"}
-        </button>
+        <form className="auth-form" onSubmit={verify}>
+          {passwordRequired && status !== "done" && (
+            <>
+              <PasswordField
+                label="Choose a password"
+                value={password}
+                onChange={setPassword}
+                id="new-password"
+              />
+              <PasswordField
+                label="Confirm password"
+                value={confirm}
+                onChange={setConfirm}
+                id="confirm-password"
+              />
+            </>
+          )}
+          <ErrorMessage error={formError} />
+          <button
+            className="auth-submit"
+            type="submit"
+            disabled={
+              status === "loading" ||
+              status === "done" ||
+              status === "error" ||
+              passwordRequired === null
+            }
+          >
+            {status === "done"
+              ? "Email verified"
+              : status === "loading"
+              ? "Verifying…"
+              : "Verify email"}
+          </button>
+        </form>
+        {status === "error" && (
+          <p className="auth-error" role="alert">
+            This verification link is invalid or has expired. Sign in and request a new one.
+          </p>
+        )}
         <AuthFooter
           prompt="Ready to continue?"
           href="/"

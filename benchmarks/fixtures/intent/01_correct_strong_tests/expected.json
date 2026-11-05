@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "id": "01_correct_strong_tests",
+  "scenario": "correct_strong_tests",
+  "title": "Correct PR backed by strong, boundary-checking tests",
+  "language": "python",
+  "ground_truth": {
+    "pr_correct": true,
+    "note": "apply_discount is correct; strong probes would add nothing."
+  },
+  "criteria": [
+    {
+      "id": "C1",
+      "text": "apply_discount returns the price reduced by percent, rounded to 2 decimals",
+      "testability": "testable",
+      "expected_state": "proven"
+    },
+    {
+      "id": "C2",
+      "text": "percent outside 0..100 inclusive raises ValueError",
+      "testability": "testable",
+      "expected_state": "proven"
+    }
+  ],
+  "links": [
+    {
+      "criterion": "C1",
+      "symbol": "src/pricing.py::apply_discount",
+      "tests": [
+        "tests/test_pricing.py::test_discount_reduces_price",
+        "tests/test_pricing.py::test_discount_zero_is_identity",
+        "tests/test_pricing.py::test_discount_hundred_is_free",
+        "tests/test_pricing.py::test_discount_rounds_to_cents"
+      ]
+    },
+    {
+      "criterion": "C2",
+      "symbol": "src/pricing.py::apply_discount",
+      "tests": [
+        "tests/test_pricing.py::test_discount_rejects_negative_percent",
+        "tests/test_pricing.py::test_discount_rejects_percent_above_hundred"
+      ]
+    }
+  ],
+  "evidence_quality": [
+    {
+      "test": "tests/test_pricing.py::test_discount_reduces_price",
+      "band": "strong",
+      "rationale": "exact value check; fails if the sign of the discount flips"
+    },
+    {
+      "test": "tests/test_pricing.py::test_discount_zero_is_identity",
+      "band": "strong",
+      "rationale": "exact value at lower boundary"
+    },
+    {
+      "test": "tests/test_pricing.py::test_discount_hundred_is_free",
+      "band": "strong",
+      "rationale": "exact value at upper boundary; fails if the bound check becomes >="
+    },
+    {
+      "test": "tests/test_pricing.py::test_discount_rounds_to_cents",
+      "band": "strong",
+      "rationale": "exact value that depends on rounding"
+    },
+    {
+      "test": "tests/test_pricing.py::test_discount_rejects_negative_percent",
+      "band": "strong",
+      "rationale": "asserts the specific exception type for an invalid input"
+    },
+    {
+      "test": "tests/test_pricing.py::test_discount_rejects_percent_above_hundred",
+      "band": "strong",
+      "rationale": "asserts the specific exception type for an invalid input"
+    }
+  ],
+  "tamper_findings": [],
+  "unlinked_changed_symbols": [],
+  "expected_verdict": "verified",
+  "verdict_rationale": "Both criteria are proven by strong, independent-of-implementation value checks and no tamper rule fires.",
+  "test_outcomes": {
+    "base": {
+      "tests/test_pricing.py::test_line_total_multiplies": "passed"
+    },
+    "head": {
+      "tests/test_pricing.py::test_line_total_multiplies": "passed",
+      "tests/test_pricing.py::test_discount_reduces_price": "passed",
+      "tests/test_pricing.py::test_discount_zero_is_identity": "passed",
+      "tests/test_pricing.py::test_discount_hundred_is_free": "passed",
+      "tests/test_pricing.py::test_discount_rounds_to_cents": "passed",
+      "tests/test_pricing.py::test_discount_rejects_negative_percent": "passed",
+      "tests/test_pricing.py::test_discount_rejects_percent_above_hundred": "passed"
+    }
+  },
+  "mutants": [
+    {
+      "id": "M1",
+      "file": "src/pricing.py",
+      "old": "1 - percent / 100",
+      "new": "1 + percent / 100",
+      "killed_by": [
+        "tests/test_pricing.py::test_discount_reduces_price",
+        "tests/test_pricing.py::test_discount_hundred_is_free",
+        "tests/test_pricing.py::test_discount_rounds_to_cents"
+      ]
+    },
+    {
+      "id": "M2",
+      "file": "src/pricing.py",
+      "old": "percent > 100",
+      "new": "percent >= 100",
+      "killed_by": [
+        "tests/test_pricing.py::test_discount_hundred_is_free"
+      ]
+    },
+    {
+      "id": "M3",
+      "file": "src/pricing.py",
+      "old": "percent < 0 or ",
+      "new": "",
+      "killed_by": [
+        "tests/test_pricing.py::test_discount_rejects_negative_percent"
+      ]
+    }
+  ]
+}

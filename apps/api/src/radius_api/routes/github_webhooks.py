@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -15,21 +16,31 @@ from radius_analysis.application import AnalysisApplicationService
 from radius_analysis.dto import StartAnalysisCommand
 from radius_repository.application import RepositoryApplicationService
 from radius_repository.domain import RepositoryVisibility
+from radius_repository.domain.clone_url import validate_clone_url
 from radius_repository.dto import (
     ConnectRepositoryCommand,
+    RepositoryListQuery,
     UpsertBranchCommand,
     UpsertPullRequestCommand,
 )
+from radius_shared.database import enums as db_enums
 from radius_shared.database import models as db_models
 from radius_shared.dto import success_response
 from radius_shared.errors import AccessDeniedError, ValidationError
 from radius_shared.logging import get_logger
+from radius_shared.observability import span, update_correlation
 
 from radius_api.dependencies import (
     get_analysis_service,
     get_idempotency_store,
     get_repository_service,
 )
+from radius_api.github_intent import (
+    latest_analysis_id,
+    record_pull_request_intent,
+    refresh_issue_intent,
+)
+from radius_api.github_pull import clone_policy
 from radius_api.idempotency import IdempotencyStore, replay_or_validate
 from radius_api.schemas.github_webhooks import (
     GitHubPullRequestPayload,
@@ -40,6 +51,9 @@ from radius_api.schemas.github_webhooks import (
 LOGGER = get_logger(__name__)
 
 router = APIRouter(prefix="/webhooks/github", tags=["github-webhooks"])
+
+#: Stored only until a push/pull_request delivery reports the real default branch.
+_PROVISIONAL_DEFAULT_BRANCH = "main"
 
 _ANALYSIS_PR_ACTIONS = {"opened", "reopened", "synchronize", "ready_for_review"}
 
@@ -65,11 +79,15 @@ async def handle_github_webhook(
 ):
     """Handle signed GitHub webhook deliveries."""
 
+    update_correlation(delivery_id=delivery_id)
+    # Unauthenticated callers must not make us buffer a large body: a delivery
+    # without a signature header is refused before the body is read.
+    _require_signature_header(request, signature)
     body = await request.body()
     _validate_signature(request, body, signature)
     body_hash = hashlib.sha256(body).hexdigest()
     scope = f"github_webhook:{event}"
-    payload = json.loads(body)
+    payload = _parse_payload(body)
     if event == "ping":
         # A ping carries no tenant context; acknowledge it without resolving one.
         result = GitHubWebhookResult(
@@ -81,9 +99,27 @@ async def handle_github_webhook(
             status_code=status.HTTP_202_ACCEPTED,
             content=jsonable_encoder(success_response(result)),
         )
-    org_id = _resolve_webhook_organization_id(request, payload, repository_service)
+    try:
+        org_id = _resolve_webhook_organization_id(request, payload, repository_service)
+    except AccessDeniedError:
+        if _is_removal_event(event, payload):
+            # Nothing of ours to deactivate; a 4xx would only make GitHub
+            # flag a failed delivery for an installation we never linked.
+            ignored = GitHubWebhookResult(
+                deliveryId=delivery_id,
+                event=event,
+                action=payload.get("action"),
+                ignored=True,
+                ignoredReason="unknown_installation",
+            )
+            return JSONResponse(
+                status_code=status.HTTP_202_ACCEPTED,
+                content=jsonable_encoder(success_response(ignored)),
+            )
+        raise
     # Repositories created while handling this delivery belong to this tenant.
     request.state.radius_webhook_org_id = org_id
+    update_correlation(organization_id=org_id)
     existing = replay_or_validate(
         idempotency_store,
         org_id,
@@ -98,14 +134,24 @@ async def handle_github_webhook(
         )
 
     _record_installation_id(request, payload, repository_service)
-    result = _handle_payload(
-        request,
-        event,
-        delivery_id,
-        payload,
-        repository_service,
-        analysis_service,
-    )
+    with span("webhook.handle", **{"github.event": event}):
+        try:
+            result = _handle_payload(
+                request,
+                event,
+                delivery_id,
+                payload,
+                repository_service,
+                analysis_service,
+            )
+        except (KeyError, TypeError, AttributeError, ValueError) as exc:
+            # A signed delivery with a structurally wrong payload (missing or
+            # mistyped fields) is a client error, not a server fault.
+            # The event name comes from a request header: keep it out of the log line.
+            LOGGER.warning("Webhook payload rejected", extra={"error_type": type(exc).__name__})
+            msg = f"Webhook payload for event {event!r} is missing or has invalid fields."
+            raise ValidationError(msg) from exc
+    LOGGER.info("Webhook delivery handled", extra={"github_event": event})
     response = success_response(result)
     response_body = jsonable_encoder(response)
     idempotency_store.save(
@@ -137,7 +183,12 @@ def _handle_payload(
             delivery_id,
             payload,
             repository_service,
+            analysis_service,
         )
+    if event in ("push", "pull_request", "issues"):
+        inactive = _installation_inactive_reason(request)
+        if inactive is not None:
+            return _ignored_inactive(delivery_id, event, action, inactive)
     if event == "push":
         return _handle_push(
             request,
@@ -153,6 +204,8 @@ def _handle_payload(
             repository_service,
             analysis_service,
         )
+    if event == "issues" and action == "edited":
+        _handle_issue_edited(request, payload, repository_service, analysis_service)
     return GitHubWebhookResult(
         deliveryId=delivery_id,
         event=event,
@@ -161,20 +214,167 @@ def _handle_payload(
     )
 
 
+_REMOVAL_ACTIONS = {
+    "installation": {"deleted", "suspend"},
+    "installation_repositories": {"removed"},
+}
+
+
+def _is_removal_event(event: str, payload: dict[str, Any]) -> bool:
+    return payload.get("action") in _REMOVAL_ACTIONS.get(event, set())
+
+
+def _ignored_inactive(
+    delivery_id: str,
+    event: str,
+    action: str | None,
+    reason: str,
+    repository_id: str | None = None,
+) -> GitHubWebhookResult:
+    return GitHubWebhookResult(
+        deliveryId=delivery_id,
+        event=event,
+        action=action,
+        ignored=True,
+        ignoredReason=reason,
+        repositoryId=repository_id,
+    )
+
+
+def _installation_status(request: Request) -> str:
+    """Stored installation status of the delivery's organization (SQL mode)."""
+
+    session = getattr(request.state, "radius_db_session", None)
+    org_id = getattr(request.state, "radius_webhook_org_id", None)
+    if session is None or org_id is None:
+        return db_enums.GitHubInstallationStatus.ACTIVE.value
+    organization = session.get(db_models.Organization, org_id)
+    if organization is None:
+        return db_enums.GitHubInstallationStatus.ACTIVE.value
+    return organization.github_installation_status
+
+
+def _set_installation_status(
+    request: Request,
+    status_value: db_enums.GitHubInstallationStatus,
+) -> None:
+    session = getattr(request.state, "radius_db_session", None)
+    org_id = getattr(request.state, "radius_webhook_org_id", None)
+    if session is None or org_id is None:
+        return
+    organization = session.get(db_models.Organization, org_id)
+    if organization is not None:
+        organization.github_installation_status = status_value.value
+        session.flush()
+
+
+def _installation_inactive_reason(request: Request) -> str | None:
+    current = _installation_status(request)
+    if current == db_enums.GitHubInstallationStatus.ACTIVE.value:
+        return None
+    return f"installation_{current}"
+
+
+def _deactivate_repository(
+    repository_id: UUID,
+    repository_service: RepositoryApplicationService,
+    analysis_service: AnalysisApplicationService,
+    reason: str,
+) -> list[str]:
+    """Mark a repository inactive (history kept) and drop its queued work."""
+
+    cancelled = analysis_service.cancel_queued(
+        repository_id=repository_id,
+        reason=reason,
+    )
+    repository_service.disconnect_repository(repository_id)
+    return [str(item) for item in cancelled]
+
+
 def _handle_installation_sync(
     request: Request,
     event: str,
     delivery_id: str,
     payload: dict[str, Any],
     repository_service: RepositoryApplicationService,
+    analysis_service: AnalysisApplicationService,
 ) -> GitHubWebhookResult:
     action = payload.get("action")
+    org_id = getattr(request.state, "radius_webhook_org_id", None)
+    cancelled: list[str] = []
+
+    if event == "installation" and action in ("deleted", "suspend"):
+        deleted = action == "deleted"
+        _set_installation_status(
+            request,
+            db_enums.GitHubInstallationStatus.DELETED
+            if deleted
+            else db_enums.GitHubInstallationStatus.SUSPENDED,
+        )
+        reason = f"GitHub installation was {'removed' if deleted else 'suspended'}."
+        for repo in repository_service.list_repositories(
+            RepositoryListQuery(organization_id=org_id)
+        ):
+            if repo.id is None or repo.status == "disconnected":
+                continue
+            if deleted:
+                cancelled += _deactivate_repository(
+                    UUID(str(repo.id)), repository_service, analysis_service, reason
+                )
+            else:
+                # Suspended: keep the repositories connected (they come back on
+                # unsuspend) but drop work that has not started.
+                cancelled += [
+                    str(item)
+                    for item in analysis_service.cancel_queued(
+                        repository_id=UUID(str(repo.id)), reason=reason
+                    )
+                ]
+        return GitHubWebhookResult(
+            deliveryId=delivery_id,
+            event=event,
+            action=action,
+            cancelledAnalysisIds=cancelled,
+        )
+
+    if event == "installation" and action == "unsuspend":
+        _set_installation_status(request, db_enums.GitHubInstallationStatus.ACTIVE)
+        return GitHubWebhookResult(deliveryId=delivery_id, event=event, action=action)
+
+    if event == "installation_repositories" and action == "removed":
+        for removed in payload.get("repositories_removed", []):
+            existing = repository_service.get_by_github_repository_id(
+                int(removed.get("id", 0))
+            )
+            # Only this tenant's repositories; never another organization's.
+            if (
+                existing is None
+                or existing.id is None
+                or existing.organization_id != org_id
+                or existing.status == "disconnected"
+            ):
+                continue
+            cancelled += _deactivate_repository(
+                UUID(str(existing.id)),
+                repository_service,
+                analysis_service,
+                "Repository was removed from the GitHub installation.",
+            )
+        return GitHubWebhookResult(
+            deliveryId=delivery_id,
+            event=event,
+            action=action,
+            cancelledAnalysisIds=cancelled,
+        )
+
     repos = []
     if event == "installation" and action == "created":
         repos = payload.get("repositories", [])
+        # A (re)installation makes the organization's installation usable again.
+        _set_installation_status(request, db_enums.GitHubInstallationStatus.ACTIVE)
     elif event == "installation_repositories" and action == "added":
         repos = payload.get("repositories_added", [])
-        
+
     for repo in repos:
         full_name = repo.get("full_name", "")
         owner_login = full_name.split("/")[0] if "/" in full_name else ""
@@ -185,14 +385,20 @@ def _handle_installation_sync(
             "owner": {"login": owner_login},
             "private": repo.get("private", False),
             "html_url": f"https://github.com/{full_name}",
-            "default_branch": "main",
-            "clone_url": f"https://github.com/{full_name}.git",
+            # Installation payloads do not carry the default branch. Leave it
+            # unknown: a new row gets a provisional value and the first push or
+            # pull_request delivery (which does carry it) corrects the row.
+            "default_branch": repo.get("default_branch"),
+            "clone_url": f"https://{clone_policy(request).allowed_hosts[0]}/{full_name}.git",
         }
-        _connect_repository(
+        connected = _connect_repository(
             request,
             GitHubRepositoryPayload.model_validate(repo_payload),
             repository_service,
         )
+        if connected.status == "disconnected" and connected.id is not None:
+            # Re-added after removal: history is intact, so just reactivate.
+            repository_service.reconnect_repository(UUID(str(connected.id)))
     return GitHubWebhookResult(deliveryId=delivery_id, event=event, action=action)
 
 
@@ -207,6 +413,10 @@ def _handle_push(
         GitHubRepositoryPayload.model_validate(payload["repository"]),
         repository_service,
     )
+    if repository.status == "disconnected":
+        return _ignored_inactive(
+            delivery_id, "push", None, "repository_disconnected", str(repository.id)
+        )
     ref = str(payload.get("ref", ""))
     branch_name = ref.removeprefix("refs/heads/") or repository.default_branch
     repository_service.upsert_branch(
@@ -231,14 +441,28 @@ def _handle_pull_request(
     analysis_service: AnalysisApplicationService,
 ) -> GitHubWebhookResult:
     action = payload.get("action")
-    repository = _connect_repository(
-        request,
-        GitHubRepositoryPayload.model_validate(payload["repository"]),
-        repository_service,
-    )
     pull_request_payload = GitHubPullRequestPayload.model_validate(
         payload["pull_request"]
     )
+    repository_payload = GitHubRepositoryPayload.model_validate(payload["repository"])
+    if repository_payload.default_branch is None:
+        # Fall back to the PR's base repository object.
+        base_repo = pull_request_payload.base.repo
+        if base_repo is not None and base_repo.default_branch:
+            repository_payload = repository_payload.model_copy(
+                update={"default_branch": base_repo.default_branch}
+            )
+    repository = _connect_repository(request, repository_payload, repository_service)
+    if repository.status == "disconnected":
+        # Removed from the installation (or manually disconnected): accept the
+        # delivery and do nothing. 2xx so GitHub does not mark it failed.
+        return _ignored_inactive(
+            delivery_id,
+            "pull_request",
+            action,
+            "repository_disconnected",
+            str(repository.id),
+        )
     pull_request = repository_service.upsert_pull_request(
         UpsertPullRequestCommand(
             repository_id=UUID(str(repository.id)),
@@ -252,8 +476,33 @@ def _handle_pull_request(
             merged_at=pull_request_payload.merged_at,
         )
     )
+    cancelled: list[str] = []
+    if action == "closed":
+        # A closed/merged PR no longer needs verification: drop work that has
+        # not started. Running jobs are left to finish (never killed).
+        cancelled = [
+            str(item)
+            for item in analysis_service.cancel_queued(
+                pull_request_id=UUID(str(pull_request.id)),
+                reason="Pull request was closed before the analysis started.",
+            )
+        ]
+    if action == "edited":
+        # IN-02: title/body changed. Refresh the intent of the PR's latest
+        # analysis from the payload (no analysis is started for an edit).
+        edited_analysis = latest_analysis_id(analysis_service, UUID(str(pull_request.id)))
+        if edited_analysis is not None:
+            record_pull_request_intent(
+                request,
+                analysis_id=edited_analysis,
+                payload=pull_request_payload,
+                owner=repository.owner,
+                repo=repository.name,
+                trigger="pull_request.edited",
+            )
     if action not in _ANALYSIS_PR_ACTIONS or pull_request_payload.draft:
         return GitHubWebhookResult(
+            cancelledAnalysisIds=cancelled,
             deliveryId=delivery_id,
             event="pull_request",
             action=action,
@@ -268,6 +517,16 @@ def _handle_pull_request(
             commit_sha=pull_request_payload.head.sha,
         )
     )
+    # IN-02: the payload already holds title and body; store them as intent now
+    # (best-effort, no network). The worker adds issues, commits and the spec.
+    record_pull_request_intent(
+        request,
+        analysis_id=UUID(str(analysis.id)),
+        payload=pull_request_payload,
+        owner=repository.owner,
+        repo=repository.name,
+        trigger=f"pull_request.{action}",
+    )
     return GitHubWebhookResult(
         deliveryId=delivery_id,
         event="pull_request",
@@ -278,6 +537,41 @@ def _handle_pull_request(
     )
 
 
+def _handle_issue_edited(
+    request: Request,
+    payload: dict[str, Any],
+    repository_service: RepositoryApplicationService,
+    analysis_service: AnalysisApplicationService,
+) -> None:
+    """IN-02: refresh a linked issue's stored text from an ``issues.edited`` payload."""
+
+    issue = payload.get("issue")
+    repo_data = payload.get("repository")
+    if not isinstance(issue, dict) or not isinstance(repo_data, dict):
+        return
+    try:
+        existing = repository_service.get_by_github_repository_id(int(repo_data["id"]))
+    except (KeyError, TypeError, ValueError):
+        return
+    org_id = getattr(request.state, "radius_webhook_org_id", None)
+    if (
+        existing is None
+        or existing.id is None
+        or existing.status == "disconnected"
+        or existing.organization_id != org_id
+    ):
+        return
+    refresh_issue_intent(
+        request,
+        analysis_service=analysis_service,
+        repository_id=UUID(str(existing.id)),
+        owner=existing.owner,
+        repo=existing.name,
+        issue=issue,
+        now=datetime.now(UTC),
+    )
+
+
 def _connect_repository(
     request: Request,
     payload: GitHubRepositoryPayload,
@@ -285,6 +579,22 @@ def _connect_repository(
 ):
     existing = repository_service.get_by_github_repository_id(payload.id)
     if existing is not None:
+        if existing.organization_id != getattr(
+            request.state, "radius_webhook_org_id", existing.organization_id
+        ):
+            msg = "GitHub repository is already connected to another organization."
+            raise AccessDeniedError(msg)
+        # An existing row is stale when a delivery that really carries the
+        # default branch disagrees with it (e.g. the provisional value written
+        # by the installation sync, or a rename on GitHub).
+        if (
+            payload.default_branch
+            and existing.default_branch != payload.default_branch
+        ):
+            return repository_service.update_default_branch(
+                UUID(str(existing.id)),
+                payload.default_branch,
+            )
         return existing
 
     organization_id = getattr(request.state, "radius_webhook_org_id", None)
@@ -294,14 +604,17 @@ def _connect_repository(
             {"repository": {"id": payload.id}},
             repository_service,
         )
+    # The delivery is signed, but the URL still goes through the same check as
+    # an API-supplied one before it can reach git (A-01/A-02).
+    clone_url = validate_clone_url(payload.clone_url, policy=clone_policy(request))
     repository = repository_service.connect_repository(
         ConnectRepositoryCommand(
             organization_id=organization_id,
             github_repository_id=payload.id,
             name=payload.name,
             owner=payload.owner.login,
-            default_branch=payload.default_branch,
-            clone_url=payload.clone_url,
+            default_branch=payload.default_branch or _PROVISIONAL_DEFAULT_BRANCH,
+            clone_url=clone_url,
             visibility=(
                 RepositoryVisibility.PRIVATE
                 if payload.private
@@ -313,6 +626,27 @@ def _connect_repository(
         msg = "GitHub repository is already connected to another organization."
         raise AccessDeniedError(msg)
     return repository
+
+
+def _parse_payload(body: bytes) -> dict[str, Any]:
+    """Parse a signed delivery body; anything but a JSON object is a 4xx, never a 500."""
+
+    try:
+        payload = json.loads(body)
+    except (ValueError, RecursionError) as exc:
+        msg = "Webhook body is not valid JSON."
+        raise ValidationError(msg) from exc
+    if not isinstance(payload, dict):
+        msg = "Webhook body must be a JSON object."
+        raise ValidationError(msg)
+    return payload
+
+
+def _require_signature_header(request: Request, signature: str | None) -> None:
+    settings = request.app.state.settings
+    if getattr(settings, "github_webhook_secret", "") and signature is None:
+        msg = "Missing GitHub webhook signature."
+        raise AccessDeniedError(msg)
 
 
 def _validate_signature(
@@ -340,7 +674,8 @@ def _validate_signature(
         body,
         hashlib.sha256,
     ).hexdigest()
-    if not hmac.compare_digest(signature, expected):
+    # Compare bytes: ``compare_digest`` raises TypeError (a 500) for non-ASCII str.
+    if not hmac.compare_digest(signature.encode("utf-8"), expected.encode("ascii")):
         msg = "Invalid GitHub webhook signature."
         raise AccessDeniedError(msg)
 
@@ -358,25 +693,53 @@ def _resolve_webhook_organization_id(
     mode; otherwise an unknown installation is rejected so one customer's
     repositories are never filed under another organization.
     """
-    if payload and repository_service:
-        repo_data = payload.get("repository")
-        if isinstance(repo_data, dict) and repo_data.get("id"):
-            existing = repository_service.get_by_github_repository_id(int(repo_data["id"]))
-            if existing is not None:
-                return existing.organization_id
+    settings = request.app.state.settings
+    owner_org: UUID | None = None
+    repo_data = payload.get("repository") if payload else None
+    if repository_service and isinstance(repo_data, dict) and repo_data.get("id"):
+        repo_id = _as_int(repo_data["id"])
+        if repo_id is None:
+            msg = "Webhook repository id must be an integer."
+            raise ValidationError(msg)
+        existing = repository_service.get_by_github_repository_id(repo_id)
+        if existing is not None:
+            owner_org = existing.organization_id
 
-    if payload:
-        installation = payload.get("installation")
-        if isinstance(installation, dict) and installation.get("id"):
-            session = getattr(request.state, "radius_db_session", None)
-            if session is not None:
-                org = (
-                    session.query(db_models.Organization)
-                    .filter_by(github_installation_id=int(installation["id"]))
-                    .first()
-                )
-                if org is not None:
-                    return org.id
+    installation_org: UUID | None = None
+    installation_id: int | None = None
+    installation = payload.get("installation") if payload else None
+    if isinstance(installation, dict) and installation.get("id"):
+        installation_id = _as_int(installation["id"])
+        if installation_id is None:
+            msg = "Webhook installation id must be an integer."
+            raise ValidationError(msg)
+        session = getattr(request.state, "radius_db_session", None)
+        if session is not None:
+            org = (
+                session.query(db_models.Organization)
+                .filter_by(github_installation_id=installation_id)
+                .first()
+            )
+            if org is not None:
+                installation_org = org.id
+
+    if installation_org is not None:
+        # The signed delivery names an installation that is linked to an
+        # organization: that organization is the tenant. A repository row held
+        # by a different organization is never served from here (A-05).
+        if owner_org is not None and owner_org != installation_org:
+            msg = "GitHub repository is already connected to another organization."
+            raise AccessDeniedError(msg)
+        return installation_org
+
+    if owner_org is not None:
+        if installation_id is not None and not _may_adopt_installation(settings):
+            # The delivery comes from an installation no organization is linked
+            # to. The repository row may have been registered by anyone who
+            # knew its numeric id, so it is not proof of ownership (A-05).
+            msg = "Unknown GitHub installation; connect it to an organization first."
+            raise AccessDeniedError(msg)
+        return owner_org
 
     settings = request.app.state.settings
     if getattr(settings, "github_single_tenant", False):
@@ -388,6 +751,25 @@ def _resolve_webhook_organization_id(
 
     msg = "Unknown GitHub installation; connect it to an organization first."
     raise AccessDeniedError(msg)
+
+
+def _as_int(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.isascii() and value.isdigit():
+        return int(value)
+    return None
+
+
+def _may_adopt_installation(settings: object) -> bool:
+    """Explicit single-tenant modes only: no proof of ownership exists otherwise."""
+
+    return bool(
+        getattr(settings, "github_single_tenant", False)
+        or getattr(settings, "github_dev_single_tenant", False)
+    )
 
 
 def _webhook_organization_id(request: Request) -> UUID:
@@ -424,8 +806,25 @@ def _record_installation_id(
     organization = session.get(db_models.Organization, org_id)
     if organization is None:
         return
-    installation_id = int(installation["id"])
+    installation_id = _as_int(installation["id"])
+    if installation_id is None:
+        return
     if organization.github_installation_id is None:
+        if not _may_adopt_installation(request.app.state.settings):
+            # No request-derived values in the log line (they are typed, but static analysis cannot tell).
+            LOGGER.warning(
+                "Not linking a GitHub installation to an organization: no proof of ownership "
+                "(single-tenant mode is off)"
+            )
+            return
+        organization.github_installation_id = installation_id
+    elif (
+        organization.github_installation_id != installation_id
+        and organization.github_installation_status
+        == db_enums.GitHubInstallationStatus.DELETED.value
+    ):
+        # The previous installation was removed; this organization has been
+        # installed again under a new installation id.
         organization.github_installation_id = installation_id
     elif organization.github_installation_id != installation_id:
         # Never silently re-point an organization at another installation:

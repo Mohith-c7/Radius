@@ -103,6 +103,39 @@ class AnalysisApplicationService:
             force=True,
         )
 
+    def cancel_queued(
+        self,
+        *,
+        reason: str,
+        pull_request_id: UUID | None = None,
+        repository_id: UUID | None = None,
+    ) -> list[UUID]:
+        """Cancel analyses that are queued but have not started.
+
+        Only ``pending`` analyses whose job the queue confirms was never
+        started are cancelled; a running analysis is never touched. Returns the
+        cancelled analysis ids.
+        """
+
+        if pull_request_id is None and repository_id is None:
+            msg = "cancel_queued needs a pull request or repository scope."
+            raise ValidationError(msg)
+        cancel_job = getattr(self._pipeline, "cancel_queued", None)
+        cancelled: list[UUID] = []
+        for analysis in self._store.list(
+            repository_id=repository_id,
+            pull_request_id=pull_request_id,
+            status=AnalysisStatus.PENDING,
+        ):
+            if analysis.id is None:
+                continue
+            if cancel_job is not None and not cancel_job(analysis.id, reason):
+                continue
+            analysis.cancel()
+            self._store.update_status(analysis.id, analysis.status)
+            cancelled.append(analysis.id)
+        return cancelled
+
     def get_analysis(self, analysis_id: UUID) -> AnalysisDetailResponse:
         """Return an analysis summary with changed-file evidence."""
 
@@ -111,12 +144,30 @@ class AnalysisApplicationService:
     def list_analyses(self, query: AnalysisListQuery) -> list[AnalysisResponse]:
         """List analyses with optional filters."""
 
+        extra: dict[str, object] = {}
+        if query.repository_ids is not None:
+            extra["repository_ids"] = query.repository_ids
+        if query.limit is not None:
+            extra["limit"] = query.limit
+        if query.offset:
+            extra["offset"] = query.offset
         analyses = self._store.list(
             repository_id=query.repository_id,
             pull_request_id=query.pull_request_id,
             status=self._parse_status(query.status),
+            **extra,
         )
         return [AnalysisResponse.from_entity(analysis) for analysis in analyses]
+
+    def count_analyses(self, query: AnalysisListQuery) -> int:
+        """Count analyses matching the filters of ``query`` (ignores its page window)."""
+
+        return self._store.count(
+            repository_id=query.repository_id,
+            pull_request_id=query.pull_request_id,
+            status=self._parse_status(query.status),
+            repository_ids=query.repository_ids,
+        )
 
     def mark_running(self, analysis_id: UUID) -> AnalysisResponse:
         """Move an analysis into running state."""
@@ -194,6 +245,7 @@ class AnalysisApplicationService:
         return ChangeAnalysisResponse(
             analysis_id=command.analysis_id,
             changed_files=responses,
+            diff_text=command.diff_text,
         )
 
     def analyze_repository_diff(
@@ -270,6 +322,22 @@ class AnalysisApplicationService:
                 for path in command.changed_file_paths
             },
         )
+        if command.symbol_affected_file_paths is not None:
+            keep = {
+                self._normalize_graph_path(path)
+                for path in (*command.symbol_affected_file_paths, *command.changed_file_paths)
+            }
+            scoped = {
+                node.id: node.path
+                for node in command.graph_snapshot.graph.nodes
+                if node.node_type in (GraphNodeType.FILE, GraphNodeType.SYMBOL)
+                and node.path is not None
+            }
+            affected_ids = {
+                node_id
+                for node_id in affected_ids
+                if node_id not in scoped or scoped[node_id] in keep
+            }
         affected_nodes = [
             node
             for node in command.graph_snapshot.graph.nodes

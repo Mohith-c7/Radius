@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import json
-import xml.etree.ElementTree as ET
 from uuid import UUID, uuid4
 
-try:
-    import defusedxml.ElementTree as defused_ET
-except ImportError:
-    defused_ET = None
-
+# Test reports are attacker-influenced (pull-request code writes them). There is
+# deliberately NO fallback to the stdlib XML parser: if defusedxml is missing the
+# import fails loudly (A-17) instead of silently accepting entity-expansion XML.
+import defusedxml.ElementTree as defused_ET
 from radius_shared.errors import ValidationError
 
 from radius_testing.domain.entities import TestRunResult
@@ -139,15 +137,9 @@ class JUnitReportParser:
 
     def _parse_xml(self, text: str, analysis_id: UUID) -> TestRunResult:
         try:
-            if defused_ET is not None:
-                root = defused_ET.fromstring(text.encode("utf-8"))
-            else:
-                root = ET.fromstring(text.encode("utf-8"))  # nosec B314
+            root = defused_ET.fromstring(text.encode("utf-8"))
         except Exception:
-            if defused_ET is not None:
-                root = defused_ET.fromstring(text)
-            else:
-                root = ET.fromstring(text)  # nosec B314
+            root = defused_ET.fromstring(text)
 
         tag = root.tag.lower() if isinstance(root.tag, str) else ""
         if not tag.endswith(("testsuite", "testsuites")) and next(

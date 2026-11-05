@@ -1,0 +1,1 @@
+The Verdict v2 payload the worker renders and the one the API serves are now built by the same function from the stored bundle; the stored format is unchanged. An empty `degraded` list is no longer included in the worker-side payload.

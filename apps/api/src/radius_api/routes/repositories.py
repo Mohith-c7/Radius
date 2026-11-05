@@ -9,29 +9,68 @@ from fastapi import APIRouter, Depends, Header, Query, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from radius_analysis.application import AnalysisApplicationService
+from radius_github import GitHubAppClient
+from radius_github.pull_sync import record_pull_request, sync_open_pull_requests
 from radius_repository.application import RepositoryApplicationService
 from radius_repository.domain import RepositoryVisibility
-from radius_repository.dto import ConnectRepositoryCommand, RepositoryListQuery
+from radius_repository.domain.clone_url import validate_clone_url
+from radius_repository.dto import (
+    ConnectRepositoryCommand,
+    RepositoryListQuery,
+)
 from radius_shared.dto import success_response
+from radius_shared.errors import ConflictError, NotFoundError
 
 from radius_api.auth import ApiPrincipal, ensure_same_organization, get_api_principal
 from radius_api.dependencies import (
     get_analysis_service,
+    get_github_client,
     get_idempotency_store,
     get_repository_service,
+)
+from radius_api.github_intent import record_pull_request_intent
+from radius_api.github_pull import (
+    clone_policy,
+    open_access,
+    parse_owner_repo,
+    parse_pull_request,
+    require_configured,
+    translate_github_error,
 )
 from radius_api.idempotency import (
     IdempotencyStore,
     replay_or_validate,
     request_hash,
 )
+from radius_api.pagination import PageParams
 from radius_api.schemas.repositories import (
+    ConnectGitHubRepositoryRequest,
     ConnectRepositoryRequest,
     ImportPullRequestRequest,
     UpdateRepositoryRequest,
 )
 
 router = APIRouter(prefix="/repositories", tags=["repositories"])
+
+
+def _owned_repository(
+    service: RepositoryApplicationService,
+    principal: ApiPrincipal,
+    repository_id: UUID,
+):
+    """Return the repository when it belongs to the caller's organization.
+
+    An unknown id and another organization's repository are indistinguishable
+    (both 404), so repository ids cannot be probed across tenants.
+    """
+
+    try:
+        repository = service.get_repository(repository_id)
+    except NotFoundError:
+        raise NotFoundError(f"Repository {repository_id} was not found.") from None
+    if repository.organization_id != principal.organization_id:
+        raise NotFoundError(f"Repository {repository_id} was not found.")
+    return repository
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -52,6 +91,9 @@ async def connect_repository(
     """Connect a repository to Radius."""
 
     ensure_same_organization(principal, request.organization_id)
+    # A-01/A-02: the clone URL ends up as an argument of ``git``. Accept only
+    # https://<allowed host>/<owner>/<repo>[.git]; the stored value is canonical.
+    clone_url = validate_clone_url(request.clone_url, policy=clone_policy(http_request))
     body_hash = await request_hash(http_request)
     existing = replay_or_validate(
         idempotency_store,
@@ -73,7 +115,7 @@ async def connect_repository(
             name=request.name,
             owner=request.owner,
             default_branch=request.default_branch,
-            clone_url=request.clone_url,
+            clone_url=clone_url,
             visibility=RepositoryVisibility(request.visibility),
         )
     )
@@ -98,6 +140,7 @@ def list_repositories(
         Depends(get_repository_service),
     ],
     principal: Annotated[ApiPrincipal, Depends(get_api_principal)],
+    page: PageParams,
     organization_id: Annotated[UUID | None, Query(alias="organizationId")] = None,
     status_filter: Annotated[str | None, Query(alias="status")] = None,
     visibility: str | None = None,
@@ -113,7 +156,10 @@ def list_repositories(
             visibility=visibility,
         )
     )
-    return success_response(repositories)
+    window = page.slice(repositories)
+    return success_response(
+        window, meta=page.meta(total=len(repositories), returned=len(window))
+    )
 
 
 @router.get("/{repository_id}")
@@ -127,8 +173,7 @@ def get_repository(
 ):
     """Return one repository."""
 
-    repository = service.get_repository(repository_id)
-    ensure_same_organization(principal, repository.organization_id)
+    repository = _owned_repository(service, principal, repository_id)
     return success_response(repository)
 
 
@@ -143,8 +188,7 @@ def disconnect_repository(
 ):
     """Disconnect one repository."""
 
-    repository = service.get_repository(repository_id)
-    ensure_same_organization(principal, repository.organization_id)
+    _owned_repository(service, principal, repository_id)
     return success_response(service.disconnect_repository(repository_id))
 
 
@@ -160,8 +204,7 @@ def update_repository(
 ):
     """Update repository configuration such as default branch."""
 
-    repository = service.get_repository(repository_id)
-    ensure_same_organization(principal, repository.organization_id)
+    _owned_repository(service, principal, repository_id)
     updated = service.update_default_branch(repository_id, payload.default_branch)
     return success_response(updated)
 
@@ -178,8 +221,7 @@ def get_pull_request_by_number(
 ):
     """Return a pull request by repository ID and GitHub PR number."""
 
-    repository = service.get_repository(repository_id)
-    ensure_same_organization(principal, repository.organization_id)
+    _owned_repository(service, principal, repository_id)
     pull_request = service.get_pull_request_by_repository_and_number(
         repository_id, github_pr_number
     )
@@ -194,13 +236,159 @@ def list_pull_requests(
         Depends(get_repository_service),
     ],
     principal: Annotated[ApiPrincipal, Depends(get_api_principal)],
+    page: PageParams,
 ):
-    """List all pull requests for one repository."""
+    """List the pull requests of one repository, newest first (``limit``/``offset``)."""
 
-    repository = service.get_repository(repository_id)
-    ensure_same_organization(principal, repository.organization_id)
+    _owned_repository(service, principal, repository_id)
     pull_requests = service.list_pull_requests(repository_id)
-    return success_response(pull_requests)
+    window = page.slice(pull_requests)
+    return success_response(
+        window, meta=page.meta(total=len(pull_requests), returned=len(window))
+    )
+
+
+@router.post("/connect-github", status_code=status.HTTP_201_CREATED)
+def connect_github_repository(
+    http_request: Request,
+    payload: ConnectGitHubRepositoryRequest,
+    service: Annotated[
+        RepositoryApplicationService,
+        Depends(get_repository_service),
+    ],
+    github: Annotated[GitHubAppClient, Depends(get_github_client)],
+    principal: Annotated[ApiPrincipal, Depends(get_api_principal)],
+):
+    """Connect a repository by ``owner/name`` through the GitHub App (no webhook).
+
+    The API asks GitHub which App installation covers the repository, reads the
+    repository metadata (id, default branch, clone URL, visibility) and stores
+    the installation id on the organization, which is all the worker needs to
+    clone, analyze and publish. Safe to repeat: an already connected repository
+    is returned (and reconnected if it had been disconnected).
+    """
+
+    owner, name = parse_owner_repo(payload.repository)
+    access = open_access(
+        http_request,
+        github,
+        organization_id=principal.organization_id,
+        owner=owner,
+        repo=name,
+        discover=True,
+    )
+    try:
+        info = github.get_repository(token=access.token, owner=owner, repo=name)
+    except Exception as exc:  # noqa: BLE001
+        raise translate_github_error(
+            exc, what=f"reading repository {owner}/{name}"
+        ) from exc
+    github_id = info.get("id")
+    clone_url = info.get("clone_url")
+    if not isinstance(github_id, int) or not clone_url:
+        raise ConflictError(
+            f"GitHub returned incomplete metadata for {owner}/{name}.",
+            code="GITHUB_API_ERROR",
+        )
+    # GitHub's own metadata is still checked: the URL must be https on an
+    # allowed host and name the repository we were asked about.
+    clone_url = validate_clone_url(clone_url, policy=clone_policy(http_request))
+    default_branch = str(info.get("default_branch") or "main")
+    meta = {"installationId": access.installation_id}
+    existing = service.get_by_github_repository_id(github_id)
+    if existing is not None:
+        if existing.organization_id != principal.organization_id:
+            raise ConflictError(
+                "This repository cannot be connected.",
+                code="REPOSITORY_ALREADY_CONNECTED",
+            )
+        repository_id = UUID(str(existing.id))
+        if existing.status == "disconnected":
+            service.reconnect_repository(repository_id)
+        if existing.default_branch != default_branch:
+            service.update_default_branch(repository_id, default_branch)
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content=jsonable_encoder(
+                success_response(
+                    service.get_repository(repository_id),
+                    meta={**meta, "created": False},
+                )
+            ),
+        )
+    repository = service.connect_repository(
+        ConnectRepositoryCommand(
+            organization_id=principal.organization_id,
+            github_repository_id=github_id,
+            name=str(info.get("name") or name),
+            owner=str((info.get("owner") or {}).get("login") or owner),
+            default_branch=default_branch,
+            clone_url=clone_url,
+            visibility=(
+                RepositoryVisibility.PRIVATE
+                if info.get("private", True)
+                else RepositoryVisibility.PUBLIC
+            ),
+        )
+    )
+    return JSONResponse(
+        status_code=status.HTTP_201_CREATED,
+        content=jsonable_encoder(
+            success_response(repository, meta={**meta, "created": True})
+        ),
+    )
+
+
+def _record_and_analyze(
+    http_request: Request,
+    *,
+    service: RepositoryApplicationService,
+    analysis_service: AnalysisApplicationService,
+    repository,
+    raw_pull_request: dict,
+    principal: ApiPrincipal,
+    analyze: bool,
+):
+    """Upsert one GitHub pull request; start an analysis for its head commit."""
+
+    pull_request = parse_pull_request(raw_pull_request)
+    upserted, analysis = record_pull_request(
+        repository_service=service,
+        analysis_service=analysis_service,
+        repository=repository,
+        pull_request=pull_request,
+        analyze=analyze,
+    )
+    if analysis is not None:
+        _record_intent(http_request, analysis, pull_request, repository, principal)
+    return upserted, analysis
+
+
+def _record_intent(http_request, analysis, pull_request, repository, principal) -> None:
+    if getattr(http_request.state, "radius_webhook_org_id", None) is None:
+        http_request.state.radius_webhook_org_id = principal.organization_id
+    record_pull_request_intent(
+        http_request,
+        analysis_id=UUID(str(analysis.id)),
+        payload=pull_request,
+        owner=repository.owner,
+        repo=repository.name,
+        trigger="pull_request.pull",
+    )
+
+
+def _connected_repository(
+    service: RepositoryApplicationService,
+    principal: ApiPrincipal,
+    repository_id: UUID,
+):
+    repository = _owned_repository(service, principal, repository_id)
+    if repository.status == "disconnected":
+        raise ConflictError(
+            "Repository is disconnected. Connect it again first.",
+            code="REPOSITORY_DISCONNECTED",
+        )
+    return repository
 
 
 @router.post("/{repository_id}/sync-pull-requests")
@@ -215,83 +403,132 @@ def sync_pull_requests(
         AnalysisApplicationService,
         Depends(get_analysis_service),
     ],
+    github: Annotated[GitHubAppClient, Depends(get_github_client)],
     principal: Annotated[ApiPrincipal, Depends(get_api_principal)],
     auto_analyze: bool = Query(default=True),
 ):
-    """Sync open pull requests from GitHub and optionally trigger automatic scoring."""
+    """Pull open pull requests from GitHub (no webhook) and analyze them.
 
-    from datetime import UTC, datetime
+    Draft pull requests are stored but not analyzed, and a head commit that already
+    has a live or finished analysis is not analyzed again (repeat syncs are cheap);
+    use the per-PR ``analyze`` route to analyze one explicitly. Without GitHub App credentials the stored
+    pull requests are returned unchanged (``meta.github = not_configured``).
+    GitHub failures are returned as errors, not swallowed.
+    """
 
-    from radius_analysis.dto import StartAnalysisCommand
-    from radius_github import GitHubAppClient, GitHubAppSettings
-    from radius_repository.dto import UpsertPullRequestCommand
+    repository = _connected_repository(service, principal, repository_id)
+    if not github.settings.enabled:
+        return success_response(
+            service.list_pull_requests(repository_id),
+            meta={"github": "not_configured"},
+        )
+    access = open_access(
+        http_request,
+        github,
+        organization_id=principal.organization_id,
+        owner=repository.owner,
+        repo=repository.name,
+    )
+    try:
+        raw_pull_requests = github.list_pull_requests(
+            token=access.token,
+            owner=repository.owner,
+            repo=repository.name,
+            state="open",
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise translate_github_error(
+            exc, what=f"listing pull requests of {repository.owner}/{repository.name}"
+        ) from exc
 
-    repository = service.get_repository(repository_id)
-    ensure_same_organization(principal, repository.organization_id)
+    outcome = sync_open_pull_requests(
+        repository_service=service,
+        analysis_service=analysis_service,
+        repository=repository,
+        raw_pull_requests=raw_pull_requests,
+        auto_analyze=auto_analyze,
+        parse=parse_pull_request,
+        on_analysis=lambda analysis, parsed: _record_intent(
+            http_request, analysis, parsed, repository, principal
+        ),
+    )
+    return success_response(
+        outcome.synced,
+        meta={
+            "github": "synced",
+            "installationId": access.installation_id,
+            "analysisIds": outcome.analysis_ids,
+            "skipped": outcome.skipped,
+        },
+    )
 
-    settings = GitHubAppSettings()
-    synced_prs = []
-    if settings.enabled:
-        client = GitHubAppClient(settings)
-        installation_id = settings.github_installation_id or 0
-        if not installation_id:
-            session = getattr(http_request.state, "radius_db_session", None)
-            if session is not None:
-                from radius_database import models as db_models
-                org = session.get(db_models.Organization, repository.organization_id)
-                if org and org.github_installation_id:
-                    installation_id = org.github_installation_id
 
-        if installation_id:
-            try:
-                token = client.create_installation_token(installation_id).token
-                gh_prs = client.list_pull_requests(
-                    token=token,
-                    owner=repository.owner,
-                    repo=repository.name,
-                    state="open",
-                )
-                for pr in gh_prs:
-                    pr_num = pr.get("number")
-                    head = pr.get("head", {})
-                    base = pr.get("base", {})
-                    user = pr.get("user", {})
-                    opened_at_str = pr.get("created_at")
-                    opened_at = (
-                        datetime.fromisoformat(opened_at_str.replace("Z", "+00:00"))
-                        if opened_at_str
-                        else datetime.now(UTC)
-                    )
-                    upserted = service.upsert_pull_request(
-                        UpsertPullRequestCommand(
-                            repository_id=repository_id,
-                            github_pr_number=pr_num,
-                            title=pr.get("title", f"PR #{pr_num}"),
-                            source_branch=head.get("ref", "unknown"),
-                            target_branch=base.get("ref", repository.default_branch),
-                            author=user.get("login", "unknown"),
-                            status="open",
-                            opened_at=opened_at,
-                        )
-                    )
-                    synced_prs.append(upserted)
+@router.post(
+    "/{repository_id}/pull-requests/{github_pr_number}/analyze",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def analyze_pull_request(
+    http_request: Request,
+    repository_id: UUID,
+    github_pr_number: int,
+    service: Annotated[
+        RepositoryApplicationService,
+        Depends(get_repository_service),
+    ],
+    analysis_service: Annotated[
+        AnalysisApplicationService,
+        Depends(get_analysis_service),
+    ],
+    github: Annotated[GitHubAppClient, Depends(get_github_client)],
+    principal: Annotated[ApiPrincipal, Depends(get_api_principal)],
+):
+    """Analyze one pull request by number: fetch it from GitHub, queue an analysis.
 
-                    # Trigger automatic scoring engine if auto_analyze is enabled
-                    if auto_analyze and head.get("sha"):
-                        analysis_service.start_analysis(
-                            StartAnalysisCommand(
-                                repository_id=repository_id,
-                                pull_request_id=upserted.id,
-                                commit_sha=head["sha"],
-                            )
-                        )
-            except Exception:
-                pass
+    This is the pull-based replacement for the ``pull_request`` webhook. The head
+    commit is read from GitHub, so the caller does not need a commit SHA. A
+    pending or running analysis of the same head commit is reused.
+    """
 
-    if not synced_prs:
-        synced_prs = service.list_pull_requests(repository_id)
-
-    return success_response(synced_prs)
+    repository = _connected_repository(service, principal, repository_id)
+    require_configured(github)
+    access = open_access(
+        http_request,
+        github,
+        organization_id=principal.organization_id,
+        owner=repository.owner,
+        repo=repository.name,
+    )
+    try:
+        raw = github.get_pull_request(
+            token=access.token,
+            owner=repository.owner,
+            repo=repository.name,
+            number=github_pr_number,
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise translate_github_error(
+            exc,
+            what=(
+                f"reading pull request #{github_pr_number} of "
+                f"{repository.owner}/{repository.name}"
+            ),
+        ) from exc
+    upserted, analysis = _record_and_analyze(
+        http_request,
+        service=service,
+        analysis_service=analysis_service,
+        repository=repository,
+        raw_pull_request=raw,
+        principal=principal,
+        analyze=True,
+    )
+    return success_response(
+        analysis,
+        meta={
+            "pullRequestId": str(upserted.id),
+            "installationId": access.installation_id,
+        },
+    )
 
 
 _PR_URL = re.compile(
@@ -301,6 +538,7 @@ _PR_URL = re.compile(
 
 @router.post("/import-pull-request", status_code=status.HTTP_202_ACCEPTED)
 def import_public_pull_request(
+    http_request: Request,
     request: ImportPullRequestRequest,
     service: Annotated[
         RepositoryApplicationService,
@@ -350,7 +588,9 @@ def import_public_pull_request(
                 name=repo_payload.name,
                 owner=repo_payload.owner.login,
                 default_branch=repo_payload.default_branch,
-                clone_url=repo_payload.clone_url,
+                clone_url=validate_clone_url(
+                    repo_payload.clone_url, policy=clone_policy(http_request)
+                ),
                 visibility=RepositoryVisibility.PUBLIC,
             )
         )

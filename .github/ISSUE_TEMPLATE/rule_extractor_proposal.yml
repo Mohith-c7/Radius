@@ -1,0 +1,51 @@
+name: Rule or extractor proposal
+description: Propose a new rule, intent extractor or language extractor
+title: "[Proposal]: "
+labels: ["type: proposal", "status: needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Read the "How to add things" section of [CONTRIBUTING.md](https://github.com/Mohith-c7/Radius/blob/develop/CONTRIBUTING.md) first. Radius verdicts are meant to be deterministic and evidence-based, so explain how your proposal stays so.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What are you proposing?
+      options:
+        - Verification rule
+        - Intent criterion extractor
+        - Language parser or extractor
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What should it detect or extract?
+      description: Describe inputs and outputs precisely.
+    validations:
+      required: true
+  - type: textarea
+    id: examples
+    attributes:
+      label: Examples
+      description: At least one positive and one negative example. Use public or synthetic code only.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: How would we know it is right?
+      description: Expected false-positive risk, and a benchmark case or dataset that could measure it.
+    validations:
+      required: false
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Would you like to implement it?
+      options:
+        - "Yes"
+        - "Maybe, with guidance"
+        - "No"
+    validations:
+      required: true

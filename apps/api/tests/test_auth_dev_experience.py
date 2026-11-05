@@ -282,7 +282,7 @@ def test_signup_provisions_domain_organization_and_user(test_client, test_db):
     assert domain_user.organization_id == org_id
     assert domain_user.name == "Alice Smith"
     assert domain_user.role == UserRole.DEVELOPER
-    assert domain_user.github_user_id is not None
+    assert domain_user.github_user_id is None  # C-15: password users have no GitHub id
 
     # 3. Auth user foreign/linked organization verification
     auth_user = test_db.get(AuthUser, auth_user_id)
@@ -331,6 +331,7 @@ def test_user_from_provider_provisions_domain_models(test_db):
         provider_id="12345678",
         email="oauthdev@example.com",
         name="GitHub Developer",
+        email_verified=True,
     )
     assert auth_user is not None
     assert auth_user.organization_id is not None
@@ -354,6 +355,7 @@ def test_user_from_provider_provisions_domain_models(test_db):
         provider_id="12345678",
         email="oauthdev@example.com",
         name="GitHub Developer",
+        email_verified=True,
     )
     assert re_auth_user.id == auth_user.id
 

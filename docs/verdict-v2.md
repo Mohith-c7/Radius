@@ -1,0 +1,240 @@
+# Verdict v2 (alpha): how to read the verdict and the PR comment
+
+Verdict v2 is an opt-in, per-criterion verdict. It is switched on with `RADIUS_FEATURE_VERDICT_V2` (`off` by default, `shadow` computes and stores it while v1 is still published, `on` publishes it instead of v1). This page explains what the verdict means and how the comment is laid out. It describes the **alpha**: the evidence is static assertion strength only, and every threshold is an uncalibrated default (profile `alpha-static`).
+
+## How to enable
+
+Set `RADIUS_FEATURE_VERDICT_V2` on **both** the API and the worker (same variable, same value):
+
+| Value | What happens |
+| --- | --- |
+| `off` (default; unset, `false`, `0` or anything unrecognised) | Nothing changes. No v2 code runs, the v2 endpoint answers 404 `disabled`, and the v1 comment and Check Run are byte-for-byte what they were. |
+| `shadow` | After each analysis the worker computes and stores v2, and the API serves it (`GET /api/v1/analyses/{id}/verdict-v2`, dashboard panel marked "shadow"). **v1 is still the only thing published to GitHub.** Use it to compare before you switch. |
+| `on` (also `true`, `1`) | v2 is computed, stored and published **instead of** v1 for that analysis: one PR comment (the existing Radius comment, updated in place) and the `Radius confidence` Check Run. If v2 fails for any reason, or its head commit is stale, v1 is published as before. v1 is always computed and stored. |
+
+A useful verdict also needs `RADIUS_FEATURE_INTENT_INGESTION=true` (otherwise there is no intent snapshot and the verdict is `Not verified - insufficient evidence`), and CI must upload per-case results (`POST /api/v1/analyses/{id}/tests/results`). When results arrive, the API leaves a small request for the worker, which re-scores (no new clone) and updates the same comment and Check Run within one poll interval. Replaying the same upload writes nothing new, and a result for a commit that is no longer the PR head is never published.
+
+## What the verdict says, and what it does not
+
+The verdict is computed by fixed rules from validated evidence (test outcomes uploaded from CI, links between criteria, code and tests, and tamper findings). No language model decides it.
+
+**Wording.** The JSON contract keeps its internal values (`verified`, `proven`, ...), but everything a person reads says what the alpha actually measures. A comment starts with a one-line disclaimer ("Alpha - static evidence only - uncalibrated ... not a proof of correctness"), the internal state `proven` is shown as **SUPPORTED** (`unevidenced` as UNSUPPORTED), and the verdict `verified` is shown as **Supported by static evidence (alpha)**. Legend: *supported = static assertion strength above threshold; not a proof of correctness*. The API adds `alpha: true`, `calibrated: false`, `evidence_basis` and a `presentation` block with the same strings (`contract_version` `verdict-v2-contract-5`; all fields are optional additions, see the mutation section for the one widened value).
+
+- `Supported by static evidence (alpha)` (internal `verified`) means no rule found a problem, given the evidence Radius has. It does **not** mean the code is correct: tests were rated by the strength of their assertions, not by mutation testing, so a test that cannot fail can still count. The thresholds were fitted by eye to 8 hand-written fixtures and are uncalibrated.
+- `Failed`, `Not verified - insufficient evidence` and `Needs human review` say why in one sentence and name the criteria involved.
+- There is no probability and no percentage score in v2. The v1 heuristic score appears only in a collapsed "legacy" section, labelled uncalibrated.
+
+## The four verdicts and the rules behind them
+
+Rules are checked in this order. Every rule is evaluated and recorded; the first one that fires decides. Thresholds are the alpha defaults and can be changed in configuration.
+
+| Order | Rule | Fires when | Verdict |
+| --- | --- | --- | --- |
+| 1 | R1a | a criterion is contradicted (a linked test failed) | Failed |
+| 2 | R1b | any CI test case failed for this commit | Failed |
+| 3 | R1c | an unwaived tamper finding at severity high or above (severities are assumed, not calibrated: see the note below) | Failed |
+| 4 | R2p | no CI test results received yet for this commit (not when nothing is in scope: only documentation or inert files changed, no criterion, no blocking marker; that is R2e `not_applicable`, DEC-037) | Insufficient evidence, shown as "Awaiting CI test results" |
+| 5 | R2a | no behavioral, testable criterion exists while behavioral code changed | Insufficient evidence |
+| 5b | R2e | no in-scope criterion exists (none, or all excluded) and no behavioral code changed: reason `no_intent_criteria` ("no intent criteria were extracted; add a spec or confirm criteria"), or `not_applicable` when only documentation or inert files changed | Insufficient evidence (never `verified`; see DEC-031) |
+| 6 | R2b | unproven intent mass above 0.20 | Insufficient evidence |
+| 7 | R2c | less than 50% of the behavioral changes are covered by a stated criterion | Insufficient evidence |
+| 8 | R2d | the analysis was incomplete: any blocking degraded marker (list below) | Insufficient evidence |
+| 9 | R3a | an unwaived tamper finding at severity medium or above | Needs human review |
+| 10 | R3b | a criterion counted as proven depends on a flaky test | Needs human review |
+| 11 | R3c | a proven criterion rests on a weak criterion-to-code link (below 0.50) | Needs human review |
+| 12 | R4 | none of the above | Supported by static evidence (alpha) (`verified`) |
+
+With a repository policy that has `require` or `evidence` entries, two more rules sit between R2d and R3a: **P1** (a criterion or changed code under a required path is below the required state) and **P2** (a criterion has no counted test that is not agent-authored). Both give `Not verified - insufficient evidence`. Without such a policy the list is exactly the rules above (R2e included). See [Repository policy and waivers](policy.md).
+
+> **Caution on R1c.** The tamper severities are assumptions that have not been calibrated. In the 2026-11 replay on this repository's merged PRs, every `failed` verdict came from a single high-severity tamper finding and at least 3 of 7 looked wrong on manual reading (`docs/research/evaluation/REPLAY_2026-11.md`, F3; still open: F-T4, F-T5, T010/T017). Treat a tamper-only `failed` as a prompt to look, not as a finding, and use waivers or the advisory conclusions mapping.
+
+Because failures come first, a tamper finding fails the verdict immediately, without waiting for CI. A pending PR (R2p) is published as a completed, neutral check, never left "in progress"; the comment updates itself when results arrive.
+
+Unsupported intent mass (UIM; "unproven" in the design documents) is the weighted share of non-excluded criteria whose support is below 0.50. Intent coverage is the share of behavioral changes that a stated criterion accounts for.
+
+## The dashboard analysis page tells one story
+
+When a v2 result is available for an analysis, the page header (verdict pill, headline, summary line) and the Recommendation card show the v2 verdict in the alpha wording, for example `Not verified - insufficient evidence (alpha, static evidence only)` with `0 of 2 stated criteria supported`. The Recommendation card shows the v2 "What to do next" actions; for anything other than a supported verdict it starts with `Do not treat this PR as verified: ...`, and for a supported verdict it says static evidence supports the stated intent and the change still needs review (never "safe to merge"). The v1 0-100 heuristic ring and the v1 sentence move into a muted block titled `Legacy v1 result (file-level test selection, uncalibrated heuristic)`; they are never styled as a pass. No v2 verdict is shown in green. While the v2 result is loading the header shows neither verdict. When v2 is off, not computed or unavailable, the page is unchanged (v1 wording and styling). The mapping is the pure function `buildHeaderModel` in `apps/dashboard/lib/analysis-header-model.ts`.
+
+## Criterion states
+
+| State in the comment (internal value) | Meaning |
+| --- | --- |
+| SUPPORTED (`proven`) | static assertion strength reaches 0.50 and at least one counted test has a strong assertion. Not a proof of correctness |
+| WEAK (`weak`) | some support, but below the threshold, or no strong assertion |
+| UNSUPPORTED (`unevidenced`) | little or no support, often no linked test |
+| CONTRADICTED | a linked test failed |
+| EXCLUDED | not scored (for example too vague to test) |
+
+Short tags after the state (`tampered`, `flaky`, `unconfirmed`, `awaiting CI`, `weak link`, `stale evidence`, `needs typed evidence`, `author-supplied hint`) are flags that apply to that criterion.
+
+## The comment
+
+One comment per pull request, updated in place. Layout:
+
+0. The alpha disclaimer (first visible line).
+1. Heading with the verdict, for example `Radius verdict (v2 alpha): Not verified - insufficient evidence`.
+2. A summary line: criteria supported, unsupported intent mass with its limit, intent coverage (with a note when it is below the minimum) and the evidence basis (`static assertion strength only (no mutation testing)`). If any criterion relies on an unconfirmed test hint the author supplied, a line says `N criteria rely on author-supplied test hints`.
+3. `Why`: one sentence from the deciding rule, naming criteria as C1, C2, ...
+4. A table of criteria: state, support against the threshold, and what evidence backs it, followed by the legend.
+5. `What to do next`: concrete actions per criterion.
+6. Collapsible sections: tamper findings, changed code with no stated criterion, per-criterion evidence (every factor that went into the support number), legacy v1 signals.
+7. A footer with the algorithm version, profile, short commit id and a link to the dashboard.
+
+A full example (fixture 08) is in `packages/github/tests/golden_verdict_v2/fixture_08_worked_example.md`.
+
+The Check Run keeps the name `Radius confidence`. Its title always carries the caveat, for example `Radius v2 alpha - static evidence only - uncalibrated: Supported by static evidence (alpha) (2/2 criteria supported)`, and its summary starts with the disclaimer.
+
+### Blocking degraded markers (R2d)
+
+Missing or unanalysable evidence never reads as a pass. These markers make `verified` unreachable and are listed in the R2d detail, the payload (`degraded`) and the dashboard footer:
+
+| Marker | Meaning |
+| --- | --- |
+| `truncated` | a budget or limit cut the analysis short |
+| `unsupported_language:<lang>` | behavioral change in a language other than Python (also produced for unknown-language files, `unknown`) |
+| `unanalyzed_files:<n>` | `n` changed files are neither on the inert allowlist nor analysed: unknown languages (shell, Dockerfile, Go, SQL, general YAML, Terraform ...), binary or over-budget files, parse failures, and paths the symbol extractor ignores (`vendor/`, `dist/`, `build/`, generated files). DEC-037 |
+| `tamper_unanalyzed:files=<n>` | the tamper analysis could not read or parse `n` changed test, conftest, CI, build, manifest or snapshot files (too large, binary, unparsable). A weakened test there would have gone unseen. DEC-037 |
+| `tamper_unanalyzed:<note>` | the tamper engine reported an incomplete run: `context_error`, `context_time_budget_exceeded`, `max_files_exceeded`, `base_snapshot_unavailable`, `rule_time_budget_exceeded` |
+| `intent_not_in_analysis:<n>` | `n` live criteria exist that the stored analysis never saw (a manual criterion added afterwards, a reopened rejected one). They are not scored until a new analysis |
+| `unconfirmed_inferred_intent`, `policy_invalid`, `policy_unreadable`, `snapshot_missing:*` | as documented elsewhere |
+
+The **inert allowlist** (`rules.is_inert_path`) is deliberately small: Markdown, reStructuredText and AsciiDoc files, images (png, jpg, gif, ico, webp; not SVG, which can carry script), licence/notice/authors/changelog files by exact name, `.txt` files that are documentation (README, CHANGELOG, ...) or sit under `docs/`, lockfiles (`uv.lock`, `poetry.lock`, `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `Cargo.lock`, `go.sum` ...), `.gitignore`/`.gitattributes`/`.editorconfig`, and files under `docs/`, `doc/`, `changelog.d/` only when they have a documentation suffix. Matching is by exact basename or suffix, never by prefix: `changelog_gen.sh`, `licence_check.py`, `docs/gen.go`, `CMakeLists.txt`, `requirements-dev.txt` are not inert. CI workflows, dependency manifests and build/test configuration are analysed by the tamper catalog and therefore do not add `unanalyzed_files` by themselves; their failures show up as `tamper_unanalyzed`.
+
+### Check Run conclusion mapping
+
+`RADIUS_VERDICT_V2_CHECK_CONCLUSIONS` (worker setting; `advisory` default, `strict`; any other value means `advisory`):
+
+| Verdict (deciding rule) | `advisory` (default) | `strict` |
+| --- | --- | --- |
+| `verified` (R4) | `neutral` | `success` |
+| `failed` (R1a failing linked test, R1b failing CI cases, R1c high tamper) | `failure` | `failure` |
+| `failed` (any other rule; none exists today) | `neutral` | `neutral` |
+| `insufficient_evidence` (R2*) | `neutral` | `neutral` |
+| `needs_review` (R3*) | `neutral` | `neutral` |
+| pending CI results, or v2 unavailable | `neutral` | `neutral` |
+
+A repository policy (`.radius/policy.yml` on the base branch, DEC-029) can set `mode`. Combined with the knob:
+
+| Policy `mode` | `verified` | `failed` | `insufficient_evidence` / `needs_review` | pending CI |
+| --- | --- | --- | --- | --- |
+| none (default) | `neutral` (`strict` knob: `success`) | `failure` for R1a/R1b/R1c | `neutral` | `neutral` |
+| `advisory` | `neutral` (`strict` knob: `success`) | `neutral` (never red) | `neutral` | `neutral` |
+| `blocking` | `success` | `failure` | `failure` | `failure` (republished when CI results arrive) |
+
+`blocking` is the repository's own opt-in to a required check, so it overrides the knob. Policy `advisory` does not turn `verified` green by itself (DEC-030); that needs the `strict` knob.
+
+Edge cases (B-10, DEC-037), in every mode:
+
+| Situation | Conclusion |
+| --- | --- |
+| `blocking` and only documentation or inert files changed (R2e `not_applicable`) | `neutral` (nothing to verify; a required check must not block docs-only PRs) |
+| `blocking` and no criterion at all while code changed (R2e, R2a) | `failure` |
+| a base-branch policy file exists but cannot be applied (unreadable, too large, invalid) and the verdict is not a hard failure | `action_required` (a required check does not accept it; the repository's mode is unknown, so it is never silently advisory) |
+| the same, and the verdict is `failed` by R1a/R1b/R1c | `failure` |
+| v2 unavailable (an ordinary error) | `neutral` (v1 stays published) |
+| v2 unavailable because a recompute failed after a verdict was stored (`recompute_failed:*`, `stage_a_not_stored`) | `action_required`, and the comment says "verdict unavailable" instead of keeping the old text |
+
+Docs-only PRs are not pending: with no criterion, no behavioral change and no blocking marker, R2p does not fire and the result is R2e `not_applicable`.
+
+In the default mode nothing is ever green: the alpha cannot satisfy a required check by itself. Only hard evidence turns the check red. `strict` is for operators who accept the limits below and want `verified` to be a green check.
+
+## Who supplied the evidence (provenance and the author-hint cap)
+
+The pull request author controls the description, a `.radius/intent.yml` in the PR, the tests they add and the `tests:` hints that point at them. So every criterion and every `tests:` / `paths:` hint carries a provenance tag in the payload (`criteria[].provenance`, `criteria[].hints[].provenance`):
+
+| Tag | Meaning | Hint cap |
+| --- | --- | --- |
+| `author_pr_body` | from the PR title, description, commits, comments or linked issues | capped |
+| `author_head_spec` | from `.radius/intent.yml` at the PR head, added or changed by the PR (or no base ref to compare) | capped |
+| `base_spec` | from `.radius/intent.yml` identical on the base ref | not capped |
+| `human_confirmed` | the criterion was confirmed or edited in the intent panel (authenticated API) | not capped |
+| `llm_proposed` | proposed by the optional LLM extractor | capped |
+
+The link strength of a `tests:` hint that is not `base_spec` or `human_confirmed` is capped at `author_hint_cap` (default 0.7; `LinkMapping.author_hint_cap`). A criterion that relies on a capped hint gets the flag and reason code `author_supplied_hint` and the comment says so. Confirm the criterion in the intent panel, or keep `.radius/intent.yml` on the base branch, to lift the cap. Confirming, editing or rejecting a criterion recomputes the stored verdict (next section). In the F-14 fixture harness the expected links are fed as hints on confirmed criteria, so gold results are unchanged (DEC-030); with the same hints marked `author_head_spec`, fixture 01 drops from `verified` to `insufficient_evidence`. The full threat model, what the cap does not stop and a recommended policy are in [docs/security/VERDICT_V2_THREAT_MODEL.md](security/VERDICT_V2_THREAT_MODEL.md).
+
+With `.radius/policy.yml` on the base branch, `mode: blocking` maps every unverified result to `failure` (so a required check actually blocks) and `mode: advisory` never reports `failure`; the verdict is the same either way. The comment then shows a `Policy:` line (mode, source ref, number of settings applied) and a collapsible Policy section with the policy line each setting came from. Tamper findings accepted by a valid waiver are listed as `WAIVED` with the waiver id, owner, expiry and reason, and a Waivers section lists what was applied and what was ignored (expired, invalid). Details: [policy.md](policy.md).
+
+## After a confirm, edit or reject (DEC-033)
+
+The verdict is first computed when the analysis runs, from the criteria as they were then. A human decision in the intent panel (`PATCH /api/v1/analyses/{id}/intent/criteria/{criterion_id}`: confirm, edit, reject or reopen) changes the criterion state in the database; with the flag on (`shadow` or `on`) that successful call also leaves one request in the same republish outbox that CI uploads use (`verdict_v2_requests`, reason `intent_changed`), a few seconds in the future so that several quick decisions are scored once. The worker then, without a new clone:
+
+- reads the current criterion states and applies them to the stored Stage A bundle: `confirmed` and `edited` criteria (and their `tests:` hints) become provenance `human_confirmed` (the author-hint cap no longer applies), an edit also updates the text, `rejected` criteria and their links are removed, and a criterion put back to `proposed` loses `human_confirmed` again;
+- recomputes the `unconfirmed_inferred_intent` block (DEC-032) from the same states: it lifts only when no summary-mode criterion is left unconfirmed;
+- re-scores Stage B and stores a new revision, if the inputs changed (an unchanged result stores nothing);
+- with the flag `on` and a GitHub target, edits the existing PR comment and Check Run in place.
+
+Safety: `human_confirmed` is never read from a request. The worker derives it from the stored criterion state, which only the authenticated, `write`-scoped intent API changes (a missing, read-only or other-organization key changes nothing and enqueues nothing; a body with extra fields is a 422). If the request cannot be written, or the recompute fails, the criterion change still succeeds: the failure is logged and the previous revision stays. While a request is queued, `GET .../verdict-v2` adds `meta.refresh_pending: true` (with `refresh_reason`, `refresh_attempts` and `refresh_failed` once the worker has failed at least once) and the dashboard shows that the verdict is out of date; after the dashboard's own confirm it re-reads the verdict a few times (about 30 seconds at most, widening intervals) until the new revision arrives. The worker retries a failing recompute with backoff and stops after 5 attempts; the request then stays queued, so the verdict stays marked stale until it is retried.
+
+Who confirmed (B-07, DEC-037, DEC-040): the worker reads the actor of the latest confirm or edit from the audit trail and shows it as `confirmed by <name>` in the comment and the dashboard (`criteria[].confirmed_by`). The actor is written by the intent API from the authenticated principal, never from a header: the signed-in dashboard user (with their GitHub login when they signed in with GitHub), or the API key. Rules, in order: (1) a confirmer linked to the PR author's GitHub login (case-insensitive, an optional `github:` prefix is ignored) is **not counted**: the criterion stays unconfirmed (the `unconfirmed_inferred_intent` block and the author-hint cap stay) and is shown as `confirmed by <name> (the PR author: not counted)`; (2) a confirmer linked to a different GitHub account counts and is shown by login; (3) a confirmer whose GitHub link is unknown (password user, API key, old audit rows) is decided by `RADIUS_VERDICT_V2_CONFIRM_POLICY`: `allow_unverified` (default) counts it and shows `(unverified confirmer)`, `require_second_person` does not count it (`(not counted: not verified as a different person than the PR author)`); the same applies when the PR author is unknown. The rule is the replaceable `confirm_policy` hook in `intent_refresh.refresh_stage_a_intent` (`confirm_policy_for`). Residual risk: see the threat model.
+
+Source quote (B-11, DEC-040): for a criterion proposed by the language model, `GET /analyses/{id}/intent` and the criterion writes return `source_quote`, the verbatim text of the source at the criterion's span (at most 500 characters, `source_quote_truncated` says when it was cut), and the dashboard intent panel shows it as escaped text next to the criterion, so a human confirms the wording against the text it came from. Other origins have `source_quote: null`.
+
+One payload builder (B-20, DEC-040): the payload the worker renders and the payload the API serves are both built by `radius_shared.verdict_v2_payload.build_payload` from the stored bundle (`verdict-v2-bundle-1`, format unchanged); `scoring.build_payload` only wraps the bundle. An empty `degraded` list is omitted.
+
+Failure never keeps an old verdict (B-01, B-04, DEC-037): if the recompute raises, or the stored bundle no longer holds the Stage A it needs, an `error` revision (`recompute_failed:<ExceptionName>` or `stage_a_not_stored`) becomes the newest one and is published as "verdict unavailable" (`action_required`), so a `verified` computed earlier is no longer the current verdict. The outbox keeps retrying; the next success replaces the error revision. A worker sweep (every 60 s, at most 20 analyses) also re-queues analyses whose newest CI upload is newer than their newest verdict and that have no request queued, which covers an enqueue that failed after the upload was committed.
+
+Limits: this is a state refresh, not a new analysis. Links between criteria and code are not recomputed, so a hint or text edited after the analysis does not create new links, and a criterion that was rejected when the analysis ran is not brought back by reopening it. A criterion added manually afterwards (adding one now triggers a recompute) or reopened is not scored; the blocking marker `intent_not_in_analysis:<n>` says so until a new analysis (new commit) picks it up. Submitting a source or rebuilding the intent does not trigger a recompute.
+
+## What the PR author can and cannot set (B-05, B-06, DEC-037)
+
+- **Criterion weights** written in `.radius/intent.yml` are honoured only for `base_spec` and `human_confirmed` criteria; every other criterion counts as weight 1.0. A tiny weight on an unproven criterion could otherwise hide it from the unsupported-intent-mass rule.
+- **`paths:` hints and file paths written in a criterion's text** (the `explicit` linker) are author-controlled links. When no other linker supports the same criterion-to-code link, its strength is capped like a `tests:` hint (`l_cs` at most `author_hint_cap`, 0.70), and it counts towards intent coverage only when it names a concrete symbol (`path::function`). A glob, a directory or a bare file mention no longer covers the whole change, and an author-hinted symbol does not vouch for the other symbols of its file. Links from `base_spec` or `human_confirmed` criteria are untouched.
+- Existing stored verdicts keep their numbers until their inputs change or a new analysis runs (the algorithm version string is unchanged).
+
+## Policy and waivers (VD-04, VD-05)
+
+`.radius/policy.yml` and `.radius/waivers.yml` are read from the **base branch**, never from the pull request, so a PR cannot weaken its own rules or waive its own findings. They change thresholds within safe bounds, require criterion states per path, set tamper severities (lowering or disabling a `high` finding needs a recorded `allow_disable` reason), require a non-agent-authored test, exclude paths from coverage, and set advisory or blocking mode. A waiver is owned, expires (90 days at most), is shown as WAIVED, is stored in the verdict's audit record, and can never cover a contradicted criterion or a failed CI case. The API payload gains optional `policy`, `waivers`, `summary.tamper_waived` and `tamper_findings[].waived/.waiver` fields (contract 3). Full guide: [policy.md](policy.md); samples: `.radius/policy.example.yml`, `.radius/waivers.example.yml`.
+
+## Limits and safety
+
+- The comment is capped at 60,000 characters (GitHub allows 65,536). If a PR has more criteria or findings than fit, lists are cut with a "+N more, see the dashboard" line and low-priority collapsible sections are dropped with a notice.
+- Everything that comes from the pull request (criterion text, test names, file paths, tamper reasons and code snippets) is escaped: @mentions, issue references, links, images, HTML and hidden or direction-changing characters cannot take effect, and long text is shortened.
+- The comment carries two hidden markers: the v1 marker, so v1 and v2 update the same comment, and `radius-verdict-v2 rev=N digest=...`, so republishing identical content is skipped.
+
+## Known limits of the alpha
+
+- **Alpha, off by default.** The result is not calibrated and is not a probability; do not use it as a required check yet. The default Check Run conclusion is `neutral` for this reason.
+- **Thresholds fitted to 8 fixtures.** `cap_static` 0.60 and `tau_support` 0.50 were chosen so the F-14 fixtures behave as designed; there is no held-out set, so no error rate is known.
+- **The author controls much of the evidence.** See the provenance section and the threat model; an author who writes both trivial criteria and strong-looking tests still gets a supported verdict.
+- **Static evidence only (unless mutation is enabled).** By default a test counts by the strength of its assertions, not by whether it would catch a bug. With `RADIUS_FEATURE_MUTATION` (sandbox required) some tests are measured on a bounded sample of seeded faults; unmeasured tests stay static. A weak but passing test can never prove a criterion; a strong one still does not prove correctness.
+- **Python only.** Behavioral changes in other languages, and changed files that are neither inert nor analysable (shell, Dockerfile, SQL, general YAML, Terraform, vendored or generated paths), give `Not verified` (analysis incomplete, `unsupported_language:*` / `unanalyzed_files:*`). A dependency bump in a manifest is checked by the tamper catalog only, and a lockfile-only change counts as inert (DEC-037, owner decision).
+- **Dependencies offline.** A new dependency imported behind `try/except ImportError` that cannot be checked against a package registry is reported as a medium finding (`Needs human review`); only a registry that says the package does not exist (or a near-miss of a popular name) fails the PR. No registry adapter ships yet (DEC-028).
+- **Linking without hints is conservative.** On the F-14 fixtures, auto-linking alone leaves a correct PR as `Not verified` because the matched tests get low relevance; adding `tests:` hints to `.radius/intent.yml` fixes it. The verified differences are listed in `apps/worker/tests/test_verdict_v2_acceptance.py` (`KNOWN_AUTO_DEVIATIONS`).
+- **Not browser- or live-GitHub-validated** yet: the tests use a fake GitHub client and SQLite.
+
+Per-case test results must be uploaded from CI. Linking a criterion to its tests is lexical unless you add `tests:` hints in `.radius/intent.yml`; a criterion with no linked test is reported as such, never credited. Thresholds are hypotheses that have not been calibrated, and `needs_review` is reached only through the rules above, not through a calibrated abstention band.
+
+Design and rationale: `docs/research/design/VERDICT_V2_SLICE.md`.
+
+## Optional: mutation-measured evidence (`RADIUS_FEATURE_MUTATION`, default off)
+
+By default a test counts by the **shape of its assertions** ("static assertion strength only"), capped at `cap_static` 0.60. With `RADIUS_FEATURE_MUTATION=true` (worker setting, DEC-035) the worker also **measures** how well the linked tests notice small seeded faults, and uses that instead of the cap for the tests it could measure.
+
+**What it does.** For each changed Python function or method that a criterion links to and that has linked tests, Radius makes a bounded, seeded sample of small mutants (a comparison flipped, an operator swapped, a return value dropped, ...) with its own AST operator set, runs only the tests linked to that symbol against each mutant, and records which tests failed ("killed" the mutant). For a test `t` and criterion `c`: `d_mut = killed / N` over the decided mutants of the changed code linked to `c` that were run with `t`; the quality uses its 95% Wilson lower bound, so a small sample cannot score high (5 of 5 gives 0.57, 20 of 20 gives 0.84). A strong-looking assertion that kills nothing therefore **lowers** support, and a test that kills everything can **raise** it above the static cap. With fewer than 5 decided mutants the test stays on the static cap ("unmeasured never gets better than static"), and a test with no assertion at all is never rescued by kills.
+
+**What it never does.** It does not decide a verdict: survivors, equivalent suspects and unmeasured runs only change support. A failing linked test or CI case still gives `Failed` exactly as before, and nothing can turn it into a pass. No language model is involved. It is a bounded sample of one family of faults, not a proof; some survivors are harmless equivalents.
+
+**Where it runs.** Mutants are generated code from the pull request. They run **only** in the hardened sandbox (the same container as `WORKER_TEST_EXECUTION_MODE=sandbox`: no network, read-only root, dropped capabilities, resource limits, a copy of the checkout, never the checkout itself; see [execution isolation](security/EXECUTION_ISOLATION.md)). Without the sandbox the analysis says `mutation enabled but not measured (sandbox disabled)` and keeps the static result. The stage runs inside the analysis job: budget `RADIUS_MUTATION_WALL_CLOCK_SECONDS` (600), `RADIUS_MUTATION_MAX_MUTANTS` (50), `RADIUS_MUTATION_MUTANT_TIMEOUT_SECONDS` (60). When the budget is too small it degrades step by step (sample, Tier A operators, fewer mutants) and ends at "unmeasured, static cap"; every step is listed in the payload (`mutation.ladder`). The sandbox image must already contain the project's test dependencies (no network). A default `docker compose` worker has no container runtime, so mutation stays "not measured" there; see the isolation page for what a sandbox-capable worker needs.
+
+**What you see.** Per criterion the comment table and the dashboard say either `mutation-measured (N mutants)` or `static assertion strength only` (and `mutation-measured for some tests, static for the rest`). The criterion detail lists **Gaps found by mutation**: seeded faults no linked test caught, as `file:line, operator`. The header switches from "static evidence only" to "static assertion strength plus sampled mutation testing" only when at least one criterion was measured. API: `evidence_basis` (`static_only` | `static_and_mutation`), per criterion `evidence_basis` and `mutation`, per test `basis`, `d_mut_lcb`, `mutation_n`; contract `verdict-v2-contract-5`. `d_reach` (detection given the test executed the line) is reported as unavailable: the pipeline has no per-test line coverage yet.
+
+**Cost and cache.** Roughly one container run per mutant plus two baseline runs, one control run per mutated file and one rerun per survivor. Final results are cached per repository in `mutation_result_cache` (migration `20261103_0016`), keyed by mutant, tests, image digest and a hash of the repository's Python and configuration files, so a repeated run on an unchanged head is free and any edit is a miss.
+
+**Stage 2: link gaps (optional, `RADIUS_MUTATION_STAGE2`, default off, DEC-036).** A mutant that survives the linked tests is also run, inside the same sandbox and with early exit, against a bounded, sorted set of the repository's other tests that import the mutated module (`RADIUS_MUTATION_STAGE2_MAX_TESTS` 60, `RADIUS_MUTATION_STAGE2_WALL_CLOCK_SECONDS` 300; a kill has to repeat before it counts). If only such an unlinked test kills it, the mutant is a **link gap**: it says the criterion's links are incomplete, not that the evidence is weak. Rule: the mutant leaves that criterion's mutant pool (the denominator of `d_mut` and of the union shrinks by one, the numerator is unchanged), the unlinked tests get **no credit and are not evidence** (support is never raised by them, the unfair penalty is only dropped), and fewer than 5 decided mutants left means "not measured, static cap". The comment and the dashboard show `Link gaps: N mutants killed only by tests not linked to this criterion: <test ids>` and the fixed next action "Link these tests to the criterion, or add them as `tests:` hints in .radius/intent.yml". Optional payload fields (still contract 5): per criterion `mutation.link_gaps[]`, `mutation.link_gap_tests[]`, `mutation.excluded.killed_outside_linked`; top level `mutation.stage2`. Stage 2 never decides a verdict. Limits: only test files that statically import the module are tried, the set is capped, and it was not measured in a real container yet.
+
+**Evidence of effect.** Only fixture sanity so far: [MUTATION_WIRED.md](research/evaluation/MUTATION_WIRED.md). Whether `d_mut` predicts incorrect patches is the pre-registered RQ2, not yet run.
+
+## Optional: inferred criteria from ordinary PR text (`RADIUS_INTENT_EXTRACTION_MODE=summary`)
+
+By default (`sections`) the extractor reads only acceptance-style sections, checklists, Gherkin and spec files, which finds nothing in typical PR descriptions. The worker setting `RADIUS_INTENT_EXTRACTION_MODE=summary` (default `sections`) also proposes criteria from a conventional-commit PR title and from behavioural bullets under Summary, Changes, What, Why or Description headings (DEC-032). They are the author's own words read by fixed rules, so they are `proposed`, weight 0.5, provenance `author_pr_body`, and show the `unconfirmed` flag. While any such criterion is unconfirmed the verdict cannot be `verified`: the analysis carries the blocking degraded reason `unconfirmed_inferred_intent` (rule R2d). Confirm or edit the criterion in the intent panel to lift it (the verdict is recomputed a few seconds later, see above). The mode is a recall experiment, not a measured improvement; see `docs/research/evaluation/EXTRACTION_SUMMARY_MODE.md`.
+
+## Optional: LLM proposals (`RADIUS_INTENT_EXTRACTION_MODE=llm`) and suggested tests (`RADIUS_FEATURE_SUGGEST_TESTS`)
+
+Rule: **the LLM proposes, the evidence disposes.** The verdict is computed by the deterministic rules only; a model never computes, adjusts or sees the verdict, and nothing it writes is evidence. Both features are off by default and do nothing without an explicit opt-in. **When either is on, PR text leaves your infrastructure and is sent to a third-party model provider** (see the threat model).
+
+**`llm` extraction mode (DEC-034).** `RADIUS_INTENT_EXTRACTION_MODE=llm` runs the `summary` extraction (above) and additionally asks a model to propose criteria from the **PR title and body only** (no diff, no spec files, no comments, no commit messages). It needs `RADIUS_LLM_INTENT_ENABLED=true`, the organization in `RADIUS_LLM_INTENT_ORGS` (`*` for all) and `ANTHROPIC_API_KEY` (optional extra `llm`); the model is `RADIUS_LLM_INTENT_MODEL` (default `claude-haiku-5-5`; set `claude-sonnet-5-5` for more recall). If any of these is missing, or the call fails, times out, is rate limited or returns anything that violates the schema, the worker logs why and the result is exactly the `summary` result. Every proposal must quote the PR text verbatim (a quote that is not a substring of the PR text is dropped), its wording must be grounded in the quote, duplicates are merged, and count, length, token and time are capped. Surviving proposals are `proposed`, weight 0.4, provenance `llm_proposed`, and like summary criteria they carry the blocking reason `unconfirmed_inferred_intent`: the verdict cannot be `verified` until a human confirms or edits each of them in the intent panel. Model, token usage, latency, drops and any fallback are logged per call (`intent_llm_trace`); no prompt, PR text or model output is logged.
+
+**Suggested tests (not run, not evidence).** With `RADIUS_FEATURE_SUGGEST_TESTS=true` (same egress settings and key) the worker asks the model, for up to three criteria that are `unevidenced` or `weak`, for one pytest snippet. The model sees the criterion text and the *names* of the changed modules and symbols, never source code. A snippet is shown only if a deterministic gate accepts it: it parses, imports only `pytest` and the changed symbols of this PR, calls one of them, and contains an assertion that the assertion extractor rates at or above the strong threshold (0.50; so `assert x`, `is not None` and `assert 1 == 1` are discarded). Accepted snippets appear in the PR comment under **Suggested tests (not run, not evidence)** and in the API as `suggested_tests` (`executed: false`, `evidence: false`, `provenance: llm_proposed`). They are never executed, never linked to a criterion as evidence and never change the verdict, the states or the next actions. The dashboard panel does not show them yet.
+
+What this does not give you: no measured quality. The models were never called while building this (there was no key); the guards, fallbacks and gate are unit-tested with a fake model only, and recall, precision and the share of dropped proposals on real PRs are unknown until `scripts/llm_extraction_eval.py` is run with a key.

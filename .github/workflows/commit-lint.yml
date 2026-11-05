@@ -1,0 +1,43 @@
+name: Commit lint
+
+# Conventional Commits check for the pull-request title and the commits in it
+# (PRD-06). Merges are merge commits, so the PR title is what history shows.
+# Advisory until the owner adds "Conventional Commits" to the required checks;
+# see docs/RELEASING.md.
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled]
+
+# Least privilege: read-only. No pull_request_target, no secrets.
+permissions:
+  contents: read
+
+concurrency:
+  group: commit-lint-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  conventional-commits:
+    name: Conventional Commits
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Untrusted values (title, branch names, labels) reach the script only
+      # through environment variables, never through shell interpolation.
+      - name: Lint title, commits and changelog fragment
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: python3 scripts/ci/commit_lint.py

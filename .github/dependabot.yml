@@ -1,0 +1,125 @@
+# Dependabot version updates (PRD-07).
+# Commit prefixes follow Conventional Commits: build(deps) for packages and
+# images, ci(deps) for GitHub Actions. No `labels:` are set on purpose: the
+# repo label set is created by PRD-04; Dependabot adds its own `dependencies`
+# label automatically. Add explicit labels here once .github/labels.yml lands.
+# Security updates (not version updates) are controlled by the repository
+# setting "Dependabot security updates", not by this file.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci(deps)"
+    groups:
+      github-actions:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Etc/UTC
+    # Only raise a lower bound in pyproject.toml when the new release no longer
+    # satisfies it; stops churn from bumping every >= pin on each release.
+    versioning-strategy: increase-if-necessary
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "build(deps)"
+      prefix-development: "build(deps-dev)"
+    groups:
+      python-minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm # also covers the pnpm workspace (pnpm-lock.yaml)
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    # Semver-major updates of the framework toolchain are handled in planned
+    # upgrade tasks (they need code, CSP/middleware and test changes), not as
+    # Dependabot PRs; a Next 16 bump failed CI that way. Security updates are
+    # not affected: Dependabot security updates ignore these rules.
+    ignore:
+      - dependency-name: "next"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint-config-next"
+        update-types: ["version-update:semver-major"]
+    commit-message:
+      prefix: "build(deps)"
+      prefix-development: "build(deps-dev)"
+    groups:
+      npm-minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm # browser e2e tests (Playwright), own package-lock.json
+    directory: /e2e
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: "build(deps-dev)"
+    groups:
+      e2e-minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: docker
+    directories:
+      - /apps/api
+      - /apps/worker
+      - /apps/dashboard
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "build(deps)"
+    groups:
+      docker-base-images:
+        patterns: ["*"]
+
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "build(deps)"
+    groups:
+      compose-images:
+        patterns: ["*"]

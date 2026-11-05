@@ -1,0 +1,62 @@
+{
+  "pr": {
+    "agent_name": null,
+    "author_login_sha256": "c7283516f22dd74d3c1fd3182c47b1b0d6aaf6a0d7839614138fb3f960ec1b86",
+    "author_type": "agent",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "language": "typescript",
+    "license": "SYNTHETIC",
+    "number": 101,
+    "repo": "synth-org/repo1",
+    "role": "test",
+    "size": {
+      "bucket": "S"
+    },
+    "stratum": {
+      "author_type": "agent",
+      "richness": "structured_template"
+    },
+    "url": "https://example.invalid/synth-org__repo1__pr101"
+  },
+  "pr_id": "synth-org__repo1__pr101",
+  "sanitizer": "canonicalize_text",
+  "schema_version": "radius-intent-gold-sources-v1",
+  "sources": [
+    {
+      "fetched_at": "2026-01-01T00:00:00+00:00",
+      "kind": "pr_title",
+      "length": 23,
+      "raw_text_sha256": "b78e3c94336f14c813a7df997ffc39b8f7543bf4100b93d2a63e8424c1b41fc2",
+      "source_id": "pr-title",
+      "suspicious_content_removed": false,
+      "text": "Add synthetic feature 1",
+      "text_sha256": "b78e3c94336f14c813a7df997ffc39b8f7543bf4100b93d2a63e8424c1b41fc2",
+      "truncated": false
+    },
+    {
+      "fetched_at": "2026-01-01T00:00:00+00:00",
+      "kind": "pr_body",
+      "length": 268,
+      "raw_text_sha256": "e3f07a92b176e4d091bd42e177be90ce48ecf666525857d9bb70b55bfcfcd698",
+      "source_id": "pr-body",
+      "suspicious_content_removed": false,
+      "text": "## Summary\nSynthetic change 1. Not a real pull request.\n\n## Acceptance Criteria\n- [ ] The export writes one row per order\n- [ ] Error handling is more robust\n- [ ] The parser must accept an empty list and return zero items\n- [ ] Rename the helper module to utils_core\n",
+      "text_sha256": "e3f07a92b176e4d091bd42e177be90ce48ecf666525857d9bb70b55bfcfcd698",
+      "truncated": false
+    },
+    {
+      "fetched_at": "2026-01-01T00:00:00+00:00",
+      "kind": "commit_message",
+      "length": 53,
+      "raw_text_sha256": "22745f495633b633708a2436391c92d044ddbdd3f79acfdca12616ed8331df31",
+      "source_id": "commit-0000000000a1",
+      "suspicious_content_removed": false,
+      "text": "synthetic commit for change 1\n\nNo behavior described.",
+      "text_sha256": "22745f495633b633708a2436391c92d044ddbdd3f79acfdca12616ed8331df31",
+      "truncated": false
+    }
+  ],
+  "sources_digest": "7fd77eb30f68d90893b015e3bf59505be43f5ec8042393abb684e51f41b8e841",
+  "synthetic": true,
+  "text_redistributable": true
+}

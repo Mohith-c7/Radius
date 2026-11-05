@@ -1,0 +1,1 @@
+In uat and production, signing up with an address that already has an account now answers exactly like a new signup (201, no session) and the owner is told by e-mail; development keeps the clear 409 error. The login throttle remains per process; see the hardening guide for multi-replica deployments.

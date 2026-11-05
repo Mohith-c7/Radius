@@ -3,8 +3,9 @@
 from logging.config import fileConfig
 
 from alembic import context
-from radius_shared.database import coverage, models  # noqa: F401
+from radius_shared.database import coverage, intent, models, verdict_v2  # noqa: F401
 from radius_shared.database.base import metadata
+from radius_shared.database.migration_lock import acquire_migration_lock
 from radius_shared.database.session import normalize_database_url
 from sqlalchemy import engine_from_config, pool
 
@@ -59,6 +60,9 @@ def run_migrations_online() -> None:
         context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
+            # C-17: concurrent `alembic upgrade head` (several API replicas starting
+            # together) must not both apply a revision; PostgreSQL only.
+            acquire_migration_lock(connection)
             context.run_migrations()
 
 

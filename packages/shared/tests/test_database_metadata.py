@@ -24,6 +24,11 @@ EXPECTED_TABLES = {
     "test_run_plans",
     "test_selections",
     "idempotency_keys",
+    "intent_sources",
+    "intent_snapshots",
+    "intent_snapshot_sources",
+    "intent_criteria",
+    "intent_criterion_state_changes",
 }
 
 
@@ -64,6 +69,19 @@ def test_required_indexes_exist() -> None:
         "ix_idempotency_keys_organization_id"
         in indexes_by_table["idempotency_keys"]
     )
+    assert "ix_intent_sources_analysis_id" in indexes_by_table["intent_sources"]
+    assert "ix_intent_snapshots_analysis_id" in indexes_by_table["intent_snapshots"]
+    assert "ix_intent_criteria_snapshot_id" in indexes_by_table["intent_criteria"]
+
+
+def test_intent_tables_are_tenant_scoped() -> None:
+    for name, table in metadata.tables.items():
+        if name.startswith("intent_"):
+            assert "organization_id" in table.c
+            assert table.c.organization_id.nullable is False
+            assert ["organization_id"] in [
+                [c.name for c in i.columns] for i in table.indexes
+            ]
 
 
 def test_one_to_one_analysis_tables_have_unique_analysis_id() -> None:
@@ -127,3 +145,36 @@ def test_metadata_can_create_tables_in_sqlite() -> None:
 
     inspector = inspect(engine)
     assert EXPECTED_TABLES.issubset(set(inspector.get_table_names()))
+
+
+def test_traceparent_migration_up_and_down() -> None:
+    import importlib.util
+    from pathlib import Path
+
+    import sqlalchemy as sa
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    path = next(
+        p
+        for p in Path(__file__).resolve().parents
+        if (p / "infra" / "database" / "migrations").is_dir()
+    ) / "infra/database/migrations/versions/20261102_0010_analysis_job_traceparent.py"
+    spec = importlib.util.spec_from_file_location("mig_0010", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.down_revision == "20261101_0009"
+
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    with engine.begin() as conn:
+        conn.execute(sa.text("create table analysis_jobs (id integer primary key, attempts integer)"))
+        conn.execute(sa.text("insert into analysis_jobs (id, attempts) values (1, 0)"))
+        with Operations.context(MigrationContext.configure(conn)):
+            module.upgrade()
+            cols = {c["name"]: c for c in inspect(conn).get_columns("analysis_jobs")}
+            assert cols["traceparent"]["nullable"] is True
+            assert conn.execute(sa.text("select traceparent from analysis_jobs")).scalar() is None
+            module.downgrade()
+            cols = {c["name"] for c in inspect(conn).get_columns("analysis_jobs")}
+            assert "traceparent" not in cols
+            assert conn.execute(sa.text("select count(*) from analysis_jobs")).scalar() == 1

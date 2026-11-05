@@ -1,0 +1,1 @@
+Added a pre-registration freeze checklist (`docs/research/preregistration/FREEZE_CHECKLIST.md`) and `scripts/prereg_check.py`, which prints PASS, FAIL or MANUAL for each precondition. Nothing is frozen and the check changes no file; it reports that the pre-registration is not ready to freeze, including that its documented content-hash command excludes the end of the file.

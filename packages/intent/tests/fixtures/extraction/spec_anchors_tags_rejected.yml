@@ -1,0 +1,5 @@
+version: 1
+criteria:
+  - text: &anchor "x"
+  - text: !!str y
+  - text: "ok"

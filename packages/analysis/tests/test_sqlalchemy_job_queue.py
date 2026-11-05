@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from radius_analysis.infrastructure import SqlAlchemyAnalysisJobQueue
 from radius_shared.database import enums as db_enums
 from radius_shared.database.base import Base
@@ -14,6 +15,12 @@ from radius_shared.database.models import (
 )
 from radius_shared.database.models import (
     AnalysisJob as AnalysisJobModel,
+)
+from radius_shared.observability import (
+    configure_tracing,
+    continue_trace,
+    reset_tracing,
+    span,
 )
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
@@ -73,6 +80,66 @@ def test_sqlalchemy_job_queue_requeues_until_max_attempts() -> None:
         assert second.attempts == 2
         assert job.status == "failed"
         assert queue.claim_next() is None
+
+
+def test_enqueue_persists_traceparent_and_claim_returns_it() -> None:
+    pytest.importorskip("opentelemetry.sdk")
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+        InMemorySpanExporter,
+    )
+
+    exporter = InMemorySpanExporter()
+    assert configure_tracing(span_exporter=exporter)
+    try:
+        with _session() as session:
+            analysis_id = _create_analysis(session)
+            queue = SqlAlchemyAnalysisJobQueue(session, max_attempts=3)
+            with span("api"):
+                queue.enqueue(analysis_id)
+            row = session.scalar(
+                select(AnalysisJobModel).where(
+                    AnalysisJobModel.analysis_id == analysis_id
+                )
+            )
+            api_span = next(s for s in exporter.get_finished_spans() if s.name == "api")
+            trace_hex = format(api_span.context.trace_id, "032x")
+            assert row.traceparent is not None
+            assert row.traceparent.split("-")[1] == trace_hex
+
+            # Retry keeps the same trace: the stored value survives claim/requeue.
+            first = queue.claim_next()
+            assert first.traceparent == row.traceparent
+            queue.requeue(analysis_id, "boom")
+            second = queue.claim_next()
+            assert second.attempts == 2
+            assert second.traceparent == row.traceparent
+
+            exporter.clear()
+            with continue_trace(first.traceparent), span("worker.job"):
+                pass
+            with continue_trace(second.traceparent), span("worker.job"):
+                pass
+            ids = {s.context.trace_id for s in exporter.get_finished_spans()}
+            assert ids == {api_span.context.trace_id}
+    finally:
+        reset_tracing()
+
+
+def test_enqueue_without_tracing_leaves_traceparent_null_and_invalid_is_safe() -> None:
+    with _session() as session:
+        analysis_id = _create_analysis(session)
+        queue = SqlAlchemyAnalysisJobQueue(session)
+        queue.enqueue(analysis_id)
+        assert queue.claim_next().traceparent is None
+
+        row = session.scalar(
+            select(AnalysisJobModel).where(AnalysisJobModel.analysis_id == analysis_id)
+        )
+        row.traceparent = "not-a-traceparent"
+        session.flush()
+        assert queue.get_by_analysis_id(analysis_id).traceparent == "not-a-traceparent"
+        with continue_trace("not-a-traceparent"), span("worker.job"):
+            pass
 
 
 def _session() -> Session:

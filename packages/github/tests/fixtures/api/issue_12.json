@@ -1,0 +1,13 @@
+{
+  "url": "https://api.github.com/repos/radius-sandbox-owner/radius-sandbox/issues/12",
+  "number": 12,
+  "title": "Greeting helper should validate input",
+  "user": {
+    "login": "reporter-test",
+    "type": "User"
+  },
+  "state": "open",
+  "comments": 3,
+  "author_association": "NONE",
+  "body": "greet() must reject empty names.\n\nThe helper should return a friendly message for valid names.\n"
+}

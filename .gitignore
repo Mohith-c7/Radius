@@ -51,3 +51,22 @@ tmp/
 
 # Worker repository cache (cloned repos under analysis), wherever the worker runs from
 **/.radius/
+# Generated artifacts and local smoke-test scratch
+output/
+.docker-smoke/
+.docker-pip-smoke/
+
+# Dataset cache (EP-03): third-party data is never committed
+.cache/
+
+# IN-09 gold annotation: real gold data holds third-party PR text and annotator
+# work product. Never commit it (DATA_HYGIENE sections 2 and 6). Publish only the
+# text-free output of `scripts/gold_validate.py export-public` after owner review.
+# Sample manifests (ids and strata, no text) in benchmarks/gold/samples/ may be
+# committed once the sample is frozen.
+benchmarks/gold/intent/*/
+benchmarks/gold/intent/conflicts.json
+
+# IN-10 harness output (a SYNTHETIC example report is committed under docs/research/evaluation/)
+benchmarks/results/intent/
+!e2e/package-lock.json

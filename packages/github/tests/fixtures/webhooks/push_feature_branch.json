@@ -1,0 +1,85 @@
+{
+  "ref": "refs/heads/feature/greeting",
+  "before": "111111111111111111111111111111111111111a",
+  "after": "222222222222222222222222222222222222222b",
+  "created": false,
+  "deleted": false,
+  "forced": false,
+  "base_ref": null,
+  "compare": "https://github.com/radius-sandbox-owner/radius-sandbox/compare/111111111111...222222222222",
+  "commits": [
+    {
+      "id": "222222222222222222222222222222222222222b",
+      "tree_id": "9999999999999999999999999999999999999999",
+      "distinct": true,
+      "message": "Update greeting",
+      "timestamp": "2026-11-02T09:30:00Z",
+      "author": {
+        "name": "Sandbox",
+        "email": "sandbox@example.com",
+        "username": "radius-sandbox-owner"
+      },
+      "added": [],
+      "removed": [],
+      "modified": [
+        "greet.py"
+      ]
+    }
+  ],
+  "head_commit": {
+    "id": "222222222222222222222222222222222222222b",
+    "message": "Update greeting"
+  },
+  "repository": {
+    "id": 912345678,
+    "node_id": "R_kgDOexample",
+    "name": "radius-sandbox",
+    "full_name": "radius-sandbox-owner/radius-sandbox",
+    "private": true,
+    "owner": {
+      "login": "radius-sandbox-owner",
+      "id": 1001,
+      "node_id": "U_1001",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1001?v=4",
+      "url": "https://api.github.com/users/radius-sandbox-owner",
+      "html_url": "https://github.com/radius-sandbox-owner",
+      "type": "User",
+      "site_admin": false
+    },
+    "html_url": "https://github.com/radius-sandbox-owner/radius-sandbox",
+    "description": "Radius live validation sandbox",
+    "fork": false,
+    "url": "https://api.github.com/repos/radius-sandbox-owner/radius-sandbox",
+    "clone_url": "https://github.com/radius-sandbox-owner/radius-sandbox.git",
+    "git_url": "git://github.com/radius-sandbox-owner/radius-sandbox.git",
+    "ssh_url": "git@github.com:radius-sandbox-owner/radius-sandbox.git",
+    "created_at": "2026-11-02T08:00:00Z",
+    "updated_at": "2026-11-02T09:00:00Z",
+    "pushed_at": 1793611800,
+    "default_branch": "main",
+    "language": "Python",
+    "archived": false,
+    "disabled": false,
+    "visibility": "private",
+    "master_branch": "main",
+    "stargazers": 0
+  },
+  "pusher": {
+    "name": "radius-sandbox-owner",
+    "email": "sandbox@example.com"
+  },
+  "sender": {
+    "login": "radius-sandbox-owner",
+    "id": 1001,
+    "node_id": "U_1001",
+    "avatar_url": "https://avatars.githubusercontent.com/u/1001?v=4",
+    "url": "https://api.github.com/users/radius-sandbox-owner",
+    "html_url": "https://github.com/radius-sandbox-owner",
+    "type": "User",
+    "site_admin": false
+  },
+  "installation": {
+    "id": 55001122,
+    "node_id": "I_kwExample"
+  }
+}

@@ -12,6 +12,15 @@ from radius_analysis.dto import (
     AnalyzeRepositoryDiffCommand,
     ComputeBlastRadiusCommand,
 )
+from radius_analysis.symbol_changes import (
+    DirectorySnapshot,
+    GitSnapshot,
+    RefRange,
+    SymbolChangeSet,
+    extract_symbol_changes,
+)
+from radius_analysis.symbol_impact import refine_dependents
+from radius_analysis.tamper import analyze_tampering
 from radius_confidence.application import ConfidenceApplicationService
 from radius_confidence.domain import (
     AnalysisEvidence,
@@ -30,7 +39,13 @@ from radius_parser.application import ParserApplicationService
 from radius_parser.dto import ParseRepositoryCommand
 from radius_parser.extractors.typescript import TypeScriptExtractor
 from radius_shared.logging import get_logger
+from radius_shared.observability import stage
 from radius_testing.application import TestingApplicationService
+from radius_testing.assertions import (
+    discover_test_files,
+    extract_assertions,
+    log_counts,
+)
 from radius_testing.dto import (
     DiscoverTestsCommand,
     ExecuteTestRunCommand,
@@ -44,6 +59,29 @@ from radius_testing.infrastructure.impact_mapping import (
 from radius_testing.infrastructure.selection import PathBasedTestSelector
 
 LOGGER = get_logger(__name__)
+
+
+_SKIP_DIRS = frozenset(
+    {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build", ".tox"}
+)
+
+
+def _read_python_sources(root: Path) -> dict[str, str]:
+    """Read repository ``.py`` files (no symlink escapes) keyed by posix path."""
+
+    sources: dict[str, str] = {}
+    resolved_root = root.resolve()
+    for path in sorted(root.rglob("*.py")):
+        rel = path.relative_to(root)
+        if any(part in _SKIP_DIRS for part in rel.parts) or path.is_symlink():
+            continue
+        try:
+            if resolved_root not in path.resolve().parents:
+                continue
+            sources[rel.as_posix()] = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+    return sources
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +123,11 @@ class Phase1AnalysisOrchestrator:
         testing_service: TestingApplicationService,
         confidence_service: ConfidenceApplicationService,
         execute_tests: bool = True,
+        symbol_impact_enabled: bool = False,
+        symbol_changes_enabled: bool = False,
+        tamper_rules_enabled: bool = False,
+        assertion_extraction_enabled: bool = False,
+        flaky_policy: str = "exclude",
     ) -> None:
         self._analysis = analysis_service
         self._parser = parser_service
@@ -93,6 +136,11 @@ class Phase1AnalysisOrchestrator:
         self._testing = testing_service
         self._confidence = confidence_service
         self._execute_tests = execute_tests
+        self._symbol_impact_enabled = symbol_impact_enabled
+        self._symbol_changes_enabled = symbol_changes_enabled
+        self._tamper_rules_enabled = tamper_rules_enabled
+        self._assertion_extraction_enabled = assertion_extraction_enabled
+        self._flaky_policy = flaky_policy
 
     def execute(self, command: ExecuteAnalysisCommand) -> AnalysisExecutionResult:
         """Execute one analysis and mark its lifecycle status."""
@@ -107,17 +155,27 @@ class Phase1AnalysisOrchestrator:
         return result
 
     def _execute(self, command: ExecuteAnalysisCommand) -> AnalysisExecutionResult:
-        changes = self._analyze_changes(command)
+        with stage("analyze_changes"):
+            changes = self._analyze_changes(command)
         changed_paths = tuple(item.path for item in changes.changed_files)
+        if self._symbol_changes_enabled or self._tamper_rules_enabled:
+            symbol_result = self._extract_symbol_changes(
+                command, changes, log=self._symbol_changes_enabled
+            )
+            if self._tamper_rules_enabled:
+                self._analyze_tampering(command, symbol_result)
+        if self._assertion_extraction_enabled:
+            self._extract_assertions(command)
 
         # NOTE: the experimental LLM "semantic pruning" step is intentionally
         # NOT part of this pipeline. It could remove files (and therefore
         # tests) from the blast radius based on an unvalidated model judgment,
         # which is a false-safety risk. See docs/audit/RADIUS_AUDIT.md.
 
-        parse_result = self._parser.parse_repository_result(
-            ParseRepositoryCommand(repository_path=command.repository_path)
-        )
+        with stage("parse"):
+            parse_result = self._parser.parse_repository_result(
+                ParseRepositoryCommand(repository_path=command.repository_path)
+            )
         if parse_result.parse_failures:
             LOGGER.warning(
                 "Some source files could not be parsed",
@@ -126,15 +184,35 @@ class Phase1AnalysisOrchestrator:
                     "parse_failures": len(parse_result.parse_failures),
                 },
             )
-        graph_response = self._graph.build_graph(
-            BuildGraphCommand(
-                repository_id=command.repository_id,
-                analysis_id=command.analysis_id,
-                parse_result=parse_result,
+        with stage("build_graph"):
+            graph_response = self._graph.build_graph(
+                BuildGraphCommand(
+                    repository_id=command.repository_id,
+                    analysis_id=command.analysis_id,
+                    parse_result=parse_result,
+                )
             )
-        )
         graph_snapshot = self._require_graph_snapshot(command.analysis_id)
         dependents = file_dependents(graph_snapshot.graph, changed_paths)
+        with stage("discover_tests"):
+            discovered_tests = self._testing.discover_test_cases(
+                DiscoverTestsCommand(command.repository_path, command.repository_id)
+            )
+        symbol_evidence: dict[str, tuple[str, ...]] | None = None
+        changed_symbols: tuple[str, ...] = ()
+        symbol_scope: tuple[str, ...] | None = None
+        if self._symbol_impact_enabled:
+            refined = self._refine_with_symbols(
+                command, changes, changed_paths, dependents, discovered_tests,
+                graph_snapshot,
+            )
+            if refined is not None:
+                dependents = refined.dependents
+                symbol_evidence = refined.test_evidence
+                changed_symbols = refined.changed_symbols
+                symbol_scope = tuple(
+                    sorted({p for reached in dependents.values() for p in reached})
+                )
         affected_paths = tuple(
             sorted(
                 {path for reached in dependents.values() for path in reached}
@@ -142,9 +220,6 @@ class Phase1AnalysisOrchestrator:
             )
         )
 
-        discovered_tests = self._testing.discover_test_cases(
-            DiscoverTestsCommand(command.repository_path, command.repository_id)
-        )
         selector = PathBasedTestSelector()
         mapping = map_changes_to_tests(
             changed_files=tuple(
@@ -159,50 +234,57 @@ class Phase1AnalysisOrchestrator:
             },
             parse_failures=frozenset(parse_result.parse_failures),
         )
-        selection = self._testing.select_tests(
-            SelectTestsCommand(
-                analysis_id=command.analysis_id,
-                changed_file_paths=changed_paths,
-                affected_file_paths=affected_paths,
-                available_tests=discovered_tests,
-                full_suite_reasons=mapping.full_suite_reasons,
+        with stage("select_tests"):
+            selection = self._testing.select_tests(
+                SelectTestsCommand(
+                    analysis_id=command.analysis_id,
+                    changed_file_paths=changed_paths,
+                    affected_file_paths=affected_paths,
+                    available_tests=discovered_tests,
+                    full_suite_reasons=mapping.full_suite_reasons,
+                    changed_symbols=changed_symbols,
+                    symbol_evidence=symbol_evidence,
+                )
             )
-        )
         self._testing.plan_test_run(PlanTestRunCommand(command.analysis_id))
-        test_evidence = self._run_or_defer_tests(command, selection.selected_count)
+        with stage("run_tests"):
+            test_evidence = self._run_or_defer_tests(command, selection.selected_count)
 
-        blast_radius = self._analysis.compute_blast_radius(
-            ComputeBlastRadiusCommand(
-                analysis_id=command.analysis_id,
-                graph_snapshot=graph_snapshot,
-                changed_file_paths=changed_paths,
-                affected_test_paths=tuple(
-                    item.test.path for item in selection.selected_tests
+        with stage("blast_radius"):
+            blast_radius = self._analysis.compute_blast_radius(
+                ComputeBlastRadiusCommand(
+                    analysis_id=command.analysis_id,
+                    graph_snapshot=graph_snapshot,
+                    changed_file_paths=changed_paths,
+                    affected_test_paths=tuple(
+                        item.test.path for item in selection.selected_tests
+                    ),
+                    symbol_affected_file_paths=symbol_scope,
+                )
+            )
+        with stage("confidence"):
+            confidence = self._confidence.generate_report(
+                GenerateConfidenceReportCommand(
+                    analysis_id=command.analysis_id,
+                    impact=ImpactEvidence(
+                        affected_files=blast_radius.affected_files,
+                        affected_symbols=blast_radius.affected_symbols,
+                        affected_modules=blast_radius.affected_modules,
+                        affected_tests=blast_radius.affected_tests,
+                        dependency_depth=blast_radius.dependency_depth,
+                    ),
+                    tests=test_evidence,
+                    analysis=AnalysisEvidence(
+                        changed_files=len(changed_paths),
+                        covered_files=mapping.covered_files,
+                        unmapped_files=mapping.unmapped_files,
+                        unanalyzed_files=mapping.unanalyzed_files,
+                        non_executable_files=mapping.non_executable_files,
+                        parse_failures=mapping.parse_failures,
+                        full_suite_fallback_reasons=mapping.full_suite_reasons,
+                    ),
                 ),
             )
-        )
-        confidence = self._confidence.generate_report(
-            GenerateConfidenceReportCommand(
-                analysis_id=command.analysis_id,
-                impact=ImpactEvidence(
-                    affected_files=blast_radius.affected_files,
-                    affected_symbols=blast_radius.affected_symbols,
-                    affected_modules=blast_radius.affected_modules,
-                    affected_tests=blast_radius.affected_tests,
-                    dependency_depth=blast_radius.dependency_depth,
-                ),
-                tests=test_evidence,
-                analysis=AnalysisEvidence(
-                    changed_files=len(changed_paths),
-                    covered_files=mapping.covered_files,
-                    unmapped_files=mapping.unmapped_files,
-                    unanalyzed_files=mapping.unanalyzed_files,
-                    non_executable_files=mapping.non_executable_files,
-                    parse_failures=mapping.parse_failures,
-                    full_suite_fallback_reasons=mapping.full_suite_reasons,
-                ),
-            ),
-        )
         LOGGER.info(
             "Analysis completed",
             extra={
@@ -222,6 +304,149 @@ class Phase1AnalysisOrchestrator:
             confidence_score=confidence.confidence_score,
             risk_level=confidence.risk_level,
             verification_status=confidence.verification_status,
+        )
+
+    def _refine_with_symbols(
+        self,
+        command: ExecuteAnalysisCommand,
+        changes,
+        changed_paths: tuple[str, ...],
+        dependents: dict[str, frozenset[str]],
+        discovered_tests,
+        graph_snapshot: GraphSnapshot,
+    ):
+        """Symbol-level refinement (F-08); ``None`` keeps the file-level result."""
+
+        diff_text = command.diff_text or getattr(changes, "diff_text", None)
+        try:
+            refined = refine_dependents(
+                diff_text=diff_text,
+                changed_paths=changed_paths,
+                file_level=dependents,
+                python_sources=_read_python_sources(command.repository_path),
+                test_paths=frozenset(test.path.value for test in discovered_tests),
+                graph=graph_snapshot.graph,
+            )
+        except Exception:  # never let an optimisation break the safe path
+            LOGGER.warning(
+                "Symbol-level impact failed; using file-level impact",
+                extra={"analysis_id": str(command.analysis_id)},
+                exc_info=True,
+            )
+            return None
+        LOGGER.info(
+            "Symbol-level impact computed",
+            extra={
+                "analysis_id": str(command.analysis_id),
+                "algo_version": refined.algo_version,
+                "file_level_fallbacks": len(refined.fallbacks),
+                "changed_symbols": len(refined.changed_symbols),
+            },
+        )
+        return refined
+
+    def _extract_symbol_changes(
+        self, command: ExecuteAnalysisCommand, changes, *, log: bool = True
+    ) -> SymbolChangeSet | None:
+        """LK-01: log changed-symbol counts. Stores nothing (persistence is LK-05)."""
+
+        try:
+            diff_text = command.diff_text or getattr(changes, "diff_text", None)
+            base = GitSnapshot(command.repository_path, command.base_ref) if command.base_ref else None
+            head = (
+                GitSnapshot(command.repository_path, command.head_ref)
+                if command.head_ref
+                else DirectorySnapshot(command.repository_path)
+            )
+            if diff_text:
+                source: str | RefRange = diff_text
+            elif command.base_ref and command.head_ref:
+                source = RefRange(command.repository_path, command.base_ref, command.head_ref)
+            else:
+                return None
+            with stage("symbol_changes"):
+                result = extract_symbol_changes(base, head, source)
+        except Exception:  # an optional, informational step must never fail the analysis
+            LOGGER.warning(
+                "Symbol change extraction failed; continuing without it",
+                extra={"analysis_id": str(command.analysis_id)},
+                exc_info=True,
+            )
+            return None
+        if not log:
+            return result
+        LOGGER.info(
+            "Symbol changes extracted",
+            extra={
+                "analysis_id": str(command.analysis_id),
+                "algo_version": result.algo_version,
+                "changed_symbols": len(result.symbols),
+                "behavioral_symbols": result.counts["behavioral_symbols"],
+                "unattributed_hunks": len(result.unattributed_hunks),
+                "file_level_files": result.counts["files_by_level"].get("file", 0),
+                "truncated": result.truncated,
+            },
+        )
+        return result
+
+    def _extract_assertions(self, command: ExecuteAnalysisCommand) -> None:
+        """LK-04: log test-assertion counts. Stores nothing (persistence is LK-05)."""
+
+        try:
+            with stage("assertion_extraction"):
+                files = discover_test_files(command.repository_path)
+                result = extract_assertions(files, DirectorySnapshot(command.repository_path))
+        except Exception:  # an optional, informational step must never fail the analysis
+            LOGGER.warning(
+                "Assertion extraction failed; continuing without it",
+                extra={"analysis_id": str(command.analysis_id)},
+                exc_info=True,
+            )
+            return
+        LOGGER.info(
+            "Test assertions extracted",
+            extra={"analysis_id": str(command.analysis_id), **log_counts(result), "by_kind": str(result.counts()["by_kind"])},
+        )
+
+    def _analyze_tampering(
+        self, command: ExecuteAnalysisCommand, symbol_result: SymbolChangeSet | None
+    ) -> None:
+        """EV-02: log tamper-finding counts. Stores nothing (persistence is EV-01/LK-05)."""
+
+        if symbol_result is None:
+            return
+        try:
+            base = GitSnapshot(command.repository_path, command.base_ref) if command.base_ref else None
+            head = (
+                GitSnapshot(command.repository_path, command.head_ref)
+                if command.head_ref
+                else DirectorySnapshot(command.repository_path)
+            )
+            with stage("tamper_rules"):
+                report = analyze_tampering(
+                    symbol_result, base, head, diff_text=command.diff_text or None
+                )
+        except Exception:  # an optional, informational step must never fail the analysis
+            LOGGER.warning(
+                "Tamper analysis failed; continuing without it",
+                extra={"analysis_id": str(command.analysis_id)},
+                exc_info=True,
+            )
+            return
+        counts = report.counts
+        LOGGER.info(
+            "Tamper rules evaluated",
+            extra={
+                "analysis_id": str(command.analysis_id),
+                "catalog_version": report.catalog_version,
+                "findings": counts["findings"],
+                "waived": counts["waived"],
+                "unanalyzable": counts["unanalyzable"],
+                "by_severity": counts["by_severity"],
+                "by_rule": counts["by_rule"],
+                "rule_errors": len(report.rule_errors),
+                "truncated": report.truncated,
+            },
         )
 
     def _run_or_defer_tests(
@@ -251,11 +476,20 @@ class Phase1AnalysisOrchestrator:
             if result.status == "error"
             else TestRunOutcome.COMPLETED
         )
+        flaky = result.flaky
+        flaky_tests = tuple(result.flaky_tests)
+        failed = result.failed
+        if self._flaky_policy == "fail" and flaky:
+            # Strict policy: a flaky test is a failure. It never becomes a pass.
+            failed += flaky
+            flaky, flaky_tests = 0, ()
         return TestEvidence(
             total_tests=result.total_tests,
             passed=result.passed,
-            failed=result.failed,
+            failed=failed,
             skipped=result.skipped,
+            flaky=flaky,
+            flaky_tests=flaky_tests,
             coverage_percent=(
                 CoveragePercent(result.coverage_percent)
                 if result.coverage_percent is not None
@@ -270,7 +504,7 @@ class Phase1AnalysisOrchestrator:
     ) -> set[str]:
         import os
 
-        from radius_analysis.ai.pruner import SemanticPruner
+        from radius_analysis.ai.pruner import SemanticPruner, gemini_api_key_from_env
         from radius_analysis.diff_hunks import parse_diff_modified_lines
         from radius_graph.cpg import CodePropertyGraph
         from radius_graph.slicer import GraphSlicer
@@ -355,7 +589,8 @@ class Phase1AnalysisOrchestrator:
         self._last_cpg = cpg
 
         slicer = GraphSlicer(cpg)
-        api_key = os.environ.get("GEMINI_API_KEY", "")
+        # Opt-in only: needs RADIUS_FEATURE_GEMINI_PRUNER as well as the key.
+        api_key = gemini_api_key_from_env()
         pruner = SemanticPruner(api_key=api_key)
 
         pruned_files = set()

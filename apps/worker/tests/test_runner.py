@@ -1,4 +1,6 @@
+import base64
 import subprocess
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -7,6 +9,7 @@ import pytest
 import radius_worker.runner as worker_runner
 from radius_analysis.domain import AnalysisStatus
 from radius_analysis.infrastructure import SqlAlchemyAnalysisJobQueue
+from radius_repository.infrastructure import LocalGitRepositoryClient
 from radius_shared.database import enums as db_enums
 from radius_shared.database.base import Base
 from radius_shared.database.models import (
@@ -133,7 +136,11 @@ def test_github_clone_headers_use_stored_installation_id() -> None:
             github_client=github_client,
         )
 
-        assert headers == ("Authorization: Bearer clone-token",)
+        # Basic auth, username x-access-token, token as password (GitHub's
+        # git-over-HTTPS contract); the raw token is not in the header text.
+        expected = base64.b64encode(b"x-access-token:clone-token").decode()
+        assert headers == (f"Authorization: Basic {expected}",)
+        assert "clone-token" not in headers[0]
         assert github_client.installation_ids == [12345]
 
 
@@ -253,6 +260,7 @@ class FakeOrchestrator:
 class FakeRuntime:
     def __init__(self) -> None:
         self.ran = False
+        self.stop_event = threading.Event()
 
     def run_loop(self, *, poll_interval_seconds: float) -> None:
         self.ran = poll_interval_seconds > 0
@@ -279,7 +287,10 @@ class FakeGitClient:
         self.checked_out = branch_name
 
 
-class RealGitClient:
+class RealGitClient(LocalGitRepositoryClient):
+    """Clones a LOCAL source repository (production clients refuse local paths),
+    but creates per-analysis worktrees exactly like the production client."""
+
     def clone_or_fetch(
         self,
         clone_url: str,
@@ -287,19 +298,15 @@ class RealGitClient:
         *,
         extra_headers: tuple[str, ...] = (),
     ) -> Path:
-        from radius_repository.infrastructure import LocalGitRepositoryClient
-
-        return LocalGitRepositoryClient().clone_or_fetch(
-            clone_url,
-            destination,
-            extra_headers=extra_headers,
+        if destination.exists():
+            return destination
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            ("git", "clone", "-q", clone_url, str(destination)),
+            check=True,
+            capture_output=True,
         )
-
-    def checkout(self, repository_path: Path, branch_name: str) -> None:
-        from radius_repository.infrastructure import LocalGitRepositoryClient
-
-        LocalGitRepositoryClient().checkout(repository_path, branch_name)
-
+        return destination
 
 class DisabledGitHubClient:
     def create_installation_token(self, installation_id: int):
@@ -433,3 +440,120 @@ def _git(args: tuple[str, ...], *, cwd: Path) -> str:
         text=True,
     )
     return result.stdout.strip()
+
+
+# -- C-03 / C-07 / C-08: per-analysis worktrees --------------------------------
+
+
+def _commit_file(repo: Path, content: str) -> str:
+    (repo / "marker.txt").write_text(content, encoding="utf-8")
+    _git(("add", "."), cwd=repo)
+    _git(("commit", "-m", content), cwd=repo)
+    return _git(("rev-parse", "HEAD"), cwd=repo).strip()
+
+
+def test_each_analysis_gets_a_private_worktree_removed_afterwards(tmp_path: Path) -> None:
+    import contextlib
+
+    source = _create_git_repository(tmp_path / "source")
+    first = _commit_file(source, "first")
+    second = _commit_file(source, "second")
+    cache = tmp_path / "cache"
+    client = RealGitClient()
+    seen = {}
+    with _session_factory()() as session:
+        analysis_a, repository, pull_request = _persist_analysis_context(
+            session, clone_url=str(source), commit_sha=first
+        )
+        analysis_b = Analysis(
+            repository=repository,
+            pull_request=pull_request,
+            commit_sha=second,
+            status=db_enums.AnalysisStatus.PENDING,
+            started_at=datetime.now(UTC),
+            created_at=datetime.now(UTC),
+        )
+        session.add(analysis_b)
+        session.flush()
+        # Two analyses of the same repository are open at the same time.
+        with contextlib.ExitStack() as stack_a, contextlib.ExitStack() as stack_b:
+            for key, analysis, stack in (
+                ("a", analysis_a, stack_a),
+                ("b", analysis_b, stack_b),
+            ):
+                command = load_persisted_analysis_command(
+                    session=session,
+                    analysis_id=analysis.id,
+                    repository_cache_dir=cache,
+                    git_client=client,
+                    cleanup=stack,
+                )
+                seen[key] = command.repository_path
+            assert seen["a"] != seen["b"]
+            assert (seen["a"] / "marker.txt").read_text(encoding="utf-8") == "first"
+            assert (seen["b"] / "marker.txt").read_text(encoding="utf-8") == "second"
+            for path in seen.values():
+                assert cache / ".worktrees" in path.parents
+        assert not seen["a"].exists()
+        assert not seen["b"].exists()
+
+
+def test_worktree_is_removed_when_the_pipeline_raises(tmp_path: Path) -> None:
+    import contextlib
+
+    source = _create_git_repository(tmp_path / "source")
+    sha = _commit_file(source, "only")
+    with _session_factory()() as session:
+        analysis, _, _ = _persist_analysis_context(
+            session, clone_url=str(source), commit_sha=sha
+        )
+        path = None
+        with pytest.raises(RuntimeError), contextlib.ExitStack() as stack:
+            command = load_persisted_analysis_command(
+                session=session,
+                analysis_id=analysis.id,
+                repository_cache_dir=tmp_path / "cache",
+                git_client=RealGitClient(),
+                cleanup=stack,
+            )
+            path = command.repository_path
+            assert path.is_dir()
+            raise RuntimeError("pipeline failed")
+        assert path is not None and not path.exists()
+
+
+@pytest.mark.parametrize("owner", ["..", ".", "../..", "a/../..", "...", ""])
+def test_repository_cache_path_cannot_leave_the_cache_directory(
+    tmp_path: Path, owner: str
+) -> None:
+    cache = tmp_path / "cache"
+    with _session_factory()() as session:
+        _, repository, _ = _persist_analysis_context(session)
+        repository.owner = owner
+        repository.name = ".."
+        path = worker_runner._repository_cache_path(cache, repository)
+    resolved = path.resolve()
+    assert cache.resolve() in resolved.parents
+
+
+def test_cache_maintenance_passes_settings_and_never_raises(tmp_path: Path) -> None:
+    calls = []
+
+    class Maintainer:
+        def maintain_cache(self, root, **kwargs):
+            calls.append((root, kwargs))
+            raise OSError("disk on fire")
+
+    runtime = SqlAlchemyWorkerRuntime(
+        session_factory=_session_factory(),
+        repository_cache_dir=tmp_path / "cache",
+        git_client=Maintainer(),
+        settings=worker_runner.WorkerSettings(
+            RADIUS_GIT_CACHE_MAX_IDLE_DAYS=9, RADIUS_RETENTION_DAYS=30
+        ),
+        github_client=DisabledGitHubClient(),
+    )
+    runtime.run_cache_maintenance()  # must swallow the error
+    assert calls[0][0] == tmp_path / "cache"
+    assert calls[0][1]["max_idle_days"] == 9
+    assert calls[0][1]["worktrees_root"] == tmp_path / "cache" / ".worktrees"

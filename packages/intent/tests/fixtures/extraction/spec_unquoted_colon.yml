@@ -1,0 +1,4 @@
+version: 1
+criteria:
+  - text: Users can: reset
+  - text: "fine"

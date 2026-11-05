@@ -288,3 +288,9 @@ Radius is not being built as another testing framework.
 It is being built as the intelligence layer that helps engineering teams understand software changes, evaluate their impact, and make informed decisions before every merge.
 
 Every feature developed within Radius should move the platform closer to becoming the trusted verification system for modern software engineering.
+
+---
+
+# Research and Product Plan
+
+The next phase of Radius (intent-to-evidence verification, calibrated trust, and the market plan) is specified in [docs/research/](research/README.md). Ratified decisions are in [decisions.md](decisions.md) (DEC-006 to DEC-015).

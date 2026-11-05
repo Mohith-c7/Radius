@@ -492,6 +492,41 @@ mutating the old one.
 
 ---
 
+## 6a. Intent Panel (IN-11)
+
+The analysis detail page has an **Intent** section (`components/intent-panel.tsx`,
+anchor `#intent`) that shows what the change is supposed to do as a checklist of
+criteria, and lets a developer or reviewer confirm them. It uses the Intent API
+(`docs/API_CONTRACTS.md`, "Intent APIs") through the same-origin proxy.
+
+What it shows and does:
+
+- Header: snapshot version and time, source badges (PR description, `.radius/intent.yml`,
+  agent prompt, ...) with explanations for `truncated` and `suspicious content removed`.
+- Criteria list, filterable by state (proposed, confirmed, rejected, edited,
+  needs_reconfirmation, orphaned). `needs_reconfirmation` and `orphaned` are sorted first and
+  called out with a banner.
+- Each criterion: text, weight, testability badge (with a "why" rationale), provenance
+  (source kind, method, "LLM-proposed - verify" marker), state badge.
+  `subjective_or_vague` and `untestable_external` show guidance ("add a measurable threshold").
+- Actions, offered only where the server state machine allows them: confirm, edit (inline,
+  2000 character cap), reject, reopen; per-criterion history; "Source" opens a drawer with the
+  criterion's span highlighted in the stored source text.
+- Add criterion (confirmed on creation), Add intent / spec dialog (agent prompt, `.radius/intent.yml`,
+  PR description, issue, PR title; 64 KiB counter; `INTENT_SPEC_INVALID` shown as line-numbered
+  messages), Rebuild, and a history drawer that compares two snapshot versions.
+- Optimistic updates roll back on failure. Writes send `If-Match` with the last ETag; on
+  409 `INTENT_STALE` the panel asks the user to reload. 404 `INTENT_NOT_FOUND` is the empty state.
+
+Security: all intent text is untrusted and rendered as React text only (no HTML, no markdown).
+Highlight offsets are Unicode code point indices and are validated against the text length.
+Long text is truncated with "show more". The proxy allowlist (`lib/proxy.ts`) exposes exactly the
+intent routes and methods and forwards `If-Match` / `X-Radius-Actor` only on intent writes and
+only when the value is well formed. The actor label is `user:<id>` from the signed-in session
+(omitted when there is none); Radius records it but does not verify it.
+
+---
+
 ## 7. Changed Files View
 
 Route:

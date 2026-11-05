@@ -1,13 +1,20 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from radius_analysis.ai import pruner as _pruner_module
 from radius_analysis.ai.pruner import SemanticPruner
+
+# The google-genai SDK is an optional extra (installed via the dev extra in CI).
+requires_genai = pytest.mark.skipif(
+    _pruner_module.genai is None, reason="google-genai SDK not installed"
+)
 
 # ==========================================
 # Modern google-genai SDK tests (_USE_GENAI=True)
 # ==========================================
 
 
+@requires_genai
 @patch("radius_analysis.ai.pruner._USE_GENAI", True)
 @patch("radius_analysis.ai.pruner.genai.Client")
 def test_semantic_pruner_impacted(mock_client_class):
@@ -33,6 +40,7 @@ def test_semantic_pruner_impacted(mock_client_class):
     assert call_kwargs["config"]["response_schema"] == PrunerDecision
 
 
+@requires_genai
 @patch("radius_analysis.ai.pruner._USE_GENAI", True)
 @patch("radius_analysis.ai.pruner.genai.Client")
 def test_semantic_pruner_benign(mock_client_class):
@@ -53,6 +61,7 @@ def test_semantic_pruner_benign(mock_client_class):
     mock_client.models.generate_content.assert_called_once()
 
 
+@requires_genai
 @patch("radius_analysis.ai.pruner._USE_GENAI", True)
 @patch("radius_analysis.ai.pruner.genai.Client")
 def test_semantic_pruner_fallback_on_error(mock_client_class):
@@ -66,6 +75,7 @@ def test_semantic_pruner_fallback_on_error(mock_client_class):
     assert result is True
 
 
+@requires_genai
 @patch("radius_analysis.ai.pruner._USE_GENAI", True)
 @patch("radius_analysis.ai.pruner.genai.Client")
 def test_semantic_pruner_fallback_on_invalid_json(mock_client_class):
@@ -172,3 +182,23 @@ def test_legacy_semantic_pruner_fallback_on_invalid_json():
         result = pruner.evaluate_impact("def caller(): pass", "diff")
 
         assert result is True
+
+
+def test_gemini_key_ignored_without_explicit_flag() -> None:
+    from radius_analysis.ai.pruner import gemini_api_key_from_env
+
+    assert gemini_api_key_from_env({"GEMINI_API_KEY": "k"}) == ""
+    assert (
+        gemini_api_key_from_env(
+            {"GEMINI_API_KEY": "k", "RADIUS_FEATURE_GEMINI_PRUNER": "false"}
+        )
+        == ""
+    )
+
+
+def test_gemini_key_used_when_flag_is_on() -> None:
+    from radius_analysis.ai.pruner import gemini_api_key_from_env
+
+    env = {"GEMINI_API_KEY": " k ", "RADIUS_FEATURE_GEMINI_PRUNER": "TRUE"}
+    assert gemini_api_key_from_env(env) == "k"
+    assert gemini_api_key_from_env({"RADIUS_FEATURE_GEMINI_PRUNER": "1"}) == ""

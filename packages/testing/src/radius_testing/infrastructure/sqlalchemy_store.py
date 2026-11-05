@@ -268,12 +268,13 @@ class SqlAlchemyTestStore:
         analysis = self._session.get(db_models.Analysis, result.analysis_id)
         selection = self.get_selection(result.analysis_id)
         if analysis is not None and selection is not None:
-            status = "failed" if result.failed else "passed"
             branch = analysis.pull_request.source_branch if analysis.pull_request else None
             pr_id = analysis.pull_request.github_pr_number if analysis.pull_request else None
             duration_per_test = result.duration_ms // max(1, len(selection.selected_tests))
+            flaky_files = {_norm_path(t.split("::", 1)[0]) for t in result.flaky_tests}
             for item in selection.selected_tests:
                 path = item.test_case.path.value
+                status = _history_status(result, path, flaky_files)
                 existing = self._session.scalar(select(db_models.TestExecutionHistory).where(
                     db_models.TestExecutionHistory.analysis_id == result.analysis_id,
                     db_models.TestExecutionHistory.test_path == path,
@@ -544,6 +545,32 @@ class SqlAlchemyTestStore:
             ).order_by(db_models.TestExecutionHistory.timestamp.desc())
         ).all()
 
+    def list_test_samples(self, repository_id: UUID, limit: int = 5000) -> list[dict]:
+        """Return the newest ``limit`` history rows of a repository, oldest first.
+
+        Ordered by (timestamp, id) so equal timestamps still give a stable order.
+        """
+
+        rows = self._session.scalars(
+            select(db_models.TestExecutionHistory)
+            .where(db_models.TestExecutionHistory.repository_id == repository_id)
+            .order_by(
+                db_models.TestExecutionHistory.timestamp.desc(),
+                db_models.TestExecutionHistory.id.desc(),
+            )
+            .limit(limit)
+        ).all()
+        return [
+            {
+                "test_path": row.test_path,
+                "test_name": row.test_name,
+                "status": row.status,
+                "commit_sha": row.commit_sha,
+                "analysis_id": str(row.analysis_id),
+            }
+            for row in reversed(rows)
+        ]
+
     def get_recent_executions(
         self, repository_id: UUID | None = None, limit: int = 50
     ) -> list[dict]:
@@ -577,3 +604,21 @@ class SqlAlchemyTestStore:
             }
             for row in rows
         ]
+
+
+def _norm_path(path: str) -> str:
+    return path.replace("\\", "/").removeprefix("./")
+
+
+def _history_status(result: TestRunResult, path: str, flaky_files: set[str]) -> str:
+    """History status of one selected test file for an aggregate result.
+
+    ``flaky`` is only recorded when nothing stably failed (conservative: a
+    stable failure anywhere keeps every file ``failed``, as before F-11).
+    """
+
+    if result.failed:
+        return "failed"
+    if _norm_path(path) in flaky_files:
+        return "flaky"
+    return "passed"

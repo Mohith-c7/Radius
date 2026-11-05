@@ -8,6 +8,7 @@ from radius_testing.infrastructure.planner import StaticTestCommandPlanner
 from radius_testing.infrastructure.sandbox_runner import (
     ContainerSandboxRunner,
     SandboxConfig,
+    SandboxUnavailableError,
 )
 from radius_testing.infrastructure.selection import PathBasedTestSelector
 from radius_testing.infrastructure.sqlalchemy_store import SqlAlchemyTestStore
@@ -21,6 +22,7 @@ __all__ = [
     "JUnitReportParser",
     "PathBasedTestSelector",
     "SandboxConfig",
+    "SandboxUnavailableError",
     "SqlAlchemyTestStore",
     "StaticTestCommandPlanner",
     "SubprocessTestRunner",

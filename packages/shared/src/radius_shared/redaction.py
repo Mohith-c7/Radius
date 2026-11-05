@@ -52,9 +52,46 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         ),
         rf"\1\2{REDACTED}",
     ),
+    # JSON Web Tokens (three base64url segments starting with a JSON header).
+    (re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*"), REDACTED),
+    # AWS access key ids and common "sk-" style API keys.
+    (re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"), REDACTED),
+    (re.compile(r"\bsk-[A-Za-z0-9_-]{20,}"), REDACTED),
     # GitHub token formats (installation, user, OAuth, refresh, fine-grained PAT).
     (re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b"), REDACTED),
 )
+
+
+_SENSITIVE_KEY = re.compile(
+    r"(?i)(authorization|cookie|signature|x-radius-api-key|x-api-key|api[_-]?key|"
+    r"access[_-]?token|refresh[_-]?token|client[_-]?secret|private[_-]?key|"
+    r"password|passwd|secret|token|credential)"
+)
+
+
+def is_sensitive_key(key: object) -> bool:
+    """Return whether a field/header name denotes a secret value."""
+
+    return bool(_SENSITIVE_KEY.search(str(key)))
+
+
+def redact_structure(value: object, *, key: object = None) -> object:
+    """Redact secrets in nested dict/list/tuple data, keeping its shape.
+
+    A value whose *key* looks sensitive (``Authorization``, ``token``,
+    ``private_key`` ...) is replaced wholesale, whatever its content; other
+    strings go through :func:`redact_secrets`.
+    """
+
+    if key is not None and is_sensitive_key(key):
+        return REDACTED
+    if isinstance(value, dict):
+        return {k: redact_structure(v, key=k) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [redact_structure(item) for item in value]
+    if isinstance(value, str):
+        return redact_secrets(value)
+    return value
 
 
 def redact_secrets(text: object, *, max_length: int | None = None) -> str:

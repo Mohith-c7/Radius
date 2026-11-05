@@ -292,8 +292,9 @@ export function ImpactGraph({ nodes, edges, changedFiles, selectedTestPaths, hei
           {!model.hasImportLinks && (
             <p className="impact-note">
               <strong>Only the changed files are shown.</strong> Radius found no file-to-file imports in this
-              repository{model.counts.selectedTests === 0 ? " and matched no tests" : ""}. Import links are resolved
-              for Python today; for other languages the ripple beyond the changed files is not traced yet.
+              repository{model.counts.selectedTests === 0 ? " and matched no tests" : ""}. Imports are resolved to
+              files for Python and TypeScript/JavaScript; for other languages (Go, Java, Rust) the ripple beyond the
+              changed files is not traced yet.
             </p>
           )}
         </div>

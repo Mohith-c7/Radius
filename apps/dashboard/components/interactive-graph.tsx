@@ -337,7 +337,7 @@ export function InteractiveGraphViewer({
                     fill="var(--ink)"
                     fontSize="11"
                     fontWeight="700"
-                    fontFamily="'DM Mono', monospace"
+                    style={{ fontFamily: "var(--font-mono)" }}
                   >
                     {node.label.length > 20 ? `${node.label.slice(0, 19)}…` : node.label}
                   </text>
@@ -348,7 +348,7 @@ export function InteractiveGraphViewer({
                     y="42"
                     fill="var(--muted)"
                     fontSize="9.5"
-                    fontFamily="Manrope, sans-serif"
+                    style={{ fontFamily: "var(--font-sans)" }}
                   >
                     {node.path
                       ? (node.path.length > 24 ? `…${node.path.slice(-22)}` : node.path)

@@ -1,0 +1,89 @@
+[importlinter]
+root_package = radius_linking
+include_external_packages = True
+
+[importlinter:contract:domain-is-pure]
+name = Linking domain imports only the standard library and itself
+type = forbidden
+source_modules =
+    radius_linking.domain
+forbidden_modules =
+    radius_linking.application
+    radius_linking.infrastructure
+    radius_intent
+    radius_analysis
+    radius_graph
+    radius_shared
+    sqlalchemy
+    fastapi
+    pydantic
+    httpx
+    requests
+    psycopg
+    alembic
+    google
+    anthropic
+    openai
+    yaml
+
+[importlinter:contract:application-uses-domain-only]
+name = Linking application depends on the domain only
+type = forbidden
+source_modules =
+    radius_linking.application
+forbidden_modules =
+    radius_linking.infrastructure
+    radius_intent
+    radius_analysis
+    radius_graph
+    radius_shared
+    sqlalchemy
+    fastapi
+    pydantic
+    httpx
+    requests
+    psycopg
+    alembic
+    google
+    anthropic
+    openai
+
+[importlinter:contract:deterministic-linkers-are-offline]
+name = Deterministic linkers have no web, database, LLM or tenant dependencies
+type = forbidden
+source_modules =
+    radius_linking.infrastructure.linkers
+    radius_linking.infrastructure.symbol_docs
+    radius_linking.infrastructure.neighbors
+forbidden_modules =
+    radius_linking.application
+    radius_linking.infrastructure.rerank
+    radius_intent
+    radius_shared
+    sqlalchemy
+    fastapi
+    pydantic
+    httpx
+    requests
+    psycopg
+    alembic
+    google
+    anthropic
+    openai
+    yaml
+
+[importlinter:contract:rerank-core-has-no-sdk]
+name = LLM reranker imports no provider SDK or HTTP client
+type = forbidden
+source_modules =
+    radius_linking.infrastructure.rerank
+forbidden_modules =
+    anthropic
+    openai
+    google
+    httpx
+    requests
+    sqlalchemy
+    fastapi
+    psycopg
+    radius_linking.application

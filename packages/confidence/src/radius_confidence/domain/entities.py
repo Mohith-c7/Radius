@@ -7,9 +7,11 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from radius_confidence.domain.enums import (
+    CURRENT_SCORE_KIND,
     EvidenceCategory,
     EvidenceImpact,
     RiskLevel,
+    ScoreKind,
 )
 from radius_confidence.domain.value_objects import ConfidenceScore, CoveragePercent
 
@@ -64,6 +66,10 @@ class TestEvidence:
     """Selected test files whose reported cases were all skipped."""
     contradictory_tests: tuple[str, ...] = ()
     """Test cases reported as passed in one upload and failed in another."""
+    flaky: int = 0
+    """Cases that failed then passed on rerun (F-11); not in ``passed`` or ``failed``."""
+    flaky_tests: tuple[str, ...] = ()
+    """Identities of the flaky cases. They are never a verified pass."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -166,6 +172,12 @@ class ConfidenceReport:
     analysis_completeness: float = 100.0
     verification_status: str = "unverified"
     generated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    @property
+    def score_kind(self) -> ScoreKind:
+        """Kind of ``confidence_score`` (uncalibrated heuristic for v1)."""
+
+        return CURRENT_SCORE_KIND
 
     def __post_init__(self) -> None:
         if not self.summary.strip():

@@ -1,0 +1,30 @@
+{"id":"h01","text":"Admins can disable a user account from the settings page","label":"behavioral_testable"}
+{"id":"h02","text":"The importer skips blank lines and reports their line numbers","label":"behavioral_testable"}
+{"id":"h03","text":"A 403 response is returned when a member edits another team's project","label":"behavioral_testable"}
+{"id":"h04","text":"Session cookies must have the Secure and HttpOnly flags set","label":"behavioral_testable"}
+{"id":"h05","text":"Scenario: Out of stock: Given an item with zero stock; When the user adds it to the cart; Then an out-of-stock notice appears","label":"behavioral_testable"}
+{"id":"h06","text":"The function compute_total() returns 0 for an empty list","label":"behavioral_testable"}
+{"id":"h07","text":"Uploading a file with an unsupported extension fails with a clear error code","label":"behavioral_testable"}
+{"id":"h08","text":"Bulk delete asks for confirmation before removing more than 10 records","label":"behavioral_testable"}
+{"id":"h09","text":"Rename `OrderHandler` to `CheckoutHandler`","label":"structural_checkable"}
+{"id":"h10","text":"Bump the lodash dependency to 4.17.21","label":"structural_checkable"}
+{"id":"h11","text":"Move the integration tests into tests/integration","label":"structural_checkable"}
+{"id":"h12","text":"Remove the unused imports in the api package","label":"structural_checkable"}
+{"id":"h13","text":"Update the contributing guide with the new branch naming rules","label":"structural_checkable"}
+{"id":"h14","text":"Refactor the cache layer to use a single interface","label":"structural_checkable"}
+{"id":"h15","text":"Deprecate the old export flag and document the replacement","label":"structural_checkable"}
+{"id":"h16","text":"The nightly job completes in under 20 minutes","label":"non_functional_measurable"}
+{"id":"h17","text":"Time to first byte is at most 150 ms for cached pages","label":"non_functional_measurable"}
+{"id":"h18","text":"The Docker image stays below 200 MB","label":"non_functional_measurable"}
+{"id":"h19","text":"The checkout flow passes WCAG 2.2 AA checks in axe","label":"non_functional_measurable"}
+{"id":"h20","text":"Make the app more user-friendly","label":"subjective_or_vague"}
+{"id":"h21","text":"Refactor the code to be cleaner","label":"subjective_or_vague"}
+{"id":"h22","text":"Improve the onboarding","label":"subjective_or_vague"}
+{"id":"h23","text":"Better error messages","label":"subjective_or_vague"}
+{"id":"h24","text":"Should be performant and scalable","label":"subjective_or_vague"}
+{"id":"h25","text":"Handle all the usual cases","label":"subjective_or_vague"}
+{"id":"h26","text":"The checkout should be smooth","label":"subjective_or_vague"}
+{"id":"h27","text":"Security must be improved","label":"subjective_or_vague"}
+{"id":"h28","text":"The finance team approves the new invoice layout","label":"untestable_external"}
+{"id":"h29","text":"Customers are happy with the new dashboard in production over time","label":"untestable_external"}
+{"id":"h30","text":"Legal reviews the cookie banner wording","label":"untestable_external"}

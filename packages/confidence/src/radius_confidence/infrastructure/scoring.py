@@ -131,8 +131,13 @@ class DeterministicConfidenceScorer:
             gaps.append(f"Test execution did not complete: {tests.run_outcome}{detail}")
         elif needs_tests and tests.total_tests == 0:
             gaps.append("No tests were selected or collected for the changed code")
-        elif needs_tests and tests.passed == 0 and tests.failed == 0:
+        elif needs_tests and tests.passed == 0 and tests.failed == 0 and tests.flaky == 0:
             gaps.append("All selected tests were skipped; nothing was verified")
+        if tests.flaky:
+            gaps.append(
+                f"{tests.flaky} flaky test(s) failed then passed on rerun; they are "
+                "excluded from verification evidence"
+            )
         if needs_tests and tests.selected_test_files == 0:
             gaps.append(
                 "No selected test files are recorded for this analysis, so the "
@@ -188,6 +193,15 @@ class DeterministicConfidenceScorer:
                         else "selected_test_not_in_results"
                     ),
                     message=missing,
+                    impact=EvidenceImpact.NEGATIVE,
+                )
+            )
+        for name in tests.flaky_tests:
+            evidence.append(
+                ConfidenceEvidence(
+                    category=EvidenceCategory.TESTS,
+                    label="flaky_test",
+                    message=f"{name} is flaky (failed, then passed on rerun); not counted as a pass.",
                     impact=EvidenceImpact.NEGATIVE,
                 )
             )

@@ -1,0 +1,18 @@
+title: "[Idea]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Float an idea before it becomes a feature request. Concrete, well-scoped requests can go to a feature request issue.
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: What problem does it solve?
+    validations:
+      required: true

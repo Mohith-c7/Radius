@@ -129,6 +129,8 @@ class ConfidenceApplicationService:
             failed_selected_tests=failed_selected_tests,
             skipped_selected_tests=skipped_selected_tests,
             contradictory_tests=contradictory_tests,
+            flaky=getattr(test_result, "flaky", 0),
+            flaky_tests=tuple(getattr(test_result, "flaky_tests", ())),
         )
         report = self._build_report(
             analysis_id=analysis_id,

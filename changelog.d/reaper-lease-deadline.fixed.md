@@ -1,0 +1,1 @@
+The stuck-analysis reaper no longer fails a long job whose worker keeps renewing its lease; the deadline now counts from the job's last change instead of the analysis start, and a job that stops heartbeating is requeued after `WORKER_JOB_STALE_AFTER_SECONDS`.

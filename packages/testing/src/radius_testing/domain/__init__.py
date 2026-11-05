@@ -18,9 +18,27 @@ from radius_testing.domain.enums import (
     TestSelectionReason,
     TestType,
 )
+from radius_testing.domain.flakiness import (
+    ExecutionSample,
+    FlakinessAssessment,
+    FlakinessConfig,
+    RerunPolicy,
+    RerunVerdict,
+    SampleOutcome,
+    classify_rerun,
+    flakiness_score,
+)
 from radius_testing.domain.value_objects import SourcePath, TestName, TestPath
 
 __all__ = [
+    "ExecutionSample",
+    "FlakinessAssessment",
+    "FlakinessConfig",
+    "RerunPolicy",
+    "RerunVerdict",
+    "SampleOutcome",
+    "classify_rerun",
+    "flakiness_score",
     "CaseOutcome",
     "ReportedTestCase",
     "SelectedTest",

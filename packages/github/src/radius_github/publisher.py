@@ -12,6 +12,14 @@ CHECK_RUN_NAME = "Radius confidence"
 COMMENT_MARKER = "<!-- radius-confidence-report -->"
 
 
+class CommentPublishError(Exception):
+    """The Check Run was completed but the PR comment could not be written.
+
+    Lets callers tell "result is visible on the check" from "nothing was
+    published", so they never overwrite a completed check with a failure.
+    """
+
+
 @dataclass(frozen=True, slots=True)
 class GitHubAnalysisReport:
     """Data needed to publish one analysis result."""
@@ -39,6 +47,7 @@ class GitHubAnalysisReport:
     discovered_tests_count: int = 0
     verification_gaps: tuple[str, ...] = ()
     unmapped_files: tuple[str, ...] = ()
+    score_kind: str = "heuristic_uncalibrated"
 
 
 _RISK_BADGES: dict[str, str] = {
@@ -47,6 +56,24 @@ _RISK_BADGES: dict[str, str] = {
     "high": "🟠",
     "critical": "🔴",
 }
+
+
+_SCORE_LABELS: dict[str, str] = {
+    "heuristic_uncalibrated": "uncalibrated heuristic, not a probability",
+    "calibrated": "calibrated",
+}
+
+
+def _score_label(score_kind: str) -> str:
+    """Human label for the score kind; unknown kinds fall back to the safe one."""
+
+    return _SCORE_LABELS.get(score_kind, _SCORE_LABELS["heuristic_uncalibrated"])
+
+
+def _score_title_label(score_kind: str) -> str:
+    if score_kind == "calibrated":
+        return "calibrated score"
+    return "uncalibrated heuristic score"
 
 
 def _risk_badge(risk_level: str) -> str:
@@ -163,12 +190,13 @@ class GitHubAnalysisPublisher:
         conclusion = _check_conclusion(report.risk_level, report.verification_status)
         title = (
             f"{_verdict_title(report.verification_status)} "
-            f"(heuristic score {report.confidence_score:.0f}/100)"
+            f"({_score_title_label(report.score_kind)} "
+            f"{report.confidence_score:.0f}/100)"
         )
         summary = (
             f"{_verdict_title(report.verification_status)}. "
-            f"Heuristic score {report.confidence_score:.0f}/100 "
-            f"({report.risk_level} risk); not a calibrated probability."
+            f"Confidence {report.confidence_score:.0f}/100 "
+            f"({_score_label(report.score_kind)}); {report.risk_level} risk."
         )
         body = _markdown_report(report)
         check_run = _latest_check_run(
@@ -201,30 +229,33 @@ class GitHubAnalysisPublisher:
                 check_run_id=int(check_run["id"]),
             )
 
-        existing_comment = _existing_radius_comment(
-            self._client.list_issue_comments(
-                token=token,
-                owner=report.owner,
-                repo=report.repository_name,
-                issue_number=report.pull_request_number,
+        try:
+            existing_comment = _existing_radius_comment(
+                self._client.list_issue_comments(
+                    token=token,
+                    owner=report.owner,
+                    repo=report.repository_name,
+                    issue_number=report.pull_request_number,
+                )
             )
-        )
-        comment_args = {
-            "token": token,
-            "owner": report.owner,
-            "repo": report.repository_name,
-            "body": body,
-        }
-        if existing_comment is None:
-            self._client.create_issue_comment(
-                **comment_args,
-                issue_number=report.pull_request_number,
-            )
-        else:
-            self._client.update_issue_comment(
-                **comment_args,
-                comment_id=int(existing_comment["id"]),
-            )
+            comment_args = {
+                "token": token,
+                "owner": report.owner,
+                "repo": report.repository_name,
+                "body": body,
+            }
+            if existing_comment is None:
+                self._client.create_issue_comment(
+                    **comment_args,
+                    issue_number=report.pull_request_number,
+                )
+            else:
+                self._client.update_issue_comment(
+                    **comment_args,
+                    comment_id=int(existing_comment["id"]),
+                )
+        except Exception as exc:
+            raise CommentPublishError(str(exc)) from exc
 
 
 def _check_conclusion(risk_level: str, verification_status: str | None = None) -> str:
@@ -261,7 +292,8 @@ def _markdown_report(report: GitHubAnalysisReport) -> str:
     badge = _risk_badge(report.risk_level)
     
     rows = [
-        f"| **Confidence Score** | {badge} {report.confidence_score:.0f}/100 |",
+        f"| **Confidence Score** | {badge} {report.confidence_score:.0f}/100 "
+        f"({_score_label(report.score_kind)}) |",
     ]
     if report.verification_status:
         status_icon = "🟢" if report.verification_status.upper() == "VERIFIED" else "🔴" if report.verification_status.upper() == "FAILED" else "🟡"
@@ -346,10 +378,11 @@ def _markdown_report(report: GitHubAnalysisReport) -> str:
         f"{COMMENT_MARKER}\n"
         f"## {badge} Radius Confidence Report\n\n"
         f"**Verdict:** {_verdict_title(report.verification_status)}\n\n"
-        f"**Score:** {report.confidence_score:.0f}/100\n\n"
+        f"**Score:** Confidence {report.confidence_score:.0f}/100 "
+        f"({_score_label(report.score_kind)})\n\n"
         f"**Risk:** {report.risk_level}\n\n"
-        "_The score is a heuristic computed from fixed penalties, not a calibrated "
-        "probability that this change is correct._\n\n"
+        "_The score is an uncalibrated heuristic computed from fixed penalties, not a "
+        "calibrated probability that this change is correct._\n\n"
         f"{report.summary}\n\n"
         "### Verification Metrics\n\n"
         f"{metrics_table}"

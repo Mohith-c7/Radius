@@ -1,11 +1,18 @@
 """Worker runtime shell."""
 
+import base64
+import contextlib
+import os
+import signal
+import socket
+import threading
 import time
 import traceback
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
+from uuid import uuid4
 
 from radius_analysis.application import AnalysisApplicationService
 from radius_analysis.infrastructure import (
@@ -16,13 +23,15 @@ from radius_analysis.infrastructure import (
     UnifiedDiffChangeAnalyzer,
 )
 from radius_confidence.application import ConfidenceApplicationService
+from radius_confidence.domain import CURRENT_SCORE_KIND
 from radius_confidence.infrastructure import (
     DeterministicConfidenceScorer,
     InMemoryConfidenceStore,
     SqlAlchemyConfidenceStore,
 )
 from radius_github import GitHubAnalysisPublisher, GitHubAppClient, GitHubAppSettings
-from radius_github.publisher import GitHubAnalysisReport
+from radius_github.intent_rest import EtagCache, HttpTransport
+from radius_github.publisher import CommentPublishError, GitHubAnalysisReport
 from radius_graph.application import GraphApplicationService
 from radius_graph.infrastructure import InMemoryGraphStore, SqlAlchemyGraphStore
 from radius_parser.application import ParserApplicationService
@@ -30,7 +39,9 @@ from radius_parser.infrastructure import (
     FilesystemSourceDiscovery,
     default_language_parser_registry,
 )
-from radius_repository.infrastructure import LocalGitRepositoryClient
+from radius_repository.domain.clone_url import GitUrlPolicy, parse_allowed_hosts
+from radius_repository.infrastructure import GitTimeouts, LocalGitRepositoryClient
+from radius_shared.database import enums as db_enums
 from radius_shared.database import models as db_models
 from radius_shared.database.session import (
     create_database_engine,
@@ -38,7 +49,17 @@ from radius_shared.database.session import (
 )
 from radius_shared.errors import NotFoundError, ValidationError
 from radius_shared.logging import configure_logging, get_logger
+from radius_shared.observability import (
+    ObservabilitySettings,
+    bind_correlation,
+    configure_tracing,
+    continue_trace,
+    span,
+    stage,
+)
+from radius_shared.observability import metrics as obs_metrics
 from radius_shared.redaction import redact_secrets
+from radius_shared.verdict_v2_flag import VerdictV2Mode
 from radius_testing.application import TestingApplicationService
 from radius_testing.infrastructure import (
     ConventionalTestDiscoverer,
@@ -54,19 +75,120 @@ from radius_worker.config import WorkerSettings
 from radius_worker.execution_mode import (
     TestExecutionMode,
     build_test_runner,
+    require_sandbox_ready,
     resolve_test_execution_mode,
 )
+from radius_worker.intent_ingestion import ingest_intent_best_effort
+from radius_worker.maintenance import run_retention
 from radius_worker.orchestrator import (
     ExecuteAnalysisCommand,
     Phase1AnalysisOrchestrator,
 )
+from radius_worker.poller import PullRequestPoller
 from radius_worker.queue import InMemoryAnalysisQueue
+from radius_worker.verdict_v2.publish import publish_in_job as publish_v2_in_job
+from radius_worker.verdict_v2.publish import v2_replaces_v1
+from radius_worker.verdict_v2.requests import Recomputer as VerdictV2Recomputer
+from radius_worker.verdict_v2.requests import (
+    process_pending as process_verdict_v2_requests,
+)
 
 LOGGER = get_logger(__name__)
+
+#: Seconds between opt-in retention passes.
+RETENTION_INTERVAL_SECONDS = 3600.0
+#: Seconds between repository-cache housekeeping passes (C-07).
+CACHE_MAINTENANCE_INTERVAL_SECONDS = 3600.0
+#: Directory (inside the repository cache dir) holding per-analysis worktrees (C-03).
+WORKTREES_DIRNAME = ".worktrees"
 
 
 class AnalysisStuckError(RuntimeError):
     """An analysis was stopped by the reaper because it could not finish."""
+
+
+class LeaseLostError(RuntimeError):
+    """This worker no longer holds the job lease (C-02); its result must be discarded."""
+
+
+def new_worker_id() -> str:
+    """Unique id of this worker process (host, pid, random suffix)."""
+
+    return f"{socket.gethostname()[:60]}:{os.getpid()}:{uuid4().hex[:8]}"
+
+
+def touch_health_file(path: str) -> None:
+    """Record liveness for the container healthcheck (C-09); never raises."""
+
+    if not path:
+        return
+    try:
+        with open(path, "a"):
+            os.utime(path, None)
+    except OSError:
+        pass
+
+
+class _LeaseHeartbeat:
+    """Renews the job lease from a background thread while the job runs (C-02).
+
+    Each beat is one conditional UPDATE in its own short session. When the
+    update matches no row the lease is lost (the job was recovered, failed by
+    the reaper or claimed elsewhere): ``lost`` is set and the pipeline stops at
+    its next ``ensure_held`` check instead of publishing a duplicate result.
+    A transient database error is logged and retried at the next beat.
+    """
+
+    def __init__(self, runtime: "SqlAlchemyWorkerRuntime", job) -> None:
+        self._runtime = runtime
+        self._job = job
+        self._stop = threading.Event()
+        self.lost = threading.Event()
+        self._thread = threading.Thread(
+            target=self._run, name="radius-lease-heartbeat", daemon=True
+        )
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        self._thread.join(timeout=10)
+
+    def ensure_held(self) -> None:
+        if self.lost.is_set():
+            msg = "The job lease was lost; this worker stops working on it."
+            raise LeaseLostError(msg)
+
+    def _run(self) -> None:
+        interval = self._runtime.settings.heartbeat_interval
+        while not self._stop.wait(interval):
+            try:
+                with self._runtime.session_factory() as session:
+                    held = self._runtime._queue(session).heartbeat(self._job.analysis_id)
+                    session.commit()
+            except Exception as exc:
+                LOGGER.warning(
+                    "Lease heartbeat failed; will retry",
+                    extra={
+                        "analysis_id": str(self._job.analysis_id),
+                        "outcome": "heartbeat_error",
+                        "error": redact_secrets(exc),
+                    },
+                )
+                continue
+            if not held:
+                self.lost.set()
+                LOGGER.warning(
+                    "Job lease lost",
+                    extra={
+                        "analysis_id": str(self._job.analysis_id),
+                        "job_id": str(self._job.id),
+                        "outcome": "lease_lost",
+                    },
+                )
+                return
+            touch_health_file(self._runtime.settings.health_file)
 
 
 def run_worker() -> None:
@@ -74,9 +196,40 @@ def run_worker() -> None:
 
     settings = WorkerSettings()
     configure_logging(settings.log_level)
+    configure_observability()
     runtime = create_sql_worker_runtime(settings)
+    if obs_metrics.metrics_enabled():
+        obs_metrics.set_queue_depth_provider(runtime.queue_depths)
+    _install_stop_handlers(runtime.stop_event)
     print("Radius worker ready")
     runtime.run_loop(poll_interval_seconds=settings.poll_interval_seconds)
+    LOGGER.info("Radius worker stopped", extra={"outcome": "worker_stopped"})
+
+
+def _install_stop_handlers(stop_event: threading.Event) -> None:
+    """SIGTERM / SIGINT finish the current job, then end the loop (no new work is claimed)."""
+
+    def _stop(signum, _frame) -> None:
+        LOGGER.info("Stop requested", extra={"outcome": "worker_stopping", "signal": signum})
+        stop_event.set()
+
+    if threading.current_thread() is not threading.main_thread():
+        return
+    for name in ("SIGTERM", "SIGINT"):
+        sig = getattr(signal, name, None)
+        if sig is not None:
+            signal.signal(sig, _stop)
+
+
+def configure_observability(settings: ObservabilitySettings | None = None) -> None:
+    """Enable optional tracing/metrics from env settings (default: off)."""
+
+    settings = settings or ObservabilitySettings()
+    if settings.service_name == "radius":
+        settings = settings.model_copy(update={"service_name": "radius-worker"})
+    configure_tracing(settings)
+    if obs_metrics.configure_metrics(settings.metrics_enabled):
+        obs_metrics.start_metrics_server(settings.worker_metrics_port)
 
 
 @dataclass(slots=True)
@@ -88,6 +241,35 @@ class SqlAlchemyWorkerRuntime:
     git_client: LocalGitRepositoryClient
     settings: WorkerSettings
     github_client: GitHubAppClient
+    #: IN-02: HTTP transport for intent ingestion (``None`` = real urllib). Tests inject a fake.
+    intent_transport: HttpTransport | None = None
+    #: IN-02: conditional-request cache; process-local and bounded.
+    intent_etag_cache: EtagCache = field(default_factory=EtagCache)
+    #: VS-07: Stage B recompute used by the verdict v2 outbox consumer (``None`` =
+    #: republish the latest stored verdict without recomputing). Wired by VS-06.
+    verdict_v2_recomputer: VerdictV2Recomputer | None = None
+    #: Set to end ``run_loop`` after the current job (SIGTERM / SIGINT in ``run_worker``).
+    stop_event: threading.Event = field(default_factory=threading.Event)
+    #: Opt-in pull request poller (``None`` = off; built from settings when unset).
+    poller: PullRequestPoller | None = None
+    #: C-02: identifies this process as the owner of the jobs it claims.
+    worker_id: str = field(default_factory=new_worker_id)
+
+    def __post_init__(self) -> None:
+        if self.poller is None and self.settings.github_poll_interval_seconds > 0:
+            if not self.github_client.settings.enabled:
+                LOGGER.warning(
+                    "RADIUS_GITHUB_POLL_INTERVAL_SECONDS is set but GITHUB_APP_ID / the "
+                    "private key are missing in the worker; the poller stays off",
+                    extra={"outcome": "poll_disabled"},
+                )
+                return
+            self.poller = PullRequestPoller(
+                session_factory=self.session_factory,
+                github_client=self.github_client,
+                settings=self.settings,
+                should_stop=self.stop_event.is_set,
+            )
 
     def run_once(self) -> bool:
         """Claim and execute one durable analysis job."""
@@ -95,8 +277,119 @@ class SqlAlchemyWorkerRuntime:
         job = self._claim_job()
         if job is None:
             return False
+        organization_id = self._organization_id(job.analysis_id)
+        # Persisted at enqueue; kept across retries so attempts share one trace.
+        traceparent = job.traceparent
+        started = time.perf_counter()
+        outcome = "completed"
+        with (
+            bind_correlation(
+                analysis_id=job.analysis_id,
+                job_id=job.id,
+                organization_id=organization_id,
+            ),
+            continue_trace(traceparent),
+            span("worker.job", **{"radius.attempt": job.attempts}),
+        ):
+            try:
+                self._run_claimed_job(job)
+            except Exception:
+                outcome = "failed"
+                raise
+            finally:
+                obs_metrics.observe_job(time.perf_counter() - started, outcome)
+        return True
+
+    def queue_depths(self) -> dict[str, int]:
+        """Jobs per status, for the queue-depth gauge."""
+
+        with self.session_factory() as session:
+            return self._queue(session).depth_by_status()
+
+    def _organization_id(self, analysis_id):
+        """Best-effort org id for log correlation; never fails the job."""
+
         try:
             with self.session_factory() as session:
+                analysis = session.get(db_models.Analysis, analysis_id)
+                repository = (
+                    session.get(db_models.Repository, analysis.repository_id)
+                    if analysis is not None
+                    else None
+                )
+                return repository.organization_id if repository else None
+        except Exception:
+            return None
+
+    def _run_claimed_job(self, job) -> None:
+        """Execute one claimed job while a heartbeat keeps its lease alive (C-02)."""
+
+        lease = _LeaseHeartbeat(self, job)
+        lease.start()
+        try:
+            self._run_claimed_job_leased(job, lease)
+        finally:
+            lease.stop()
+
+    def _run_claimed_job_leased(self, job, lease: _LeaseHeartbeat) -> None:
+        """Execute one claimed job inside its correlation/trace context.
+
+        C-04: the ``running`` state is committed before the long pipeline, and
+        the GitHub result is published only after the transaction that records
+        the result and the job completion has committed.
+        """
+
+        try:
+            # Everything the pipeline reads from disk (analysis, linking, test
+            # selection, sandbox mount) lives in a per-analysis worktree that
+            # this stack removes on every exit path (C-03).
+            with self.session_factory() as session, contextlib.ExitStack() as checkout_stack:
+                skip_reason = _skip_reason(session, job.analysis_id)
+                if skip_reason is not None:
+                    # Cancelled (e.g. PR closed) between enqueue and claim: do
+                    # not clone, run or publish anything for it.
+                    self._queue(session).skip_claimed(job.analysis_id, skip_reason)
+                    session.commit()
+                    LOGGER.info(
+                        "Analysis job skipped",
+                        extra={
+                            "analysis_id": str(job.analysis_id),
+                            "job_id": str(job.id),
+                            "outcome": "cancelled",
+                            "reason": skip_reason,
+                        },
+                    )
+                    return
+                # C-04: make "running" visible now, in its own short transaction,
+                # instead of holding one transaction (and the analyses row) open
+                # for the whole job.
+                _mark_analysis_running(session, job.analysis_id)
+                session.commit()
+                lease.ensure_held()
+                # Best-effort: shows "in progress" on the PR while we work. It
+                # never raises, so it cannot fail the analysis.
+                _publish_github_in_progress(
+                    session=session,
+                    analysis_id=job.analysis_id,
+                    settings=self.settings,
+                    github_client=self.github_client,
+                )
+                # Best-effort (IN-02): intent sources -> snapshot. Own session and
+                # transaction; never raises, so it cannot fail the analysis.
+                ingest_intent_best_effort(
+                    session_factory=self.session_factory,
+                    analysis_id=job.analysis_id,
+                    settings=self.settings,
+                    github_client=self.github_client,
+                    installation_id_for=lambda s: _github_installation_id(
+                        session=s,
+                        analysis_id=job.analysis_id,
+                        settings=self.settings,
+                    ),
+                    transport=self.intent_transport,
+                    etag_cache=self.intent_etag_cache,
+                )
+                lease.ensure_held()
                 orchestrator = _create_sql_orchestrator(session, self.settings)
                 clone_headers = _github_clone_headers(
                     session=session,
@@ -110,16 +403,51 @@ class SqlAlchemyWorkerRuntime:
                     repository_cache_dir=self.repository_cache_dir,
                     git_client=self.git_client,
                     extra_headers=clone_headers,
+                    cleanup=checkout_stack,
                 )
+                lease.ensure_held()
                 orchestrator.execute(command)
+                lease.ensure_held()
+                if self.settings.verdict_v2_mode != "off":
+                    # Verdict v2 Stage A/B (VS-05, flag RADIUS_FEATURE_VERDICT_V2):
+                    # best-effort, own sessions, never raises; v1 is unaffected.
+                    from radius_worker.verdict_v2.scoring import (
+                        run_verdict_v2_for_analysis,
+                    )
+
+                    run_verdict_v2_for_analysis(
+                        session_factory=self.session_factory,
+                        analysis_id=job.analysis_id,
+                        command=command,
+                        settings=self.settings,
+                    )
+                lease.ensure_held()
+                if not self._queue(session).complete(job.analysis_id):
+                    # Lost the lease between the last check and now: discard this
+                    # run's artefacts (rolled back) and publish nothing.
+                    raise LeaseLostError("The job lease was lost before completion.")
+                session.commit()
+                # The result is durable. Publishing never raises and is
+                # idempotent (it updates the same check run), so a failure here
+                # cannot make the job run again or leave a half-recorded result.
                 _publish_github_result(
                     session=session,
                     analysis_id=job.analysis_id,
                     settings=self.settings,
                     github_client=self.github_client,
                 )
-                self._queue(session).complete(job.analysis_id)
                 session.commit()
+        except LeaseLostError as exc:
+            LOGGER.warning(
+                "Job abandoned: lease lost",
+                extra={
+                    "analysis_id": str(job.analysis_id),
+                    "job_id": str(job.id),
+                    "outcome": "lease_lost",
+                    "error": redact_secrets(exc),
+                },
+            )
+            return
         except Exception as exc:
             self._record_job_failure(job, exc)
             raise
@@ -132,7 +460,6 @@ class SqlAlchemyWorkerRuntime:
                 "outcome": "completed",
             },
         )
-        return True
 
     def _record_job_failure(self, job, exc: Exception) -> None:
         """Persist a failed attempt; on the final attempt fail the analysis too.
@@ -162,12 +489,15 @@ class SqlAlchemyWorkerRuntime:
         with self.session_factory() as session:
             queue = self._queue(session)
             if final_attempt:
-                queue.fail(job.analysis_id, error)
-                queue.mark_analysis_failed(job.analysis_id)
+                held = queue.fail(job.analysis_id, error)
+                if held:
+                    queue.mark_analysis_failed(job.analysis_id)
             else:
-                queue.requeue(job.analysis_id, error)
+                held = queue.requeue(job.analysis_id, error)
+                if held:
+                    obs_metrics.record_retry()
             session.commit()
-            if final_attempt:
+            if final_attempt and held:
                 _publish_github_failure(
                     session=session,
                     analysis_id=job.analysis_id,
@@ -213,7 +543,36 @@ class SqlAlchemyWorkerRuntime:
 
         idle_cycles = 0
         next_reap = 0.0
-        while True:
+        # Retention is opt-in; the first pass runs a minute after start, then hourly.
+        next_retention = (
+            time.monotonic() + 60.0 if self.settings.retention_days > 0 else None
+        )
+        next_cache_maintenance = time.monotonic() + 120.0
+        next_poll = (
+            time.monotonic() + self.poller.first_delay() if self.poller is not None else None
+        )
+        if self.poller is not None:
+            LOGGER.info(
+                "GitHub pull request poller enabled",
+                extra={
+                    "outcome": "poll_enabled",
+                    "interval_seconds": self.poller.interval,
+                    "max_analyses_per_tick": self.settings.github_poll_max_analyses_per_tick,
+                    "max_repositories_per_tick": (
+                        self.settings.github_poll_max_repositories_per_tick
+                    ),
+                },
+            )
+        while not self.stop_event.is_set():
+            touch_health_file(self.settings.health_file)
+            self._process_verdict_v2_requests()
+            if (
+                self.poller is not None
+                and next_poll is not None
+                and time.monotonic() >= next_poll
+            ):
+                self.poller.poll_once()  # never raises
+                next_poll = time.monotonic() + self.poller.next_delay()
             if time.monotonic() >= next_reap:
                 next_reap = time.monotonic() + self.settings.reaper_interval_seconds
                 try:
@@ -223,6 +582,12 @@ class SqlAlchemyWorkerRuntime:
                         "Stuck-analysis reaper failed",
                         extra={"outcome": "reaper_error", "error": redact_secrets(exc)},
                     )
+            if time.monotonic() >= next_cache_maintenance:
+                next_cache_maintenance = time.monotonic() + CACHE_MAINTENANCE_INTERVAL_SECONDS
+                self.run_cache_maintenance()  # never raises
+            if next_retention is not None and time.monotonic() >= next_retention:
+                next_retention = time.monotonic() + RETENTION_INTERVAL_SECONDS
+                self.run_retention()  # never raises
             try:
                 processed = self.run_once()
             except Exception as exc:
@@ -231,7 +596,7 @@ class SqlAlchemyWorkerRuntime:
                     extra={"outcome": "iteration_error", "error": redact_secrets(exc)},
                 )
                 idle_cycles = 0
-                time.sleep(poll_interval_seconds)
+                self.stop_event.wait(poll_interval_seconds)
                 continue
             if processed:
                 idle_cycles = 0
@@ -242,7 +607,84 @@ class SqlAlchemyWorkerRuntime:
                 and idle_cycles >= stop_after_idle_cycles
             ):
                 return
-            time.sleep(poll_interval_seconds)
+            self.stop_event.wait(poll_interval_seconds)
+
+    def run_retention(self) -> None:
+        """One opt-in retention pass (``RADIUS_RETENTION_DAYS``); never raises."""
+
+        try:
+            run_retention(
+                self.session_factory,
+                retention_days=self.settings.retention_days,
+                dry_run=self.settings.retention_dry_run,
+            )
+        except Exception as exc:
+            LOGGER.warning(
+                "Retention pass failed; continuing",
+                extra={"outcome": "retention_error", "error": redact_secrets(exc)},
+            )
+
+    def run_cache_maintenance(self) -> None:
+        """Repository-cache housekeeping and opt-in pruning (C-07); never raises.
+
+        Stale ``index.lock`` files, dangling worktree registrations, orphaned
+        analysis worktrees and ``git gc --auto`` always run. Deleting an idle
+        cache is opt-in: ``RADIUS_GIT_CACHE_MAX_IDLE_DAYS``, else
+        ``RADIUS_RETENTION_DAYS``. A cache that is locked or has a live
+        worktree is never deleted.
+        """
+
+        maintain = getattr(self.git_client, "maintain_cache", None)
+        if maintain is None:
+            return
+        try:
+            from radius_worker.maintenance import normalise_retention_days
+
+            idle_days = self.settings.git_cache_max_idle_days or normalise_retention_days(
+                self.settings.retention_days
+            )
+            report = maintain(
+                self.repository_cache_dir,
+                worktrees_root=self.repository_cache_dir / WORKTREES_DIRNAME,
+                max_idle_days=idle_days,
+                orphan_worktree_seconds=max(2.0 * self.settings.job_stale_after_seconds, 3600.0),
+            )
+            LOGGER.info(
+                "Repository cache maintenance finished",
+                extra={
+                    "outcome": "cache_maintenance_done",
+                    "repositories_seen": report.repositories_seen,
+                    "repositories_busy": report.repositories_busy,
+                    "repositories_pruned": report.repositories_pruned,
+                    "stale_index_locks_removed": report.stale_index_locks_removed,
+                    "orphan_worktrees_removed": report.orphan_worktrees_removed,
+                    "errors": report.errors,
+                    "max_idle_days": idle_days,
+                },
+            )
+        except Exception as exc:
+            LOGGER.warning(
+                "Repository cache maintenance failed; continuing",
+                extra={"outcome": "cache_maintenance_error", "error": redact_secrets(exc)},
+            )
+
+    def _process_verdict_v2_requests(self) -> None:
+        """VS-07: republish after CI. No-op with the flag off; never raises."""
+
+        if self.settings.verdict_v2_mode == VerdictV2Mode.OFF:
+            return
+        try:
+            process_verdict_v2_requests(
+                session_factory=self.session_factory,
+                settings=self.settings,
+                github_client=self.github_client,
+                recomputer=self.verdict_v2_recomputer,
+            )
+        except Exception as exc:
+            LOGGER.warning(
+                "Verdict v2 outbox pass failed; continuing",
+                extra={"outcome": "verdict_v2_outbox_error", "error": redact_secrets(exc)},
+            )
 
     def _claim_job(self):
         with self.session_factory() as session:
@@ -256,6 +698,9 @@ class SqlAlchemyWorkerRuntime:
             session,
             stale_after=timedelta(seconds=self.settings.job_stale_after_seconds),
             max_attempts=self.settings.job_max_attempts,
+            worker_id=self.worker_id,
+            retry_base_seconds=self.settings.job_retry_base_seconds,
+            retry_max_seconds=self.settings.job_retry_max_seconds,
         )
 
 
@@ -263,14 +708,31 @@ def create_sql_worker_runtime(settings: WorkerSettings) -> SqlAlchemyWorkerRunti
     """Create the SQL-backed worker runtime."""
 
     # Fail fast at startup on a forbidden execution mode (e.g. unsafe in prod).
-    resolve_test_execution_mode(settings)
+    require_sandbox_ready(resolve_test_execution_mode(settings), settings)
     engine = create_database_engine(settings)
+    session_factory = create_session_factory(engine)
+    verdict_v2_recomputer = None
+    if settings.verdict_v2_mode != VerdictV2Mode.OFF:
+        from radius_worker.verdict_v2.scoring import create_recomputer
+
+        verdict_v2_recomputer = create_recomputer(
+            session_factory, settings.verdict_v2_mode, settings
+        )
     return SqlAlchemyWorkerRuntime(
-        session_factory=create_session_factory(engine),
+        session_factory=session_factory,
         repository_cache_dir=settings.repository_cache_dir,
-        git_client=LocalGitRepositoryClient(),
+        git_client=LocalGitRepositoryClient(
+            GitUrlPolicy(allowed_hosts=parse_allowed_hosts(settings.git_allowed_hosts)),
+            GitTimeouts(
+                clone=settings.git_clone_timeout_seconds,
+                command=settings.git_timeout_seconds,
+                lock_wait=settings.git_lock_timeout_seconds,
+                stale_lock=settings.git_stale_lock_seconds,
+            ),
+        ),
         settings=settings,
         github_client=GitHubAppClient(_github_settings(settings)),
+        verdict_v2_recomputer=verdict_v2_recomputer,
     )
 
 
@@ -363,8 +825,17 @@ def load_persisted_analysis_command(
     repository_cache_dir: Path,
     git_client: LocalGitRepositoryClient,
     extra_headers: tuple[str, ...] = (),
+    cleanup: contextlib.ExitStack | None = None,
 ) -> ExecuteAnalysisCommand:
-    """Resolve an analysis row into an executable worker command."""
+    """Resolve an analysis row into an executable worker command.
+
+    ``repository_cache_dir`` holds one object cache per repository; the command's
+    ``repository_path`` is a PRIVATE worktree of the analysed commit, created
+    under ``<cache dir>/.worktrees`` and registered on ``cleanup`` so it is
+    removed when the caller's stack closes (C-03). Without ``cleanup`` (or with a
+    git client that cannot make worktrees, e.g. a test double) the legacy shared
+    checkout of the cache is used and nothing is removed.
+    """
 
     analysis = session.get(db_models.Analysis, analysis_id)
     if analysis is None:
@@ -380,30 +851,50 @@ def load_persisted_analysis_command(
         raise NotFoundError(msg)
 
     destination = _repository_cache_path(repository_cache_dir, repository)
+    # Everything below is git work (clone, fetch, checkout): copy what it needs out of the
+    # rows and end the read transaction first, so no connection waits on git (C-04).
+    clone_url = repository.clone_url
+    repository_id, pr_number = repository.id, pull_request.github_pr_number
+    commit_sha, analysis_pk = analysis.commit_sha, analysis.id
+    target_branch = pull_request.target_branch
+    _end_read_transaction(session)
+    # The stored URL is untrusted data (A-01/A-02): LocalGitRepositoryClient
+    # re-validates it (https, allow-listed host, owner/repo shape) before git runs
+    # and never sends the installation token to another host.
     repository_path = git_client.clone_or_fetch(
-        repository.clone_url,
+        clone_url,
         destination,
         extra_headers=extra_headers,
     )
-    if hasattr(git_client, "fetch_pull_request") and pull_request.github_pr_number:
+    if hasattr(git_client, "fetch_pull_request") and pr_number:
         try:
             git_client.fetch_pull_request(
                 repository_path,
-                pull_request.github_pr_number,
+                pr_number,
                 extra_headers=extra_headers,
             )
         except Exception:
             LOGGER.debug(
                 "Could not fetch pull request ref directly; continuing with commit SHA checkout.",
-                extra={"pr_number": pull_request.github_pr_number},
+                extra={"pr_number": pr_number},
             )
-    git_client.checkout(repository_path, analysis.commit_sha)
+    if cleanup is not None and hasattr(git_client, "analysis_worktree"):
+        repository_path = cleanup.enter_context(
+            git_client.analysis_worktree(
+                repository_path,
+                commit_sha,
+                repository_cache_dir / WORKTREES_DIRNAME,
+                str(analysis_pk),
+            )
+        )
+    else:
+        git_client.checkout(repository_path, commit_sha)
     return ExecuteAnalysisCommand(
-        analysis_id=analysis.id,
-        repository_id=repository.id,
+        analysis_id=analysis_pk,
+        repository_id=repository_id,
         repository_path=repository_path,
-        base_ref=f"origin/{pull_request.target_branch}",
-        head_ref=analysis.commit_sha,
+        base_ref=f"origin/{target_branch}",
+        head_ref=commit_sha,
     )
 
 
@@ -438,6 +929,11 @@ def _create_sql_orchestrator(
             store=SqlAlchemyConfidenceStore(session),
         ),
         execute_tests=execution_mode != TestExecutionMode.DISABLED,
+        symbol_impact_enabled=bool(settings and settings.symbol_impact_enabled),
+        symbol_changes_enabled=bool(settings and settings.symbol_changes_enabled),
+        tamper_rules_enabled=bool(settings and settings.tamper_rules_enabled),
+        assertion_extraction_enabled=bool(settings and settings.assertion_extraction_enabled),
+        flaky_policy=(settings.flaky_policy if settings else "exclude"),
     )
 
 
@@ -445,15 +941,29 @@ def _repository_cache_path(
     repository_cache_dir: Path,
     repository: db_models.Repository,
 ) -> Path:
+    """Cache directory for one repository, scoped by organization (A-02).
+
+    The organization id is a path segment, so one tenant's checkout can never be
+    the destination (or the stale cache) of another tenant's repository row.
+    """
+
+    organization = _safe_path_segment(str(repository.organization_id))
     owner = _safe_path_segment(repository.owner)
     name = _safe_path_segment(repository.name)
-    return repository_cache_dir / owner / f"{name}-{repository.github_repository_id}"
+    return (
+        repository_cache_dir
+        / organization
+        / owner
+        / f"{name}-{repository.github_repository_id}"
+    )
 
 
 def _safe_path_segment(value: str) -> str:
-    return "".join(
+    cleaned = "".join(
         char if char.isalnum() or char in {"-", "_", "."} else "-" for char in value
     )
+    # '.', '..' and dot-only names must never act as path traversal.
+    return cleaned if cleaned.strip(".") else "-" * max(len(cleaned), 1)
 
 
 def _github_settings(settings: WorkerSettings) -> GitHubAppSettings:
@@ -462,6 +972,7 @@ def _github_settings(settings: WorkerSettings) -> GitHubAppSettings:
         RADIUS_LOG_LEVEL=settings.log_level,
         GITHUB_APP_ID=settings.github_app_id,
         GITHUB_APP_PRIVATE_KEY=settings.github_app_private_key,
+        GITHUB_APP_PRIVATE_KEY_PATH=settings.github_app_private_key_path,
         GITHUB_INSTALLATION_ID=settings.github_installation_id,
         GITHUB_API_BASE_URL=settings.github_api_base_url,
         GITHUB_API_VERSION=settings.github_api_version,
@@ -484,8 +995,24 @@ def _github_clone_headers(
         analysis_id=analysis_id,
         settings=settings,
     )
+    _end_read_transaction(session)  # C-04: no open transaction during the GitHub call
     token = github_client.create_installation_token(installation_id).token
-    return (f"Authorization: Bearer {token}",)
+    return (_git_basic_auth_header(token),)
+
+
+def _git_basic_auth_header(token: str) -> str:
+    """Git-over-HTTPS auth for a GitHub App installation token.
+
+    GitHub's smart-HTTP git endpoints take HTTP Basic auth with the username
+    ``x-access-token`` and the installation token as the password (documented as
+    ``git clone https://x-access-token:TOKEN@github.com/owner/repo.git``); a
+    ``Bearer`` header is only valid for the REST API. The header is passed to
+    git through the child process environment (see ``LocalGitRepositoryClient``),
+    never on argv, in ``.git/config`` or in the remote URL.
+    """
+
+    credentials = base64.b64encode(f"x-access-token:{token}".encode()).decode("ascii")
+    return f"Authorization: Basic {credentials}"
 
 
 def _publish_github_result(
@@ -498,6 +1025,15 @@ def _publish_github_result(
     github_settings = _github_settings(settings)
     if not settings.github_publish_results or not github_settings.enabled:
         return
+    # VS-08: with the flag ``on`` and a stored v2 verdict that is ok, v2 is
+    # published instead of v1; any v2 problem falls through to v1 below.
+    if v2_replaces_v1(session, settings, analysis_id) and publish_v2_in_job(
+        session,
+        analysis_id=analysis_id,
+        settings=settings,
+        github_client=github_client,
+    ):
+        return
     try:
         installation_id = _github_installation_id(
             session=session,
@@ -505,17 +1041,133 @@ def _publish_github_result(
             settings=settings,
         )
         report = _github_report(session, analysis_id, settings)
-        GitHubAnalysisPublisher(github_client).publish(
-            installation_id=installation_id,
-            report=report,
-        )
+        _end_read_transaction(session)  # C-04: no open transaction during the GitHub calls
+        with stage("publish"):
+            GitHubAnalysisPublisher(github_client).publish(
+                installation_id=installation_id,
+                report=report,
+            )
         LOGGER.info(
             "Successfully published GitHub Check Run and PR comment",
             extra={"analysis_id": str(analysis_id), "pr_number": report.pull_request_number},
         )
+    except CommentPublishError as exc:
+        # The check run is already completed; only the PR comment failed.
+        LOGGER.warning(
+            "Could not publish GitHub PR comment: %s",
+            redact_secrets(exc),
+            extra={"analysis_id": str(analysis_id), "outcome": "publish_error"},
+        )
     except Exception as exc:
         LOGGER.warning(
             "Could not publish GitHub Check Run or PR comment: %s",
+            redact_secrets(exc),
+            extra={"analysis_id": str(analysis_id), "outcome": "publish_error"},
+        )
+        # The in-progress run opened at job start must not stay stuck: complete
+        # it as "not verified" rather than leaving it spinning forever.
+        _publish_github_failure(
+            session=session,
+            analysis_id=analysis_id,
+            settings=settings,
+            github_client=github_client,
+            error=RuntimeError("Radius could not publish its result to GitHub."),
+        )
+
+
+def _end_read_transaction(session: Session) -> None:
+    """End the transaction a read-only step opened, before slow network or git work (C-04).
+
+    Only called where the session holds nothing but reads, so committing is a pure release
+    of the connection (SQLAlchemy begins a new transaction on the next use). Without this a
+    pooled connection sits "idle in transaction" for the whole GitHub round trip or clone.
+    """
+
+    if session.new or session.dirty or session.deleted:
+        msg = "A read-only unit must not hold pending changes."
+        raise RuntimeError(msg)
+    session.commit()
+
+
+def _mark_analysis_running(session: Session, analysis_id) -> None:
+    """Flip a pending analysis to running (the caller commits); other states are kept."""
+
+    analysis = session.get(db_models.Analysis, analysis_id)
+    if analysis is not None and analysis.status == db_enums.AnalysisStatus.PENDING:
+        analysis.status = db_enums.AnalysisStatus.RUNNING
+        session.flush()
+
+
+def _skip_reason(session: Session, analysis_id) -> str | None:
+    """Why a freshly claimed job must not run, or ``None`` to run it."""
+
+    analysis = session.get(db_models.Analysis, analysis_id)
+    if analysis is not None and analysis.status == db_enums.AnalysisStatus.CANCELLED:
+        return "Analysis was cancelled before it started."
+    repository = (
+        session.get(db_models.Repository, analysis.repository_id)
+        if analysis is not None
+        else None
+    )
+    if repository is None:
+        return None
+    if repository.status == db_enums.RepositoryStatus.DISCONNECTED:
+        return "Repository is disconnected from Radius."
+    organization = session.get(db_models.Organization, repository.organization_id)
+    if (
+        organization is not None
+        and organization.github_installation_status
+        != db_enums.GitHubInstallationStatus.ACTIVE.value
+    ):
+        return f"GitHub installation is {organization.github_installation_status}."
+    return None
+
+
+def _publish_github_in_progress(
+    *,
+    session: Session,
+    analysis_id,
+    settings: WorkerSettings,
+    github_client: GitHubAppClient,
+) -> None:
+    """Open (or re-open) the single in-progress Check Run for this head SHA.
+
+    Best-effort: any failure is logged and swallowed. The later completion
+    (``publish`` / ``publish_failure``) finds this run by head SHA and updates
+    it, so there is one check run per commit.
+    """
+
+    github_settings = _github_settings(settings)
+    if not settings.github_publish_results or not github_settings.enabled:
+        return
+    try:
+        analysis = session.get(db_models.Analysis, analysis_id)
+        repository = (
+            session.get(db_models.Repository, analysis.repository_id)
+            if analysis is not None
+            else None
+        )
+        if analysis is None or repository is None:
+            return
+        installation_id = _github_installation_id(
+            session=session,
+            analysis_id=analysis_id,
+            settings=settings,
+        )
+        owner, repository_name = repository.owner, repository.name
+        head_sha = analysis.commit_sha
+        _end_read_transaction(session)  # C-04: no open transaction during the GitHub call
+        with stage("publish"):
+            GitHubAnalysisPublisher(github_client).publish_in_progress(
+                installation_id=installation_id,
+                owner=owner,
+                repository_name=repository_name,
+                head_sha=head_sha,
+                dashboard_url=settings.dashboard_analysis_url(analysis_id),
+            )
+    except Exception as exc:
+        LOGGER.warning(
+            "Could not publish in-progress GitHub Check Run: %s",
             redact_secrets(exc),
             extra={"analysis_id": str(analysis_id), "outcome": "publish_error"},
         )
@@ -546,25 +1198,25 @@ def _publish_github_failure(
         publisher = GitHubAnalysisPublisher(github_client)
         if not hasattr(publisher, "publish_failure"):
             return
+        installation_id = _github_installation_id(
+            session=session,
+            analysis_id=analysis_id,
+            settings=settings,
+        )
+        owner, repository_name = repository.owner, repository.name
+        head_sha = analysis.commit_sha
+        _end_read_transaction(session)  # C-04: no open transaction during the GitHub call
         publisher.publish_failure(
-            installation_id=_github_installation_id(
-                session=session,
-                analysis_id=analysis_id,
-                settings=settings,
-            ),
-            owner=repository.owner,
-            repository_name=repository.name,
-            head_sha=analysis.commit_sha,
+            installation_id=installation_id,
+            owner=owner,
+            repository_name=repository_name,
+            head_sha=head_sha,
             # Exception text can contain repository-controlled content and
             # credentials echoed by git/HTTP clients: redact, then keep it short.
             error_summary=redact_secrets(
                 f"{error.__class__.__name__}: {error}", max_length=300
             ),
-            dashboard_url=(
-                f"{settings.dashboard_base_url.rstrip('/')}/analyses/{analysis_id}"
-                if settings.dashboard_base_url
-                else None
-            ),
+            dashboard_url=settings.dashboard_analysis_url(analysis_id),
         )
     except Exception as publish_exc:  # pragma: no cover - best effort
         LOGGER.warning(
@@ -616,11 +1268,7 @@ def _github_report(
     if repository is None or pull_request is None or confidence is None:
         msg = f"GitHub publishing artifacts for analysis {analysis_id} are incomplete."
         raise NotFoundError(msg)
-    dashboard_url = (
-        f"{settings.dashboard_base_url.rstrip('/')}/analyses/{analysis_id}"
-        if settings.dashboard_base_url
-        else None
-    )
+    dashboard_url = settings.dashboard_analysis_url(analysis_id)
 
     test_selection = (
         session.query(db_models.TestSelection)
@@ -668,6 +1316,7 @@ def _github_report(
         pull_request_number=pull_request.github_pr_number,
         head_sha=analysis.commit_sha,
         confidence_score=float(confidence.confidence_score),
+        score_kind=CURRENT_SCORE_KIND.value,
         risk_level=confidence.risk_level.value,
         summary=confidence.summary,
         recommendations=tuple(confidence.recommendations),

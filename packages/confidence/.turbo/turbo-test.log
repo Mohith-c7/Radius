@@ -1,6 +1,0 @@
-
-> @radius/confidence@0.1.0 test D:\Radius\packages\confidence
-> python -m pytest tests
-
-..........                                                               [100%]
-10 passed in 4.09s

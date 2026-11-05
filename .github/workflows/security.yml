@@ -1,0 +1,153 @@
+name: Security
+
+on:
+  pull_request:
+  push:
+    branches:
+      - develop
+      - dev
+      - main
+  schedule:
+    - cron: "41 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # gitleaks v8.24.3, pinned by digest.
+  GITLEAKS_IMAGE: ghcr.io/gitleaks/gitleaks@sha256:e1b35e12a8c6fa8901f060459cfb6b2fc4c484d3afbe3b029733a3bbfab07055
+
+jobs:
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Scan full git history
+        # Blocking. Allowlist: .gitleaks.toml (verified fake fixtures only).
+        run: |
+          docker run --rm -v "$PWD:/repo:ro" --entrypoint /bin/sh "$GITLEAKS_IMAGE" -c \
+            'git config --global --add safe.directory /repo && gitleaks git /repo --config /repo/.gitleaks.toml --redact --no-banner --exit-code 1'
+
+  python-audit:
+    name: Dependency audit (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install project and audit tool
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]" "pip-audit==2.10.1"
+
+      - name: pip-audit (blocking; baseline is zero known vulnerabilities)
+        run: |
+          python -m pip freeze --exclude-editable > requirements-audit.txt
+          pip-audit -r requirements-audit.txt --no-deps --disable-pip
+
+  node-audit:
+    name: Dependency audit (pnpm)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 9.15.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          # No `cache: pnpm` here: this job never installs packages, so there is no
+          # store to save and setup-node >= 7 fails its post step on a missing path.
+
+      - name: pnpm audit
+        # pnpm audit exits non-zero when anything is reported; the gate below
+        # decides. Known advisories live in .github/security/audit-baseline.json.
+        run: pnpm audit --json > pnpm-audit.json || true
+
+      - name: Gate against expiring baseline
+        run: python3 scripts/ci/audit_gate.py pnpm-audit.json .github/security/audit-baseline.json
+
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pnpm-audit
+          path: pnpm-audit.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+  sbom-licenses:
+    name: SBOM and license report
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 9.15.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]" "cyclonedx-bom==7.6.0" "pip-licenses==5.5.5"
+
+      - name: Generate Python SBOM (CycloneDX)
+        run: cyclonedx-py environment --of JSON -o sbom-python.cdx.json
+
+      - name: License reports
+        run: |
+          pip-licenses --from=mixed --format=json --output-file=licenses-python.json
+          pnpm licenses list --json > licenses-node.json
+
+      - name: License policy (blocking on AGPL/SSPL/GPL; LGPL/MPL allowed)
+        run: python3 scripts/ci/license_check.py --pip licenses-python.json --pnpm licenses-node.json
+
+      - name: Upload SBOM and license reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom-and-licenses
+          path: |
+            sbom-python.cdx.json
+            licenses-python.json
+            licenses-node.json
+          if-no-files-found: ignore
+          retention-days: 90

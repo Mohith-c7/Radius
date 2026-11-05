@@ -1,0 +1,64 @@
+name: Wrong verdict report (false positive or false negative)
+description: Radius gave a verdict that does not match reality
+title: "[Verdict]: "
+labels: ["type: verdict", "status: needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Verdict reports help us measure and improve accuracy.
+
+        **Redaction warning.** This issue is public. Do not paste private source code, diffs, secrets, tokens, customer names or personal data. Share a minimal public reproduction, or describe the change in words. If the evidence is confidential, say so and offer to share it privately; do not post it here.
+
+        If you found a way to manipulate a verdict on purpose (for example prompt injection in a PR description), report it privately per [SECURITY.md](https://github.com/Mohith-c7/Radius/blob/develop/SECURITY.md).
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of error
+      options:
+        - "False positive: Radius flagged a good change (verified, failed or insufficient evidence wrongly)"
+        - "False negative: Radius verified a change that is actually wrong or poorly tested"
+        - "Other mismatch (wrong score, wrong reason, missing test selection)"
+    validations:
+      required: true
+  - type: input
+    id: analysis-id
+    attributes:
+      label: Analysis id
+      description: The analysis id shown in the dashboard or API response (not a secret, but do not include tokens).
+    validations:
+      required: true
+  - type: input
+    id: expected
+    attributes:
+      label: Expected verdict
+      description: For example verified, failed or insufficient_evidence.
+    validations:
+      required: true
+  - type: input
+    id: actual
+    attributes:
+      label: Actual verdict
+      description: What Radius reported, including the score and its label if shown.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Why you believe the expected verdict is right. Test names, report excerpts, reasons shown by Radius, a link to a public PR or repository. Redact private content.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Radius version or commit
+    validations:
+      required: true
+  - type: checkboxes
+    id: redaction
+    attributes:
+      label: Redaction
+      options:
+        - label: I removed private code, secrets and personal data from this report.
+          required: true

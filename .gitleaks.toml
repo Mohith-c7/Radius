@@ -1,0 +1,33 @@
+# Gitleaks configuration (F-13 / QS-05). Extends the default ruleset.
+# Only VERIFIED false positives are listed: fake credentials that live in test
+# fixtures. Each pattern is the exact fake value (not a wildcard), so a real
+# secret added to the same files is still reported. Baseline scan results are
+# recorded in docs/security/CI_CHECKS.md.
+title = "Radius gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fake credentials used as test fixtures (verified by inspection)"
+regexes = [
+  '''FAKEinstallationTOKEN''',
+  '''ghs_abcdefghijklmnopqrstuvwxyz0123456789''',
+  '''e2e-secret-api-key-0123456789''',
+  '''MIIEbody\{TOKEN\}''',
+  # Seeded fakes in redaction/proxy tests (F-10, F-05)
+  '''MIIEowIBAAKCAQEAseededfakekeymaterial''',
+  '''eyJhbGciOiJIUzI1NiJ9\.eyJzdWIiOiJzZWVkZWQifQ\.c2VlZGVkc2lnbmF0dXJl''',
+  '''12345678-aaaa-bbbb-cccc-1234567890ab''',
+  # Planted fake secret in the LK-02 re-ranker leak test
+  '''sk-planted-secret-7731-zeta''',
+  # Fake key in the EV-02 tamper-rule test cases (T015 hardcoded_secret)
+  '''sk_live_9f8a7b6c5d4e''',
+  # Placeholder PEM body in tests/test_github_app_manifest.py (F-06)
+  '''PRIVATE KEY-----.{1,4}AAA.{1,4}BBB.{1,4}-----END''',
+  # Garbled placeholder PEM ("QUJD" = base64 of ABC) in tests/test_live_check.py (live GitHub preflight)
+  '''PRIVATE KEY-----.{1,4}QUJD.{1,4}-----END RSA PRIVATE KEY''',
+  # Fake passwords in the OAuth password-sign-in test (apps/api/tests/test_oauth_flow.py), already in history
+  '''Passw0rdLong1''',
+  '''Wrong-pass1''',
+]

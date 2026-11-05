@@ -17,9 +17,19 @@ class GitHubRepositoryPayload(BaseModel):
     id: int
     name: str
     private: bool = False
-    default_branch: str = Field(default="main")
+    #: ``None`` when the payload does not carry it (installation payloads list
+    #: only id/name/full_name/private). Never defaulted to a guess here, so the
+    #: handler can tell "unknown" from "explicitly main".
+    default_branch: str | None = None
     clone_url: str
     owner: GitHubUserPayload
+
+
+class GitHubRepositoryDefaultBranchPayload(BaseModel):
+    """The only field read from a PR branch's embedded repository object."""
+
+    id: int | None = None
+    default_branch: str | None = None
 
 
 class GitHubPullRequestBranchPayload(BaseModel):
@@ -27,6 +37,9 @@ class GitHubPullRequestBranchPayload(BaseModel):
 
     ref: str
     sha: str
+    #: The repository this branch belongs to (full repository object in real
+    #: deliveries); used as a default-branch source for a PR's base repo.
+    repo: GitHubRepositoryDefaultBranchPayload | None = None
 
 
 class GitHubPullRequestPayload(BaseModel):
@@ -34,6 +47,9 @@ class GitHubPullRequestPayload(BaseModel):
 
     number: int
     title: str
+    #: PR description. ``None`` both when the payload says ``null`` and when it
+    #: has no ``body`` key; ``"body" in model_fields_set`` tells them apart (IN-02).
+    body: str | None = None
     state: str
     draft: bool = False
     merged: bool = False
@@ -54,5 +70,12 @@ class GitHubWebhookResult(BaseModel):
     repository_id: str | None = Field(default=None, alias="repositoryId")
     pull_request_id: str | None = Field(default=None, alias="pullRequestId")
     analysis_id: str | None = Field(default=None, alias="analysisId")
+    #: Why a delivery was ignored when it is not simply an unhandled event
+    #: (``repository_disconnected``, ``installation_suspended``, ...).
+    ignored_reason: str | None = Field(default=None, alias="ignoredReason")
+    #: Queued-not-started analyses cancelled by this delivery (PR closed, repo removed).
+    cancelled_analysis_ids: list[str] = Field(
+        default_factory=list, alias="cancelledAnalysisIds"
+    )
 
     model_config = {"populate_by_name": True}

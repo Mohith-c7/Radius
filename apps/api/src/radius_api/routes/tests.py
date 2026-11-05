@@ -13,7 +13,12 @@ from radius_confidence.domain import ImpactEvidence
 from radius_repository.application import RepositoryApplicationService
 from radius_shared.dto import success_response
 from radius_shared.errors import ConflictError, NotFoundError, ValidationError
+from radius_shared.logging import get_logger
+from radius_shared.redaction import redact_secrets
+from radius_shared.verdict_v2_flag import VerdictV2Mode
+from radius_shared.verdict_v2_repository import VerdictV2Repository
 from radius_testing.application import TestingApplicationService
+from radius_testing.domain.flakiness import FlakinessConfig
 
 from radius_api.auth import ApiPrincipal, ensure_same_organization, get_api_principal
 from radius_api.dependencies import (
@@ -21,7 +26,10 @@ from radius_api.dependencies import (
     get_confidence_service,
     get_repository_service,
     get_testing_service,
+    get_verdict_v2_repository,
 )
+
+LOGGER = get_logger(__name__)
 
 router = APIRouter(prefix="/analyses/{analysis_id}/tests", tags=["tests"])
 
@@ -64,6 +72,7 @@ async def ingest_test_results(
     analysis_service: Annotated[AnalysisApplicationService, Depends(get_analysis_service)],
     repository_service: Annotated[RepositoryApplicationService, Depends(get_repository_service)],
     principal: Annotated[ApiPrincipal, Depends(get_api_principal)],
+    verdicts: Annotated[VerdictV2Repository, Depends(get_verdict_v2_repository)],
     commit_sha: str | None = Query(
         None,
         description=(
@@ -154,9 +163,36 @@ async def ingest_test_results(
         skipped_selected_tests=skipped,
         contradictory_tests=ingestion.contradictory_cases,
     )
+    _request_verdict_v2_republish(request, verdicts, repository.organization_id, analysis_id)
     return success_response(
         replace(ingestion, verification_status=report.verification_status)
     )
+
+
+def _request_verdict_v2_republish(
+    request: Request,
+    verdicts: VerdictV2Repository,
+    organization_id: UUID,
+    analysis_id: UUID,
+) -> None:
+    """VS-07: ask the worker to recompute and republish verdict v2 after CI results.
+
+    One upsert into the outbox (replays collapse). No-op with the flag off. The
+    API holds no GitHub credentials and makes no network call here; a failure
+    must never fail the CI upload, so it is logged and swallowed.
+    """
+
+    mode = getattr(request.app.state.settings, "verdict_v2_mode", VerdictV2Mode.OFF)
+    if mode == VerdictV2Mode.OFF:
+        return
+    try:
+        verdicts.enqueue_request(organization_id, analysis_id, "ci_results")
+    except Exception as exc:
+        LOGGER.warning(
+            "Could not enqueue verdict v2 republish: %s",
+            redact_secrets(exc),
+            extra={"analysis_id": str(analysis_id)},
+        )
 
 
 _CLOSED_ANALYSIS_STATUSES = frozenset({"failed", "cancelled"})
@@ -314,3 +350,35 @@ def get_recent_executions(
     ensure_same_organization(principal, repository.organization_id)
     executions = service.get_recent_executions(repository_id, limit)
     return success_response(executions)
+
+
+@router.get("/flaky", summary="List quarantined (flaky) tests of the analysis' repository")
+def get_flaky_tests(
+    analysis_id: UUID,
+    service: Annotated[
+        TestingApplicationService,
+        Depends(get_testing_service),
+    ],
+    analysis_service: Annotated[
+        AnalysisApplicationService,
+        Depends(get_analysis_service),
+    ],
+    repository_service: Annotated[
+        RepositoryApplicationService,
+        Depends(get_repository_service),
+    ],
+    principal: Annotated[ApiPrincipal, Depends(get_api_principal)],
+    window: Annotated[int, Query(ge=2, le=200)] = 20,
+    min_comparable: Annotated[int, Query(alias="minComparable", ge=1, le=200)] = 3,
+    threshold: Annotated[float, Query(gt=0.0, le=1.0)] = 0.2,
+) -> Any:
+    """Return tests whose flakiness score (F-11) is at or above the threshold.
+
+    Tenant-scoped through the analysis' repository. Deterministic for a given
+    history; see ``docs/FLAKY_TESTS.md`` for the score definition.
+    """
+    analysis = analysis_service.get_analysis(analysis_id)
+    repository = repository_service.get_repository(analysis.repository_id)
+    ensure_same_organization(principal, repository.organization_id)
+    config = FlakinessConfig(window=window, min_comparable=min_comparable, threshold=threshold)
+    return success_response(service.list_flaky_tests(analysis.repository_id, config))

@@ -24,10 +24,40 @@ class InMemoryAnalysisStore:
         repository_id: UUID | None = None,
         pull_request_id: UUID | None = None,
         status: AnalysisStatus | None = None,
+        *,
+        repository_ids: tuple[UUID, ...] | None = None,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> list[Analysis]:
-        """Return analyses matching optional filters."""
+        """Return analyses matching optional filters, optionally one page."""
 
+        analyses = self._filtered(repository_id, pull_request_id, status, repository_ids)
+        if limit is not None:
+            return analyses[offset : offset + limit]
+        return analyses[offset:] if offset else analyses
+
+    def count(
+        self,
+        repository_id: UUID | None = None,
+        pull_request_id: UUID | None = None,
+        status: AnalysisStatus | None = None,
+        *,
+        repository_ids: tuple[UUID, ...] | None = None,
+    ) -> int:
+        """Return how many analyses match the filters."""
+
+        return len(self._filtered(repository_id, pull_request_id, status, repository_ids))
+
+    def _filtered(
+        self,
+        repository_id: UUID | None,
+        pull_request_id: UUID | None,
+        status: AnalysisStatus | None,
+        repository_ids: tuple[UUID, ...] | None,
+    ) -> list[Analysis]:
         analyses = list(self._analyses.values())
+        if repository_ids is not None:
+            analyses = [a for a in analyses if a.repository_id in repository_ids]
         if repository_id is not None:
             analyses = [
                 analysis

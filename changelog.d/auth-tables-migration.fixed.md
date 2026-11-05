@@ -1,0 +1,1 @@
+The sign-in tables (`auth_*`) are created by Alembic migration `20261103_0019` when missing (existing installs are untouched), `users.github_user_id` is nullable as the model says (`20261103_0020`; password users store NULL), the sign-in database engine accepts `postgres://` URLs, and the opt-in retention task also purges expired sessions, tokens and OAuth flows.

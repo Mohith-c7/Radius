@@ -1,0 +1,1 @@
+The GitHub webhook endpoint now answers a correctly signed delivery whose body is not valid JSON, is not a JSON object, or lacks fields the event needs (for example a `push` without `repository`) with a 4xx validation error instead of an HTTP 500. Found by the new seeded fuzz test.

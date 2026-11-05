@@ -35,6 +35,18 @@ class RepositoryStatus(StrEnum):
     DISCONNECTED = "disconnected"
 
 
+class GitHubInstallationStatus(StrEnum):
+    """Lifecycle of the GitHub App installation linked to an organization.
+
+    Stored as plain text (not a native enum) so it can evolve without a
+    Postgres ``ALTER TYPE`` migration.
+    """
+
+    ACTIVE = "active"
+    SUSPENDED = "suspended"
+    DELETED = "deleted"
+
+
 class PullRequestStatus(StrEnum):
     """Pull request lifecycle status."""
 

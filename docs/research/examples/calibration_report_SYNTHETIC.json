@@ -1,0 +1,1014 @@
+{
+  "args": {
+    "alpha": 0.3,
+    "confidence": 0.95,
+    "delta": 0.1,
+    "n_bins": 10,
+    "recalibrate": "auto",
+    "resamples": 500,
+    "seed": 20261102,
+    "split": 0.5
+  },
+  "data_label": "synthetic: scripts/calibration_report.py --write-synthetic-input, seed 20261102, n 1600",
+  "groups": {
+    "A": {
+      "base_rate": 0.5783898305084746,
+      "metrics": null,
+      "n": 472,
+      "n_negative": 199,
+      "n_positive": 273,
+      "policy": {
+        "isotonic_min_n": 800,
+        "min_bin_count": 10,
+        "min_n_fit": 300,
+        "min_n_report": 500,
+        "min_n_threshold": 300,
+        "min_per_class": 50
+      },
+      "reasons": [
+        "N=472 is below the declared minimum 500",
+        "no calibration number is reported; treat the score as an uncalibrated prior"
+      ],
+      "state": "uncalibrated_prior",
+      "warnings": []
+    },
+    "B": {
+      "base_rate": 0.60790273556231,
+      "metrics": null,
+      "n": 329,
+      "n_negative": 129,
+      "n_positive": 200,
+      "policy": {
+        "isotonic_min_n": 800,
+        "min_bin_count": 10,
+        "min_n_fit": 300,
+        "min_n_report": 500,
+        "min_n_threshold": 300,
+        "min_per_class": 50
+      },
+      "reasons": [
+        "N=329 is below the declared minimum 500",
+        "no calibration number is reported; treat the score as an uncalibrated prior"
+      ],
+      "state": "uncalibrated_prior",
+      "warnings": []
+    }
+  },
+  "input": {
+    "file": "calibration_input_SYNTHETIC.jsonl",
+    "rows": 1600,
+    "sha256": "d4d487e60df63591903bd59360d869980b3241d4492683acbb9b0e91e13d1757"
+  },
+  "not_a_research_result": true,
+  "policy": {
+    "isotonic_min_n": 800,
+    "min_bin_count": 10,
+    "min_n_fit": 300,
+    "min_n_report": 500,
+    "min_n_threshold": 300,
+    "min_per_class": 50
+  },
+  "raw": {
+    "base_rate": 0.5905118601747815,
+    "ece_noise_floor": {
+      "assumption": "scores are treated as the true probabilities (perfect calibration by construction)",
+      "mean": 0.036249947353308366,
+      "n": 801,
+      "n_bins": 10,
+      "n_draws": 200,
+      "quantile": 0.95,
+      "quantile_value": 0.05125736029962546,
+      "seed": 20261102,
+      "strategy": "mass"
+    },
+    "metrics": {
+      "brier": {
+        "ci": {
+          "clustered": true,
+          "confidence": 0.95,
+          "estimate": 0.2587862079247828,
+          "lower": 0.24219413416699745,
+          "n_resamples": 500,
+          "n_valid": 500,
+          "seed": 20261102,
+          "upper": 0.2762579816447712
+        },
+        "decomposition_mass": {
+          "brier": 0.2587862079247828,
+          "reliability": 0.025507597675375204,
+          "resolution": 0.007664325474693602,
+          "uncertainty": 0.2418076031677008,
+          "within_bin": -0.0008646674435996225
+        },
+        "decomposition_width": {
+          "brier": 0.2587862079247828,
+          "reliability": 0.023774140426039345,
+          "resolution": 0.0061095056872933285,
+          "uncertainty": 0.2418076031677008,
+          "within_bin": -0.000686029981664042
+        },
+        "value": 0.2587862079247828
+      },
+      "ece_mass": {
+        "ci": {
+          "clustered": true,
+          "confidence": 0.95,
+          "estimate": 0.13760372159800252,
+          "lower": 0.1185063234082397,
+          "n_resamples": 500,
+          "n_valid": 500,
+          "seed": 20261102,
+          "upper": 0.18020405877028714
+        },
+        "mce": 0.25327409999999995,
+        "note": "ECE is biased upward at small N; compare with the noise floor of a perfectly calibrated model at the same N before reading it",
+        "value": 0.13760372159800252
+      },
+      "ece_width": {
+        "ci": {
+          "clustered": true,
+          "confidence": 0.95,
+          "estimate": 0.13387381897627967,
+          "lower": 0.11082010845817727,
+          "n_resamples": 500,
+          "n_valid": 500,
+          "seed": 20261102,
+          "upper": 0.17062471323345818
+        },
+        "mce": 0.33773575,
+        "note": "ECE is biased upward at small N; compare with the noise floor of a perfectly calibrated model at the same N before reading it",
+        "value": 0.13387381897627967
+      },
+      "log_loss": {
+        "ci": {
+          "clustered": true,
+          "confidence": 0.95,
+          "estimate": 0.7454448042758505,
+          "lower": 0.6996450300228784,
+          "n_resamples": 500,
+          "n_valid": 500,
+          "seed": 20261102,
+          "upper": 0.7983404974889533
+        },
+        "value": 0.7454448042758505
+      },
+      "n_bins": 10,
+      "reliability_curve_mass": [
+        {
+          "count": 81,
+          "index": 0,
+          "lower": 0.071524,
+          "mean_confidence": 0.27084795061728395,
+          "observed_frequency": 0.4567901234567901,
+          "upper": 0.379548
+        },
+        {
+          "count": 80,
+          "index": 1,
+          "lower": 0.381402,
+          "mean_confidence": 0.4401464875,
+          "observed_frequency": 0.5125,
+          "upper": 0.485969
+        },
+        {
+          "count": 80,
+          "index": 2,
+          "lower": 0.486764,
+          "mean_confidence": 0.5261152499999999,
+          "observed_frequency": 0.525,
+          "upper": 0.569432
+        },
+        {
+          "count": 80,
+          "index": 3,
+          "lower": 0.570647,
+          "mean_confidence": 0.5985183125,
+          "observed_frequency": 0.6375,
+          "upper": 0.626377
+        },
+        {
+          "count": 80,
+          "index": 4,
+          "lower": 0.627109,
+          "mean_confidence": 0.6568520375,
+          "observed_frequency": 0.575,
+          "upper": 0.684796
+        },
+        {
+          "count": 80,
+          "index": 5,
+          "lower": 0.687165,
+          "mean_confidence": 0.7214525,
+          "observed_frequency": 0.5125,
+          "upper": 0.761189
+        },
+        {
+          "count": 80,
+          "index": 6,
+          "lower": 0.763077,
+          "mean_confidence": 0.7863745625,
+          "observed_frequency": 0.65,
+          "upper": 0.812866
+        },
+        {
+          "count": 80,
+          "index": 7,
+          "lower": 0.813614,
+          "mean_confidence": 0.8407741,
+          "observed_frequency": 0.5875,
+          "upper": 0.868984
+        },
+        {
+          "count": 80,
+          "index": 8,
+          "lower": 0.869226,
+          "mean_confidence": 0.8925940750000001,
+          "observed_frequency": 0.725,
+          "upper": 0.918017
+        },
+        {
+          "count": 80,
+          "index": 9,
+          "lower": 0.918307,
+          "mean_confidence": 0.9539930875,
+          "observed_frequency": 0.725,
+          "upper": 0.9986
+        }
+      ],
+      "reliability_curve_width": [
+        {
+          "count": 4,
+          "index": 0,
+          "lower": 0.0,
+          "mean_confidence": 0.08529525,
+          "observed_frequency": 0.25,
+          "upper": 0.1
+        },
+        {
+          "count": 12,
+          "index": 1,
+          "lower": 0.1,
+          "mean_confidence": 0.16226425,
+          "observed_frequency": 0.5,
+          "upper": 0.2
+        },
+        {
+          "count": 31,
+          "index": 2,
+          "lower": 0.2,
+          "mean_confidence": 0.25957748387096774,
+          "observed_frequency": 0.41935483870967744,
+          "upper": 0.3
+        },
+        {
+          "count": 46,
+          "index": 3,
+          "lower": 0.3,
+          "mean_confidence": 0.353559,
+          "observed_frequency": 0.5217391304347826,
+          "upper": 0.4
+        },
+        {
+          "count": 85,
+          "index": 4,
+          "lower": 0.4,
+          "mean_confidence": 0.4579614823529412,
+          "observed_frequency": 0.5176470588235295,
+          "upper": 0.5
+        },
+        {
+          "count": 102,
+          "index": 5,
+          "lower": 0.5,
+          "mean_confidence": 0.5540471470588235,
+          "observed_frequency": 0.5196078431372549,
+          "upper": 0.6
+        },
+        {
+          "count": 139,
+          "index": 6,
+          "lower": 0.6,
+          "mean_confidence": 0.6482651870503597,
+          "observed_frequency": 0.5971223021582733,
+          "upper": 0.7
+        },
+        {
+          "count": 130,
+          "index": 7,
+          "lower": 0.7,
+          "mean_confidence": 0.7572776999999999,
+          "observed_frequency": 0.6,
+          "upper": 0.8
+        },
+        {
+          "count": 146,
+          "index": 8,
+          "lower": 0.8,
+          "mean_confidence": 0.8543041575342466,
+          "observed_frequency": 0.6506849315068494,
+          "upper": 0.9
+        },
+        {
+          "count": 106,
+          "index": 9,
+          "lower": 0.9,
+          "mean_confidence": 0.9430419339622642,
+          "observed_frequency": 0.7169811320754716,
+          "upper": 1.0
+        }
+      ]
+    },
+    "n": 801,
+    "n_negative": 328,
+    "n_positive": 473,
+    "policy": {
+      "isotonic_min_n": 800,
+      "min_bin_count": 10,
+      "min_n_fit": 300,
+      "min_n_report": 500,
+      "min_n_threshold": 300,
+      "min_per_class": 50
+    },
+    "reasons": [],
+    "state": "estimate_reported",
+    "warnings": [
+      "width-bin ECE: bins [0] hold fewer than 10 items"
+    ]
+  },
+  "recalibration": {
+    "held_out": {
+      "base_rate": 0.5905118601747815,
+      "metrics": {
+        "brier": {
+          "ci": {
+            "clustered": true,
+            "confidence": 0.95,
+            "estimate": 0.23580966450387628,
+            "lower": 0.2270219035766862,
+            "n_resamples": 500,
+            "n_valid": 500,
+            "seed": 20261102,
+            "upper": 0.2455796140265811
+          },
+          "decomposition_mass": {
+            "brier": 0.23580966450387628,
+            "reliability": 0.0024689630856579853,
+            "resolution": 0.007664325474693602,
+            "uncertainty": 0.2418076031677008,
+            "within_bin": -0.0008025762747889225
+          },
+          "decomposition_width": {
+            "brier": 0.23580966450387628,
+            "reliability": 0.0006476489882776235,
+            "resolution": 0.00562748934161614,
+            "uncertainty": 0.2418076031677008,
+            "within_bin": -0.0010180983104860195
+          },
+          "value": 0.23580966450387628
+        },
+        "ece_mass": {
+          "ci": {
+            "clustered": true,
+            "confidence": 0.95,
+            "estimate": 0.038453050938055025,
+            "lower": 0.03771009547610343,
+            "n_resamples": 500,
+            "n_valid": 500,
+            "seed": 20261102,
+            "upper": 0.09128705451591272
+          },
+          "mce": 0.09286549076293094,
+          "note": "ECE is biased upward at small N; compare with the noise floor of a perfectly calibrated model at the same N before reading it",
+          "value": 0.038453050938055025
+        },
+        "ece_width": {
+          "ci": {
+            "clustered": true,
+            "confidence": 0.95,
+            "estimate": 0.01690589725779841,
+            "lower": 0.01379378243506811,
+            "n_resamples": 500,
+            "n_valid": 500,
+            "seed": 20261102,
+            "upper": 0.06170781471161301
+          },
+          "mce": 0.10480558931536305,
+          "note": "ECE is biased upward at small N; compare with the noise floor of a perfectly calibrated model at the same N before reading it",
+          "value": 0.01690589725779841
+        },
+        "log_loss": {
+          "ci": {
+            "clustered": true,
+            "confidence": 0.95,
+            "estimate": 0.6639698367994572,
+            "lower": 0.6447663702957258,
+            "n_resamples": 500,
+            "n_valid": 500,
+            "seed": 20261102,
+            "upper": 0.6852084054173214
+          },
+          "value": 0.6639698367994572
+        },
+        "n_bins": 10,
+        "reliability_curve_mass": [
+          {
+            "count": 81,
+            "index": 0,
+            "lower": 0.3069025482803524,
+            "mean_confidence": 0.4316496709482892,
+            "observed_frequency": 0.4567901234567901,
+            "upper": 0.47933191956456755
+          },
+          {
+            "count": 80,
+            "index": 1,
+            "lower": 0.4800253653204183,
+            "mean_confidence": 0.5013935312091029,
+            "observed_frequency": 0.5125,
+            "upper": 0.5177560978123148
+          },
+          {
+            "count": 80,
+            "index": 2,
+            "lower": 0.5180367694862207,
+            "mean_confidence": 0.5319230181461309,
+            "observed_frequency": 0.525,
+            "upper": 0.5472649661724908
+          },
+          {
+            "count": 80,
+            "index": 3,
+            "lower": 0.5476987904038393,
+            "mean_confidence": 0.5577534916389955,
+            "observed_frequency": 0.6375,
+            "upper": 0.567928249689056
+          },
+          {
+            "count": 80,
+            "index": 4,
+            "lower": 0.5681994533412525,
+            "mean_confidence": 0.5794449115515614,
+            "observed_frequency": 0.575,
+            "upper": 0.5902407560214222
+          },
+          {
+            "count": 80,
+            "index": 5,
+            "lower": 0.5911799785790863,
+            "mean_confidence": 0.6053654907629309,
+            "observed_frequency": 0.5125,
+            "upper": 0.622543711662854
+          },
+          {
+            "count": 80,
+            "index": 6,
+            "lower": 0.6234077722784968,
+            "mean_confidence": 0.6345415467282325,
+            "observed_frequency": 0.65,
+            "upper": 0.6478716789357364
+          },
+          {
+            "count": 80,
+            "index": 7,
+            "lower": 0.6482684524928198,
+            "mean_confidence": 0.6637335381063437,
+            "observed_frequency": 0.5875,
+            "upper": 0.6811819960102773
+          },
+          {
+            "count": 80,
+            "index": 8,
+            "lower": 0.681345162935831,
+            "mean_confidence": 0.6987885292827052,
+            "observed_frequency": 0.725,
+            "upper": 0.7199469361266329
+          },
+          {
+            "count": 80,
+            "index": 9,
+            "lower": 0.7202217253801526,
+            "mean_confidence": 0.771566604644488,
+            "observed_frequency": 0.725,
+            "upper": 0.91770790886837
+          }
+        ],
+        "reliability_curve_width": [
+          {
+            "count": 15,
+            "index": 3,
+            "lower": 0.3,
+            "mean_confidence": 0.36186107735130363,
+            "observed_frequency": 0.4666666666666667,
+            "upper": 0.4
+          },
+          {
+            "count": 96,
+            "index": 4,
+            "lower": 0.4,
+            "mean_confidence": 0.46071809975186967,
+            "observed_frequency": 0.4791666666666667,
+            "upper": 0.5
+          },
+          {
+            "count": 318,
+            "index": 5,
+            "lower": 0.5,
+            "mean_confidence": 0.5522309637557072,
+            "observed_frequency": 0.5534591194968553,
+            "upper": 0.6
+          },
+          {
+            "count": 256,
+            "index": 6,
+            "lower": 0.6,
+            "mean_confidence": 0.6484077271200855,
+            "observed_frequency": 0.62890625,
+            "upper": 0.7
+          },
+          {
+            "count": 96,
+            "index": 7,
+            "lower": 0.7,
+            "mean_confidence": 0.7347986652628303,
+            "observed_frequency": 0.6875,
+            "upper": 0.8
+          },
+          {
+            "count": 19,
+            "index": 8,
+            "lower": 0.8,
+            "mean_confidence": 0.8319693781497245,
+            "observed_frequency": 0.8421052631578947,
+            "upper": 0.9
+          },
+          {
+            "count": 1,
+            "index": 9,
+            "lower": 0.9,
+            "mean_confidence": 0.91770790886837,
+            "observed_frequency": 1.0,
+            "upper": 1.0
+          }
+        ]
+      },
+      "n": 801,
+      "n_negative": 328,
+      "n_positive": 473,
+      "policy": {
+        "isotonic_min_n": 800,
+        "min_bin_count": 10,
+        "min_n_fit": 300,
+        "min_n_report": 500,
+        "min_n_threshold": 300,
+        "min_per_class": 50
+      },
+      "reasons": [],
+      "state": "estimate_reported",
+      "warnings": [
+        "width-bin ECE: bins [9] hold fewer than 10 items"
+      ]
+    },
+    "kind": "platt",
+    "n_fit": 799,
+    "reason": null,
+    "requested": "auto",
+    "state": "fitted"
+  },
+  "risk_coverage": [
+    {
+      "coverage": 0.0012484394506866417,
+      "n_accepted": 1,
+      "n_errors": 0,
+      "risk": 0.0,
+      "threshold": 0.9986
+    },
+    {
+      "coverage": 0.02122347066167291,
+      "n_accepted": 17,
+      "n_errors": 3,
+      "risk": 0.17647058823529413,
+      "threshold": 0.977207
+    },
+    {
+      "coverage": 0.04119850187265917,
+      "n_accepted": 33,
+      "n_errors": 8,
+      "risk": 0.24242424242424243,
+      "threshold": 0.957268
+    },
+    {
+      "coverage": 0.06117353308364544,
+      "n_accepted": 49,
+      "n_errors": 11,
+      "risk": 0.22448979591836735,
+      "threshold": 0.941701
+    },
+    {
+      "coverage": 0.08114856429463171,
+      "n_accepted": 65,
+      "n_errors": 15,
+      "risk": 0.23076923076923078,
+      "threshold": 0.930042
+    },
+    {
+      "coverage": 0.10112359550561797,
+      "n_accepted": 81,
+      "n_errors": 23,
+      "risk": 0.2839506172839506,
+      "threshold": 0.918017
+    },
+    {
+      "coverage": 0.12109862671660425,
+      "n_accepted": 97,
+      "n_errors": 26,
+      "risk": 0.26804123711340205,
+      "threshold": 0.907168
+    },
+    {
+      "coverage": 0.14107365792759052,
+      "n_accepted": 113,
+      "n_errors": 32,
+      "risk": 0.2831858407079646,
+      "threshold": 0.898003
+    },
+    {
+      "coverage": 0.16104868913857678,
+      "n_accepted": 129,
+      "n_errors": 36,
+      "risk": 0.27906976744186046,
+      "threshold": 0.888048
+    },
+    {
+      "coverage": 0.18102372034956304,
+      "n_accepted": 145,
+      "n_errors": 43,
+      "risk": 0.296551724137931,
+      "threshold": 0.875644
+    },
+    {
+      "coverage": 0.2009987515605493,
+      "n_accepted": 161,
+      "n_errors": 45,
+      "risk": 0.2795031055900621,
+      "threshold": 0.868984
+    },
+    {
+      "coverage": 0.2209737827715356,
+      "n_accepted": 177,
+      "n_errors": 49,
+      "risk": 0.2768361581920904,
+      "threshold": 0.854833
+    },
+    {
+      "coverage": 0.24094881398252185,
+      "n_accepted": 193,
+      "n_errors": 56,
+      "risk": 0.29015544041450775,
+      "threshold": 0.845421
+    },
+    {
+      "coverage": 0.26092384519350814,
+      "n_accepted": 209,
+      "n_errors": 62,
+      "risk": 0.2966507177033493,
+      "threshold": 0.836777
+    },
+    {
+      "coverage": 0.2808988764044944,
+      "n_accepted": 225,
+      "n_errors": 70,
+      "risk": 0.3111111111111111,
+      "threshold": 0.823563
+    },
+    {
+      "coverage": 0.30087390761548066,
+      "n_accepted": 241,
+      "n_errors": 78,
+      "risk": 0.3236514522821577,
+      "threshold": 0.812866
+    },
+    {
+      "coverage": 0.3208489388264669,
+      "n_accepted": 257,
+      "n_errors": 83,
+      "risk": 0.3229571984435798,
+      "threshold": 0.797854
+    },
+    {
+      "coverage": 0.3408239700374532,
+      "n_accepted": 273,
+      "n_errors": 88,
+      "risk": 0.32234432234432236,
+      "threshold": 0.787957
+    },
+    {
+      "coverage": 0.36079900124843944,
+      "n_accepted": 289,
+      "n_errors": 91,
+      "risk": 0.314878892733564,
+      "threshold": 0.782444
+    },
+    {
+      "coverage": 0.3807740324594257,
+      "n_accepted": 305,
+      "n_errors": 97,
+      "risk": 0.3180327868852459,
+      "threshold": 0.772473
+    },
+    {
+      "coverage": 0.40074906367041196,
+      "n_accepted": 321,
+      "n_errors": 106,
+      "risk": 0.3302180685358255,
+      "threshold": 0.761189
+    },
+    {
+      "coverage": 0.4207240948813982,
+      "n_accepted": 337,
+      "n_errors": 112,
+      "risk": 0.3323442136498516,
+      "threshold": 0.745412
+    },
+    {
+      "coverage": 0.44069912609238454,
+      "n_accepted": 353,
+      "n_errors": 118,
+      "risk": 0.3342776203966006,
+      "threshold": 0.725777
+    },
+    {
+      "coverage": 0.4606741573033708,
+      "n_accepted": 369,
+      "n_errors": 128,
+      "risk": 0.34688346883468835,
+      "threshold": 0.711501
+    },
+    {
+      "coverage": 0.48064918851435706,
+      "n_accepted": 385,
+      "n_errors": 135,
+      "risk": 0.35064935064935066,
+      "threshold": 0.698573
+    },
+    {
+      "coverage": 0.5006242197253433,
+      "n_accepted": 401,
+      "n_errors": 145,
+      "risk": 0.36159600997506236,
+      "threshold": 0.684796
+    },
+    {
+      "coverage": 0.5205992509363296,
+      "n_accepted": 417,
+      "n_errors": 152,
+      "risk": 0.3645083932853717,
+      "threshold": 0.673749
+    },
+    {
+      "coverage": 0.5405742821473158,
+      "n_accepted": 433,
+      "n_errors": 160,
+      "risk": 0.3695150115473441,
+      "threshold": 0.662793
+    },
+    {
+      "coverage": 0.5605493133583022,
+      "n_accepted": 449,
+      "n_errors": 165,
+      "risk": 0.3674832962138085,
+      "threshold": 0.651015
+    },
+    {
+      "coverage": 0.5805243445692884,
+      "n_accepted": 465,
+      "n_errors": 172,
+      "risk": 0.36989247311827955,
+      "threshold": 0.638437
+    },
+    {
+      "coverage": 0.6004993757802747,
+      "n_accepted": 481,
+      "n_errors": 178,
+      "risk": 0.3700623700623701,
+      "threshold": 0.626377
+    },
+    {
+      "coverage": 0.6204744069912609,
+      "n_accepted": 497,
+      "n_errors": 181,
+      "risk": 0.3641851106639839,
+      "threshold": 0.61445
+    },
+    {
+      "coverage": 0.6404494382022472,
+      "n_accepted": 513,
+      "n_errors": 186,
+      "risk": 0.36257309941520466,
+      "threshold": 0.602252
+    },
+    {
+      "coverage": 0.6604244694132334,
+      "n_accepted": 529,
+      "n_errors": 191,
+      "risk": 0.3610586011342155,
+      "threshold": 0.592827
+    },
+    {
+      "coverage": 0.6803995006242197,
+      "n_accepted": 545,
+      "n_errors": 199,
+      "risk": 0.3651376146788991,
+      "threshold": 0.581349
+    },
+    {
+      "coverage": 0.700374531835206,
+      "n_accepted": 561,
+      "n_errors": 207,
+      "risk": 0.3689839572192513,
+      "threshold": 0.569432
+    },
+    {
+      "coverage": 0.7203495630461922,
+      "n_accepted": 577,
+      "n_errors": 209,
+      "risk": 0.36221837088388215,
+      "threshold": 0.547694
+    },
+    {
+      "coverage": 0.7403245942571786,
+      "n_accepted": 593,
+      "n_errors": 216,
+      "risk": 0.3642495784148398,
+      "threshold": 0.537509
+    },
+    {
+      "coverage": 0.7602996254681648,
+      "n_accepted": 609,
+      "n_errors": 227,
+      "risk": 0.3727422003284072,
+      "threshold": 0.517575
+    },
+    {
+      "coverage": 0.7802746566791511,
+      "n_accepted": 625,
+      "n_errors": 239,
+      "risk": 0.3824,
+      "threshold": 0.496801
+    },
+    {
+      "coverage": 0.8002496878901373,
+      "n_accepted": 641,
+      "n_errors": 246,
+      "risk": 0.3837753510140406,
+      "threshold": 0.485969
+    },
+    {
+      "coverage": 0.8202247191011236,
+      "n_accepted": 657,
+      "n_errors": 256,
+      "risk": 0.3896499238964992,
+      "threshold": 0.469108
+    },
+    {
+      "coverage": 0.8401997503121099,
+      "n_accepted": 673,
+      "n_errors": 262,
+      "risk": 0.38930163447251115,
+      "threshold": 0.448482
+    },
+    {
+      "coverage": 0.8601747815230961,
+      "n_accepted": 689,
+      "n_errors": 270,
+      "risk": 0.3918722786647315,
+      "threshold": 0.436882
+    },
+    {
+      "coverage": 0.8801498127340824,
+      "n_accepted": 705,
+      "n_errors": 277,
+      "risk": 0.39290780141843973,
+      "threshold": 0.410979
+    },
+    {
+      "coverage": 0.9001248439450686,
+      "n_accepted": 721,
+      "n_errors": 285,
+      "risk": 0.39528432732316227,
+      "threshold": 0.379548
+    },
+    {
+      "coverage": 0.920099875156055,
+      "n_accepted": 737,
+      "n_errors": 293,
+      "risk": 0.39755766621438265,
+      "threshold": 0.344344
+    },
+    {
+      "coverage": 0.9400749063670412,
+      "n_accepted": 753,
+      "n_errors": 301,
+      "risk": 0.399734395750332,
+      "threshold": 0.310378
+    },
+    {
+      "coverage": 0.9600499375780275,
+      "n_accepted": 769,
+      "n_errors": 309,
+      "risk": 0.40182054616384916,
+      "threshold": 0.260903
+    },
+    {
+      "coverage": 0.9800249687890137,
+      "n_accepted": 785,
+      "n_errors": 319,
+      "risk": 0.4063694267515924,
+      "threshold": 0.200478
+    },
+    {
+      "coverage": 1.0,
+      "n_accepted": 801,
+      "n_errors": 328,
+      "risk": 0.4094881398252185,
+      "threshold": 0.071524
+    }
+  ],
+  "risk_coverage_total_points": 801,
+  "split": {
+    "fraction_calibration": 0.5,
+    "n_calibration": 799,
+    "n_evaluation": 801,
+    "unit": "cluster"
+  },
+  "synthetic": true,
+  "thresholds": {
+    "crc": {
+      "decision": {
+        "abstains_on_everything": false,
+        "alpha": 0.3,
+        "assumptions": [
+          "calibration items and the new item are exchangeable (no distribution shift)",
+          "loss 1[incorrect and accepted] is non-increasing in t and bounded by 1",
+          "labels are correct (label noise is not modelled)"
+        ],
+        "coverage_cal": 0.8172715894868585,
+        "delta": null,
+        "empirical_risk_cal": 0.3660030627871363,
+        "errors_cal": 239,
+        "guarantee": "If the n calibration items and the new item are exchangeable, the expected joint false-accept rate E[1{incorrect and confidence >= t}] is <= alpha for the selected t. This bounds the probability of accepting an incorrect item among ALL items, not the error rate among accepted items (that equals this rate divided by coverage and may exceed alpha). The expectation is also over the calibration draw, so it is an average guarantee, not a per-dataset one.",
+        "method": "crc-joint",
+        "n_accepted_cal": 653,
+        "n_cal": 799,
+        "note": "upper_bound is the CRC-adjusted empirical joint risk, not an accepted-set error bound",
+        "risk_kind": "joint_false_accept_rate",
+        "threshold": 0.5183770590933466,
+        "upper_bound": 0.29999999999999993
+      },
+      "held_out": {
+        "bound_confidence": 0.9,
+        "coverage": 0.7965043695380774,
+        "error_rate": 0.384012539184953,
+        "error_upper_bound": 0.40971512598484655,
+        "n": 801,
+        "n_accepted": 638,
+        "n_errors": 245,
+        "threshold": 0.5183770590933466
+      }
+    },
+    "ltt": {
+      "decision": {
+        "abstains_on_everything": true,
+        "alpha": 0.3,
+        "assumptions": [
+          "calibration items and future items are i.i.d. draws from one distribution (no covariate, label or temporal shift)",
+          "the threshold grid was fixed before looking at the calibration labels",
+          "labels are correct (label noise is not modelled)",
+          "the statement is about the population rate, not about any single item"
+        ],
+        "coverage_cal": 0.0,
+        "delta": 0.1,
+        "empirical_risk_cal": null,
+        "errors_cal": 0,
+        "guarantee": "With probability >= 1 - delta over the draw of the calibration set, the population error rate among accepted items, P(incorrect | confidence >= t), is <= alpha for the selected t (simultaneously valid for every t on the grid; Bonferroni over the grid, exact binomial p-values). If no grid threshold can be certified the decision abstains on everything.",
+        "method": "ltt-bonferroni",
+        "n_accepted_cal": 0,
+        "n_cal": 799,
+        "note": "no threshold could be certified: abstain on everything",
+        "risk_kind": "accepted_set_error",
+        "threshold": null,
+        "upper_bound": null
+      },
+      "held_out": {
+        "bound_confidence": 0.9,
+        "coverage": 0.0,
+        "error_rate": null,
+        "error_upper_bound": null,
+        "n": 801,
+        "n_accepted": 0,
+        "n_errors": 0,
+        "threshold": null
+      }
+    }
+  },
+  "tool": "calibration-report-v1"
+}

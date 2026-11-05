@@ -90,6 +90,7 @@ def test_multilang_cpg_prunes_benign_callers_with_ai(
     orchestrator = _create_orchestrator()
 
     monkeypatch.setenv("GEMINI_API_KEY", "mock-gemini-key")
+    monkeypatch.setenv("RADIUS_FEATURE_GEMINI_PRUNER", "true")
 
     with patch(
         "radius_analysis.ai.pruner.SemanticPruner.evaluate_impact", return_value=False
@@ -147,6 +148,7 @@ def test_diff_hunk_precision_only_slices_modified_symbol(
         return original_extract(self, target_node_id)
 
     monkeypatch.setenv("GEMINI_API_KEY", "mock-gemini-key")
+    monkeypatch.setenv("RADIUS_FEATURE_GEMINI_PRUNER", "true")
     with patch(
         "radius_analysis.ai.pruner.SemanticPruner.evaluate_impact", return_value=False
     ):

@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import test, { afterEach } from "node:test";
 
 process.env.NEXT_PUBLIC_RADIUS_API_BASE_URL = "https://radius.test/";
+process.env.RADIUS_DASHBOARD_INTERNAL_URL = "http://dashboard.test";
 process.env.NEXT_PUBLIC_RADIUS_ORGANIZATION_ID =
   "11111111-1111-4111-8111-111111111111";
-process.env.NEXT_PUBLIC_RADIUS_API_KEY = "dashboard-test-key";
 
 const api = await import("../lib/api.ts");
 const originalFetch = globalThis.fetch;
@@ -20,17 +20,14 @@ function envelope(data, init = {}) {
   });
 }
 
-test("listRepositories sends Radius headers and normalizes API URLs", async () => {
+test("listRepositories calls the same-origin proxy without credentials", async () => {
   globalThis.fetch = async (input, init) => {
-    assert.equal(String(input), "https://radius.test/api/v1/repositories");
+    assert.equal(String(input), "http://dashboard.test/api/radius/repositories?limit=500");
     assert.equal(init?.cache, "no-store");
 
     const headers = new Headers(init?.headers);
-    assert.equal(
-      headers.get("X-Radius-Organization-Id"),
-      "11111111-1111-4111-8111-111111111111",
-    );
-    assert.equal(headers.get("X-Radius-API-Key"), "dashboard-test-key");
+    // Credentials are attached by the server-side proxy, never by the browser.
+    assert.equal(headers.get("X-Radius-API-Key"), null);
 
     return envelope({ success: true, data: [] });
   };
@@ -41,10 +38,12 @@ test("listRepositories sends Radius headers and normalizes API URLs", async () =
 test("listAnalyses preserves supported filters as query parameters", async () => {
   globalThis.fetch = async (input) => {
     const url = new URL(String(input));
-    assert.equal(url.pathname, "/api/v1/analyses");
+    assert.equal(url.pathname, "/api/radius/analyses");
     assert.equal(url.searchParams.get("repositoryId"), "repo-1");
     assert.equal(url.searchParams.get("status"), "completed");
     assert.equal(url.searchParams.has("pullRequestId"), false);
+    assert.equal(url.searchParams.get("limit"), "500"); // API lists are paginated (max 500)
+    assert.equal(url.searchParams.has("offset"), false);
 
     return envelope({ success: true, data: [] });
   };
@@ -57,7 +56,7 @@ test("listAnalyses preserves supported filters as query parameters", async () =>
 
 test("connectRepository posts JSON with an idempotency key", async () => {
   globalThis.fetch = async (input, init) => {
-    assert.equal(String(input), "https://radius.test/api/v1/repositories");
+    assert.equal(String(input), "http://dashboard.test/api/radius/repositories");
     assert.equal(init?.method, "POST");
 
     const headers = new Headers(init?.headers);
@@ -138,7 +137,7 @@ test("getTestRunResult fetches CI test run results", async () => {
   globalThis.fetch = async (input) => {
     assert.equal(
       String(input),
-      "https://radius.test/api/v1/analyses/analysis-1/tests/results",
+      "http://dashboard.test/api/radius/analyses/analysis-1/tests/results",
     );
     return envelope({
       success: true,
@@ -165,7 +164,7 @@ test("uploadTestResults posts JUnit XML report payload", async () => {
   globalThis.fetch = async (input, init) => {
     assert.equal(
       String(input),
-      "https://radius.test/api/v1/analyses/analysis-1/tests/results",
+      "http://dashboard.test/api/radius/analyses/analysis-1/tests/results?commit_sha=abc123def456",
     );
     assert.equal(init?.method, "POST");
     const headers = new Headers(init?.headers);
@@ -188,8 +187,25 @@ test("uploadTestResults posts JUnit XML report payload", async () => {
     });
   };
 
-  const res = await api.uploadTestResults("analysis-1", "<testsuite></testsuite>", true);
+  const res = await api.uploadTestResults("analysis-1", "<testsuite></testsuite>", true, "abc123def456");
   assert.equal(res.status, "PASSED");
   assert.equal(res.total_tests, 1);
 });
 
+
+test("uploadTestResults refuses to upload without a commit to bind the results to", async () => {
+  let called = false;
+  globalThis.fetch = async () => {
+    called = true;
+    return envelope({ success: true, data: {} });
+  };
+  await assert.rejects(() => api.uploadTestResults("analysis-1", "<x/>", true, "  "), /no commit/);
+  assert.equal(called, false);
+});
+
+test("testResultsUploadPath encodes the commit and trims it", () => {
+  assert.equal(
+    api.testResultsUploadPath("analysis-1", " abc&x=1 "),
+    "/analyses/analysis-1/tests/results?commit_sha=abc%26x%3D1",
+  );
+});

@@ -1,0 +1,1 @@
+The intent evaluation harness (`scripts/intent_eval.py`) measures criteria extraction against a gold set: span-matching precision/recall/F1 with bootstrap confidence intervals, testability accuracy, and paired comparisons between extractors. Current outputs are labelled synthetic; real numbers need the annotated gold set.

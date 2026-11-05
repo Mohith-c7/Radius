@@ -1,0 +1,124 @@
+{
+  "id": "aidev-hf",
+  "name": "AIDev (Hugging Face, hao-li/AIDev)",
+  "kind": "pr-corpus",
+  "source": {
+    "type": "huggingface",
+    "url": "https://huggingface.co/datasets/hao-li/AIDev",
+    "revision": "b8dc67df93e7c11f6f20c84129db7232eb1ec253",
+    "revision_kind": "commit",
+    "paper": "arXiv 2602.09185"
+  },
+  "license": {
+    "name": "Creative Commons Attribution 4.0 International (HF: license: cc-by-4.0)",
+    "url": "https://creativecommons.org/licenses/by/4.0/",
+    "spdx": "CC-BY-4.0",
+    "verdict": "open",
+    "evidence": "HF README front matter and API fetched 2026-11-02. Card says each source repository retains its own copyright and licence; the card does not relicense embedded patches. The all_repository table carries per-repo licence."
+  },
+  "redistribution": {
+    "allowed": "conditional",
+    "notes": "Collection CC-BY-4.0 with attribution; embedded code and patches keep repo licences, so do not redistribute raw patches; filter by repo licence first. all_user said to have PII removed (per card) but PR bodies and comments may still contain personal data."
+  },
+  "status": "available",
+  "size": "about 22 GB total on HF (all_pull_request 6.7 GB, pr_commit_details 12.4 GB); AIDev-pop tables smaller. Paper: 932,791 PRs, 5 agents, 116,211 repos; curated 33,596 PRs / 2,807 repos with >100 stars",
+  "rqs": [
+    "RQ4",
+    "RQ3 (CA-01 labels)"
+  ],
+  "labels": [
+    "agent name",
+    "PR state, merged_at, closed_at (outcome)",
+    "reviews, comments, timeline, commits, linked issues (AIDev-pop only)"
+  ],
+  "risks": [
+    "no acceptance-criteria annotations",
+    "dataset cutoff 2025-08-01: stale vs newer agents",
+    "HF file sizes differ from the Zenodo v3 release (all_pull_request 6.7 GB vs 331 MB): versions differ, pin one",
+    "merge is a noisy proxy for correctness",
+    "personal data in free text (see DATA_HYGIENE.md)"
+  ],
+  "obtain": "python scripts/datasets.py fetch --id aidev-hf --yes --path pull_request.parquet --path repository.parquet --path related_issue.parquet --path issue.parquet",
+  "files": [
+    {
+      "path": "all_repository.parquet",
+      "url": "https://huggingface.co/datasets/hao-li/AIDev/resolve/b8dc67df93e7c11f6f20c84129db7232eb1ec253/all_repository.parquet",
+      "size": 58452322,
+      "sha256": "ed4dce3ec60e82c64efae8a30b019c597fd3e26e2efb5e5601ef612f45de2700"
+    },
+    {
+      "path": "all_user.parquet",
+      "url": "https://huggingface.co/datasets/hao-li/AIDev/resolve/b8dc67df93e7c11f6f20c84129db7232eb1ec253/all_user.parquet",
+      "size": 13646451,
+      "sha256": "d56df8653b59cccae68677dd7a07fd53f987ebeb0fd96ba065d1c9a456a9d6e1"
+    },
+    {
+      "path": "all_pull_request.parquet",
+      "url": "https://huggingface.co/datasets/hao-li/AIDev/resolve/b8dc67df93e7c11f6f20c84129db7232eb1ec253/all_pull_request.parquet",
+      "size": 6730346702,
+      "sha256": "135f06b55ae010023557f051f35be815ac41574e26e51d8a35161bf5a6fb08e7"
+    },
+    {
+      "path": "issue.parquet",
+      "url": "https://huggingface.co/datasets/hao-li/AIDev/resolve/b8dc67df93e7c11f6f20c84129db7232eb1ec253/issue.parquet",
+      "size": 74957881,
+      "sha256": "fc45ba381ca3566a88ffce91272dd0a37eba3fa31e681a333ef2ded85e9c3a30"
+    },
+    {
+      "path": "pr_comments.parquet",
+      "url": "https://huggingface.co/datasets/hao-li/AIDev/resolve/b8dc67df93e7c11f6f20c84129db7232eb1ec253/pr_comments.parquet",
+      "size": 690491134,
+      "sha256": "d7795bf9b41e881ddbed1d66667959b5f10042f06c2bba5e1e41c734df3a90a3"
+    },
+    {
+      "path": "pr_commit_details.parquet",
+      "url": "https://huggingface.co/datasets/hao-li/AIDev/resolve/b8dc67df93e7c11f6f20c84129db7232eb1ec253/pr_commit_details.parquet",
+      "size": 12449618050,
+      "sha256": "feec2f74de1ea7a43d7b2a07daac54e02ddac4cf83808cc0f6c296ff5c95cb51"
+    },
+    {
+      "path": "pr_commits.parquet",
+      "url": "https://huggingface.co/datasets/hao-li/AIDev/resolve/b8dc67df93e7c11f6f20c84129db7232eb1ec253/pr_commits.parquet",
+      "size": 341101690,
+      "sha256": "381add099897bded6281b1968cc128646a6c6e223cb529d253f1cbd6b585bd21"
+    },
+    {
+      "path": "pr_review_comments.parquet",
+      "url": "https://huggingface.co/datasets/hao-li/AIDev/resolve/b8dc67df93e7c11f6f20c84129db7232eb1ec253/pr_review_comments.parquet",
+      "size": 326309123,
+      "sha256": "40c164f9bc8c7837bd501d19de62b65b46035842a8132a77560c087a896d7b61"
+    },
+    {
+      "path": "pr_reviews.parquet",
+      "url": "https://huggingface.co/datasets/hao-li/AIDev/resolve/b8dc67df93e7c11f6f20c84129db7232eb1ec253/pr_reviews.parquet",
+      "size": 212297906,
+      "sha256": "e825557fb4913129dea6d76f61c2ba903eb54b26a372945258d25b4fa7a7a67b"
+    },
+    {
+      "path": "pr_timeline.parquet",
+      "url": "https://huggingface.co/datasets/hao-li/AIDev/resolve/b8dc67df93e7c11f6f20c84129db7232eb1ec253/pr_timeline.parquet",
+      "size": 1100479400,
+      "sha256": "12baa3224361a2cadb6e55a12e2a35e43ff2bc4e450473fcc53d676b3d49ea15"
+    },
+    {
+      "path": "pull_request.parquet",
+      "url": "https://huggingface.co/datasets/hao-li/AIDev/resolve/b8dc67df93e7c11f6f20c84129db7232eb1ec253/pull_request.parquet",
+      "size": 362078556,
+      "sha256": "a9341e2ef692ae4220830b046da228000becc623a1591c5634728d78c331c32b"
+    },
+    {
+      "path": "related_issue.parquet",
+      "url": "https://huggingface.co/datasets/hao-li/AIDev/resolve/b8dc67df93e7c11f6f20c84129db7232eb1ec253/related_issue.parquet",
+      "size": 1264494,
+      "sha256": "16a22395a2572b29345888c76aba4c39e98dc1cf79b54685a521451c469e7aef"
+    },
+    {
+      "path": "repository.parquet",
+      "url": "https://huggingface.co/datasets/hao-li/AIDev/resolve/b8dc67df93e7c11f6f20c84129db7232eb1ec253/repository.parquet",
+      "size": 1496533,
+      "sha256": "1c84f195fd9813c4bb2c1f2436a9dde71329348f23b5ddd7b92f66125e626f3d"
+    }
+  ],
+  "schema_version": 1,
+  "accessed": "2026-11-02"
+}
