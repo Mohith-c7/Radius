@@ -64,7 +64,7 @@ dev = [
   "black==26.10.1",
   "import-linter==2.15",
   "pytest==9.2.0",
-  "ruff==0.17.3",
+  "ruff==0.17.4",
 ]
 
 [tool.setuptools]
