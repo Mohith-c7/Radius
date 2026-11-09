@@ -16,7 +16,7 @@
 # (`make dev`, `scripts/dev.ps1 dev`); see docs/operations/INSTALL.md.
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     restart: unless-stopped
     environment:
       POSTGRES_DB: radius
@@ -243,7 +243,7 @@ services:
   # See docs/OBSERVABILITY.md. Not started by default.
   jaeger:
     profiles: ["observability"]
-    image: jaegertracing/all-in-one:1.62.0
+    image: jaegertracing/all-in-one:1.76.0
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
     ports:
@@ -252,7 +252,7 @@ services:
 
   prometheus:
     profiles: ["observability"]
-    image: prom/prometheus:v2.55.1
+    image: prom/prometheus:v3.16.0
     volumes:
       - ./infra/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
