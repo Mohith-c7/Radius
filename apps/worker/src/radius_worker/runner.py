@@ -15,11 +15,16 @@ from radius_analysis.infrastructure import (
     SubprocessGitDiffProvider,
     UnifiedDiffChangeAnalyzer,
 )
-from radius_confidence.application import ConfidenceApplicationService
+from radius_confidence.application import (
+    ConfidenceApplicationService,
+    CoverageApplicationService,
+)
 from radius_confidence.infrastructure import (
     DeterministicConfidenceScorer,
     InMemoryConfidenceStore,
+    InMemoryCoverageStore,
     SqlAlchemyConfidenceStore,
+    SqlAlchemyCoverageStore,
 )
 from radius_github import GitHubAnalysisPublisher, GitHubAppClient, GitHubAppSettings
 from radius_github.publisher import GitHubAnalysisReport
@@ -334,6 +339,7 @@ def create_local_orchestrator(
         pipeline=queue,
         change_analyzer=UnifiedDiffChangeAnalyzer(),
     )
+    coverage_store = InMemoryCoverageStore()
     return Phase1AnalysisOrchestrator(
         analysis_service=analysis_service,
         parser_service=ParserApplicationService(
@@ -352,6 +358,11 @@ def create_local_orchestrator(
         confidence_service=ConfidenceApplicationService(
             scorer=DeterministicConfidenceScorer(),
             store=InMemoryConfidenceStore(),
+        ),
+        coverage_service=CoverageApplicationService(
+            scorer=DeterministicConfidenceScorer(),
+            confidence_store=InMemoryConfidenceStore(),
+            coverage_store=coverage_store,
         ),
     )
 
@@ -412,8 +423,10 @@ def _create_sql_orchestrator(
     settings: WorkerSettings | None = None,
 ) -> Phase1AnalysisOrchestrator:
     graph_store = SqlAlchemyGraphStore(session)
-    # Runner selection is security-critical: see radius_worker.execution_mode.
     execution_mode = resolve_test_execution_mode(settings)
+    confidence_store = SqlAlchemyConfidenceStore(session)
+    coverage_store = SqlAlchemyCoverageStore(session)
+    confidence_scorer = DeterministicConfidenceScorer()
     return Phase1AnalysisOrchestrator(
         analysis_service=AnalysisApplicationService(
             SqlAlchemyAnalysisStore(session),
@@ -434,8 +447,13 @@ def _create_sql_orchestrator(
             runner=build_test_runner(execution_mode, settings),
         ),
         confidence_service=ConfidenceApplicationService(
-            scorer=DeterministicConfidenceScorer(),
-            store=SqlAlchemyConfidenceStore(session),
+            scorer=confidence_scorer,
+            store=confidence_store,
+        ),
+        coverage_service=CoverageApplicationService(
+            scorer=confidence_scorer,
+            confidence_store=confidence_store,
+            coverage_store=coverage_store,
         ),
         execute_tests=execution_mode != TestExecutionMode.DISABLED,
     )

@@ -21,8 +21,8 @@ from radius_testing.domain.entities import CaseOutcome, ReportedTestCase
 
 try:
     import defusedxml.ElementTree as _safe_et
-except ImportError:  # pragma: no cover - defusedxml is a declared dependency
-    _safe_et = None
+except ImportError:
+    import xml.etree.ElementTree as _safe_et
 
 # Backwards-compatible name: one reported case with location hints.
 ExecutedCase = ReportedTestCase

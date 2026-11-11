@@ -1,8 +1,10 @@
 """Coverage ingestion and retrieval API routes."""
 
 from typing import Any
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Request, status
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from radius_confidence.application import CoverageApplicationService
 from radius_confidence.dto.commands import (
@@ -11,6 +13,7 @@ from radius_confidence.dto.commands import (
     GetTestsForSymbolCommand,
     IngestCoverageCommand,
 )
+from radius_confidence.infrastructure import parse_coverage_report
 from radius_confidence.interfaces.store import CoverageStore
 
 from radius_api.auth import ApiPrincipal, ensure_same_organization, get_api_principal
@@ -37,6 +40,12 @@ async def ingest_coverage(
 
     files = payload.get("files", []) if payload else []
     symbols = payload.get("symbols", []) if payload else []
+    if payload and payload.get("report_format") and payload.get("report"):
+        parsed = parse_coverage_report(
+            str(payload["report_format"]), str(payload["report"]),
+            str(payload.get("framework", "unknown")),
+        )
+        files, symbols = parsed.files, parsed.symbols
 
     service.ingest_coverage(
         IngestCoverageCommand(
@@ -45,7 +54,7 @@ async def ingest_coverage(
             coverage_percent=(
                 float(payload["coverage_percent"])
                 if payload and payload.get("coverage_percent") is not None
-                else None
+                else (parsed.coverage_percent if payload and payload.get("report_format") and payload.get("report") else None)
             ),
             files=files,
             symbols=symbols,
@@ -61,7 +70,7 @@ async def ingest_coverage(
         content={
             "success": True,
             "data": {
-                "analysis_id": analysis_id_uuid,
+                "analysis_id": str(analysis_id_uuid),
                 "coverage_percent": summary["coverage_percent"] if summary else None,
                 "artifact_count": summary["artifact_count"] if summary else 0,
             },
@@ -74,14 +83,14 @@ async def ingest_coverage(
     response_model=None,
 )
 def get_coverage_for_analysis(
-    analysis_id: str,
+    analysis_id: UUID,
     service: CoverageApplicationService = Depends(get_coverage_service),
     principal: ApiPrincipal = Depends(get_api_principal),
 ) -> JSONResponse:
     """Return aggregate coverage for one analysis."""
 
     summary = service.get_coverage_summary(
-        GetCoverageForAnalysisCommand(analysis_id=str(analysis_id))
+        GetCoverageForAnalysisCommand(analysis_id=analysis_id)
     )
     if summary is None:
         return JSONResponse(
@@ -90,7 +99,7 @@ def get_coverage_for_analysis(
         )
     return JSONResponse(
         status_code=status.HTTP_200_OK,
-        content={"data": summary},
+        content={"data": jsonable_encoder(summary)},
     )
 
 
@@ -99,14 +108,14 @@ def get_coverage_for_analysis(
     response_model=None,
 )
 def get_coverage_report(
-    analysis_id: str,
+    analysis_id: UUID,
     service: CoverageApplicationService = Depends(get_coverage_service),
     principal: ApiPrincipal = Depends(get_api_principal),
 ) -> JSONResponse:
     """Return the full normalized coverage report for one analysis."""
 
     report = service.get_coverage_report(
-        GetCoverageForAnalysisCommand(analysis_id=str(analysis_id))
+        GetCoverageForAnalysisCommand(analysis_id=analysis_id)
     )
     if report is None:
         return JSONResponse(
@@ -115,7 +124,7 @@ def get_coverage_report(
         )
     return JSONResponse(
         status_code=status.HTTP_200_OK,
-        content={"data": report},
+        content={"data": jsonable_encoder(report)},
     )
 
 
@@ -124,6 +133,7 @@ def get_coverage_report(
     response_model=None,
 )
 def get_coverage_for_artifact(
+    analysis_id: UUID,
     file_path: str,
     service: CoverageApplicationService = Depends(get_coverage_service),
     principal: ApiPrincipal = Depends(get_api_principal),
@@ -131,13 +141,11 @@ def get_coverage_for_artifact(
     """Return coverage lines for a specific source file."""
 
     # The route accepts the file path as a query parameter for usability.
+    command = GetCoverageForArtifactCommand(analysis_id=analysis_id, path=file_path)
+    data = service.get_coverage_for_artifact(command)
     return JSONResponse(
         status_code=status.HTTP_200_OK,
-        content={
-            "data": service.get_coverage_for_artifact(
-                GetCoverageForArtifactCommand(analysis_id="00000000-0000-0000-0000-000000000000", path=file_path)
-            )
-        },
+        content=jsonable_encoder(data),
     )
 
 
@@ -146,6 +154,7 @@ def get_coverage_for_artifact(
     response_model=None,
 )
 def get_tests_for_symbol(
+    analysis_id: UUID,
     file_path: str,
     symbol: str,
     service: CoverageApplicationService = Depends(get_coverage_service),
@@ -153,15 +162,14 @@ def get_tests_for_symbol(
 ) -> JSONResponse:
     """Return tests that executed a specific symbol."""
 
+    data = service.get_tests_for_symbol(
+        GetTestsForSymbolCommand(
+            analysis_id=analysis_id,
+            file_path=file_path,
+            symbol=symbol,
+        )
+    )
     return JSONResponse(
         status_code=status.HTTP_200_OK,
-        content={
-            "data": service.get_tests_for_symbol(
-                GetTestsForSymbolCommand(
-                    analysis_id="00000000-0000-0000-0000-000000000000",
-                    file_path=file_path,
-                    symbol=symbol,
-                )
-            )
-        },
+        content={"data": jsonable_encoder(data)},
     )

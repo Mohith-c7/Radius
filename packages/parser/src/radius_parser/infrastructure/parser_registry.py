@@ -26,19 +26,26 @@ def default_language_parser_registry() -> StaticLanguageParserRegistry:
     from radius_parser.infrastructure.python_parser import (
         PythonAstParser,  # noqa: PLC0415
     )
-    from radius_parser.infrastructure.tree_sitter_parsers import (  # noqa: PLC0415
-        GoLanguageParser,
-        JavaLanguageParser,
-        RustLanguageParser,
-    )
-
-    return StaticLanguageParserRegistry(
-        (
-            PythonAstParser(),
-            JavaScriptParser(),
-            TypeScriptParser(),
-            GoLanguageParser(),
-            JavaLanguageParser(),
-            RustLanguageParser(),
+    parsers: list[LanguageParser] = [
+        PythonAstParser(),
+        JavaScriptParser(),
+        TypeScriptParser(),
+    ]
+    try:
+        from radius_parser.infrastructure.tree_sitter_parsers import (  # noqa: PLC0415
+            GoLanguageParser,
+            JavaLanguageParser,
+            RustLanguageParser,
         )
-    )
+
+        parsers.extend(
+            [
+                GoLanguageParser(),
+                JavaLanguageParser(),
+                RustLanguageParser(),
+            ]
+        )
+    except (ImportError, ModuleNotFoundError):
+        pass
+
+    return StaticLanguageParserRegistry(tuple(parsers))

@@ -162,6 +162,7 @@ class TestRunResultResponse:
     duration_ms: int
     coverage_percent: float | None
     output: str
+    retry_index: int = 0
 
     @classmethod
     def from_entity(cls, result: TestRunResult) -> "TestRunResultResponse":

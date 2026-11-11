@@ -47,3 +47,11 @@ class CoverageStore(Protocol):
 
     def get_report(self, analysis_id: UUID) -> dict | None:
         """Return the full coverage report for an analysis."""
+
+    def get_selection_evidence(
+        self,
+        analysis_id: UUID,
+        changed_paths: tuple[str, ...],
+        changed_symbols: tuple[str, ...],
+    ) -> dict[str, tuple[str, ...]]:
+        """Return historical runtime facts keyed by test path."""

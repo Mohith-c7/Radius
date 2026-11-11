@@ -120,6 +120,8 @@ class TestRunResult:
     duration_ms: int
     coverage_percent: float | None = None
     output: str = ""
+    retry_index: int = 0
+
 
 
 class CaseOutcome:
@@ -170,3 +172,4 @@ class TestResultUpload:
     result: TestRunResult
     cases: tuple[ReportedTestCase, ...] = ()
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    retry_index: int = 0

@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 import tempfile
 import time
 from dataclasses import dataclass
@@ -109,10 +110,11 @@ class SubprocessTestRunner:
         test_files = planned_test_files(args)
         with tempfile.TemporaryDirectory(prefix="radius-run-") as scratch:
             junit_path = Path(scratch) / "junit.xml"
-            argv = [command, *args]
+            executable = sys.executable if command == "python" else command
+            argv = [executable, *args]
             if is_pytest:
                 argv = [
-                    command,
+                    executable,
                     "-m",
                     "pytest",
                     "-p",

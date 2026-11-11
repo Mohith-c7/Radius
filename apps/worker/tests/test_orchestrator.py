@@ -9,10 +9,14 @@ from radius_analysis.infrastructure import (
     InMemoryAnalysisStore,
     UnifiedDiffChangeAnalyzer,
 )
-from radius_confidence.application import ConfidenceApplicationService
+from radius_confidence.application import (
+    ConfidenceApplicationService,
+    CoverageApplicationService,
+)
 from radius_confidence.infrastructure import (
     DeterministicConfidenceScorer,
     InMemoryConfidenceStore,
+    InMemoryCoverageStore,
 )
 from radius_graph.application import GraphApplicationService
 from radius_graph.infrastructure import InMemoryGraphStore
@@ -105,6 +109,34 @@ def test_in_memory_analysis_queue_claims_each_analysis_once() -> None:
     assert len(queue) == 1
     assert queue.claim_next() == analysis_id
     assert queue.claim_next() is None
+
+
+def test_worker_passes_stored_runtime_coverage_to_pts(tmp_path: Path) -> None:
+    _write_repository(tmp_path)
+    analysis_store = InMemoryAnalysisStore()
+    graph_store = InMemoryGraphStore()
+    analysis_service = AnalysisApplicationService(analysis_store, change_analyzer=UnifiedDiffChangeAnalyzer())
+    analysis = analysis_service.start_analysis(StartAnalysisCommand(repository_id=uuid4(), pull_request_id=uuid4(), commit_sha="a" * 40))
+    testing = RadiusTestingService(ConventionalTestDiscoverer(), PathBasedTestSelector(), InMemoryTestStore(), StaticTestCommandPlanner(), SubprocessTestRunner())
+    coverage_store = InMemoryCoverageStore()
+    coverage_store.ingest_coverage(analysis.id, "pytest", 100.0, [{"test_path": "tests/test_api.py", "path": "src/core.py", "covered": True, "count": 1}], [])
+    orchestrator = Phase1AnalysisOrchestrator(
+        analysis_service=analysis_service, parser_service=ParserApplicationService(FilesystemSourceDiscovery(), default_language_parser_registry()),
+        graph_service=GraphApplicationService(graph_store), graph_store=graph_store, testing_service=testing,
+        confidence_service=ConfidenceApplicationService(DeterministicConfidenceScorer(), InMemoryConfidenceStore()),
+        coverage_service=CoverageApplicationService(DeterministicConfidenceScorer(), InMemoryConfidenceStore(), coverage_store),
+    )
+    orchestrator.execute(ExecuteAnalysisCommand(analysis_id=analysis.id, repository_id=analysis.repository_id, repository_path=tmp_path, diff_text="""diff --git a/src/core.py b/src/core.py
+--- a/src/core.py
++++ b/src/core.py
+@@ -1 +1,2 @@
+ def calculate():
++    return 2
+"""))
+
+    selection = testing.get_selection(analysis.id)
+    api_decision = next(item for item in selection.decisions if item.test.path == "tests/test_api.py")
+    assert "RUNTIME_COVERAGE" in api_decision.evidence_sources
 
 
 def _write_repository(root: Path) -> None:

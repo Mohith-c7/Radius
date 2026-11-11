@@ -40,8 +40,8 @@ class TestStore(Protocol):
     def get_run_plan(self, analysis_id: UUID) -> TestRunPlan | None:
         """Return test run plan for an analysis."""
 
-    def save_run_result(self, result: TestRunResult) -> TestRunResult:
-        """Persist test execution result."""
+    def save_run_result(self, result: TestRunResult, retry_index: int = 0) -> TestRunResult:
+        """Persist test execution result, optionally specifying retry index."""
 
     def get_run_result(self, analysis_id: UUID) -> TestRunResult | None:
         """Return test execution result."""

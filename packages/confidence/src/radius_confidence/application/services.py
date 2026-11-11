@@ -268,6 +268,17 @@ class CoverageApplicationService:
             return None
         return self._to_coverage_report(payload)
 
+    def get_selection_evidence(
+        self,
+        analysis_id,
+        changed_paths: tuple[str, ...],
+        changed_symbols: tuple[str, ...],
+    ) -> dict[str, tuple[str, ...]]:
+        """Retrieve factual runtime relationships for test selection."""
+        return self._coverage_store.get_selection_evidence(
+            analysis_id, changed_paths, changed_symbols
+        )
+
     def _to_coverage_report(self, payload: dict) -> CoverageReportResponse:
         report = payload["report"]
         files = []

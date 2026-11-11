@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from radius_confidence.interfaces.store import CoverageStore
 
@@ -42,7 +42,7 @@ class InMemoryCoverageStore(CoverageStore):
             path = item["path"]
             self._files[key].append(
                 {
-                    "test_id": item["test_id"],
+                    "test_id": item.get("test_id", uuid4()),
                     "test_path": item.get("test_path", ""),
                     "file_path": path,
                     "symbol": item.get("symbol") or None,
@@ -54,7 +54,7 @@ class InMemoryCoverageStore(CoverageStore):
         for item in symbols:
             self._symbols[key].append(
                 {
-                    "test_id": item["test_id"],
+                    "test_id": item.get("test_id", uuid4()),
                     "file_path": item["file_path"],
                     "symbol": item["symbol"],
                     "executed": bool(item.get("executed", False)),
@@ -116,3 +116,28 @@ class InMemoryCoverageStore(CoverageStore):
     def get_report(self, analysis_id: UUID) -> dict | None:
         key = str(analysis_id)
         return {"report": self._reports.get(key), "files": self._files.get(key, []), "artifacts": self._symbols.get(key, [])}
+
+    def get_selection_evidence(
+        self,
+        analysis_id: UUID,
+        changed_paths: tuple[str, ...],
+        changed_symbols: tuple[str, ...],
+    ) -> dict[str, tuple[str, ...]]:
+        """Build selection evidence from stored, not inferred, coverage."""
+        evidence: dict[str, list[str]] = {}
+        for artifacts in (self._files.values(), self._symbols.values()):
+            for items in artifacts:
+                for item in items:
+                    path = item.get("file_path")
+                    symbol = item.get("symbol")
+                    if path not in changed_paths and symbol not in changed_symbols:
+                        continue
+                    test_path = item.get("test_path")
+                    if not test_path:
+                        continue
+                    detail = (
+                        f"Runtime coverage executes {symbol} in {path}."
+                        if symbol else f"Runtime coverage covers {path}."
+                    )
+                    evidence.setdefault(test_path, []).append(detail)
+        return {path: tuple(dict.fromkeys(details)) for path, details in evidence.items()}

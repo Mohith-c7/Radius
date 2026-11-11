@@ -256,6 +256,7 @@ class SqlAlchemyTestStore:
                 skipped=result.skipped,
                 duration_ms=result.duration_ms,
                 coverage_percent=result.coverage_percent,
+                retry_index=result.retry_index,
             )
         )
         self._session.flush()
@@ -319,6 +320,7 @@ class SqlAlchemyTestStore:
                 if row.coverage_percent is not None
                 else None
             ),
+            retry_index=row.retry_index,
         )
 
     def get_result_upload(

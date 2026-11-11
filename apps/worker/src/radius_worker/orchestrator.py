@@ -12,7 +12,10 @@ from radius_analysis.dto import (
     AnalyzeRepositoryDiffCommand,
     ComputeBlastRadiusCommand,
 )
-from radius_confidence.application import ConfidenceApplicationService
+from radius_confidence.application import (
+    ConfidenceApplicationService,
+    CoverageApplicationService,
+)
 from radius_confidence.domain import (
     AnalysisEvidence,
     CoveragePercent,
@@ -22,13 +25,12 @@ from radius_confidence.domain import (
 )
 from radius_confidence.dto import GenerateConfidenceReportCommand
 from radius_graph.application import GraphApplicationService
-from radius_graph.domain import GraphSnapshot
+from radius_graph.domain import GraphNodeType, GraphSnapshot
 from radius_graph.dto import BuildGraphCommand
 from radius_graph.interfaces.graph_store import GraphStore
 from radius_graph.traversal import file_dependents
 from radius_parser.application import ParserApplicationService
 from radius_parser.dto import ParseRepositoryCommand
-from radius_parser.extractors.typescript import TypeScriptExtractor
 from radius_shared.logging import get_logger
 from radius_testing.application import TestingApplicationService
 from radius_testing.dto import (
@@ -85,6 +87,7 @@ class Phase1AnalysisOrchestrator:
         testing_service: TestingApplicationService,
         confidence_service: ConfidenceApplicationService,
         execute_tests: bool = True,
+        coverage_service: CoverageApplicationService | None = None,
     ) -> None:
         self._analysis = analysis_service
         self._parser = parser_service
@@ -93,6 +96,7 @@ class Phase1AnalysisOrchestrator:
         self._testing = testing_service
         self._confidence = confidence_service
         self._execute_tests = execute_tests
+        self._coverage = coverage_service
 
     def execute(self, command: ExecuteAnalysisCommand) -> AnalysisExecutionResult:
         """Execute one analysis and mark its lifecycle status."""
@@ -134,36 +138,52 @@ class Phase1AnalysisOrchestrator:
             )
         )
         graph_snapshot = self._require_graph_snapshot(command.analysis_id)
+        # Compute dependents and affected file paths (upstream logic)
         dependents = file_dependents(graph_snapshot.graph, changed_paths)
         affected_paths = tuple(
-            sorted(
-                {path for reached in dependents.values() for path in reached}
-                - set(changed_paths)
-            )
+            sorted({path for reached in dependents.values() for path in reached} - set(changed_paths))
         )
 
+        # Discover test cases (upstream method)
         discovered_tests = self._testing.discover_test_cases(
             DiscoverTestsCommand(command.repository_path, command.repository_id)
         )
         selector = PathBasedTestSelector()
+        # Map changes to tests (upstream mapping for full suite reasons)
         mapping = map_changes_to_tests(
             changed_files=tuple(
-                ChangedFileRef(item.path, item.change_type)
-                for item in changes.changed_files
+                ChangedFileRef(item.path, item.change_type) for item in changes.changed_files
             ),
             dependents=dependents,
             test_paths=frozenset(test.path.value for test in discovered_tests),
             conventional_tests={
-                path: selector.conventional_matches(path, discovered_tests)
-                for path in changed_paths
+                path: selector.conventional_matches(path, discovered_tests) for path in changed_paths
             },
             parse_failures=frozenset(parse_result.parse_failures),
         )
+
+        # Stashed logic: changed symbols and coverage evidence
+        changed_symbols = tuple(
+            node.label for node in graph_snapshot.graph.nodes
+            if node.node_type == GraphNodeType.SYMBOL and node.path in changed_paths
+        )
+        coverage_evidence = (
+            self._coverage.get_selection_evidence(
+                command.analysis_id, changed_paths, changed_symbols
+            )
+            if self._coverage is not None
+            else {}
+        )
+        # Ensure test discovery for stashed workflow (already performed above)
+        # self._testing.discover_tests(DiscoverTestsCommand(command.repository_path))
+
         selection = self._testing.select_tests(
             SelectTestsCommand(
                 analysis_id=command.analysis_id,
                 changed_file_paths=changed_paths,
                 affected_file_paths=affected_paths,
+                changed_symbols=changed_symbols,
+                coverage_evidence=coverage_evidence,
                 available_tests=discovered_tests,
                 full_suite_reasons=mapping.full_suite_reasons,
             )
@@ -276,6 +296,7 @@ class Phase1AnalysisOrchestrator:
         from radius_graph.slicer import GraphSlicer
         from radius_parser.core import ParserEngine
         from radius_parser.extractors.python import PythonExtractor
+        from radius_parser.extractors.typescript import TypeScriptExtractor
 
         print(
             f"\n[PHASE 2 POC] Starting Semantic CPG Engine on cloned repo: {repo_path}"

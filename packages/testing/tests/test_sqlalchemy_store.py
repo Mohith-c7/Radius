@@ -65,7 +65,8 @@ def test_sqlalchemy_test_store_persists_selection_plan_and_result() -> None:
                 command_plan=(("python", ("-m", "pytest", "tests/test_core.py")),),
             )
         )
-        result = store.save_run_result(
+        # Save a result with default retry_index (0) and verify persistence
+        result0 = store.save_run_result(
             RadiusTestRunResult(
                 id=uuid4(),
                 analysis_id=analysis_id,
@@ -75,15 +76,52 @@ def test_sqlalchemy_test_store_persists_selection_plan_and_result() -> None:
                 failed=0,
                 skipped=0,
                 duration_ms=10,
+                # retry_index defaults to 0
             )
         )
+        assert result0.retry_index == 0
+        assert store.get_run_result(analysis_id).retry_index == 0
+
+        # Save a result with retry_index=1 and verify
+        result1 = store.save_run_result(
+            RadiusTestRunResult(
+                id=uuid4(),
+                analysis_id=analysis_id,
+                status=RadiusTestRunStatus.PASSED,
+                total_tests=1,
+                passed=1,
+                failed=0,
+                skipped=0,
+                duration_ms=10,
+                retry_index=1,
+            )
+        )
+        assert result1.retry_index == 1
+        assert store.get_run_result(analysis_id).retry_index == 1
+
+        # Save a result with retry_index=2 and verify
+        result2 = store.save_run_result(
+            RadiusTestRunResult(
+                id=uuid4(),
+                analysis_id=analysis_id,
+                status=RadiusTestRunStatus.PASSED,
+                total_tests=1,
+                passed=1,
+                failed=0,
+                skipped=0,
+                duration_ms=10,
+                retry_index=2,
+            )
+        )
+        assert result2.retry_index == 2
+        assert store.get_run_result(analysis_id).retry_index == 2
 
         assert selection.selected_tests[0].test_case.path.value == "tests/test_core.py"
         assert store.get_selection(analysis_id).selected_tests[0].reason.value == (
             "affected_file"
         )
         assert store.get_run_plan(analysis_id).command_plan == plan.command_plan
-        assert store.get_run_result(analysis_id).passed == result.passed
+        assert store.get_run_result(analysis_id).passed == result2.passed
 
 
 def _session() -> Session:

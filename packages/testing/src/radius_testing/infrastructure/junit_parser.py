@@ -138,6 +138,9 @@ class JUnitReportParser:
         )
 
     def _parse_xml(self, text: str, analysis_id: UUID) -> TestRunResult:
+        if defused_ET is None and ("<!DOCTYPE" in text or "<!ENTITY" in text):
+            msg = "XML report contains forbidden DOCTYPE or ENTITY."
+            raise ValidationError(msg)
         try:
             if defused_ET is not None:
                 root = defused_ET.fromstring(text.encode("utf-8"))

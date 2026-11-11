@@ -58,6 +58,7 @@ import {
 } from "../lib/api";
 import { ConfidenceRing, OpenLink, PageHeading, Status } from "./ui";
 import { InteractiveGraphViewer } from "./interactive-graph";
+import { CoverageHealth } from "./coverage-health";
 
 type LoadState<T> =
   | { status: "loading" }
@@ -1708,6 +1709,10 @@ function CiTestResultsCard({
           </button>
         </div>
       )}
+
+      <div className="stat-list" style={{ marginTop: "16px", borderTop: "1px solid #E7ECE8", paddingTop: "14px" }}>
+        <CoverageHealth />
+      </div>
 
       {showModal && (
         <div
