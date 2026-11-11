@@ -413,6 +413,8 @@ class TestRun(UuidPrimaryKeyMixin, Base):
     skipped: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     duration_ms: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     coverage_percent: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    # New column for retry attempts
+    retry_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     analysis: Mapped[Analysis] = relationship(back_populates="test_runs")
 
@@ -473,15 +475,10 @@ class TestCase(UuidPrimaryKeyMixin, Base):
     test_type: Mapped[str] = mapped_column(String(100), nullable=False)
     target_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     test_metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-
     selections: Mapped[list["SelectedTest"]] = relationship(back_populates="test_case")
 
     __table_args__ = (
-        UniqueConstraint(
-            "repository_id",
-            "path",
-            name="uq_test_cases_repository_id_path",
-        ),
+        UniqueConstraint("repository_id", "path", name="uq_test_cases_repository_id_path"),
         Index("ix_test_cases_path", "path"),
     )
 
