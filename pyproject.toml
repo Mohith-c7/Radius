@@ -38,7 +38,7 @@ dependencies = [
 
 [project.optional-dependencies]
 observability = [
-  "opentelemetry-api>=1.27.0",
+  "opentelemetry-api>=1.45.2",
   "opentelemetry-sdk>=1.27.0",
   "opentelemetry-exporter-otlp-proto-http>=1.27.0",
   "prometheus-client>=0.21.0",
@@ -57,7 +57,7 @@ dev = [
   "google-genai>=0.1.0",
   "google-generativeai>=0.8.3",
   # Observability libraries are optional at runtime but installed for tests.
-  "opentelemetry-api>=1.27.0",
+  "opentelemetry-api>=1.45.2",
   "opentelemetry-sdk>=1.27.0",
   "opentelemetry-exporter-otlp-proto-http>=1.27.0",
   "prometheus-client>=0.21.0",
