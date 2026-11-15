@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  Activity,
   AlertCircle,
   ArrowRight,
   Check,
@@ -56,7 +57,15 @@ import {
   updateRepository,
   uploadTestResults,
 } from "../lib/api";
-import { ConfidenceRing, OpenLink, PageHeading, Status } from "./ui";
+import {
+  ConfidenceRing,
+  EmptyState,
+  MetricTile,
+  OpenLink,
+  PageHeading,
+  Skeleton,
+  Status,
+} from "./ui";
 import { InteractiveGraphViewer } from "./interactive-graph";
 import { CoverageHealth } from "./coverage-health";
 
@@ -95,40 +104,54 @@ function useRadiusData<T>(load: () => Promise<T>, deps: React.DependencyList) {
   return state;
 }
 
-function LoadingState({ label = "Loading Radius data" }: { label?: string }) {
+function LoadingState({ label = "Loading verification data…" }: { label?: string }) {
   return (
-    <div className="card detail-card state-card">
-      <Loader2 size={18} className="spin" />
-      <strong>{label}</strong>
+    <div className="card" style={{ padding: "32px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
+      <Loader2 size={24} className="spin" style={{ color: "var(--green)" }} />
+      <span style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)" }}>{label}</span>
+      <p style={{ margin: 0, fontSize: "12px", color: "var(--muted)" }}>Connecting to Radius verification engine…</p>
     </div>
   );
 }
 
-function ErrorState({ message }: { message: string }) {
+function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
-    <div className="card detail-card state-card error-state">
-      <AlertCircle size={18} />
-      <strong>Dashboard could not reach the Radius API.</strong>
-      <p className="muted">{message}</p>
+    <div className="card" style={{ padding: "24px", borderColor: "var(--status-err-border)", background: "var(--status-err-bg)" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
+        <AlertCircle size={20} style={{ color: "var(--status-err-ink)", flexShrink: 0, marginTop: "2px" }} />
+        <div style={{ flex: 1 }}>
+          <strong style={{ display: "block", color: "var(--status-err-ink)", fontSize: "14px", marginBottom: "4px" }}>
+            Unable to communicate with Radius API
+          </strong>
+          <p style={{ margin: "0 0 12px 0", color: "var(--ink)", fontSize: "13px" }}>{message}</p>
+          {onRetry && (
+            <button className="button sm secondary" onClick={onRetry} type="button">
+              <RefreshCw size={12} /> Retry connection
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
-function EmptyState({ title, detail }: { title: string; detail: string }) {
+function EmptyPanelState({
+  title,
+  detail,
+  action,
+  icon,
+}: {
+  title: string;
+  detail: string;
+  action?: React.ReactNode;
+  icon?: React.ReactNode;
+}) {
   return (
-    <div className="card detail-card state-card">
-      <strong>{title}</strong>
-      <p className="muted">{detail}</p>
-    </div>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: number | string }) {
-  return (
-    <div className="metric-card">
-      <dt>{label}</dt>
-      <dd>{value}</dd>
-      <small>Live Radius API data</small>
+    <div className="empty-state">
+      <div className="empty-icon-wrap">{icon || <FolderGit2 size={22} />}</div>
+      <h3>{title}</h3>
+      <p>{detail}</p>
+      {action}
     </div>
   );
 }
@@ -182,7 +205,7 @@ async function loadOverview() {
 
 export function DashboardOverviewData() {
   const state = useRadiusData(loadOverview, []);
-  if (state.status === "loading") return <LoadingState />;
+  if (state.status === "loading") return <LoadingState label="Loading workspace overview…" />;
   if (state.status === "error") return <ErrorState message={state.error} />;
 
   const { repositories, analyses, reports } = state.data;
@@ -193,109 +216,176 @@ export function DashboardOverviewData() {
             reports.length,
         )
       : 0;
-  const attention = analyses.filter((item) =>
-    ["failed", "cancelled"].includes(item.status.toLowerCase()),
-  ).length;
+
+  const failingAnalyses = analyses.filter((item) =>
+    ["failed", "cancelled", "error"].includes(item.status.toLowerCase()),
+  );
+  const attention = failingAnalyses.length;
 
   return (
     <>
       <PageHeading
-        title="Engineering workspace"
-        description="Live verification health from Radius backend services."
+        title="Engineering Workspace"
+        description="Continuous verification intelligence and predictive test selection across your codebase."
         action={
           <Link href="/repositories/connect" className="button">
-            <Plus size={16} />
+            <Plus size={15} />
             Connect repository
           </Link>
         }
       />
+
+      {/* Action-Oriented Banner */}
+      {repositories.length === 0 ? (
+        <div className="action-banner attention">
+          <div className="action-banner-content">
+            <AlertCircle size={20} style={{ color: "var(--status-warn-ink)", flexShrink: 0, marginTop: "2px" }} />
+            <div>
+              <h3>No repositories connected yet</h3>
+              <p>Connect a GitHub repository to activate diff-hunk analysis and predictive test selection.</p>
+            </div>
+          </div>
+          <Link href="/repositories/connect" className="button sm">
+            Connect repository <ArrowRight size={13} />
+          </Link>
+        </div>
+      ) : attention > 0 ? (
+        <div className="action-banner attention">
+          <div className="action-banner-content">
+            <AlertCircle size={20} style={{ color: "var(--status-warn-ink)", flexShrink: 0, marginTop: "2px" }} />
+            <div>
+              <h3>{attention} verification run{attention > 1 ? "s" : ""} require attention</h3>
+              <p>Recent pull request analyses encountered test failures or unmapped changed code.</p>
+            </div>
+          </div>
+          {failingAnalyses[0]?.id && (
+            <Link href={`/analyses/${failingAnalyses[0].id}`} className="button sm secondary">
+              Inspect failure <ArrowRight size={13} />
+            </Link>
+          )}
+        </div>
+      ) : (
+        <div className="action-banner success">
+          <div className="action-banner-content">
+            <CheckCircle2 size={20} style={{ color: "var(--status-pos-ink)", flexShrink: 0, marginTop: "2px" }} />
+            <div>
+              <h3>All verification pipelines healthy</h3>
+              <p>Monitored repositories have active webhooks and passing evidence-backed verdicts.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Key Health Indicators */}
       <section className="metric-grid">
-        <Metric label="Connected repositories" value={repositories.length} />
-        <Metric label="Analyses tracked" value={analyses.length} />
-        <Metric label="Average confidence" value={average ? `${average}/100` : "-"} />
-        <Metric label="Attention needed" value={attention} />
+        <MetricTile
+          label="Active Repositories"
+          value={repositories.length}
+          context={repositories.length === 1 ? "1 repository monitored" : `${repositories.length} repositories monitored`}
+          icon={<FolderGit2 size={16} />}
+        />
+        <MetricTile
+          label="Analyses Run"
+          value={analyses.length}
+          context="Pull request verification runs"
+          icon={<Activity size={16} />}
+        />
+        <MetricTile
+          label="Verification Confidence"
+          value={average ? `${average}/100` : "-"}
+          context="Average evidence score (heuristic)"
+          icon={<Zap size={16} />}
+        />
+        <MetricTile
+          label="Attention Required"
+          value={attention}
+          context={attention === 0 ? "No failing runs" : `${attention} blocked or failed`}
+          icon={<AlertCircle size={16} />}
+        />
       </section>
+
+      {/* Primary Operational View: Runs + Monitored Repos */}
       <div className="content-grid">
-        <RecentAnalysesCard analyses={analyses.slice(0, 5)} repositories={repositories} />
         <section className="card">
           <div className="card-heading">
             <div>
-              <h2>Workspace confidence</h2>
-              <p>Computed from available confidence reports</p>
+              <h2>Recent verification runs</h2>
+              <p>Latest pull request analyses and evidence verdicts</p>
             </div>
+            <OpenLink href="/analyses">View all</OpenLink>
           </div>
-          <div className="confidence-summary">
-            <ConfidenceRing score={average} />
+          {analyses.length === 0 ? (
+            <div style={{ padding: "32px", textAlign: "center", color: "var(--muted)" }}>
+              No analyses recorded yet. Push a commit or connect a repository to start.
+            </div>
+          ) : (
+            <AnalysisTable analyses={analyses.slice(0, 6)} repositories={repositories} />
+          )}
+        </section>
+
+        <section className="card">
+          <div className="card-heading">
             <div>
-              <h3>{average ? "Evidence available" : "No reports yet"}</h3>
-              <p>
-                {average
-                  ? "Radius is aggregating confidence from recent analyses."
-                  : "Run analyses to generate confidence evidence."}
-              </p>
+              <h2>Monitored repositories</h2>
+              <p>Connected codebases and default targets</p>
             </div>
+            <OpenLink href="/repositories">Manage</OpenLink>
           </div>
-          <RepositoryRows repositories={repositories.slice(0, 6)} />
+          {repositories.length === 0 ? (
+            <div style={{ padding: "32px", textAlign: "center", color: "var(--muted)" }}>
+              No repositories connected yet.
+            </div>
+          ) : (
+            <div style={{ padding: "0 var(--space-5) var(--space-3)" }}>
+              {repositories.slice(0, 5).map((repository) => (
+                <div
+                  key={repository.id ?? repository.full_name}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "12px 0",
+                    borderBottom: "1px solid var(--line-subtle)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                    <div
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        borderRadius: "var(--radius-md)",
+                        background: "var(--green-soft)",
+                        color: "var(--green)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <FolderGit2 size={16} />
+                    </div>
+                    <div>
+                      <Link
+                        href={`/repositories/${repository.id}`}
+                        style={{ fontWeight: 600, fontSize: "13px", color: "inherit", textDecoration: "none" }}
+                      >
+                        {repository.full_name}
+                      </Link>
+                      <div style={{ fontSize: "11px", color: "var(--muted)", fontFamily: "var(--font-mono)" }}>
+                        {repository.default_branch} · {repository.visibility}
+                      </div>
+                    </div>
+                  </div>
+                  <Status status={repository.status} />
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       </div>
     </>
   );
 }
 
-function RecentAnalysesCard({
-  analyses,
-  repositories,
-}: {
-  analyses: Analysis[];
-  repositories: Repository[];
-}) {
-  return (
-    <section className="card">
-      <div className="card-heading">
-        <div>
-          <h2>Recent analyses</h2>
-          <p>Latest pull request verification runs</p>
-        </div>
-        <OpenLink href="/analyses">View all</OpenLink>
-      </div>
-      {analyses.length === 0 ? (
-        <div className="detail-card">
-          <p className="muted">No analyses have been created yet.</p>
-        </div>
-      ) : (
-        <AnalysisTable analyses={analyses} repositories={repositories} />
-      )}
-    </section>
-  );
-}
-
-function RepositoryRows({ repositories }: { repositories: Repository[] }) {
-  if (repositories.length === 0) {
-    return (
-      <div className="repo-list">
-        <p className="muted">No repositories connected yet.</p>
-      </div>
-    );
-  }
-  return (
-    <div className="repo-list">
-      {repositories.map((repository) => (
-        <div className="repo-row" key={repository.id ?? repository.full_name}>
-          <span className="repo-icon">
-            <FolderGit2 size={17} />
-          </span>
-          <span>
-            <strong>{repository.full_name}</strong>
-            <small>
-              {repository.provider} / {repository.visibility}
-            </small>
-          </span>
-          <Status status={repository.status} />
-        </div>
-      ))}
-    </div>
-  );
-}
 
 export function RepositoriesData() {
   const [refreshKey, setRefreshKey] = useState(0);
@@ -306,26 +396,31 @@ export function RepositoriesData() {
     setRefreshKey((value) => value + 1);
   }
 
-  if (state.status === "loading") return <LoadingState label="Loading repositories" />;
+  if (state.status === "loading") return <LoadingState label="Loading repositories…" />;
   if (state.status === "error") return <ErrorState message={state.error} />;
 
   return (
     <>
       <PageHeading
-        eyebrow="Repository management"
         title="Repositories"
-        description="Connected GitHub repositories and their backend sync status."
+        description="Monitored GitHub repositories and automated synchronization status."
         action={
           <Link href="/repositories/connect" className="button">
-            <Plus size={16} />
+            <Plus size={15} />
             Connect repository
           </Link>
         }
       />
       {state.data.length === 0 ? (
-        <EmptyState
+        <EmptyPanelState
+          icon={<FolderGit2 size={24} />}
           title="No repositories connected"
-          detail="Connect a GitHub repository to begin synchronization and analysis."
+          detail="Connect your GitHub repository to enable predictive test selection and evidence-gated verification."
+          action={
+            <Link href="/repositories/connect" className="button" style={{ marginTop: "12px" }}>
+              <Plus size={15} /> Connect repository
+            </Link>
+          }
         />
       ) : (
         <section className="card">
@@ -337,34 +432,52 @@ export function RepositoriesData() {
                   <th>Default branch</th>
                   <th>Provider</th>
                   <th>Visibility</th>
-                  <th>Status</th>
-                  <th />
+                  <th>Sync status</th>
+                  <th style={{ width: "48px" }} />
                 </tr>
               </thead>
               <tbody>
                 {state.data.map((repository) => (
                   <tr key={repository.id ?? repository.full_name}>
                     <td>
-                      <div className="repo-name">
-                        <span className="repo-icon">
+                      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                        <div
+                          style={{
+                            width: "32px",
+                            height: "32px",
+                            borderRadius: "var(--radius-md)",
+                            background: "var(--green-soft)",
+                            color: "var(--green)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexShrink: 0,
+                          }}
+                        >
                           <FolderGit2 size={16} />
-                        </span>
-                        <span>
+                        </div>
+                        <div>
                           <Link
                             href={`/repositories/${repository.id}`}
-                            style={{ color: "inherit", textDecoration: "none" }}
+                            style={{ fontWeight: 600, fontSize: "13px", color: "inherit", textDecoration: "none" }}
                           >
-                            <strong>{repository.full_name}</strong>
+                            {repository.full_name}
                           </Link>
-                          <div className="subtext">{repository.clone_url}</div>
-                        </span>
+                          <div style={{ fontSize: "11px", color: "var(--muted)", fontFamily: "var(--font-mono)", marginTop: "2px" }}>
+                            {repository.clone_url}
+                          </div>
+                        </div>
                       </div>
                     </td>
                     <td>
-                      <code>{repository.default_branch}</code>
+                      <code style={{ fontSize: "12px", background: "var(--panel-muted)", padding: "2px 6px", borderRadius: "4px" }}>
+                        {repository.default_branch}
+                      </code>
                     </td>
                     <td>{repository.provider}</td>
-                    <td>{repository.visibility}</td>
+                    <td>
+                      <span className="badge">{repository.visibility}</span>
+                    </td>
                     <td>
                       <Status status={repository.status} />
                     </td>
@@ -375,8 +488,9 @@ export function RepositoriesData() {
                           onClick={() => void remove(repository.id as string)}
                           title="Disconnect repository"
                           type="button"
+                          aria-label={`Disconnect ${repository.full_name}`}
                         >
-                          <Trash2 size={15} />
+                          <Trash2 size={14} />
                         </button>
                       )}
                     </td>
@@ -392,7 +506,7 @@ export function RepositoriesData() {
 }
 
 export function ConnectRepositoryForm() {
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -411,9 +525,15 @@ export function ConnectRepositoryForm() {
     };
     try {
       const repository = await connectRepository(payload);
-      setMessage(`Connected ${repository.full_name}.`);
+      setMessage({
+        type: "success",
+        text: `Connected ${repository.full_name}! Push a commit or open a PR to trigger your first verification run.`,
+      });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error));
+      setMessage({
+        type: "error",
+        text: error instanceof Error ? error.message : String(error),
+      });
     } finally {
       setSubmitting(false);
     }
@@ -422,53 +542,82 @@ export function ConnectRepositoryForm() {
   return (
     <>
       <PageHeading
-        eyebrow="Repository management"
+        breadcrumbs={[{ label: "Repositories", href: "/repositories" }, { label: "Connect" }]}
         title="Connect a repository"
-        description="Create a backend repository record Radius can synchronize and analyze."
+        description="Enable automatic code property graph analysis, predictive test selection, and confidence reporting."
       />
-      
-      <div className="card" style={{ marginBottom: "2rem", padding: "2rem", display: "flex", flexDirection: "column", alignItems: "center", border: "1px solid var(--border-color)" }}>
-        <h2 style={{ marginBottom: "0.5rem" }}>Install GitHub App</h2>
-        <p className="muted" style={{ marginBottom: "1.5rem", textAlign: "center", maxWidth: "600px" }}>
-          Install the Radius GitHub App to automatically synchronize repositories and trigger verification pipelines on push.
-        </p>
-        <a 
-          href={process.env.NEXT_PUBLIC_GITHUB_APP_URL || "https://github.com/apps/radius-verification/installations/new"} 
-          target="_blank" 
-          rel="noreferrer" 
-          className="button primary"
-          style={{ padding: "0.75rem 1.5rem", fontSize: "1rem", display: "flex", alignItems: "center", gap: "0.5rem" }}
-        >
-          <Plus size={18} />
-          Install App
-        </a>
+
+      {/* GitHub App Installation Onboarding */}
+      <div className="card" style={{ marginBottom: "24px", padding: "28px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "24px", alignItems: "center" }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
+              <span className="badge" style={{ background: "var(--green-soft)", color: "var(--status-pos-ink)", borderColor: "var(--green-border)" }}>
+                Recommended
+              </span>
+              <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>Install Radius GitHub App</h2>
+            </div>
+            <p style={{ margin: "0 0 12px 0", color: "var(--muted)", fontSize: "13px", lineHeight: 1.5, maxWidth: "680px" }}>
+              The official GitHub App automatically installs webhooks on your repositories, triggers verification pipelines when pull requests are created or updated, and publishes explainable Check Run comments directly to developers.
+            </p>
+            <div style={{ display: "flex", gap: "16px", fontSize: "12px", color: "var(--muted)" }}>
+              <span>✓ Read repository contents & PRs</span>
+              <span>✓ Publish GitHub Check Runs</span>
+              <span>✓ PR comment summaries</span>
+            </div>
+          </div>
+          <a
+            href={process.env.NEXT_PUBLIC_GITHUB_APP_URL || "https://github.com/apps/radius-verification/installations/new"}
+            target="_blank"
+            rel="noreferrer"
+            className="button"
+            style={{ padding: "10px 18px", whiteSpace: "nowrap" }}
+          >
+            <Plus size={16} />
+            Install GitHub App
+          </a>
+        </div>
       </div>
 
-      <h3 style={{ marginBottom: "1rem", marginTop: "2rem", color: "var(--text-color)", fontSize: "1.1rem", fontWeight: 600 }}>Manual configuration</h3>
-      <p className="muted" style={{ marginBottom: "1.5rem" }}>
-        Manually register a repository for local testing or custom CI/CD integrations.
-      </p>
-      <div className="detail-grid">
-        <form className="card detail-card form-grid" onSubmit={submit}>
+      {/* Manual Configuration */}
+      <div className="card" style={{ padding: "28px" }}>
+        <div style={{ marginBottom: "20px" }}>
+          <h2 style={{ margin: "0 0 4px", fontSize: "15px", fontWeight: 700 }}>Manual repository configuration</h2>
+          <p style={{ margin: 0, color: "var(--muted)", fontSize: "13px" }}>
+            For local evaluation, self-hosted CI pipelines, or repositories with custom credentials.
+          </p>
+        </div>
+
+        {message && (
+          <div
+            className={`action-banner ${message.type === "success" ? "success" : "attention"}`}
+            style={{ marginBottom: "20px" }}
+          >
+            <div className="action-banner-content">
+              {message.type === "success" ? (
+                <CheckCircle2 size={18} style={{ color: "var(--status-pos-ink)", flexShrink: 0, marginTop: "2px" }} />
+              ) : (
+                <AlertCircle size={18} style={{ color: "var(--status-warn-ink)", flexShrink: 0, marginTop: "2px" }} />
+              )}
+              <div>
+                <p style={{ margin: 0, fontWeight: 600 }}>{message.text}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <form className="form-grid" onSubmit={submit}>
           <label>
-            Organization ID
-            <input name="organizationId" defaultValue={radiusConfig.organizationId} required />
-          </label>
-          <label>
-            GitHub repository ID
-            <input name="repositoryId" required type="number" min="1" />
-          </label>
-          <label>
-            Owner
-            <input name="owner" placeholder="Mohith-c7" required />
+            Owner / Organization
+            <input name="owner" placeholder="e.g. Mohith-c7" required />
           </label>
           <label>
             Repository name
-            <input name="name" placeholder="Radius" required />
+            <input name="name" placeholder="e.g. Radius" required />
           </label>
           <label>
             Default branch
-            <input name="defaultBranch" defaultValue="develop" required />
+            <input name="defaultBranch" defaultValue="main" required />
           </label>
           <label>
             Visibility
@@ -476,6 +625,17 @@ export function ConnectRepositoryForm() {
               <option value="private">Private</option>
               <option value="public">Public</option>
             </select>
+          </label>
+          <label>
+            GitHub repository ID
+            <input name="repositoryId" required type="number" min="1" placeholder="e.g. 12345678" />
+            <span style={{ fontSize: "11px", color: "var(--muted)", fontWeight: 400 }}>
+              Tip: Run <code style={{ fontSize: "11px" }}>gh repo view --json id</code> in your terminal.
+            </span>
+          </label>
+          <label>
+            Organization ID
+            <input name="organizationId" defaultValue={radiusConfig.organizationId} required />
           </label>
           <label className="full-span">
             Clone URL
@@ -486,25 +646,21 @@ export function ConnectRepositoryForm() {
               type="url"
             />
           </label>
-          <div className="form-actions full-span">
+          <div className="form-actions full-span" style={{ marginTop: "12px" }}>
             <button className="button" disabled={submitting} type="submit">
               {submitting ? <Loader2 size={15} className="spin" /> : <Plus size={15} />}
               Connect repository
             </button>
-            {message && <p className="muted">{message}</p>}
+            <Link href="/repositories" className="button secondary">
+              Cancel
+            </Link>
           </div>
         </form>
-        <aside className="card detail-card">
-          <h2>Backend endpoint</h2>
-          <p className="muted">
-            This form posts to <code>POST /api/v1/repositories</code> and sends
-            the configured organization header.
-          </p>
-        </aside>
       </div>
     </>
   );
 }
+
 
 export function RepositoryDetailData({ repositoryId }: { repositoryId: string }) {
   const router = useRouter();
@@ -596,9 +752,12 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
   return (
     <>
       <PageHeading
-        eyebrow={`Repository / ${repository.provider}`}
+        breadcrumbs={[
+          { label: "Repositories", href: "/repositories" },
+          { label: repository.full_name },
+        ]}
         title={repository.full_name}
-        description={`${repository.visibility} / ${repository.status}`}
+        description={`${repository.visibility} repository • Provider: ${repository.provider}`}
         action={
           <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
             <button
@@ -625,22 +784,30 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
 
       {syncNotice && (
         <div
-          className="card"
           style={{
             marginBottom: "16px",
             padding: "12px 16px",
-            borderLeft: `4px solid ${
-              syncNotice.type === "success" ? "var(--green, #22c55e)" : "var(--red, #ef4444)"
+            borderRadius: "var(--radius-md)",
+            border: `1px solid ${
+              syncNotice.type === "success"
+                ? "rgba(25, 129, 92, 0.3)"
+                : "rgba(211, 61, 34, 0.3)"
             }`,
+            background:
+              syncNotice.type === "success"
+                ? "rgba(25, 129, 92, 0.08)"
+                : "rgba(211, 61, 34, 0.08)",
+            color: syncNotice.type === "success" ? "var(--green)" : "var(--red)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
           }}
         >
-          <span style={{ fontSize: "14px" }}>{syncNotice.text}</span>
+          <span style={{ fontSize: "14px", fontWeight: 500 }}>{syncNotice.text}</span>
           <button
             onClick={() => setSyncNotice(null)}
-            style={{ background: "none", border: "none", color: "inherit", cursor: "pointer" }}
+            style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", fontSize: "16px" }}
+            aria-label="Dismiss notice"
           >
             ×
           </button>
@@ -648,10 +815,10 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
       )}
 
       <section className="metric-grid">
-        <Metric label="Target branch" value={repository.default_branch} />
-        <Metric label="Pull requests" value={pullRequests.length} />
-        <Metric label="Branches indexed" value={repository.branches?.length ?? 0} />
-        <Metric label="Verification runs" value={analyses.length} />
+        <MetricTile label="Target Branch" value={repository.default_branch} icon={<GitBranch size={16} />} />
+        <MetricTile label="Pull Requests" value={pullRequests.length} icon={<GitPullRequest size={16} />} />
+        <MetricTile label="Branches Indexed" value={repository.branches?.length ?? 0} icon={<GitBranch size={16} />} />
+        <MetricTile label="Verification Runs" value={analyses.length} icon={<Activity size={16} />} />
       </section>
 
       {/* Target Branch Configuration & Branch Selection Panel */}
@@ -680,7 +847,7 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
                 padding: "8px 12px",
                 borderRadius: "6px",
                 border: "1px solid var(--border)",
-                background: "var(--card-bg, #1a221f)",
+                background: "var(--surface)",
                 color: "inherit",
                 width: "240px",
               }}
@@ -708,8 +875,8 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
                     alignItems: "center",
                     padding: "10px 14px",
                     borderRadius: "6px",
-                    background: isDefault ? "rgba(34, 197, 94, 0.08)" : "var(--card-bg, rgba(255,255,255,0.03))",
-                    border: `1px solid ${isDefault ? "rgba(34, 197, 94, 0.3)" : "var(--border)"}`,
+                    background: isDefault ? "rgba(25, 129, 92, 0.08)" : "var(--surface)",
+                    border: `1px solid ${isDefault ? "rgba(25, 129, 92, 0.3)" : "var(--border)"}`,
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -721,7 +888,7 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
                           fontSize: "11px",
                           padding: "2px 8px",
                           borderRadius: "10px",
-                          background: "var(--green, #22c55e)",
+                          background: "var(--green)",
                           color: "#fff",
                           fontWeight: 700,
                         }}
@@ -804,7 +971,7 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
                     padding: "12px 16px",
                     borderRadius: "6px",
                     border: "1px solid var(--border)",
-                    background: "var(--card-bg, rgba(255,255,255,0.02))",
+                    background: "var(--surface)",
                   }}
                 >
                   <div style={{ display: "grid", gap: "4px" }}>
@@ -823,15 +990,15 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
                           textTransform: "capitalize",
                           background:
                             pr.status === "open"
-                              ? "rgba(34, 197, 94, 0.15)"
+                              ? "rgba(25, 129, 92, 0.15)"
                               : pr.status === "merged"
-                              ? "rgba(168, 85, 247, 0.15)"
+                              ? "rgba(100, 200, 157, 0.15)"
                               : "rgba(156, 163, 175, 0.15)",
                           color:
                             pr.status === "open"
-                              ? "var(--green, #22c55e)"
+                              ? "var(--green)"
                               : pr.status === "merged"
-                              ? "#c084fc"
+                              ? "var(--green-accent)"
                               : "#9ca3af",
                         }}
                       >
@@ -891,14 +1058,22 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
             })}
           </div>
         ) : (
-          <div className="empty-state" style={{ padding: "24px 0", textAlign: "center" }}>
-            <p className="muted" style={{ marginBottom: "12px" }}>
-              No pull requests recorded for this repository yet.
-            </p>
-            <button className="button" onClick={handleSyncPullRequests} disabled={syncingPrs}>
-              Sync Pull Requests from GitHub
-            </button>
-          </div>
+          <EmptyState
+            icon={<GitPullRequest size={24} />}
+            title="No pull requests recorded yet"
+            detail="Synchronize with GitHub to fetch open pull requests or trigger a verification run directly."
+            action={
+              <button
+                className="button secondary"
+                onClick={handleSyncPullRequests}
+                disabled={syncingPrs}
+                style={{ marginTop: "12px" }}
+              >
+                <RefreshCw size={14} className={syncingPrs ? "spin" : ""} style={{ marginRight: "6px" }} />
+                Sync Pull Requests from GitHub
+              </button>
+            }
+          />
         )}
       </div>
 
@@ -1288,6 +1463,34 @@ function AnalysisTable({
   );
 }
 
+function RecentAnalysesCard({
+  analyses,
+  repositories,
+}: {
+  analyses: Analysis[];
+  repositories: Repository[];
+}) {
+  return (
+    <section className="card">
+      <div className="card-heading">
+        <div>
+          <h2>Recent analyses</h2>
+          <p>Latest verification runs</p>
+        </div>
+        <OpenLink href="/analyses">View all</OpenLink>
+      </div>
+      {analyses.length === 0 ? (
+        <EmptyState
+          title="No verification runs yet"
+          detail="Run verification or push a commit to trigger automated analysis."
+        />
+      ) : (
+        <AnalysisTable analyses={analyses.slice(0, 5)} repositories={repositories} />
+      )}
+    </section>
+  );
+}
+
 export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
   const [rerunMessage, setRerunMessage] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -1329,13 +1532,17 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
 
   const { analysis, repositories, blast, confidence, tests, graph, testResult } = state.data;
   const repo = repositoryName(repositories, analysis.repository_id);
+  const verdict = verdictPresentation(confidence?.verification_status);
 
   return (
     <>
       <PageHeading
-        eyebrow={`Analysis / ${analysis.id}`}
-        title="Pull request verification"
-        description={`${repo} / PR ${analysis.pull_request_id}`}
+        breadcrumbs={[
+          { label: "Analyses", href: "/analyses" },
+          { label: shortSha(analysis.id || analysis.commit_sha) },
+        ]}
+        title="Pull Request Verification"
+        description={`${repo} • PR #${analysis.pull_request_id || "Direct Commit"}`}
         action={
           <button className="button secondary" onClick={() => void runAgain()} type="button">
             <RefreshCw size={15} />
@@ -1344,51 +1551,60 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
         }
       />
       {rerunMessage && <p className="muted action-message">{rerunMessage}</p>}
+
+      {/* Unified Verdict Hero */}
       <section className="analysis-hero">
         <div>
-          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap", marginBottom: "8px" }}>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap", marginBottom: "12px" }}>
             <Status status={analysis.status} />
-            {confidence && (
-              <span
-                className="pr-chip"
-                style={{ color: verdictPresentation(confidence.verification_status).color, fontWeight: 600 }}
-              >
-                {verdictPresentation(confidence.verification_status).label}
-              </span>
-            )}
+            <span
+              className={`status ${verdict.badgeClass}`}
+              style={{ fontWeight: 600 }}
+            >
+              {verdict.label}
+            </span>
             {confidence?.change_risk && (
-              <span className="pr-chip">Change size risk: {confidence.change_risk.toLowerCase()}</span>
+              <span className="pr-chip">Risk: {confidence.change_risk.toLowerCase()}</span>
             )}
             {confidence?.analysis_completeness !== undefined && confidence?.analysis_completeness !== null && (
               <span className="pr-chip">
-                Changed files with test evidence: {Math.round(confidence.analysis_completeness)}%
+                Coverage completeness: {Math.round(confidence.analysis_completeness)}%
               </span>
             )}
           </div>
-          <h2>{confidence?.summary ?? "Analysis artifacts are being prepared"}</h2>
-          <p className="muted">
-            Started {formatDate(analysis.started_at)} / completed{" "}
-            {formatDate(analysis.completed_at)}
+          <h2 style={{ fontSize: "20px", fontWeight: 700, margin: "0 0 6px" }}>
+            {confidence?.summary ?? "Analysis artifacts are being prepared"}
+          </h2>
+          <p style={{ fontSize: "14px", color: "var(--foreground)", margin: "0 0 12px", lineHeight: "1.5" }}>
+            {verdict.description}
+          </p>
+          <p className="muted" style={{ fontSize: "12px", margin: 0 }}>
+            Started {formatDate(analysis.started_at)} • Completed {formatDate(analysis.completed_at)}
           </p>
         </div>
-        <div style={{ textAlign: "center" }}>
+        <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
           <ConfidenceRing score={score(confidence)} />
-          <p className="muted" style={{ fontSize: "12px", marginTop: "6px" }}>
+          <p className="muted" style={{ fontSize: "11px", marginTop: "8px", maxWidth: "160px", lineHeight: "1.4" }}>
             Heuristic score (not a probability)
           </p>
         </div>
       </section>
+
+      {/* Actionable Blockers Callout */}
       <VerdictGapsCard confidence={confidence} />
+
+      {/* Section Navigation Tabs */}
       <nav className="analysis-tabs">
-        <a href="#summary">Summary</a>
-        <a href="#impact">Blast radius</a>
-        <a href="#tests">Tests & CI</a>
+        <a href="#summary">Summary & Evidence</a>
+        <a href="#impact">Blast Radius & Graph</a>
+        <a href="#tests">Tests & CI Execution</a>
       </nav>
+
       <div className="detail-grid" id="summary">
         <ConfidenceEvidenceCard confidence={confidence} />
         <aside className="card detail-card">
           <h2>Recommendation</h2>
-          <p className="muted">
+          <p className="muted" style={{ lineHeight: "1.6" }}>
             {confidence?.recommendations.join(" ") ||
               "Radius has not generated recommendations for this analysis yet."}
           </p>
@@ -1407,7 +1623,6 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
           />
         )}
       </div>
-
 
       <div id="tests" style={{ marginTop: "24px", display: "grid", gap: "20px" }}>
         <CiTestResultsCard
@@ -1428,14 +1643,34 @@ const GAP_FILE_LABELS: Record<string, string> = {
   selected_test_not_in_results: "Selected test missing from CI results",
 };
 
-export function verdictPresentation(status?: string | null): { label: string; color: string } {
+export function verdictPresentation(status?: string | null): {
+  label: string;
+  color: string;
+  badgeClass: string;
+  description: string;
+} {
   switch ((status ?? "").toLowerCase()) {
     case "verified":
-      return { label: "Verified", color: "#64C89D" };
+      return {
+        label: "Verified for Merge",
+        color: "var(--green)",
+        badgeClass: "success",
+        description: "All changed code paths are covered by verified passing tests.",
+      };
     case "failed":
-      return { label: "Failed", color: "#F87171" };
+      return {
+        label: "Verification Failed",
+        color: "var(--red)",
+        badgeClass: "error",
+        description: "One or more targeted tests failed during CI execution.",
+      };
     default:
-      return { label: "Not verified (insufficient evidence)", color: "#FBBF24" };
+      return {
+        label: "Not Verified (Action Required)",
+        color: "var(--amber)",
+        badgeClass: "warning",
+        description: "Changed files lack test reachability or await CI test execution.",
+      };
   }
 }
 
@@ -1446,29 +1681,63 @@ function VerdictGapsCard({ confidence }: { confidence: ConfidenceReport | null }
   );
   const files = confidence.evidence.filter((item) => item.label in GAP_FILE_LABELS);
   if (gaps.length === 0 && files.length === 0) return null;
+
   return (
-    <section className="card" style={{ marginBottom: "20px" }}>
+    <section
+      className="card detail-card"
+      style={{
+        marginBottom: "20px",
+        borderColor: "var(--amber)",
+        background: "rgba(179, 122, 0, 0.04)",
+      }}
+    >
       <div className="card-heading">
         <div>
-          <h2>Why this is not verified</h2>
-          <p>Radius only reports a change as verified when every changed file has passing test evidence.</p>
+          <h2 style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--amber)" }}>
+            <AlertCircle size={18} />
+            Verification Blockers & Uncovered Changes
+          </h2>
+          <p className="muted">
+            Radius only marks a pull request verified when every changed file has direct, passing test coverage.
+          </p>
         </div>
       </div>
       {gaps.length > 0 && (
-        <ul>
+        <div style={{ margin: "12px 0 16px", display: "grid", gap: "8px" }}>
           {gaps.map((gap, index) => (
-            <li key={`gap-${index}`}>{gap.message}</li>
+            <div
+              key={`gap-${index}`}
+              style={{
+                display: "flex",
+                gap: "10px",
+                alignItems: "flex-start",
+                padding: "8px 12px",
+                borderRadius: "var(--radius-sm, 6px)",
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                fontSize: "13px",
+              }}
+            >
+              <AlertCircle size={15} style={{ color: "var(--amber)", flexShrink: 0, marginTop: "2px" }} />
+              <span>{gap.message}</span>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
       {files.length > 0 && (
-        <div className="evidence">
+        <div className="evidence" style={{ marginTop: "12px" }}>
+          <p style={{ fontSize: "12px", fontWeight: 700, color: "var(--muted)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+            Unmapped Files Requiring Test Coverage
+          </p>
           {files.map((item, index) => (
             <div className="evidence-row" key={`gap-file-${index}`}>
               <div>
                 <strong>{item.message}</strong>
-                <p>{GAP_FILE_LABELS[item.label]}</p>
+                <p>{GAP_FILE_LABELS[item.label] ?? item.label}</p>
               </div>
+              <span className="status warning" style={{ padding: "2px 8px", fontSize: "11px" }}>
+                Uncovered
+              </span>
             </div>
           ))}
         </div>
@@ -1549,52 +1818,12 @@ function BlastRadiusVisualizerCard({
         )}
       </div>
 
-      <div className="stat-list">
-        <div>
-          <span>Changed or affected files</span>
-          <strong>{blast?.affected_files ?? "-"}</strong>
-        </div>
-        <div>
-          <span>Affected symbols</span>
-          <strong>{blast?.affected_symbols ?? "-"}</strong>
-        </div>
-        <div>
-          <span>Affected modules</span>
-          <strong>{blast?.affected_modules ?? "-"}</strong>
-        </div>
-        <div>
-          <span>Dependency depth</span>
-          <strong>{blast ? `${blast.dependency_depth} hops` : "-"}</strong>
-        </div>
+      <div className="metric-grid" style={{ marginBottom: "16px" }}>
+        <MetricTile label="Affected Files" value={blast?.affected_files ?? "-"} icon={<FileCode2 size={16} />} />
+        <MetricTile label="Affected Symbols" value={blast?.affected_symbols ?? "-"} icon={<Sparkles size={16} />} />
+        <MetricTile label="Affected Modules" value={blast?.affected_modules ?? "-"} icon={<FolderGit2 size={16} />} />
+        <MetricTile label="Dependency Depth" value={blast ? `${blast.dependency_depth} hops` : "-"} icon={<GitBranch size={16} />} />
       </div>
-
-      {graph && graph.nodes.length > 0 && (
-        <div className="cpg-slice-card">
-          <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "8px", color: "var(--muted)" }}>
-            CPG Dependency Slice Nodes ({graph.node_count} nodes, {graph.edge_count} edges)
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-            {graph.nodes.slice(0, 16).map((node) => {
-              const isFile = node.node_type === "FILE" || node.node_type === "file";
-              const isTest = node.label.includes("test") || (node.path && node.path.includes("test"));
-              return (
-                <span
-                  key={node.id}
-                  className={`cpg-node-chip ${isTest ? "test" : isFile ? "caller" : "modified"}`}
-                  title={`${node.id} (${node.node_type})`}
-                >
-                  {node.label}
-                </span>
-              );
-            })}
-            {graph.nodes.length > 16 && (
-              <span className="subtext" style={{ alignSelf: "center", marginLeft: "6px" }}>
-                + {graph.nodes.length - 16} more nodes
-              </span>
-            )}
-          </div>
-        </div>
-      )}
     </section>
   );
 }
@@ -1678,10 +1907,10 @@ function CiTestResultsCard({
           </div>
 
           <div className="metric-grid" style={{ marginBottom: "16px" }}>
-            <Metric label="Total tests run" value={testResult.total_tests} />
-            <Metric label="Passed" value={testResult.passed} />
-            <Metric label="Failed" value={testResult.failed} />
-            <Metric label="Skipped" value={testResult.skipped} />
+            <MetricTile label="Total Tests Run" value={testResult.total_tests} icon={<TestTube2 size={16} />} />
+            <MetricTile label="Passed" value={testResult.passed} icon={<CheckCircle2 size={16} />} />
+            <MetricTile label="Failed" value={testResult.failed} icon={<XCircle size={16} />} />
+            <MetricTile label="Skipped" value={testResult.skipped} icon={<AlertCircle size={16} />} />
           </div>
 
           {testResult.output && (
@@ -1859,9 +2088,9 @@ function TestSelectionHub({
       </div>
 
       <div className="metric-grid" style={{ marginBottom: "16px" }}>
-        <Metric label="Selected for run" value={selectedCount} />
-        <Metric label="Not selected" value={skippedCount} />
-        <Metric label="Discovered in repo" value={totalCount} />
+        <MetricTile label="Selected for Run" value={selectedCount} icon={<Zap size={16} />} />
+        <MetricTile label="Not Selected" value={skippedCount} icon={<AlertCircle size={16} />} />
+        <MetricTile label="Discovered in Repo" value={totalCount} icon={<TestTube2 size={16} />} />
       </div>
 
       <div className="cli-box">
@@ -1989,7 +2218,7 @@ export function BlastRadiusData({ analysisId }: { analysisId: string }) {
       />
       <section className="metric-grid">
         {rows.slice(0, 4).map(([label, value]) => (
-          <Metric key={label} label={String(label)} value={String(value)} />
+          <MetricTile key={label} label={String(label)} value={String(value)} />
         ))}
       </section>
 
@@ -2238,10 +2467,10 @@ export function PullRequestData({ pullRequestId }: { pullRequestId: string }) {
       />
 
       <section className="metric-grid" style={{ marginBottom: "16px" }}>
-        <Metric label="GitHub PR Number" value={pr ? `#${pr.github_pr_number}` : (isNumeric ? `#${cleanNumber}` : "-")} />
-        <Metric label="Radius PR UUID" value={pr?.id ? pr.id.slice(0, 8) + "..." : (isUuid ? pullRequestId.slice(0, 8) + "..." : "-")} />
-        <Metric label="Status" value={pr?.status ?? "unknown"} />
-        <Metric label="Verification Runs" value={analyses.length} />
+        <MetricTile label="GitHub PR Number" value={pr ? `#${pr.github_pr_number}` : (isNumeric ? `#${cleanNumber}` : "-")} icon={<GitPullRequest size={16} />} />
+        <MetricTile label="Radius PR UUID" value={pr?.id ? pr.id.slice(0, 8) + "..." : (isUuid ? pullRequestId.slice(0, 8) + "..." : "-")} icon={<FileCode2 size={16} />} />
+        <MetricTile label="Status" value={pr?.status ?? "unknown"} />
+        <MetricTile label="Verification Runs" value={analyses.length} icon={<Activity size={16} />} />
       </section>
 
       {pr && (
@@ -2502,10 +2731,10 @@ export function PullRequestsOverviewData() {
   return (
     <div style={{ display: "grid", gap: "24px" }}>
       <section className="metric-grid">
-        <Metric label="Total Pull Requests" value={pullRequests.length} />
-        <Metric label="Open PRs" value={openCount} />
-        <Metric label="Merged PRs" value={mergedCount} />
-        <Metric label="Tracked Repositories" value={repositories.length} />
+        <MetricTile label="Total Pull Requests" value={pullRequests.length} icon={<GitPullRequest size={16} />} />
+        <MetricTile label="Open PRs" value={openCount} icon={<CheckCircle2 size={16} />} />
+        <MetricTile label="Merged PRs" value={mergedCount} icon={<Sparkles size={16} />} />
+        <MetricTile label="Tracked Repositories" value={repositories.length} icon={<FolderGit2 size={16} />} />
       </section>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
