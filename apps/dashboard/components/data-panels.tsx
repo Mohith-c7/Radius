@@ -2509,43 +2509,7 @@ export function PullRequestData({ pullRequestId }: { pullRequestId: string }) {
   );
 }
 
-export function SettingsData() {
-  return (
-    <>
-      <PageHeading
-        title="Settings"
-        description="Runtime configuration used by the dashboard API client."
-      />
-      <div className="detail-grid">
-        <section className="card detail-card">
-          <h2>API connection</h2>
-          <div className="stat-list">
-            <div>
-              <span>API base URL</span>
-              <strong>{radiusConfig.apiBaseUrl}</strong>
-            </div>
-            <div>
-              <span>Organization header</span>
-              <strong>{radiusConfig.organizationId || "Missing"}</strong>
-            </div>
-            <div>
-              <span>API key</span>
-              <strong>{radiusConfig.apiKey ? "Configured" : "Not configured"}</strong>
-            </div>
-          </div>
-        </section>
-        <section className="card detail-card">
-          <h2>Required environment</h2>
-          <p className="muted">
-            Set <code>NEXT_PUBLIC_RADIUS_API_BASE_URL</code> and{" "}
-            <code>NEXT_PUBLIC_RADIUS_ORGANIZATION_ID</code> before running the
-            dashboard against a real backend.
-          </p>
-        </section>
-      </div>
-    </>
-  );
-}
+export { SettingsData } from "./settings-panel";
 
 export function CompareData() {
   const state = useRadiusData(async () => {
