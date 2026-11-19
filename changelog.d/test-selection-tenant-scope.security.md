@@ -1,0 +1,1 @@
+The skipped tests, test totals and run-plan tests returned for an analysis are now limited to the analysed repository. Before, with the SQL backend, they could list test case paths from every repository in the database, including other organizations' repositories.

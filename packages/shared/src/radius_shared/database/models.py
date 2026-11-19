@@ -413,6 +413,9 @@ class TestRun(UuidPrimaryKeyMixin, Base):
     skipped: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     duration_ms: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     coverage_percent: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    # Run status as reported by the runner (passed/failed/error/...). NULL only on rows
+    # written before migration 20261119_0022; readers derive a status for those.
+    status: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     analysis: Mapped[Analysis] = relationship(back_populates="test_runs")
 
