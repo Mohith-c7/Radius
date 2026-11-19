@@ -22,7 +22,7 @@ How to read it.
   (`RADIUS_LLM_*`) silently fall back to their default on a bad number.
 
 
-Variables documented: **162** (15 secret, 10 feature flags).
+Variables documented: **163** (15 secret, 10 feature flags).
 
 ## Core, API, GitHub and observability
 
@@ -61,6 +61,7 @@ Variables documented: **162** (15 secret, 10 feature flags).
 | `RADIUS_API_BIND_ADDRESS` | str | `127.0.0.1` | compose | no | - | Compose: host address the API port 8000 is published on. Loopback by default; set 0.0.0.0 only deliberately (prefer a TLS reverse proxy). |
 | `RADIUS_API_PUBLIC_UPSTREAM` | str | `unset` | dashboard | no | - | Split deployments only (dashboard and API on different sites, e.g. Vercel + Render): API origin the dashboard forwards `/api/v1/*` to, so the session cookie stays first-party. Then point `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_RADIUS_API_BASE_URL` at the dashboard origin. Read at build time. |
 | `RADIUS_CORS_ALLOW_CREDENTIALS` | bool | `true` | api | no | - | Send `Access-Control-Allow-Credentials`. Never combined with `*`. |
+| `RADIUS_EMBEDDED_WORKER_GRACE_SECONDS` | float | `30` | api | no | - | Single-container hosting only (`python -m radius_api.serve_with_worker`): seconds the embedded worker gets to finish its current job after the API stops, before it is killed. |
 | `RADIUS_ENV` | RuntimeEnvironment | `development` | api, worker | no | - | Runtime environment: `development`, `test`, `uat` or `production`. Production tightens CORS validation (https origins only, no wildcard, no automatic localhost), ignores demo seeding, refuses the public session secret and `EMAIL_DELIVERY_MODE=log`. `docker-compose.yml` pins `production`; `docker-compose.dev.yml` (used by `make dev`) sets `development` for the api. |
 | `RADIUS_EVAL_ALLOW_REAL_LLM` | str | `unset` | evaluation CLI | no | - | Intent evaluation CLI only: must be `1`, together with `--allow-real-llm`, before a real provider is used. Tests and CI never set it. |
 | `RADIUS_EXTRAS` | str | `empty` | compose build | no | - | Compose build argument: extra Python dependency groups to install in the api and worker images (for example `llm`, `gemini`, `observability`). |

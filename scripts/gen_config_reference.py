@@ -321,6 +321,7 @@ def extra_entries() -> list[Entry]:
         e("NEXT_PUBLIC_GITHUB_APP_URL", "str", "unset", "Link target for the GitHub App install button in the dashboard.", {"dashboard"}, "apps/dashboard/components/data-panels.tsx"),
         e("RADIUS_DASHBOARD_INTERNAL_URL", "str", "http://localhost:3000", "Dashboard origin used for server-side calls to its own proxy.", {"dashboard"}, "apps/dashboard/lib/api.ts"),
         e("RADIUS_HSTS_ENABLED", "bool", "false", "Dashboard side of the flag defined for the API: send Strict-Transport-Security and CSP `upgrade-insecure-requests`. Enable only behind TLS.", {"dashboard"}, "apps/dashboard/middleware.ts"),
+        e("RADIUS_EMBEDDED_WORKER_GRACE_SECONDS", "float", "30", "Single-container hosting only (`python -m radius_api.serve_with_worker`): seconds the embedded worker gets to finish its current job after the API stops, before it is killed.", {"api"}, "apps/api/src/radius_api/serve_with_worker.py"),
         e("PORT", "int", "8000 (api), 3000 (dashboard)", "Listen port in the API and dashboard images (`uvicorn --port ${PORT:-8000}`; dashboard `PORT=3000`).", {"api", "dashboard"}, "apps/api/Dockerfile"),
         e("RADIUS_EXTRAS", "str", "empty", "Compose build argument: extra Python dependency groups to install in the api and worker images (for example `llm`, `gemini`, `observability`).", {"compose build"}, "docker-compose.yml"),
         e("POSTGRES_HOST_PORT", "int", "5432", "Compose: host port published for the bundled PostgreSQL.", {"compose"}, "docker-compose.yml"),
