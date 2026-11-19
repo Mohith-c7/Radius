@@ -72,6 +72,22 @@ class SqlAlchemyTestStore:
         rows = self._session.scalars(query).all()
         return tuple(self._test_case_to_domain(row) for row in rows)
 
+    def _repository_test_cases(self, analysis_id: UUID) -> tuple[TestCase, ...]:
+        """Test cases of the analysed repository only, never another repository's.
+
+        Same scoping as ``save_selection``: when the analysis has no repository the
+        selection's test cases were stored with a NULL repository, so only those are
+        returned (``list_test_cases(None)`` would return every repository's tests).
+        """
+
+        repository_id = self._analysis_repository_id(analysis_id)
+        query = select(db_models.TestCase).order_by(db_models.TestCase.path)
+        if repository_id is None:
+            query = query.where(db_models.TestCase.repository_id.is_(None))
+        else:
+            query = query.where(db_models.TestCase.repository_id == repository_id)
+        return tuple(self._test_case_to_domain(row) for row in self._session.scalars(query))
+
     @staticmethod
     def _by_path(repository_id: UUID | None, path: str):
         query = select(db_models.TestCase).where(db_models.TestCase.path == path)
@@ -163,7 +179,9 @@ class SqlAlchemyTestStore:
                 key=lambda item: item.test_case.path,
             )
         )
-        all_tests = self.list_test_cases()
+        # Skipped tests and the total are scoped to the analysed repository: test
+        # cases of other repositories (and other organizations) never appear here.
+        all_tests = self._repository_test_cases(row.analysis_id)
         selected_paths = {selected.test_case.path.value for selected in selected_tests}
         skipped_tests = tuple(t for t in all_tests if t.path.value not in selected_paths)
         total_count = max(len(all_tests), len(selected_tests))
@@ -219,7 +237,8 @@ class SqlAlchemyTestStore:
         if row is None:
             return None
         tests = {
-            test.path.value: test for test in self.list_test_cases()
+            test.path.value: test
+            for test in self._repository_test_cases(row.analysis_id)
         }
         return TestRunPlan(
             id=row.id,
@@ -256,6 +275,7 @@ class SqlAlchemyTestStore:
                 skipped=result.skipped,
                 duration_ms=result.duration_ms,
                 coverage_percent=result.coverage_percent,
+                status=result.status.value,
             )
         )
         self._session.flush()
@@ -305,11 +325,7 @@ class SqlAlchemyTestStore:
         return TestRunResult(
             id=row.id,
             analysis_id=row.analysis_id,
-            status=(
-                TestRunStatus.FAILED
-                if row.failed > 0
-                else TestRunStatus.PASSED
-            ),
+            status=_stored_run_status(row),
             total_tests=row.total_tests,
             passed=row.passed,
             failed=row.failed,
@@ -617,6 +633,27 @@ def _history_status(result: TestRunResult, path: str, flaky_files: set[str]) -> 
 
     if result.failed:
         return "failed"
+    if result.status is not TestRunStatus.PASSED:
+        # An ERROR (or otherwise unfinished) run is not evidence that any file
+        # passed; recording "passed" here would feed history and flakiness.
+        return result.status.value
     if _norm_path(path) in flaky_files:
         return "flaky"
     return "passed"
+
+
+def _stored_run_status(row: db_models.TestRun) -> TestRunStatus:
+    """Status of a stored run.
+
+    Rows written before ``test_runs.status`` existed have NULL there; for those
+    the old derivation (failed > 0 -> FAILED, else PASSED) is kept, except that
+    a run that recorded no outcome at all is ERROR, never PASSED.
+    """
+
+    if row.status:
+        return TestRunStatus(row.status)
+    if row.failed > 0:
+        return TestRunStatus.FAILED
+    if row.passed == 0 and row.total_tests == 0:
+        return TestRunStatus.ERROR
+    return TestRunStatus.PASSED

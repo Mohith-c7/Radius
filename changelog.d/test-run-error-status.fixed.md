@@ -1,0 +1,1 @@
+A test run that ended in `error` (for example with test execution disabled, a sandbox that refused to start or unreadable reports) is no longer read back as `passed` and no longer writes `passed` rows into test history. Migration `20261119_0022` adds `test_runs.status`; existing rows with no recorded outcome read as `error`.

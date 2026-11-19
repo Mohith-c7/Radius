@@ -10,6 +10,7 @@ from radius_testing.domain.entities import (
     TestRunResult,
     TestSelection,
 )
+from radius_testing.domain.enums import TestRunStatus
 
 
 class InMemoryTestStore:
@@ -85,6 +86,9 @@ class InMemoryTestStore:
                     "status": (
                         "failed"
                         if result.failed
+                        # an ERROR/unfinished run is not evidence any file passed
+                        else result.status.value
+                        if result.status is not TestRunStatus.PASSED
                         else "flaky"
                         if item.test_case.path.value.replace("\\", "/") in flaky_files
                         else "passed"

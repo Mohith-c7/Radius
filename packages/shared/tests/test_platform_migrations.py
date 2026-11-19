@@ -1,4 +1,4 @@
-"""Migrations 20261103_0017..0020 (C-02/C-05, C-12, C-13, C-15): chain, data safety, model parity."""
+"""Migrations 20261103_0017..20261119_0022 (C-02/C-05, C-12, C-13, C-15, test_runs.status): chain, data safety, model parity."""
 
 from pathlib import Path
 
@@ -189,3 +189,18 @@ def test_provider_login_column_is_added_keeps_rows_and_is_idempotent(db) -> None
     command.downgrade(config, "20261103_0020")
     command.upgrade(config, "head")  # idempotent after a downgrade
     assert "provider_login" in {c["name"] for c in inspect(engine).get_columns("auth_accounts")}
+
+
+def test_test_runs_status_column_is_added_keeps_rows_and_is_idempotent(db) -> None:
+    config, engine = db
+    command.upgrade(config, "20261104_0021")
+    with engine.begin() as conn:
+        _insert(conn, "test_runs", id="t1", analysis_id="a1", framework="mixed", total_tests=0)
+    command.upgrade(config, "head")
+    with engine.connect() as conn:
+        row = conn.execute(text("SELECT id, status FROM test_runs")).one()
+    assert tuple(row) == ("t1", None)  # pre-existing runs keep NULL; readers derive a status
+    command.downgrade(config, "20261104_0021")
+    assert "status" not in {c["name"] for c in inspect(engine).get_columns("test_runs")}
+    command.upgrade(config, "head")
+    assert "status" in {c["name"] for c in inspect(engine).get_columns("test_runs")}
