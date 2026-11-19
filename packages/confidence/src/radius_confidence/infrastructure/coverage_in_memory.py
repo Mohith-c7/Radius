@@ -70,12 +70,15 @@ class InMemoryCoverageStore(CoverageStore):
 
     def get_coverage_for_artifact(self, analysis_id: UUID, path: str) -> dict | None:
         key = str(analysis_id)
+        report = self._reports.get(key)
+        if report is None:
+            return None
         artifacts = [
             item
             for item in self._files.get(key, [])
             if item["file_path"] == path
         ]
-        return {"report": self._reports.get(key), "artifacts": artifacts or None}
+        return {"report": report, "artifacts": artifacts or None}
 
     def get_tests_for_symbol(
         self, analysis_id: UUID, file_path: str, symbol: str
@@ -96,11 +99,8 @@ class InMemoryCoverageStore(CoverageStore):
 
     def get_summary(self, analysis_id: UUID) -> dict | None:
         key = str(analysis_id)
+        # Only the analysis' own report: never fall back to another analysis' data.
         report = self._reports.get(key)
-        # Legacy callers did not retain the analysis id. Returning the sole
-        # report preserves that compatibility without guessing between runs.
-        if report is None and len(self._reports) == 1:
-            report = next(iter(self._reports.values()))
         if report is None:
             return None
         return {
@@ -115,4 +115,7 @@ class InMemoryCoverageStore(CoverageStore):
 
     def get_report(self, analysis_id: UUID) -> dict | None:
         key = str(analysis_id)
-        return {"report": self._reports.get(key), "files": self._files.get(key, []), "artifacts": self._symbols.get(key, [])}
+        report = self._reports.get(key)
+        if report is None:
+            return None
+        return {"report": report, "files": self._files.get(key, []), "artifacts": self._symbols.get(key, [])}

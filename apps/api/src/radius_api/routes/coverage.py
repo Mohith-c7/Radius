@@ -143,21 +143,26 @@ def get_coverage_report(
     response_model=None,
 )
 def get_coverage_for_artifact(
+    analysis_id: UUID,
     file_path: str,
     service: CoverageApplicationService = Depends(get_coverage_service),
     principal: ApiPrincipal = Depends(get_api_principal),
+    analysis_service: AnalysisApplicationService = Depends(get_analysis_service),
+    repository_service: RepositoryApplicationService = Depends(get_repository_service),
 ) -> JSONResponse:
-    """Return coverage lines for a specific source file."""
+    """Return coverage of one source file in one analysis.
 
-    # The route accepts the file path as a query parameter for usability.
-    return JSONResponse(
-        status_code=status.HTTP_200_OK,
-        content={
-            "data": service.get_coverage_for_artifact(
-                GetCoverageForArtifactCommand(analysis_id="00000000-0000-0000-0000-000000000000", path=file_path)
-            )
-        },
+    ``analysis_id`` and ``file_path`` are query parameters. The analysis must belong to
+    the caller's organization (unknown and foreign analyses are both 404).
+    """
+
+    owned = resolve_owned_analysis(analysis_id, principal, analysis_service, repository_service)
+    result = service.get_coverage_for_artifact(
+        GetCoverageForArtifactCommand(analysis_id=owned, path=file_path)
     )
+    if result is None:
+        return _not_found("Coverage not found.")
+    return JSONResponse(status_code=status.HTTP_200_OK, content={"data": jsonable_encoder(result)})
 
 
 @router.get(
@@ -165,22 +170,31 @@ def get_coverage_for_artifact(
     response_model=None,
 )
 def get_tests_for_symbol(
+    analysis_id: UUID,
     file_path: str,
     symbol: str,
     service: CoverageApplicationService = Depends(get_coverage_service),
     principal: ApiPrincipal = Depends(get_api_principal),
+    analysis_service: AnalysisApplicationService = Depends(get_analysis_service),
+    repository_service: RepositoryApplicationService = Depends(get_repository_service),
 ) -> JSONResponse:
-    """Return tests that executed a specific symbol."""
+    """Return the tests that executed one symbol in one analysis.
 
+    ``analysis_id``, ``file_path`` and ``symbol`` are query parameters. The analysis must
+    belong to the caller's organization (unknown and foreign analyses are both 404).
+    """
+
+    owned = resolve_owned_analysis(analysis_id, principal, analysis_service, repository_service)
+    result = service.get_tests_for_symbol(
+        GetTestsForSymbolCommand(analysis_id=owned, file_path=file_path, symbol=symbol)
+    )
+    if result is None:
+        return _not_found("No coverage for this symbol.")
+    return JSONResponse(status_code=status.HTTP_200_OK, content={"data": jsonable_encoder(result)})
+
+
+def _not_found(message: str) -> JSONResponse:
     return JSONResponse(
-        status_code=status.HTTP_200_OK,
-        content={
-            "data": service.get_tests_for_symbol(
-                GetTestsForSymbolCommand(
-                    analysis_id="00000000-0000-0000-0000-000000000000",
-                    file_path=file_path,
-                    symbol=symbol,
-                )
-            )
-        },
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={"error": {"code": "NOT_FOUND", "message": message}},
     )

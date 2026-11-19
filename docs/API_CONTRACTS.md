@@ -826,3 +826,15 @@ Managed API key administration. Every route needs the `admin` scope and only eve
 Errors: 403 for missing or insufficient credentials (the same message for unknown, expired, revoked and wrong-organization keys), 404 for a key id from another organization, 422 for invalid scopes, past expiry, bad overlap, or when `RADIUS_API_KEY_PEPPER` is unset.
 
 Existing routes now also require a scope: `read` for GET, `write` for other mutations, `ci-upload` for `POST /analyses/{id}/tests/results` and `POST /coverage`. The GitHub webhook keeps its own HMAC auth.
+
+### Coverage (beta)
+
+| Route | Notes | Response |
+|---|---|---|
+| `POST /coverage` | Header `X-Analysis-Id`; body `framework`, `coverage_percent`, `files[]` (`test_id` or `test_path`, `path`, `covered`, `count`) and `symbols[]` (`test_id` or `test_path`, `file_path`, `symbol`, `executed`, `count`). Each ingestion replaces the analysis' coverage. Every referenced test must be a test case of the analysed repository, otherwise 422. Scope `ci-upload`. | 202 `{analysis_id, coverage_percent, artifact_count}` |
+| `GET /coverage/analysis/{analysis_id}` | Aggregate summary. | 200, 404 when none |
+| `GET /coverage/analysis/{analysis_id}/report` | Full report: `files` (per-file artifacts) and `artifacts` (per-symbol artifacts). | 200, 404 when none |
+| `GET /coverage/artifact?analysis_id=&file_path=` | Coverage of one source file. | 200, 404 when none |
+| `GET /coverage/symbol?analysis_id=&file_path=&symbol=` | Test case ids that executed one symbol. | 200, 404 when none |
+
+Unknown analyses and analyses of another organization are both 404.

@@ -245,6 +245,24 @@ def test_coverage_routes_enforce_the_tenant_boundary() -> None:
         )
         assert missing.status_code == 404  # indistinguishable from "foreign"
 
+    # The per-file and per-symbol reads are scoped to an owned analysis too.
+    artifact = {"analysis_id": analysis_id, "file_path": "a.py"}
+    owner_file = client.get(
+        "/api/v1/coverage/artifact", params=artifact, headers={"X-Radius-Organization-Id": org_a}
+    )
+    assert owner_file.status_code == 200, owner_file.text
+    assert owner_file.json()["data"]["artifacts"][0]["file_path"] == "a.py"
+    for params in (artifact, {**artifact, "symbol": "f"}):
+        route = "/api/v1/coverage/symbol" if "symbol" in params else "/api/v1/coverage/artifact"
+        foreign = client.get(route, params=params, headers={"X-Radius-Organization-Id": org_b})
+        assert foreign.status_code == 404, (route, foreign.text)
+    no_analysis = client.get(
+        "/api/v1/coverage/artifact",
+        params={"file_path": "a.py"},
+        headers={"X-Radius-Organization-Id": org_a},
+    )
+    assert no_analysis.status_code == 422  # analysis_id is required
+
 
 def test_coverage_ingest_rejects_malformed_ids_with_4xx() -> None:
     client = TestClient(create_app())

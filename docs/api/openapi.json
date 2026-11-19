@@ -6170,9 +6170,19 @@
     },
     "/api/v1/coverage/artifact": {
       "get": {
-        "description": "Return coverage lines for a specific source file.",
+        "description": "Return coverage of one source file in one analysis.\n\n``analysis_id`` and ``file_path`` are query parameters. The analysis must belong to\nthe caller's organization (unknown and foreign analyses are both 404).",
         "operationId": "get_coverage_for_artifact",
         "parameters": [
+          {
+            "in": "query",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          },
           {
             "in": "query",
             "name": "file_path",
@@ -6225,9 +6235,19 @@
     },
     "/api/v1/coverage/symbol": {
       "get": {
-        "description": "Return tests that executed a specific symbol.",
+        "description": "Return the tests that executed one symbol in one analysis.\n\n``analysis_id``, ``file_path`` and ``symbol`` are query parameters. The analysis must\nbelong to the caller's organization (unknown and foreign analyses are both 404).",
         "operationId": "get_tests_for_symbol",
         "parameters": [
+          {
+            "in": "query",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          },
           {
             "in": "query",
             "name": "file_path",

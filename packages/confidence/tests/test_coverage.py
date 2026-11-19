@@ -19,10 +19,11 @@ def test_ingest_and_retrieve_coverage() -> None:
         confidence_store=None,  # type: ignore[arg-type]
         coverage_store=store,
     )
+    analysis_id = uuid4()
 
     service.ingest_coverage(
         IngestCoverageCommand(
-            analysis_id=uuid4(),
+            analysis_id=analysis_id,
             framework="pytest",
             coverage_percent=88.5,
             files=[
@@ -48,7 +49,7 @@ def test_ingest_and_retrieve_coverage() -> None:
     )
 
     summary = service.get_coverage_summary(
-        GetCoverageForAnalysisCommand(analysis_id=uuid4())
+        GetCoverageForAnalysisCommand(analysis_id=analysis_id)
     )
     assert summary is not None
     assert summary["coverage_percent"] == 88.5
@@ -56,7 +57,7 @@ def test_ingest_and_retrieve_coverage() -> None:
 
     artifact = service.get_coverage_for_artifact(
         GetCoverageForArtifactCommand(
-            analysis_id=uuid4(),
+            analysis_id=analysis_id,
             path="src/core.py",
         )
     )
