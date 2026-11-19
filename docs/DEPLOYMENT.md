@@ -122,6 +122,7 @@ Check them with `docker compose ps` (the STATUS column shows `healthy`) or
 | **`DASHBOARD_BASE_URL`** | Canonical public URL of the dashboard used in PR comment links. | `https://radius.yourcompany.com` |
 | **`NEXT_PUBLIC_RADIUS_API_BASE_URL`** | Public URL used by the browser to communicate with the API. | `https://api-radius.yourcompany.com` |
 | **`NEXT_PUBLIC_RADIUS_ORGANIZATION_ID`** | Tenant organization UUID loaded by the dashboard. | `00000000-0000-4000-8000-000000000001` |
+| **`RADIUS_API_PUBLIC_UPSTREAM`** | Split deployments only (dashboard and API on different sites, for example Vercel and Render): the API origin the dashboard forwards `/api/v1/*` to, so the session cookie stays first-party. Set `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_RADIUS_API_BASE_URL` to the dashboard origin. Build time. | `https://radius-api.onrender.com` |
 | **`NEXT_PUBLIC_RADIUS_DEMO_SIGNIN`** | Dashboard build argument: `true` shows the "Quick Demo Sign-In" button (public demo credentials). Only `docker-compose.dev.yml` sets it; leave it unset for a deployment. | `false` |
 | **`RADIUS_API_KEY`** | Server-only secret the dashboard proxy (`/api/radius/*`) attaches as `X-Radius-API-Key`. Never use a `NEXT_PUBLIC_` prefix; leave empty only with `RADIUS_ALLOW_INSECURE_DEV`. | *(empty; set a secret)* |
 

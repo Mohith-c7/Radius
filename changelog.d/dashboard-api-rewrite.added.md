@@ -1,0 +1,1 @@
+The dashboard can forward `/api/v1/*` to the API when `RADIUS_API_PUBLIC_UPSTREAM` is set, so sign-in works when the dashboard and the API are on different sites (for example Vercel and Render). Unset, nothing changes.
