@@ -44,7 +44,7 @@ Publishing facts that shape the assertions:
 - The check run is named `Radius confidence`. There is one per head SHA; republishing the same SHA updates it, a new push creates a new one on the new SHA (GitHub scopes check runs to a commit).
 - The worker opens the `Radius confidence` check run as `in_progress` when it starts a job (best-effort: a publish failure is logged and never fails the analysis; skipped when `GITHUB_PUBLISH_RESULTS=false`), then completes the **same** run: with the verdict on success, or `neutral` ("analysis failed") when the final attempt fails or the result cannot be published. A job that is retried keeps the one run `in_progress` until the last attempt. A job cancelled before it starts never creates a check run.
 - The PR comment contains `<!-- radius-confidence-report -->` and is edited in place (only bot-authored comments are edited).
-- Conclusion is `success` only for a `verified` verdict with low/medium risk; otherwise `neutral` (a sandbox repo with no tests will normally be `neutral`, which is correct, not a failure).
+- Conclusion (v1, `RADIUS_FEATURE_VERDICT_V2` `off` or `shadow`): `success` only for a `verified` verdict with low/medium risk, `failure` for `failed`, otherwise `neutral` (a sandbox repo with no tests will normally be `neutral`, which is correct, not a failure). With the flag `on` the Verdict v2 mapping applies instead (advisory by default: `verified` is `neutral`), see [verdict-v2.md](../verdict-v2.md#check-run-conclusion-mapping).
 
 ## 1. Prerequisites
 
@@ -119,7 +119,7 @@ Env vars (names match `.env.example`, `apps/api/src/radius_api/config.py`, `apps
 | `GITHUB_APP_PRIVATE_KEY` | worker | single line with `\n` (client expands `\n`); keep single quotes in `.env` so Compose does not mangle it |
 | `GITHUB_WEBHOOK_SECRET` | api | from `radius-github.env` |
 | `GITHUB_PUBLISH_RESULTS` | worker | `true` |
-| `GITHUB_SINGLE_TENANT` | api | `true` (otherwise a first delivery from an unlinked installation is rejected 403; there is no other way yet to link an installation to an organization) |
+| `GITHUB_SINGLE_TENANT` | api | `true` (otherwise a first delivery from an unlinked installation is rejected 403). Other ways to link an installation: development single-tenant mode, a fixed `GITHUB_INSTALLATION_ID`, or an operator update; see [INSTALLATION_BINDING.md](../security/INSTALLATION_BINDING.md) |
 | `GITHUB_DEFAULT_ORGANIZATION_ID` | api | UUID of an **existing** organization row (see below) |
 | `GITHUB_INSTALLATION_ID` | worker | optional; if empty the worker uses the installation id the API stored on the organization |
 | `DASHBOARD_BASE_URL` | worker | `http://localhost:3000` (link in the check run) |

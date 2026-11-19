@@ -20,8 +20,9 @@ curl -si http://localhost:8000/api/v1/ready         # 200, or 503 not_ready if d
 docker compose logs --tail 100 worker api
 ```
 
-The worker has no HTTP port; its container health is "can it run `select 1` against the database". A hung poll loop
-is **not** detected by that check (noted in `apps/worker/Dockerfile`). Use queue depth (below) to notice a stalled worker.
+The worker has no HTTP port; its container health (`python -m radius_worker.healthcheck`) needs the database to answer
+and the health file (`WORKER_HEALTH_FILE`) to have been touched by the poll loop or a job heartbeat within
+`WORKER_HEALTH_MAX_AGE_SECONDS` (default 300), so a hung loop turns it unhealthy. Queue depth (below) still helps to notice a slow worker.
 With `RADIUS_METRICS_ENABLED=true`: API `/metrics`, worker `RADIUS_WORKER_METRICS_PORT`; metrics
 `radius_queue_depth{status}`, `radius_job_duration_seconds`, `radius_job_retries_total`,
 `radius_stage_failures_total{stage}`, `radius_sandbox_kills_total`, `radius_http_rate_limited_total{bucket}`.
@@ -99,8 +100,9 @@ and that your proxy forwards the path.
   Enterprise Server).
 - Check runs missing or stuck in progress: the worker completes in-progress check runs on failure and the reaper completes them
   for expired analyses. If a check never appears, confirm `GITHUB_PUBLISH_RESULTS=true` and that App id and key are set on the **worker**.
-- Check run shows `insufficient_evidence` after CI passed: expected until results are uploaded, and the check is not
-  re-published after a later upload (README).
+- Check run shows `insufficient_evidence` after CI passed: expected until results are uploaded. With
+  `RADIUS_FEATURE_VERDICT_V2` `off` or `shadow` the v1 check is not re-published after a later upload (README); with `on`
+  the upload enqueues a Verdict v2 republish (`verdict_v2_requests`, reason `ci_results`).
 
 ## Sandbox (test execution) failures
 

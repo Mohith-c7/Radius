@@ -194,7 +194,7 @@ The generator itself never imports or executes repository code (pure `ast`). Not
 
 ## 11. Data model and API (unchanged from DESIGN 5; for reference)
 
-`mutation_run(id, analysis_id, engine, scope, budget, seed, status, ...)` and `mutant(run_id, symbol_id, operator, location, status in killed|survived|timeout|equivalent_suspect|flaky|error|skipped_for_budget, killed_by_test_id[])`. `killed_by` is a set, not the single `killed_by_test_id` of the EV-04 sketch, because per-test attribution needs the full matrix: one row per (mutant, killing test) in a child table, or a JSON array. Migration number as in EV-04 (0013).
+`mutation_run(id, analysis_id, engine, scope, budget, seed, status, ...)` and `mutant(run_id, symbol_id, operator, location, status in killed|survived|timeout|equivalent_suspect|flaky|error|skipped_for_budget, killed_by_test_id[])`. `killed_by` is a set, not the single `killed_by_test_id` of the EV-04 sketch, because per-test attribution needs the full matrix: one row per (mutant, killing test) in a child table, or a JSON array. Migration number as in EV-04 (0013). (As implemented: no `mutation_run` / `mutant` tables exist; migration `20261103_0016_mutation_result_cache` stores final mutant results, and 0013 is `verdict_v2`.)
 
 ## 12. Circularity and the RQ2 label (the review's concern)
 

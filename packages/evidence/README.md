@@ -2,7 +2,7 @@
 
 Typed contracts and (later) pure functions that turn validated outcomes into per-criterion support for the **Verdict v2 alpha**. Design: [`docs/research/design/VERDICT_V2_SLICE.md`](../../docs/research/design/VERDICT_V2_SLICE.md); decisions: DEC-027.
 
-Status: VS-00 contracts, the scoring core (EV-08 `quality.py`, VD-01 `support.py`, VD-02 `states.py`), the IEG builder (LK-05) and the first feature wave (EV-01, EV-06, EV-07, EV-03-lite). Algorithm ownership: design section 2.3.
+Status: VS-00 contracts, the scoring core (EV-08 `quality.py`, VD-01 `support.py`, VD-02 `states.py`), the IEG builder (LK-05), the first feature wave (EV-01, EV-06, EV-07, EV-03-lite), Stage B mutation measurement (`domain/mutation.py`, contract 5, DEC-035) and the repository policy and waivers (`policy/`, VD-04/VD-05, DEC-029). Algorithm ownership: design section 2.3.
 
 ## Layout
 
@@ -17,8 +17,10 @@ Status: VS-00 contracts, the scoring core (EV-08 `quality.py`, VD-01 `support.py
 | `domain/freshness.py` | EV-07 | Head-SHA binding, blob-level staleness, optional decay hook (off). |
 | `domain/independence.py` | EV-03-lite | Independence factor and agent-trailer detector. |
 | `domain/factories.py`, `domain/assertion_records.py`, `application/normalize.py` | EV-01 | Evidence item factories, test-id joiner, LK-04 dict conversion, batch normalizer. |
-| `application/` | LK-05, VS-03 | `ieg_builder`, pure Stage B `pipeline`. |
-| `infrastructure/` | Beta | SQL projection repositories. |
+| `domain/mutation.py` | DEC-035 (contract 5) | `d_mut` per test and criterion from the mutation kill matrix. |
+| `policy/` | VD-04, VD-05 | `.radius/policy.yml` and `.radius/waivers.yml` parsing (`miniyaml`), globs, effective policy, waiver application, report ([`docs/policy.md`](../../docs/policy.md)). |
+| `application/` | LK-05, EV-01 | `ieg_builder`, `normalize`. The Stage B pipeline is in the worker (`apps/worker/src/radius_worker/verdict_v2/scoring.py`, `compute_pipeline`). |
+| `infrastructure/` | Beta | Empty; SQL projection repositories are planned. |
 
 ## Rules
 
@@ -39,7 +41,7 @@ Pure functions over the frozen contracts. Details and weights: [`docs/evidence/a
 
 ## Tests
 
-`python -m pytest packages/evidence/tests`. They validate the example payload against `docs/research/design/verdict_v2.schema.json` with a small stdlib validator (no new dependency) and check the fixture expectations against the 8 F-14 fixtures.
+`python -m pytest packages/evidence/tests`. They validate the example payload against `docs/research/design/verdict_v2.schema.json` with a small stdlib validator (no new dependency) and check the fixture expectations against the 8 F-14 fixtures. `test_scoring_fixtures.py` reproduces the design's gold-mode `S(c)`, states, UIM and intent coverage for all 8 fixtures.
 
 ## IEG builder (LK-05)
 
@@ -49,9 +51,7 @@ Pure functions over the frozen contracts. Details and weights: [`docs/evidence/a
 - Policy: an edge naming an unknown criterion or symbol is dropped and reported, never repaired; non-finite weights are dropped, out-of-range weights clamped; duplicate edges merge (max weight, union of reasons); evidence from another analysis or head SHA is rejected (no cross-analysis edges); test nodes are created on demand. A tamper finding with no resolvable target keeps its node (it is a penalty and must not vanish). Finding snippets are not copied into the graph.
 - Symbol->test edge methods derive from the LK-03 link kind: `static` (calls, imports, fixtures), `naming`, `dynamic`.
 - `IegIndex(ieg).paths(criterion_id)` returns every criterion -> symbol -> test path with `w_cs`, `w_st` and `r_ct` (0 when no ADDRESSED_BY edge: a symbol-level test link alone is not evidence for the criterion). Other queries: `addressed_tests`, `tests_for_criterion`, `reachable_evidence`, `findings_for_test`, `criteria_for_symbol`, `unlinked_criteria`.
-- Persistence: alpha scope is in-memory plus JSON (`Ieg.to_json` / `Ieg.from_json`, stored inside the `verdict_v2` bundle). The normalized `ieg_nodes` / `ieg_edges` tables (migration 0017) are Beta, assigned to a later VS-B0 task.
-
-`python -m pytest packages/evidence/tests`. They validate the example payload against `docs/research/design/verdict_v2.schema.json` with a small stdlib validator (no new dependency) and check the fixture expectations against the 8 F-14 fixtures. `test_scoring_fixtures.py` reproduces the design's gold-mode `S(c)`, states, UIM and intent coverage for all 8 fixtures.
+- Persistence: alpha scope is in-memory plus JSON (`Ieg.to_json` / `Ieg.from_json`, stored inside the `verdict_v2` bundle). Normalized `ieg_nodes` / `ieg_edges` tables are Beta, assigned to a later VS-B0 task; no migration creates them yet.
 
 ## Scoring formulas
 

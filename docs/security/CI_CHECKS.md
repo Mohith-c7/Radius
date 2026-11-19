@@ -110,7 +110,7 @@ Verified locally: actionlint 1.7.7 clean on all workflows, YAML parse of `depend
 - Proves: migrations, health/readiness, auth and scope enforcement, signed webhook to analysis, worker loop, Verdict v2 verdict, renderer output (alpha disclaimer, v2 marker) and republish after CI results, all against real code and a real database. See "End-to-end smoke test" in `docs/DEVELOPMENT_GUIDE.md`.
 - Does not prove: real GitHub behaviour (the GitHub REST API is an in-memory fake), a browser or the dashboard, Docker image builds or Compose wiring, the test sandbox.
 - Dashboard: the Next.js dashboard is not started by the smoke. Its lint, typecheck, test and build already run in the `Validate` job of `ci.yml` (`pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`), so no extra pnpm step was added; a browser-level smoke remains a follow-up.
-- Status: the first run on a CI runner has not happened yet; it was run locally against `postgres:16-alpine` only.
+- Status: green on develop on 2026-11-03 on the Linux CI runner ([RELEASE_CHECKLIST](../RELEASE_CHECKLIST.md) items 1 and 5).
 
 ## Stack boot and browser end-to-end
 
@@ -130,7 +130,7 @@ Verified locally: actionlint 1.7.7 clean on all workflows, YAML parse of `depend
 - Run manually: Actions, Release, Run workflow, keep `dry_run` checked. A manual run never publishes. To rehearse a real publish use a `v0.1.0-rc.N` tag in a fork with the two variables set.
 - Deviations from the plan, stated plainly: (1) no new third-party actions were added, because their commit SHAs could not be verified offline and an invented pin would be worse than none. buildx is used through the Docker CLI on the runner, SBOMs come from the already digest-pinned Trivy image instead of syft, and cosign runs from a digest-pinned image supplied by a variable. (2) `actions/attest-build-provenance` is **not** used; the provenance is the BuildKit provenance attestation attached to the image, which is not SLSA Build L3 and has not been verified. Add the action (with a SHA read from `git ls-remote`) when a maintainer can do so. (3) arm64 is not built. (4) The pushed image is rebuilt in `publish`, so its digest can differ from the image scanned in `build`; the Trivy gate does not run on the pushed digest. (5) No GitHub Release object is created and SBOMs are not attached to one.
 - Does not prove: reproducible builds, any SLSA level, that the signature verifies (no `cosign verify` job yet; the verify command is echoed in the log), or that the Trivy invocation with a mounted Docker config works on the runner.
-- Status: **has not run on GitHub.** Verified locally: `actionlint` 1.7.7 clean, `scripts/ci/check_action_pins.py`, unit tests for `scripts/release_notes.py`.
+- Status: a `dry_run=true` run on GitHub succeeded on 2026-11-03 ([VERIFICATION_RUNS_2026-11-03](../operations/VERIFICATION_RUNS_2026-11-03.md) section 2); publish, signing and attestation have not run.
 
 ## DAST (ZAP baseline)
 
@@ -140,7 +140,7 @@ Verified locally: actionlint 1.7.7 clean on all workflows, YAML parse of `depend
 - The image is `vars.RADIUS_ZAP_IMAGE` or the fallback tag `ghcr.io/zaproxy/zaproxy:stable`, which is **not digest-pinned** (the digest could not be resolved offline); the job prints a warning. Set the variable to a digest to pin.
 - Run manually: Actions, DAST, Run workflow. Locally, with the dev stack running: `docker run --rm --network host -v "$PWD/zap-out:/zap/wrk" ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://127.0.0.1:8000/ -J report.json -I`, then `python scripts/ci/zap_gate.py zap-out/report.json`.
 - Does not prove: authenticated coverage (the scan is unauthenticated and most API routes answer 401/403, so little of the API is exercised), absence of injection or access-control bugs (that needs the active/API scan with the OpenAPI spec and credentials), or anything about the production-like compose profile.
-- Status: **has not run on GitHub.** Verified locally: `actionlint` clean, pin check, unit tests for `zap_gate.py`. The ZAP container was not run.
+- Status: run on GitHub on 2026-11-03, result success, 0 failures ([VERIFICATION_RUNS_2026-11-03](../operations/VERIFICATION_RUNS_2026-11-03.md) section 3).
 
 ## Load and performance test (`scripts/load_test.py`)
 
@@ -157,7 +157,7 @@ Verified locally: actionlint 1.7.7 clean on all workflows, YAML parse of `depend
 ## Coverage
 
 - Command: `python -m pytest apps/api/tests apps/worker/tests packages/*/tests tests --cov` (config in `pyproject.toml` `[tool.coverage]`: sources `apps`, `packages`; tests, conftest and the dashboard are omitted; line coverage).
-- Measured baseline: **86%** total (8406 statements, 1160 missed). 457 passed, 5 skipped, 4 failed locally; the 4 failures are Windows/Docker environment tests (`test_sandbox_runner.py` x3, `test_subprocess_runner.py` x1) that should pass on the Linux runner, which would raise the number.
+- Measured baseline (local run, 2026-11-02; the suite has grown a lot since): **86%** total (8406 statements, 1160 missed). 457 passed, 5 skipped, 4 failed locally; the 4 failures are Windows/Docker environment tests (`test_sandbox_runner.py` x3, `test_subprocess_runner.py` x1) that should pass on the Linux runner, which would raise the number.
 - Threshold: **83%** (`COVERAGE_MIN` in `coverage.yml`), 3 points below baseline to avoid flakiness. Raise it once the first CI run shows the real number; never lower it.
 - The JS dashboard has no coverage measurement yet (follow-up).
 

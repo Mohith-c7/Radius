@@ -1,5 +1,7 @@
 # Radius — Engineering Audit, Research Validation, and Remediation Plan
 
+> Status (2026-11-19): historical snapshot of 2026-11-01; many findings are superseded (the default branch is `develop` per DEC-010, JS/TS parsing uses tree-sitter per DEC-017, migrations run to `20261104_0021`, test cases are repository-scoped and active analyses are deduplicated, Verdict v2 republishes after CI uploads when `RADIUS_FEATURE_VERDICT_V2=on`). For the current state see [../KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md) and [../decisions.md](../decisions.md).
+
 | | |
 | --- | --- |
 | Audit date | 2026-11-01 |

@@ -159,7 +159,7 @@ Test execution inside the worker is off by default (`WORKER_TEST_EXECUTION_MODE=
 pull request normally ends `insufficient_evidence` with the gap "Selected tests were not executed; upload
 CI results to verify" (`packages/confidence/.../scoring.py`). To reach `verified`, run the selected tests in
 your CI and upload JUnit XML or JSON bound to the head SHA ([CI integration](../CI_INTEGRATION_GUIDE.md)).
-The check run is not re-published after a later upload (README, maturity table).
+With `RADIUS_FEATURE_VERDICT_V2` `off` (default) or `shadow`, the v1 check run is not re-published after a later upload (README, maturity table); with `on`, an upload enqueues a Verdict v2 republish that updates the same check run and comment ([verdict-v2.md](../verdict-v2.md)).
 
 ## Optional profiles
 

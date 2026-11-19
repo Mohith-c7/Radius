@@ -91,7 +91,7 @@ confidence     = min(cap, 1 - prod_i (1 - 0.7^i * support_i))   i = 0.., top 5 t
 cap            = 0.99 if a counted chain is explicit+dynamic else 0.95
 ```
 
-Diminishing returns (`0.7^i`) keep a pile of weak tests from outweighing one strong chain. Specificity penalises tests that "cover" many unrelated criteria (typically broad integration tests). It is a corpus-level effect, so it is the one input where evidence added for another criterion can lower this criterion; for a single criterion the rule is monotone (tested). Work is bounded: at most 10 symbols per criterion, 10 tests per symbol and 10 chains kept (`ChainConfig`); 2000 criteria x 50 symbols x 20 tests runs in about 8 s (tested < 30 s).
+Diminishing returns (`0.7^i`) keep a pile of weak tests from outweighing one strong chain. Specificity penalises tests that "cover" many unrelated criteria (typically broad integration tests). It is a corpus-level effect, so it is the one input where evidence added for another criterion can lower this criterion; for a single criterion the rule is monotone (tested). Work is bounded: at most 10 symbols per criterion, 10 tests per symbol and 10 chains kept (`ChainConfig`); 2000 criteria x 50 symbols x 20 tests takes about 18 s on a busy developer laptop (the test bound is 90 s and only catches an order-of-magnitude regression, `test_chain_properties.py`).
 
 Properties (seeded random property tests): confidence and chain score are monotone non-decreasing in every link score, in added linkers or components, in added dynamic evidence and in added chains; removing a hop or a chain cannot raise them; no chain exceeds its cap; output is independent of input order.
 

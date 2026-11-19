@@ -1,5 +1,7 @@
 # Domain Model
 
+> Status (2026-11-19): original Phase 1 domain model. Later concepts (intent snapshots and criteria, evidence, criterion-level Verdict v2, tamper findings) are documented in [verdict-v2.md](verdict-v2.md), [intent/](intent/) and [evidence/](evidence/); the database schema has grown beyond this model.
+
 Project: Radius
 
 Version: 1.0

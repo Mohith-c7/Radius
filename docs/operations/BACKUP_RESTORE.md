@@ -2,8 +2,8 @@
 
 Radius keeps its durable state in one PostgreSQL database. Nothing else needs a backup to recover the
 service, apart from your own configuration and secrets. Commands below assume the Compose stack
-(service `postgres`, database, user and password all `radius` in `docker-compose.yml`; change them for any
-real deployment). **Unverified:** the dump/restore commands were not executed while writing this page.
+(service `postgres`, database and user `radius` in `docker-compose.yml`; the password is the required
+`POSTGRES_PASSWORD`, which has no default). **Unverified:** the dump/restore commands were not executed while writing this page.
 
 ## What is stored where
 

@@ -172,11 +172,11 @@ Tree-sitter
 
 Graph
 
-NetworkX
+In-house dictionaries and tuples (`packages/graph`; NetworkX is not a dependency)
 
 Git
 
-GitPython
+git CLI through `subprocess` (`packages/repository`, `local_git.py`; GitPython is not a dependency)
 
 Authentication
 
@@ -213,6 +213,14 @@ testing/
 confidence/
 
 shared/
+
+intent/
+
+evidence/
+
+linking/
+
+github/
 
 docs/
 
@@ -408,7 +416,7 @@ Every line of code should reflect that goal.
 
 # Research Direction (ratified 2026-11-02)
 
-The next phase is specified in `docs/research/` (start with `docs/research/README.md`). Decisions are DEC-006 to DEC-015 in `docs/decisions.md`. Read `docs/research/IMPLEMENTATION_PLAN.md` section 1 before any task and do only the task you were given.
+The next phase is specified in `docs/research/` (start with `docs/research/README.md`). Decisions are DEC-006 onward (DEC-040 at the time of writing) in `docs/decisions.md`; later decisions supersede earlier ones where they say so. Read `docs/research/IMPLEMENTATION_PLAN.md` section 1 before any task and do only the task you were given.
 
 ## LLM governance rule
 

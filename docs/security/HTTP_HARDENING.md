@@ -166,7 +166,9 @@ Trade-offs:
   A revoked or expired session therefore stops working within the cache time. `next dev` (NODE_ENV=development)
   keeps the old no-auth behaviour for local work only.
 * Destructive proxied calls (`DELETE`) additionally need the validated user's role to be `admin` (403 otherwise).
-  The audit actor (`X-Radius-Actor`) of intent writes is the validated user's e-mail, not a client header.
+  On intent writes the proxy forwards the validated session token (`X-Radius-Session`, server to server) and the API
+  derives the audit actor from it (`org:<id>/user=<id>[/gh=<login>]`, B-07, DEC-040); a client `X-Radius-Actor` label is
+  forwarded only without a validated session and honoured only in the API's insecure development mode (`/dev=<label>`).
 * **A deployment is single-tenant.** The proxy talks to the API with ONE configured key and organization
   (`RADIUS_API_KEY`, `RADIUS_ORGANIZATION_ID`). Every authenticated dashboard user shares that organization and its
   data, whatever workspace was created for them at sign-up. Do not enable open sign-up on a shared deployment

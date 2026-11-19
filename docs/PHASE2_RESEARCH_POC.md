@@ -1,5 +1,7 @@
 # Phase 2: Semantic CPG Slicing (Research POC)
 
+> Status (2026-11-19): historical phase document. Status lines, task boxes, counts and gap lists here are not maintained and some are out of date. For current behaviour see [verdict-v2.md](verdict-v2.md), [API_CONTRACTS.md](API_CONTRACTS.md) (with [api/openapi.json](api/openapi.json)), [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) and [decisions.md](decisions.md).
+
 ## 1. Abstract and Motivation
 Current state-of-the-art software verification and CI/CD optimization tools rely heavily on deterministic Dependency Graphs (often mapping file-to-file relationships). While effective for finding linked components, these models suffer from **Blast Radius Explosion**—a high rate of false positives where unaffected files and tests are erroneously flagged for execution simply because an `import` statement exists.
 

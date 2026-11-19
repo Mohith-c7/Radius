@@ -31,7 +31,7 @@ is [`openapi.json`](openapi.json) (OpenAPI 3.1, generated, do not edit by hand).
 | `graph` | beta | |
 | `coverage` | beta | |
 | `intent` | beta | ETag/If-Match semantics and error codes are intended to be stable; view shapes may still grow. |
-| `verdict-v2` (`GET /analyses/{id}/verdict`) | alpha | Behind `RADIUS_FEATURE_VERDICT_V2` (`off` default, `shadow`, `on`). Hidden from `openapi.json` in every flag state; answers 404 today. |
+| `verdict-v2` (`GET /analyses/{id}/verdict-v2`; `/verdict` is an undocumented alias) | alpha | Behind `RADIUS_FEATURE_VERDICT_V2` (`off` default, `shadow`, `on`). Listed in OpenAPI only while the flag is not `off`, so the committed `openapi.json` (generated with the flag off) does not contain it; with the flag off it answers 404 (`meta.reason` `disabled`). |
 | `github-webhooks` | internal | Called by GitHub; authenticated by HMAC signature. |
 | `authentication` (`/auth/*`) | internal | Dashboard session cookie flow. |
 

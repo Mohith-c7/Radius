@@ -2,6 +2,8 @@
 
 # Database Design
 
+> Status (2026-11-19): original design, not maintained. It covers the Phase 1 core and intent tables only; the authoritative schema is the Alembic history in `infra/database/migrations/versions/` (21 revisions, head `20261104_0021`) and the models in `packages/shared/src/radius_shared/database/`. The dependency graph is stored in the `graph_nodes`/`graph_edges` tables, and stored enum values are lowercase (`pending`, `low`, ...).
+
 **Project:** Radius
 
 **Version:** 1.0

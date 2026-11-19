@@ -678,9 +678,7 @@ Deterministic linkers (explicit hints, BM25 lexical, identifier/phrase, structur
 
 Non Responsibilities
 
-Persistence and the IEG (LK-05), fitting calibrators on gold labels (LK-07; the calibration machinery itself lives here), the RQ1 gold set and results (LK-07), producing symbol-to-test links (LK-03), judging whether the code is correct.
-
-Persistence and the IEG (LK-05), calibration of link confidence (LK-06), the RQ1 gold set and results (LK-07), symbol-to-test linking (LK-03), assertion strength scoring (EV-06), judging whether the code is correct.
+Persistence and the IEG (LK-05), fitting calibrators on gold labels (LK-07; the calibration machinery itself lives here), the RQ1 gold set and results (LK-07), producing symbol-to-test links (LK-03), judging whether the code is correct. Assertion strength scoring (EV-06) lives in `radius_evidence`.
 
 ---
 

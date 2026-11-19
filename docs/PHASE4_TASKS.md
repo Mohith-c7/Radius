@@ -1,5 +1,7 @@
 # Phase 4: Detailed Execution Tasks
 
+> Status (2026-11-19): historical phase document. Status lines, task boxes, counts and gap lists here are not maintained and some are out of date. For current behaviour see [verdict-v2.md](verdict-v2.md), [API_CONTRACTS.md](API_CONTRACTS.md) (with [api/openapi.json](api/openapi.json)), [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) and [decisions.md](decisions.md).
+
 **Project:** Radius - AI-Native Software Verification Platform  
 **Phase:** 4 - Frontend Dashboard Intelligence & Visual Verification  
 

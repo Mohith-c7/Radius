@@ -105,7 +105,7 @@ Responsibilities
 
 Phase 1 may execute synchronously.
 
-Future versions may move work into queues.
+Future versions may move work into queues. (As implemented: the worker consumes a durable SQL job queue, `analysis_jobs`, with leases and backoff.)
 
 ---
 
@@ -124,6 +124,8 @@ testing/
 confidence/
 intent/        # research: intent layer (DEC-007)
 evidence/      # research: evidence quality, support and UIM for Verdict v2 (DEC-027)
+linking/       # criterion-to-symbol and criterion-to-test links (DEC-026)
+github/        # GitHub App client, PR comment and Check Run publishing
 shared/
 ```
 
@@ -192,8 +194,7 @@ Contains
 - Database
 - GitHub
 - Tree-sitter
-- NetworkX
-- GitPython
+- git CLI (subprocess; GitPython is not used)
 - File System
 
 May depend on external libraries.
@@ -287,7 +288,7 @@ Domain
 
 Infrastructure
 
-- NetworkX
+- In-house adjacency structures (NetworkX is not a dependency)
 
 Responsibilities
 
@@ -406,7 +407,7 @@ terraform/
 kubernetes/
 ```
 
-Only Docker is needed during Phase 1.
+Only Docker is needed during Phase 1. As implemented, `infra/` holds `database/migrations` (Alembic) and `observability/`; the Dockerfiles live under `apps/*/` and the Compose files at the repository root.
 
 ---
 
@@ -441,7 +442,7 @@ workflows/
 
 ISSUE_TEMPLATE/
 
-PULL_REQUEST_TEMPLATE.md
+pull_request_template.md
 ```
 
 ---
@@ -478,7 +479,7 @@ PascalCase
 
 Functions
 
-camelCase
+snake_case in Python (ruff); camelCase in TypeScript
 
 Constants
 
@@ -488,7 +489,7 @@ Files
 
 snake_case for Python
 
-kebab-case for documentation
+Documentation: mostly UPPER_SNAKE_CASE (`DATABASE_DESIGN.md`), with some kebab-case (`verdict-v2.md`)
 
 ---
 

@@ -26,14 +26,17 @@ Legend: **Required** items are needed for a safe deployment; **Recommended** one
   store over a file. The GitHub App private key is a PEM in `GITHUB_APP_PRIVATE_KEY`; scope the App to the
   repositories it needs.
 - [ ] Recommended. Rotate by changing the value and restarting the service. Rotating `API_KEYS` requires updating
-  `RADIUS_API_KEY` for the dashboard at the same time. Per-key scopes and an audited rotation flow do not exist
-  yet (task IT-09).
-- [ ] Recommended. Change the default `radius/radius` database credentials in `docker-compose.yml`. Port 5432
+  `RADIUS_API_KEY` for the dashboard at the same time. Managed keys (`/api/v1/api-keys`, PRD-12) have per-key
+  scopes (`read`, `write`, `ci-upload`, `admin`), an overlap rotation and an audit log; see
+  [security/API_KEYS.md](../security/API_KEYS.md).
+- [ ] **Required.** `docker-compose.yml` has no default database password: `POSTGRES_PASSWORD` must be set
+  (`make env` generates one for local work; user and database name stay `radius`). Port 5432
   (`POSTGRES_HOST_PORT`) is published on `127.0.0.1` only; do not widen it.
 
 ## 3. API authentication and tenancy
 
-- [ ] **Required.** `API_KEYS` holds one `org_id:key` pair per organization. Without keys the API fails closed (403).
+- [ ] **Required.** Use managed API keys ([security/API_KEYS.md](../security/API_KEYS.md)); the legacy `API_KEYS`
+  variable (`org_id:key` pairs) still works but is deprecated. Without keys the API fails closed (403).
   Every request needs `X-Radius-Organization-Id` and the matching `X-Radius-API-Key`.
 - [ ] **Required.** Single-tenant only: `GITHUB_SINGLE_TENANT=true` is safe only when exactly one organization uses
   the GitHub App. Leave it `false` otherwise; unknown installations are then rejected with 403.

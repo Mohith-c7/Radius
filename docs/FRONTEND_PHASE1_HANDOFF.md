@@ -1,5 +1,7 @@
 # Frontend Phase 1 Handoff
 
+> Status (2026-11-19): historical phase document. Status lines, task boxes, counts and gap lists here are not maintained and some are out of date. For current behaviour see [verdict-v2.md](verdict-v2.md), [API_CONTRACTS.md](API_CONTRACTS.md) (with [api/openapi.json](api/openapi.json)), [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) and [decisions.md](decisions.md). The dashboard routes and the pull-request endpoints have changed since; see `apps/dashboard/app/` and the OpenAPI document.
+
 Project: Radius
 
 Audience: Frontend developer responsible for the Phase 1 dashboard.
@@ -523,7 +525,9 @@ Highlight offsets are Unicode code point indices and are validated against the t
 Long text is truncated with "show more". The proxy allowlist (`lib/proxy.ts`) exposes exactly the
 intent routes and methods and forwards `If-Match` / `X-Radius-Actor` only on intent writes and
 only when the value is well formed. The actor label is `user:<id>` from the signed-in session
-(omitted when there is none); Radius records it but does not verify it.
+(omitted when there is none); Radius records it but does not verify it. (Superseded by B-07 /
+DEC-040: with a validated session the proxy now sends `X-Radius-Session` instead and the API derives
+the actor; see `docs/API_CONTRACTS.md`, intent conventions.)
 
 ---
 

@@ -1,5 +1,7 @@
 # Radius — Phase 3: End-to-End Verification, Reliability & Production Readiness
 
+> Status (2026-11-19): historical phase document. Status lines, task boxes, counts and gap lists here are not maintained and some are out of date. For current behaviour see [verdict-v2.md](verdict-v2.md), [API_CONTRACTS.md](API_CONTRACTS.md) (with [api/openapi.json](api/openapi.json)), [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) and [decisions.md](decisions.md). Since this was written: the job queue is durable and database-backed (`analysis_jobs` with leases and backoff; no Redis), and the PR-number lookup exists (`GET /repositories/{id}/pull-requests/{number}`). This document and [PHASE3_PRD.md](PHASE3_PRD.md) were never reconciled; both test paths exist in code (CI result upload and the optional worker sandbox, off by default).
+
 **Document Type:** Technical and Business Requirements Specification  
 **Product:** Radius — AI-Native Software Verification Platform  
 **Phase:** Phase 3  

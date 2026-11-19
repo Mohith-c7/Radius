@@ -71,8 +71,10 @@ host as part of the trusted base. The API image gets no runtime and no extra pri
 ## Health check limits
 
 * The worker has no listening port unless `RADIUS_WORKER_METRICS_PORT` is set (needs the
-  observability extra), so its check proves database reachability only. A hung poll loop
-  is not detected. Follow-up: have the loop touch a heartbeat file or expose `/health`.
+  observability extra). Its check (`python -m radius_worker.healthcheck`, C-09) needs the
+  database to answer and, because the image sets `WORKER_HEALTH_FILE`, the poll loop (or a
+  running job's lease heartbeat) to have touched that file within
+  `WORKER_HEALTH_MAX_AGE_SECONDS` (default 300), so a hung loop turns the container unhealthy.
 * api uses `/ready`, so a database outage marks the container unhealthy; for orchestrators
   with split probes use `/api/v1/health` for liveness and `/api/v1/ready` for readiness.
 
