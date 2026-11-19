@@ -6,6 +6,8 @@
 
 **Version:** 1.0
 
+> Status (2026-11-19): the generated [`api/openapi.json`](api/openapi.json) is the authoritative list of routes. Parts of this document are the original design and are not implemented: JWT/role-based auth (below), `GET /pull-requests/{id}`, `POST /analyses/{id}/tests/run`, `GET /dashboard`, the `/organizations` routes, cursor pagination, filtering and sorting beyond the documented query parameters, and the domain event names.
+
 ---
 
 # Overview
@@ -59,6 +61,8 @@ Failure
 ---
 
 # Authentication
+
+As implemented: API routes take `X-Radius-Organization-Id` and `X-Radius-API-Key` (managed keys, see the end of this document); the dashboard signs users in with a session cookie (`/api/v1/auth/*`) and calls the API through its server-side proxy. The original design below is not implemented.
 
 Phase 1
 
@@ -294,7 +298,7 @@ Returns graph metadata.
 
 Returns nodes.
 
-Supports pagination.
+Not paginated: returns the full array with `meta.count`.
 
 ---
 
@@ -395,7 +399,7 @@ Conventions
 - Requests use camelCase and reject unknown fields; responses use snake_case (like analyses). Pydantic shape errors (missing field, wrong type, unknown field) return FastAPI's default 422; domain validation errors use the envelope with the codes below.
 - Intent text is untrusted data. It is sanitized before storage (`radius_shared.llm_guard.sanitize_untrusted`: hidden/bidi/control characters, HTML comments and secrets removed), never executed, bounded (64 KiB UTF-8 per source, 2000 characters per criterion, 256 KiB per request body) and returned as JSON strings. Responses carry `X-Content-Type-Options: nosniff` and `Cache-Control: no-store`. **Clients must escape the text before rendering it as HTML.**
 - Optimistic concurrency: reads return an `ETag` (strong; changes on a new snapshot version and on any criterion decision). Writes accept `If-Match` (an ETag, a list, or `*`); a mismatch returns **409 `INTENT_STALE`**. Without `If-Match` the write applies to the latest snapshot.
-- Audit actor: `org:<organizationId>`. Send `X-Radius-Actor: <label>` (`[A-Za-z0-9_.@:+-]{1,128}`, for example the dashboard user) to record `org:<id>/<label>`. The label is not verified by Radius.
+- Audit actor (B-07, DEC-040): derived from the authenticated principal, never from a free-text header. With `X-Radius-Session` (a signed-in user's session token, sent server to server by the dashboard proxy) it is `org:<organizationId>/user=<userId>` plus `/gh=<login>` when the user signed in with GitHub; otherwise `org:<id>/key=<prefix>` (managed key) or `org:<id>/legacy-env-key`. `X-Radius-Actor: <label>` (`[A-Za-z0-9_.@:+-]{1,128}`) is honoured only in the insecure development mode (`org:<id>/dev=<label>`, counted as unverified) and ignored with real credentials.
 - Logs contain ids, lengths and a SHA-256 prefix of intent text, never the text.
 - Sources can now also come from GitHub (IN-02): `GET .../intent` lists them with these `source_id`s and kinds: `pr-title` (`pr_title`), `pr-body` (`pr_body`), `intent.yml` (`spec_file`), `commits` (`commit_message`, one source, a section per commit), `issue:<n>` / `issue:<owner>:<repo>:<n>` (`issue`) and `issue-comments:<n>` (`comment`, opt-in). `truncated` and `suspicious_content_removed` describe ingestion (64 KiB cap; hidden content removed). A source submitted here under `pr-title`, `pr-body` or `intent.yml` is replaced by GitHub's value on the next ingestion; use another `sourceId` to keep both. The agent prompt (`agent-prompt`) and manual criteria are never touched by ingestion. A missing or forbidden GitHub source is simply absent from the list (the reason is in the worker's `Intent ingestion` log record).
 
@@ -664,6 +668,8 @@ AnalysisStarted
 ---
 
 # Pagination
+
+As implemented: `GET /analyses`, `GET /repositories` and `GET /repositories/{id}/pull-requests` take `limit`/`offset` and report `meta.pagination` (see `GET /analyses`); intent snapshot history takes `limit` and an opaque `cursor`; other lists return the full array. The cursor design below is not implemented.
 
 Cursor Based
 

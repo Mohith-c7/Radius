@@ -115,16 +115,18 @@ Changed behavioral code under `exclude.paths` is left out of the coverage denomi
 
 ### Mode: advisory vs blocking
 
-`mode` never changes the verdict. It only maps the verdict to the **Check Run conclusion**:
+`mode` never changes the verdict. It only maps the verdict to the **Check Run conclusion** (DEC-030; the worker knob `RADIUS_VERDICT_V2_CHECK_CONCLUSIONS` is `advisory` by default, `strict` is an operator opt-in):
 
 | Verdict | no policy / no `mode` | `advisory` | `blocking` |
 | --- | --- | --- | --- |
-| verified | success | success | success |
-| failed | failure | neutral | failure |
-| insufficient_evidence | neutral | neutral | failure |
+| verified | neutral (`strict` knob: success) | neutral (`strict` knob: success) | success |
+| failed | failure for R1a/R1b/R1c, otherwise neutral | neutral | failure |
+| insufficient_evidence | neutral | neutral | failure (neutral for a docs-only change, R2e `not_applicable`) |
 | needs_review | neutral | neutral | failure |
 | pending (awaiting CI) | neutral | neutral | failure (republished when results arrive) |
-| verdict unavailable | neutral | neutral | neutral |
+| verdict unavailable | neutral (`action_required` after a failed recompute) | neutral (same) | neutral (same) |
+
+A base policy file that exists but cannot be applied (unreadable, too large, invalid) gives `action_required`, or `failure` for an R1a/R1b/R1c failure, whatever the mode. The full mapping, with edge cases, is in [verdict-v2.md](verdict-v2.md#check-run-conclusion-mapping).
 
 GitHub treats a neutral check as passing for branch protection, which is why `blocking` maps every unverified result to `failure`. Start with `advisory`, review the comments for a few weeks, then switch to `blocking` and mark `Radius confidence` as a required check.
 

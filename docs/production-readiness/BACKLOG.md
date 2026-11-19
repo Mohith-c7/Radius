@@ -299,7 +299,7 @@ Status key: **NEW** = not in the research plan. **EXT** = extends an existing ta
 
 ## 7. Wave 4: security and operations
 
-### PRD-26 SSO/OIDC and session security   [ ] (design only: `docs/security/SSO_DESIGN.md`; no code)   NEW
+### PRD-26 SSO/OIDC and session security   [ ] (enterprise OIDC is design only, no code; the Google/GitHub sign-in gaps 1 to 4 of `docs/security/SSO_DESIGN.md` are fixed)   NEW
 - Owner type: pair
 - Depends on: MG-06 design
 - Branch: `feature/oidc-sso`

@@ -2,6 +2,8 @@
 
 # System Architecture
 
+> Status (2026-11-19): original design document. It does not show components added later (durable job queue and worker, CI result ingestion, optional test sandbox, intent, evidence, linking, Verdict v2, GitHub publishing). For the current system see [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md), [verdict-v2.md](verdict-v2.md) and [API_CONTRACTS.md](API_CONTRACTS.md).
+
 **Project:** Radius
 
 **Document Version:** 1.0

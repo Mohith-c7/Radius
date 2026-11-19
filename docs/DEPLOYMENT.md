@@ -53,7 +53,7 @@ The Next.js web console is available at `http://localhost:3000`.
 ### Container runtime behavior (PRD-08)
 
 All three images run as the non-root user `radius` (uid/gid `10001:10001`) and define a
-`HEALTHCHECK` (api: `/api/v1/ready`; worker: database reachability; dashboard: `GET /login`).
+`HEALTHCHECK` (api: `/api/v1/ready`; worker: database reachability plus a fresh `WORKER_HEALTH_FILE`, see `radius_worker.healthcheck`; dashboard: `GET /login`).
 Check them with `docker compose ps` (the STATUS column shows `healthy`) or
 `docker inspect --format '{{.State.Health.Status}}' <container>`.
 
@@ -91,8 +91,6 @@ Check them with `docker compose ps` (the STATUS column shows `healthy`) or
 | **`RADIUS_LLM_INTENT_MODEL`** | Model id used by the Anthropic adapter. | `claude-haiku-5-5` |
 | **`RADIUS_LLM_INTENT_ANALYSIS_TOKEN_CAP`** / **`RADIUS_LLM_INTENT_ORG_TOKEN_CAP`** | Token caps per analysis and per org (process lifetime); calls that would exceed them are skipped. | `30000` / `1000000` |
 | **`RADIUS_LLM_INTENT_MAX_OUTPUT_TOKENS`**, **`_TIMEOUT_S`**, **`_MAX_ATTEMPTS`**, **`_BREAKER_THRESHOLD`**, **`_BREAKER_COOLDOWN_S`**, **`_MAX_CRITERIA`**, **`_SEED`** | Output cap, request timeout, bounded retries, circuit breaker and proposal cap (same `RADIUS_LLM_INTENT_` prefix). | `2048`, `30`, `3`, `5`, `60`, `20`, `0` |
-| **`API_KEYS`** | Comma-separated API keys accepted by API in format `org_id:key`. | `00000000-0000-4000-8000-000000000001:radius_key_live` |
-
 | **`API_KEYS`** | DEPRECATED. Comma-separated legacy keys in format `org_id:key` (full access, unhashed; logs a startup warning). Migrate to managed keys, see `docs/security/API_KEYS.md`. | `00000000-0000-4000-8000-000000000001:radius_key_live` |
 | **`RADIUS_API_KEY_PEPPER`** | Secret (>= 32 chars) used to fingerprint managed API keys (HMAC-SHA256). Required for `/api/v1/api-keys`; keep it in a secret store; rotating it invalidates all managed keys. | `<random 48+ chars>` |
 | **`RADIUS_API_KEY_LAST_USED_INTERVAL`** | Minimum seconds between `last_used_at` writes per key. | `300` |
@@ -111,7 +109,7 @@ Check them with `docker compose ps` (the STATUS column shows `healthy`) or
 | **`RADIUS_TRACING_ENABLED`** | Enable OpenTelemetry tracing (needs the `observability` extra). Off by default. See `docs/OBSERVABILITY.md`. | `false` |
 | **`RADIUS_OTLP_ENDPOINT`** | OTLP/HTTP traces endpoint; empty records spans without exporting. | `http://jaeger:4318/v1/traces` |
 | **`RADIUS_METRICS_ENABLED`** | Expose Prometheus metrics at `/metrics` (API) and on the worker metrics port. Off by default. | `false` |
-| **`RADIUS_WORKER_METRICS_PORT`** | Worker Prometheus port; `0` disables it. | `9100` |
+| **`RADIUS_WORKER_METRICS_PORT`** | Worker Prometheus port; `0` disables it. The observability profile's Prometheus scrapes `worker:9100`, so set `9100` when you use it. | `0` |
 | **`CORS_ORIGINS`** | API: comma separated browser origins allowed by CORS. In production every entry must be `https://host[:port]`; `*` is rejected at startup. Localhost dashboards are added automatically outside production. | `https://radius.yourcompany.com` |
 | **`RADIUS_CORS_ALLOW_CREDENTIALS`** | API: send `Access-Control-Allow-Credentials` (session cookies). Never combined with `*`. | `true` |
 | **`RADIUS_HSTS_ENABLED`** | API and dashboard: send `Strict-Transport-Security` (and CSP `upgrade-insecure-requests` on the dashboard). Enable only behind TLS. | `false` |
@@ -143,9 +141,11 @@ To configure Radius to automatically verify Pull Requests:
    - **Checks**: Read & Write (to publish `Radius confidence` in-progress and completed Check Runs)
    - **Metadata**: Read
    - **Issues**: Read (optional; only for linked-issue intent ingestion, `RADIUS_FEATURE_INTENT_INGESTION`; without it linked issues are recorded as absent)
-3. Subscribe to Webhook Events:
-   - `pull_request` (opened, synchronize, reopened)
+3. Subscribe to Webhook Events (the sample manifest `docs/github-app-validation/app-manifest.json` also lists `issue_comment` and `check_run`, which the API acknowledges and ignores):
+   - `pull_request` (opened, synchronize, reopened, ready_for_review start an analysis)
    - `push`
+   - `issues` (optional; an edited linked issue refreshes intent when `RADIUS_FEATURE_INTENT_INGESTION` is on)
+   - `installation` and `installation_repositories` events are delivered to every GitHub App without a subscription and keep the installation binding current.
 4. Generate a Private Key, download the `.pem` file, and assign the content to `GITHUB_APP_PRIVATE_KEY`.
 5. Install the App onto your organization's repositories.
 
@@ -153,7 +153,7 @@ To configure Radius to automatically verify Pull Requests:
 
 ## 5. Security & Isolation
 
-- **Tenant Isolation**: Every API request requires an `X-Radius-Organization-Id` header (and optional Bearer API key). Data queries strictly scope records by organization ID.
+- **Tenant Isolation**: Every API request requires an `X-Radius-Organization-Id` header and a matching `X-Radius-API-Key`. Data queries strictly scope records by organization ID.
 - **Symlink Traversal Defense**: The worker uses `os.path.realpath` bounds checking during repository filesystem traversal to prevent symlink escape vulnerabilities.
 - **No LLM on the verdict path**: the experimental semantic pruner is not invoked by the worker pipeline, so no model output can remove tests or dependency edges from the selection (see `docs/audit/RADIUS_AUDIT.md`). The `google-genai` and `google-generativeai` packages are an optional extra (`gemini`, `pip install radius[gemini]` or `RADIUS_EXTRAS=[gemini]` at image build) and are not installed in the default images; the legacy module imports without them and then treats every caller as impacted.
 - **Code execution is off by default**: with `WORKER_TEST_EXECUTION_MODE=disabled` (default) worker analysis is static parsing and graph traversal and no repository code runs. The optional `sandbox` mode runs tests in an ephemeral hardened container and `unsafe_in_process` is refused in `uat`/`production`; see [security/EXECUTION_ISOLATION.md](security/EXECUTION_ISOLATION.md).

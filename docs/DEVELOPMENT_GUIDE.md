@@ -171,14 +171,15 @@ Every contribution to Radius should follow these principles:
 
 ## Graph Processing
 
-- NetworkX
+- In-house adjacency structures in `packages/graph` (NetworkX is not a dependency)
 
 ---
 
 ## Authentication
 
-- GitHub OAuth
-- GitHub App
+- Dashboard sign-in: email and password with email verification, Google and GitHub OAuth (`apps/api/src/app`)
+- API: organization id plus API key headers (managed keys, `docs/security/API_KEYS.md`)
+- GitHub App (installation tokens, webhook signatures)
 
 ---
 

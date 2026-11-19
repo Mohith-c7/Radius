@@ -1,5 +1,7 @@
 # Roadmap
 
+> Status (2026-11-19): historical phase document. Status lines, task boxes, counts and gap lists here are not maintained and some are out of date. For current behaviour see [verdict-v2.md](verdict-v2.md), [API_CONTRACTS.md](API_CONTRACTS.md) (with [api/openapi.json](api/openapi.json)), [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) and [decisions.md](decisions.md).
+
 # 10_Roadmap.md
 
 # Radius Roadmap
@@ -279,4 +281,4 @@ This roadmap is a living document. As Radius evolves, milestones may be refined,
 
 # Research and Product Plan
 
-The next phase of Radius (intent-to-evidence verification, calibrated trust, and the market plan) is specified in [docs/research/](research/README.md). Ratified decisions are in [decisions.md](decisions.md) (DEC-006 to DEC-015).
+The next phase of Radius (intent-to-evidence verification, calibrated trust, and the market plan) is specified in [docs/research/](research/README.md). Ratified decisions are in [decisions.md](decisions.md) (DEC-006 onward; later decisions supersede earlier ones where they say so).

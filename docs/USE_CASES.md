@@ -2,6 +2,8 @@
 
 # Use Cases
 
+> Status (2026-11-19): original Phase 1 use cases. Not maintained: there are no use cases for intent, Verdict v2, CI result upload, API keys or tamper detection, and the CLI listed as out of scope now exists (`scripts/radius_ci.py`, `.github/actions/radius-verify`).
+
 **Project:** Radius
 
 **Version:** 1.0

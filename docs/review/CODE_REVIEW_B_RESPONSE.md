@@ -42,7 +42,7 @@ Optional fields only; `CONTRACT_VERSION` stays `verdict-v2-contract-5`. New or d
 ## Not fixed, needs an owner decision, not verified
 
 - Lockfiles are inert (as requested), although a lockfile edit is a supply-chain change; CI workflows, manifests and build configuration are only checked by the tamper catalog, not by a deeper analyser.
-- `confirmed_by` rests on an unverified header; per-person identity on the intent API is needed for real separation of duties.
+- `confirmed_by` rests on an unverified header; per-person identity on the intent API is needed for real separation of duties. (Superseded: the B-07 fix above derives the confirmer from the validated session, DEC-040; the residuals listed in the B-07 row remain.)
 - Verdicts stored before this change keep their old numbers until their inputs change (no `ALGO_VERSION` bump, to avoid rewriting every golden file).
 - `DEC-037` may collide with a parallel branch (mutation stage 2 uses DEC-036); renumber on merge if needed.
 - Not run: Postgres tests (skipped), the dashboard's TypeScript tests and type check (no `node_modules`), any Docker or live GitHub flow. The dashboard edits are two optional fields and one line of text.

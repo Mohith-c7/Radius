@@ -8,7 +8,7 @@ database migrations. Read the changelog fragments between the two versions first
 ## How migrations are applied
 
 - Alembic, script location `infra/database/migrations` (`alembic.ini`), revisions
-  `infra/database/migrations/versions/` (16 revisions at the time of writing, head `20261103_0016`).
+  `infra/database/migrations/versions/` (21 revisions on 2026-11-19, head `20261104_0021`).
 - `infra/database/migrations/env.py` takes the URL from `DATABASE_URL` (falls back to `alembic.ini`) and normalises
   `postgres://` / `postgresql://` to `postgresql+psycopg://`.
 - Compose runs a one-shot `migrations` service (`alembic upgrade head`) before `api` and `worker` start.
@@ -114,10 +114,9 @@ its rows, which are a pure cache.
 
 ## Dashboard and images
 
-Next.js normally inlines `NEXT_PUBLIC_*` values into browser code at build time. The dashboard Dockerfile
-declares no build argument for them (only `RADIUS_VERSION` and `VCS_REF`) while Compose passes them at runtime, so
-**Unverified:** whether changing `NEXT_PUBLIC_RADIUS_API_BASE_URL` takes effect in the browser without a rebuild.
-After changing them, rebuild (`docker compose build dashboard`) and check the browser network tab. The
+Next.js inlines `NEXT_PUBLIC_*` values into browser code at build time. The dashboard Dockerfile declares them
+as build arguments (`NEXT_PUBLIC_RADIUS_API_BASE_URL`, `NEXT_PUBLIC_RADIUS_ORGANIZATION_ID`, `NEXT_PUBLIC_API_URL`)
+and Compose passes them under `build.args`, so a changed value needs a rebuild. After changing them, rebuild (`docker compose build dashboard`) and check the browser network tab. The
 server-side proxy variables (`RADIUS_API_BASE_URL`, `RADIUS_API_KEY`) are read at runtime.
 Named volumes created by an older root-owned image keep root ownership:
 recreate the repository cache volume or `chown -R 10001:10001` it

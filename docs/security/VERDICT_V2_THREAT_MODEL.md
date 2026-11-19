@@ -53,7 +53,7 @@ Until calibration and a policy engine exist:
 1. Keep the Check Run advisory (default). Do not make `Radius confidence` a required check on `verified` alone.
 2. For protected paths (auth, payments, build and release configuration, CI workflows, the `.radius/` directory itself), require that the criteria are **human-confirmed** in the intent panel before relying on `verified`, and keep `.radius/intent.yml` on the base branch so hint changes need a separate reviewed PR.
 3. Treat `author_supplied_hint` as "ask a reviewer", not as noise.
-4. The policy engine (VD-04, being built on `feature/verdict-v2-policy-waivers`) is intended to enforce item 2: a rule such as "paths matching P require every counted criterion to be `human_confirmed` or `base_spec`" turning the verdict into `needs_review` otherwise. This document does not describe that engine's behaviour; see its own documentation when it lands.
+4. The policy engine (VD-04, DEC-029) has landed: see [../policy.md](../policy.md). It enforces a minimum criterion state per path (`require`, rule P1) and `evidence.require_non_agent_test`, but not yet the rule anticipated here ("paths matching P require every counted criterion to be `human_confirmed` or `base_spec`"); that remains a follow-up.
 
 ## How to change the defaults
 

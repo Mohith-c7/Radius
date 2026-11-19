@@ -1,5 +1,7 @@
 # Production-readiness audit
 
+> Status (2026-11-19): historical snapshot of 2026-11-02. Many gaps below have since been closed (LICENSE, SECURITY.md, CONTRIBUTING, CodeQL, release workflow, non-root containers with HEALTHCHECK, scoped managed API keys). For the current state see [BACKLOG.md](BACKLOG.md), [../KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md) and [../RELEASE_CHECKLIST.md](../RELEASE_CHECKLIST.md).
+
 Baseline: `origin/develop` at fc27598 (2026-11-02). Method: read the repo files named below; compare to the standards and exemplar repos in [RESEARCH_NOTES.md](RESEARCH_NOTES.md). Radius is at version 0.1.0 (`pyproject.toml`, `package.json`).
 
 **What this is not.** No Scorecard run, no badge application, no pen test and no WCAG audit has been done. "Missing" means "not found in the tree at the checked path". Several settings live in GitHub, not in git (branch protection, secret scanning, 2FA, repo visibility); those are marked **[needs human check]**. Nothing here claims Radius meets a standard.

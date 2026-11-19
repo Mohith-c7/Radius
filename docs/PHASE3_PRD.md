@@ -1,4 +1,7 @@
 # Product Requirements Document (PRD)
+
+> Status (2026-11-19): historical phase document. Status lines, task boxes, counts and gap lists here are not maintained and some are out of date. For current behaviour see [verdict-v2.md](verdict-v2.md), [API_CONTRACTS.md](API_CONTRACTS.md) (with [api/openapi.json](api/openapi.json)), [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) and [decisions.md](decisions.md). This document and [PHASE3.md](PHASE3.md) were never reconciled; both test paths exist in code (CI result upload and the optional worker sandbox, off by default).
+
 **Project:** Radius - AI-Native Software Verification Platform  
 **Phase:** 3 - Predictive Test Selection, CI Ingestion & Rich PR Verification  
 **Status:** APPROVED  

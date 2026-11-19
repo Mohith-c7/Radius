@@ -1,6 +1,6 @@
 # CI/CD Integration Guide: Graph-Driven Test Selection & Evidence Upload
 
-Radius selects the tests that the import graph connects to a pull request's changes (plus naming-convention matches and a full-suite fallback when it cannot map a change), lets your CI run them, and turns the uploaded results into an evidence-gated verdict: `verified`, `failed` or `insufficient_evidence`. No general CI time-saving figure is claimed; measured selection and timing numbers on a small self-evaluation corpus are in [benchmarks/REAL_REPO_BENCHMARK.md](benchmarks/REAL_REPO_BENCHMARK.md).
+Radius selects the tests that the import graph connects to a pull request's changes (plus naming-convention matches and a full-suite fallback when it cannot map a change), lets your CI run them, and turns the uploaded results into an evidence-gated verdict: `verified`, `failed` or `insufficient_evidence` (the v1 verdict that `radius_ci.py` gates on; Verdict v2, when enabled, adds a fourth state, `needs_review`, see [verdict-v2.md](verdict-v2.md)). No general CI time-saving figure is claimed; measured selection and timing numbers on a small self-evaluation corpus are in [benchmarks/REAL_REPO_BENCHMARK.md](benchmarks/REAL_REPO_BENCHMARK.md).
 
 Tests from the pull request run in **your** CI, never inside the Radius worker by default (see [security/EXECUTION_ISOLATION.md](security/EXECUTION_ISOLATION.md)).
 
@@ -29,7 +29,7 @@ sequenceDiagram
     Rad-->>CI: Verdict (exit code gates the job)
 ```
 
-The Radius Check Run is published when the analysis completes. It is **not yet re-published after CI uploads**, so for uploaded evidence the merge gate is the exit code of the CI job below (make that job a required status check).
+The Radius Check Run is published when the analysis completes. With `RADIUS_FEATURE_VERDICT_V2` `off` (the default) or `shadow`, it is **not re-published after CI uploads**, so for uploaded evidence the merge gate is the exit code of the CI job below (make that job a required status check). With `on`, an upload enqueues a Verdict v2 republish that updates the same check run; see [Making the Verdict v2 check required](#making-the-verdict-v2-check-required-advisory-first-then-blocking).
 
 ---
 
@@ -78,7 +78,7 @@ The JUnit XML report format (`--junitxml` in pytest, `vitest run --reporter=juni
 
 ## 4. Immediate Benefits
 
-1. **Massive CI Cost & Time Savings**: Only tests reachable from modified diff hunks and callers are executed.
+1. **Fewer tests per pull request**: Only tests reachable from modified diff hunks and callers are executed (no general time-saving figure is claimed, see the introduction).
 2. **Instant Developer Feedback**: In-progress check runs and PR comments keep engineers informed without leaving GitHub.
 3. **Evidence-Backed Merge Confidence**: If any test fails, Radius automatically adjusts the Confidence Score and elevates the Risk Level before code hits production.
 

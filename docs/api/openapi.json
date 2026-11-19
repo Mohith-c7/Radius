@@ -847,7 +847,7 @@
               "Add tests for src/auth/reset.py::issue_token."
             ],
             "risk_level": "medium",
-            "score_kind": "uncalibrated_heuristic",
+            "score_kind": "heuristic_uncalibrated",
             "summary": "Selected tests passed; two changed symbols have no covering test.",
             "verification_confidence": 72.5,
             "verification_status": "insufficient_evidence"
@@ -2455,7 +2455,7 @@
     }
   },
   "info": {
-    "description": "Software verification API for Radius.\n\n**Envelope.** JSON payloads are wrapped as `{success, data, error, meta}`. Failures use\nthe shared `ErrorEnvelope`; branch on `error.code`.\n\n**Authentication.** Send `X-Radius-Organization-Id` and `X-Radius-API-Key` on every\nnon-health route. Both are declared as security schemes, not repeated as parameters.\n\n**Stability.** Every tag and operation carries `x-stability` (`stable`, `beta`, `alpha`\nor `internal`). The policy lives in `docs/api/STABILITY.md`. Clients must ignore unknown\nresponse fields.\n\n**Pagination.** List endpoints return the full array, except intent snapshot history\nwhich takes `limit` and `cursor`. Cursors are opaque.\n\n**Concurrency.** Intent reads return an `ETag`; intent writes accept `If-Match` and\nanswer 409 `INTENT_STALE` on a mismatch. `Idempotency-Key` makes creates replay-safe.\n\n**Rate limits.** 429 carries `Retry-After` and `RateLimit-*` headers.\n\n**Deprecation.** Deprecated operations are flagged `deprecated: true` and answer with\n`Deprecation` and `Sunset` headers.\n",
+    "description": "Software verification API for Radius.\n\n**Envelope.** JSON payloads are wrapped as `{success, data, error, meta}`. Failures use\nthe shared `ErrorEnvelope`; branch on `error.code`.\n\n**Authentication.** Send `X-Radius-Organization-Id` and `X-Radius-API-Key` on every\nnon-health route. Both are declared as security schemes, not repeated as parameters.\n\n**Stability.** Every tag and operation carries `x-stability` (`stable`, `beta`, `alpha`\nor `internal`). The policy lives in `docs/api/STABILITY.md`. Clients must ignore unknown\nresponse fields.\n\n**Pagination.** `GET /analyses`, `GET /repositories` and\n`GET /repositories/{repository_id}/pull-requests` take `limit` (default 100, maximum 500)\nand `offset` and report `meta.pagination`. Intent snapshot history takes `limit` and\n`cursor`; cursors are opaque. Other list endpoints return the full array.\n\n**Concurrency.** Intent reads return an `ETag`; intent writes accept `If-Match` and\nanswer 409 `INTENT_STALE` on a mismatch. `Idempotency-Key` makes creates replay-safe.\n\n**Rate limits.** 429 carries `Retry-After` and `RateLimit-*` headers.\n\n**Deprecation.** Deprecated operations are flagged `deprecated: true` and answer with\n`Deprecation` and `Sunset` headers.\n",
     "license": {
       "identifier": "Apache-2.0",
       "name": "Apache-2.0"
@@ -3065,7 +3065,7 @@
                           "Add tests for src/auth/reset.py::issue_token."
                         ],
                         "risk_level": "medium",
-                        "score_kind": "uncalibrated_heuristic",
+                        "score_kind": "heuristic_uncalibrated",
                         "summary": "Selected tests passed; two changed symbols have no covering test.",
                         "verification_confidence": 72.5,
                         "verification_status": "insufficient_evidence"

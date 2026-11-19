@@ -97,7 +97,7 @@ _CONFIDENCE_EXAMPLE: dict[str, Any] = {
     "id": "7d9c1c7a-0e3f-4a0c-b6a5-4f0a1c2d3e4f",
     "analysis_id": _ANALYSIS_ID,
     "confidence_score": 72.5,
-    "score_kind": "uncalibrated_heuristic",
+    "score_kind": "heuristic_uncalibrated",
     "risk_level": "medium",
     "summary": "Selected tests passed; two changed symbols have no covering test.",
     "evidence": [
@@ -502,8 +502,10 @@ non-health route. Both are declared as security schemes, not repeated as paramet
 or `internal`). The policy lives in `docs/api/STABILITY.md`. Clients must ignore unknown
 response fields.
 
-**Pagination.** List endpoints return the full array, except intent snapshot history
-which takes `limit` and `cursor`. Cursors are opaque.
+**Pagination.** `GET /analyses`, `GET /repositories` and
+`GET /repositories/{repository_id}/pull-requests` take `limit` (default 100, maximum 500)
+and `offset` and report `meta.pagination`. Intent snapshot history takes `limit` and
+`cursor`; cursors are opaque. Other list endpoints return the full array.
 
 **Concurrency.** Intent reads return an `ETag`; intent writes accept `If-Match` and
 answer 409 `INTENT_STALE` on a mismatch. `Idempotency-Key` makes creates replay-safe.

@@ -157,7 +157,8 @@ Investigated on 2026-11-01 (Linux, worker running as uid 0 in the dev container)
    `.git/config` of cached clones.
 5. **Repository cache.** cwd is the shared cache checkout, reused across analyses. A
    malicious PR can plant files (e.g. a `conftest.py` outside the diff, or git hooks)
-   that affect later analyses of the same or other PRs.
+   that affect later analyses of the same or other PRs. (Fixed since: each analysis now gets
+   its own git worktree, removed when the job ends; see "Checkout isolation" below, DEC-038.)
 6. **Resources.** The only limit is a wall-clock timeout. `subprocess.run` kills the
    direct child on timeout, but grandchildren (forked or daemonised) survive. There is
    no memory or PID limit (fork bombs, OOM-killing the worker).
@@ -293,8 +294,9 @@ then keep `WORKER_TEST_EXECUTION_MODE=disabled` and run tests in the customer's 
   engine exists), the explicit override, and sandbox wiring.
 
 Real-runtime runs used docker 29.9.2 (cgroup v1, overlayfs, runc, running as root) in
-the development container. Untested: podman, rootless docker, gVisor, cgroup v2, actual
-memory/pids-limit enforcement, and egress blocking against a host that has egress.
+the development container. Untested there: podman, rootless docker, gVisor, cgroup v2, actual
+memory/pids-limit enforcement, and egress blocking against a host that has egress. (The separate
+adversarial run above used Docker Desktop with cgroup v2.)
 
 ## Checkout isolation (review C, C-03)
 
