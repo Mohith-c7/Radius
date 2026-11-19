@@ -60,4 +60,7 @@ async function handle(request: NextRequest, requestHeaders: Headers): Promise<Ne
   if (hasSession && (pathname === "/login" || pathname === "/signup")) return NextResponse.redirect(new URL("/", request.url));
   return NextResponse.next({ request: { headers: requestHeaders } });
 }
-export const config = { matcher: ["/((?!_next|favicon.ico).*)"] };
+// /api/v1/* is the same-origin API proxy (lib/api-rewrites.mjs): the API authenticates
+// those requests itself, so the session redirect must not run on them (it would turn
+// every sign-in call into a 307 to /login).
+export const config = { matcher: ["/((?!_next|favicon.ico|api/v1(?:/|$)).*)"] };

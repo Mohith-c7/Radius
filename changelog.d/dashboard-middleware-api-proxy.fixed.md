@@ -1,0 +1,1 @@
+Sign-in on a split deployment (dashboard proxying `/api/v1/*` to the API) no longer redirects the API calls to `/login`: the session middleware now skips the `/api/v1` proxy path, which the API authenticates itself.
