@@ -22,7 +22,7 @@ How to read it.
   (`RADIUS_LLM_*`) silently fall back to their default on a bad number.
 
 
-Variables documented: **161** (15 secret, 10 feature flags).
+Variables documented: **162** (15 secret, 10 feature flags).
 
 ## Core, API, GitHub and observability
 
@@ -59,6 +59,7 @@ Variables documented: **161** (15 secret, 10 feature flags).
 | `RADIUS_ALLOW_INSECURE_DEV` | bool | `false` | api, worker | no | - | Explicit opt-in to accept unsigned GitHub webhooks and API calls without configured API keys. Honoured only in development/test; ignored in every other environment. |
 | `RADIUS_ALLOW_UNSAFE_EXECUTION` | bool | `false` | worker | no | - | Required to use unsafe_in_process when RADIUS_ENV is uat or production. The worker refuses to start otherwise. |
 | `RADIUS_API_BIND_ADDRESS` | str | `127.0.0.1` | compose | no | - | Compose: host address the API port 8000 is published on. Loopback by default; set 0.0.0.0 only deliberately (prefer a TLS reverse proxy). |
+| `RADIUS_API_PUBLIC_UPSTREAM` | str | `unset` | dashboard | no | - | Split deployments only (dashboard and API on different sites, e.g. Vercel + Render): API origin the dashboard forwards `/api/v1/*` to, so the session cookie stays first-party. Then point `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_RADIUS_API_BASE_URL` at the dashboard origin. Read at build time. |
 | `RADIUS_CORS_ALLOW_CREDENTIALS` | bool | `true` | api | no | - | Send `Access-Control-Allow-Credentials`. Never combined with `*`. |
 | `RADIUS_ENV` | RuntimeEnvironment | `development` | api, worker | no | - | Runtime environment: `development`, `test`, `uat` or `production`. Production tightens CORS validation (https origins only, no wildcard, no automatic localhost), ignores demo seeding, refuses the public session secret and `EMAIL_DELIVERY_MODE=log`. `docker-compose.yml` pins `production`; `docker-compose.dev.yml` (used by `make dev`) sets `development` for the api. |
 | `RADIUS_EVAL_ALLOW_REAL_LLM` | str | `unset` | evaluation CLI | no | - | Intent evaluation CLI only: must be `1`, together with `--allow-real-llm`, before a real provider is used. Tests and CI never set it. |
