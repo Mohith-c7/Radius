@@ -496,8 +496,13 @@ def test_refresh_rotates_the_session(client, db) -> None:
     second = client.cookies.get("radius_session")
     assert second and second != first
 
+    # Replace the jar instead of adding a second domain-less cookie next to the one the
+    # server set: with two "radius_session" cookies, which one is sent depends on the
+    # cookiejar's ordering, so the old assertion could silently test the new session.
+    client.cookies.clear()
     client.cookies.set("radius_session", first)
     assert client.get("/api/v1/auth/me").status_code == 401
+    client.cookies.clear()
     client.cookies.set("radius_session", second)
     assert client.get("/api/v1/auth/me").status_code == 200
 
