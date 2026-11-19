@@ -34,6 +34,11 @@ def is_production_like() -> bool:
     return get_settings().runtime_env.strip().lower() in _PRODUCTION_LIKE
 
 
+def email_allowed(email: str) -> bool:
+    """R7: whether ``email`` may sign up or sign in (``RADIUS_SIGNUP_ALLOWED_EMAILS/_DOMAINS``)."""
+    return get_settings().email_allowed(email)
+
+
 def should_auto_verify_email() -> bool:
     """Return True if email auto-verification is enabled for local dev.
 
@@ -296,6 +301,8 @@ def user_from_provider(
        verified too. Otherwise the link is refused (``oauth_link_refused``): linking an
        unverified local account would hand it to whoever registered that email first.
     4. No account: a new passwordless, verified user is created.
+    5. With a signup allowlist (R7), an address that is not on it is refused
+       (``oauth_not_allowed``), for a known identity as well as a new one.
     """
     account = db.scalar(
         select(AuthAccount).where(
@@ -307,6 +314,8 @@ def user_from_provider(
     if account:
         user = db.get(User, account.user_id)
         if user:
+            if not email_allowed(user.email):
+                raise OAuthError("not_allowed", public="oauth_not_allowed")
             if login is not None and account.provider_login != login:
                 account.provider_login = login
                 db.commit()
@@ -315,6 +324,8 @@ def user_from_provider(
     if not email_verified:
         raise OAuthError("email_unverified", public="oauth_email_unverified")
     email = email.strip().lower()
+    if not email_allowed(email):
+        raise OAuthError("not_allowed", public="oauth_not_allowed")
     user = db.scalar(select(User).where(User.email == email))
     if user is not None and not user.email_verified:
         raise OAuthError("link_refused_local_unverified", public="oauth_link_refused")

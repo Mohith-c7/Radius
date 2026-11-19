@@ -53,7 +53,7 @@ MAX_NEXT_LENGTH = 512
 
 # Error codes that are safe to show on the login page (``/login?error=<code>``).
 PUBLIC_ERROR_CODES = frozenset(
-    {"oauth", "oauth_denied", "oauth_email_unverified", "oauth_link_refused"}
+    {"oauth", "oauth_denied", "oauth_email_unverified", "oauth_link_refused", "oauth_not_allowed"}
 )
 
 

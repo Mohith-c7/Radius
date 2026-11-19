@@ -101,6 +101,9 @@ services:
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      # R7: who may sign up / sign in to the dashboard. Empty = anyone; set one for a public URL.
+      RADIUS_SIGNUP_ALLOWED_EMAILS: ${RADIUS_SIGNUP_ALLOWED_EMAILS:-}
+      RADIUS_SIGNUP_ALLOWED_DOMAINS: ${RADIUS_SIGNUP_ALLOWED_DOMAINS:-}
     # Loopback by default. Production: keep it behind a TLS reverse proxy, or set
     # RADIUS_API_BIND_ADDRESS (for example 0.0.0.0) deliberately. docs/security/HTTP_HARDENING.md
     ports:

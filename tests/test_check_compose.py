@@ -166,6 +166,17 @@ def test_documented_worker_settings_must_be_forwarded() -> None:
     assert any("RADIUS_RETENTION_DAYS" in p for p in checker.check_base(bad) if p.startswith("R12"))
 
 
+def test_signup_allowlist_is_forwarded_and_demo_sign_in_is_dev_only() -> None:
+    base = checker.load_yaml(checker.BASE)
+    assert "NEXT_PUBLIC_RADIUS_DEMO_SIGNIN" not in base["services"]["dashboard"]["build"]["args"]
+    dev = checker.load_yaml(checker.DEV)
+    assert dev["services"]["dashboard"]["build"]["args"]["NEXT_PUBLIC_RADIUS_DEMO_SIGNIN"] == "true"
+    bad = copy.deepcopy(base)
+    del bad["services"]["api"]["environment"]["RADIUS_SIGNUP_ALLOWED_DOMAINS"]
+    bad["services"]["dashboard"]["build"]["args"]["NEXT_PUBLIC_RADIUS_DEMO_SIGNIN"] = "true"
+    assert sum(p.startswith("R13") for p in checker.check_base(bad)) == 2
+
+
 def test_dev_env_generator_creates_a_random_database_password(tmp_path) -> None:
     spec = importlib.util.spec_from_file_location(
         "gen_dev_env", Path(__file__).resolve().parents[1] / "scripts" / "gen_dev_env.py"

@@ -24,6 +24,10 @@ services:
       EMAIL_DELIVERY_MODE: log
 
   dashboard:
+    build:
+      args:
+        # Development only: the login form offers the seeded demo account.
+        NEXT_PUBLIC_RADIUS_DEMO_SIGNIN: "true"
     environment:
       RADIUS_API_KEY: ${RADIUS_API_KEY:?Run `make env` (creates .env with a random local-dev API key)}
       RADIUS_ORGANIZATION_ID: ${GITHUB_DEFAULT_ORGANIZATION_ID}
