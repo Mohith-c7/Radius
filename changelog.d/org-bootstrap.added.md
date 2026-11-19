@@ -1,0 +1,1 @@
+New operator command `python -m radius_api.bootstrap` creates the organization row on a fresh database (idempotent; an existing row is never changed) and, with `--create-admin-key`, the first managed API key, so a new deployment needs neither raw SQL nor a legacy `API_KEYS` entry. Run it inside the api container after the migrations; key creation requires `RADIUS_API_KEY_PEPPER`.

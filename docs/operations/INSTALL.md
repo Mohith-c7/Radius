@@ -97,19 +97,32 @@ The Compose `api` and `worker` services run with `RADIUS_ENV=production` regardl
 
 - `RADIUS_ALLOW_INSECURE_DEV` is honoured only in `development`/`test` and is not forwarded by
   Compose, so the keyless dev shortcut does not apply to the Compose stack.
-- **API keys.** Protected routes answer 403 `ACCESS_DENIED` ("Radius API keys are not configured")
-  until `API_KEYS` holds at least one `org_id:key` pair (`apps/api/src/radius_api/auth.py`). Set, in `.env`:
+- **Organization and API keys.** Protected routes answer 403 `ACCESS_DENIED` until a managed key
+  (or a deprecated `API_KEYS` `org_id:key` pair) exists, and the organization row must exist in the
+  database. Pick one organization UUID and set, in `.env`:
 
   ```
-  API_KEYS=<org uuid>:<long random key>
-  RADIUS_API_KEY=<the same key>
+  RADIUS_API_KEY_PEPPER=<random, 48+ characters>
   NEXT_PUBLIC_RADIUS_ORGANIZATION_ID=<org uuid>
   GITHUB_DEFAULT_ORGANIZATION_ID=<org uuid>
   ```
 
-  `RADIUS_API_KEY` is the server-side secret the dashboard proxy sends; it is never given a
-  `NEXT_PUBLIC_` prefix. The org id must match between `API_KEYS` and the dashboard variable.
-  Managed keys are preferred over `API_KEYS` ([API_KEYS.md](../security/API_KEYS.md)).
+  After `docker compose up` (the api container runs the migrations), create the organization row
+  and the first admin key with one idempotent command; no SQL and no `API_KEYS` are needed:
+
+  ```bash
+  docker compose exec api python -m radius_api.bootstrap --name "Acme" --create-admin-key bootstrap-admin
+  ```
+
+  The organization id defaults to `GITHUB_DEFAULT_ORGANIZATION_ID` (`--organization-id` overrides it).
+  An existing organization row is left unchanged and an active key with the same name is not
+  duplicated. The token is printed once on stdout (status messages go to stderr); put it in your
+  secret store. The command refuses an unmigrated database (exit 1) and refuses `--create-admin-key`
+  without `RADIUS_API_KEY_PEPPER` (exit 2). For the dashboard, issue a `read,write` key
+  (`--create-admin-key dashboard --scopes read,write`, or `POST /api/v1/api-keys` with the admin key),
+  set it as `RADIUS_API_KEY` and recreate the dashboard; issue a `ci-upload` key for CI
+  ([API_KEYS.md](../security/API_KEYS.md)). `RADIUS_API_KEY` is the server-side secret the dashboard
+  proxy sends; it is never given a `NEXT_PUBLIC_` prefix.
   **Unverified:** that the dashboard works end to end with these values on a fresh database.
 - **CORS and sign-in.** `CORS_ORIGINS` must list the exact `https://` origin of the dashboard; production
   validation rejects `*` and `http://` origins and adds no localhost origin. Without it the browser blocks

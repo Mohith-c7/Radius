@@ -32,6 +32,16 @@ Managed API keys replace the static `API_KEYS` environment variable (AUDIT: stat
 
 The mapping lives in `required_scope()` in `apps/api/src/radius_api/auth.py`. A CI job should hold a `ci-upload` key only. The GitHub webhook is authenticated separately by its HMAC secret and is not covered by API keys.
 
+## Bootstrapping the first key
+
+A fresh deployment needs neither `API_KEYS` nor SQL. With `RADIUS_API_KEY_PEPPER` set (the same value the API uses), run after the migrations:
+
+```bash
+docker compose exec api python -m radius_api.bootstrap --organization-id <org uuid> --create-admin-key bootstrap-admin
+```
+
+It creates the `organizations` row if absent (never changes an existing one) and issues the key through the same `ApiKeyService` path as `POST /api/v1/api-keys`, with audit actor `bootstrap-cli`. The token is printed once on stdout and never logged; `--scopes` (default `admin`) narrows it. Re-running does not duplicate an active key with the same name. Code: `apps/api/src/radius_api/bootstrap.py`.
+
 ## Migrating from `API_KEYS`
 
 Legacy `org_id:key` entries keep working (full access, all scopes) but log a startup deprecation warning.
