@@ -32,6 +32,7 @@ from .auth import (
     create_action_token,
     create_session,
     decode_session,
+    email_allowed,
     hash_password,
     is_production_like,
     peek_action_token,
@@ -193,7 +194,8 @@ def _load_session(token: str, db: Session) -> tuple[User, AuthSession]:
     user = db.get(User, user_id)
     if not user or not session or session.user_id != user.id:
         raise _expired()
-    if session.revoked_at is not None:
+    if session.revoked_at is not None or not email_allowed(user.email):
+        # R7: a session of an address that is not (or no longer) on the signup allowlist is dead.
         raise _expired()
     expires_at = (
         session.expires_at
@@ -251,6 +253,18 @@ def _existing_account_mail(user: User) -> tuple[str, str, str, str]:
     return user.email, subject, text_body, html_body
 
 
+def _unconfirmed_signup(payload: Signup, email: str) -> UserResponse:
+    """A-12: the uat/production signup answer that reveals nothing about the address."""
+    return UserResponse(
+        id=str(uuid.uuid4()),
+        name=payload.name.strip(),
+        email=email,
+        email_verified=False,
+        role="developer",
+        organization_id=None,
+    )
+
+
 @router.post(
     "/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED
 )
@@ -261,6 +275,16 @@ def signup(
     db: Session = Depends(get_db),
 ):
     email = payload.email.lower()
+    if not email_allowed(email):
+        if not is_production_like():
+            raise HTTPException(
+                status_code=403,
+                detail="This email address is not allowed to sign up for this Radius deployment.",
+            )
+        # R7 (uat/production): the A-12 answer, with the same hashing work, and no mail or
+        # account for an address outside RADIUS_SIGNUP_ALLOWED_EMAILS/_DOMAINS.
+        hash_password(payload.password)
+        return _unconfirmed_signup(payload, email)
     existing = db.scalar(select(User).where(User.email == email))
     if existing is not None and not is_production_like():
         # Development / test: a clear error is more useful than privacy here.
@@ -280,14 +304,7 @@ def signup(
         else:
             mail = _verify_mail_for(db, existing)  # a fresh link for the unverified owner
         background.add_task(send_email_message, *mail)
-        return UserResponse(
-            id=str(uuid.uuid4()),
-            name=payload.name.strip(),
-            email=email,
-            email_verified=False,
-            role="developer",
-            organization_id=None,
-        )
+        return _unconfirmed_signup(payload, email)
     auto_verify = should_auto_verify_email()
     user = User(
         name=payload.name.strip(),
@@ -306,14 +323,7 @@ def signup(
                 status_code=409,
                 detail="An account with this email already exists. Please sign in instead.",
             ) from None
-        return UserResponse(
-            id=str(uuid.uuid4()),
-            name=payload.name.strip(),
-            email=email,
-            email_verified=False,
-            role="developer",
-            organization_id=None,
-        )
+        return _unconfirmed_signup(payload, email)
     db.refresh(user)
     if user.email_verified or not is_production_like():
         provision_domain_user_and_org(db, user)
@@ -343,6 +353,8 @@ def login(payload: Login, response: Response, db: Session = Depends(get_db)):
         # Same argon2 work for unknown accounts: response time must not reveal them.
         burn_password_check(payload.password)
         ok = False
+    if ok and user is not None and not email_allowed(user.email):
+        ok = False  # R7: the same answer as a wrong password; list membership stays private
     if not ok or user is None:
         _note_login_failure(email)
         raise HTTPException(

@@ -29,6 +29,8 @@ Rules
       ``stop_grace_period`` of at least one minute so ``compose stop`` drains it (C-09).
   R12 Every worker setting (``WorkerSettings`` alias) is forwarded to the worker service
       unless it is listed in ``WORKER_NOT_FORWARDED`` with a reason (C-10).
+  R13 The api forwards the signup allowlist (``RADIUS_SIGNUP_ALLOWED_EMAILS``/``_DOMAINS``)
+      and the base file does not build the dashboard with the demo sign-in button (R7).
 """
 
 from __future__ import annotations
@@ -200,6 +202,14 @@ def check_base(base: dict[str, Any]) -> list[str]:
     if worker and _grace_seconds(worker.get("stop_grace_period")) < 60:
         problems.append("R11 base: worker needs stop_grace_period >= 1m so `compose stop` drains it")
     problems.extend(check_worker_forwarding(worker))
+    api_env = environment_of(services.get("api", {}))
+    for setting in ("RADIUS_SIGNUP_ALLOWED_EMAILS", "RADIUS_SIGNUP_ALLOWED_DOMAINS"):
+        if setting not in api_env:
+            problems.append(f"R13 base: api must forward {setting} (signup allowlist)")
+    build = services.get("dashboard", {}).get("build") or {}
+    demo = str((build.get("args") or {}).get("NEXT_PUBLIC_RADIUS_DEMO_SIGNIN", "")) if isinstance(build, dict) else ""
+    if "true" in demo.lower():
+        problems.append("R13 base: dashboard must not be built with NEXT_PUBLIC_RADIUS_DEMO_SIGNIN (dev override only)")
     for required in ("postgres", "api"):
         if required not in services or not services[required].get("healthcheck"):
             problems.append(f"R6 base: {required} needs a healthcheck")

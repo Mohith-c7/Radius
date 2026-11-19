@@ -22,7 +22,7 @@ How to read it.
   (`RADIUS_LLM_*`) silently fall back to their default on a bad number.
 
 
-Variables documented: **158** (15 secret, 10 feature flags).
+Variables documented: **161** (15 secret, 10 feature flags).
 
 ## Core, API, GitHub and observability
 
@@ -104,6 +104,8 @@ Variables documented: **158** (15 secret, 10 feature flags).
 | `RADIUS_RETENTION_DAYS` | int | `0` | worker | no | - | Opt-in data retention: every hour the worker deletes rows older than this many days from idempotency_keys, exhausted verdict_v2_requests outbox rows and mutation_result_cache. Never touches analyses, verdicts, evidence or audit rows. 0 (default) = off; values from 1 to 6 are raised to 7. |
 | `RADIUS_RETENTION_DRY_RUN` | bool | `false` | worker | no | - | With RADIUS_RETENTION_DAYS set: only log how many rows each retention pass would delete, delete nothing. |
 | `RADIUS_SEED_DEMO_DATA` | bool | `false` | api | no | - | Seed illustrative demo fixtures and a demo login at startup. Off by default and never honoured in production: the demo account uses a publicly documented password and the fixtures are not real analyses. |
+| `RADIUS_SIGNUP_ALLOWED_DOMAINS` | str | `empty` | api | no | - | Comma-separated e-mail domains allowed to use the dashboard, matched exactly against the part after `@` (`example.com` does not admit `team.example.com`; list each subdomain). Same effect as `RADIUS_SIGNUP_ALLOWED_EMAILS`; an address is allowed when either list matches. |
+| `RADIUS_SIGNUP_ALLOWED_EMAILS` | str | `empty` | api | no | - | Comma-separated e-mail addresses allowed to use the dashboard (exact match, case-insensitive). When this or `RADIUS_SIGNUP_ALLOWED_DOMAINS` is set, any other address cannot sign up with a password, cannot be provisioned or signed in through Google/GitHub, cannot sign in with a password and loses its existing sessions. Empty with an empty domain list (default): everyone may sign up. Recommended for any public URL. |
 | `RADIUS_TRACING_ENABLED` | bool | `false` | api, worker | no | - | Create OpenTelemetry spans (needs the `observability` extra). Off by default. |
 | `RADIUS_TRUSTED_PROXIES` | str | `empty` | api | no | - | Comma separated IPs/CIDRs of reverse proxies whose X-Forwarded-For is trusted. |
 | `RADIUS_UPLOAD_MAX_BODY_BYTES` | int | `20971520` | api | no | - | Body cap in bytes for CI test-report uploads. |
@@ -198,6 +200,7 @@ Variables documented: **158** (15 secret, 10 feature flags).
 | `NEXT_PUBLIC_API_URL` | str | `http://localhost:8000/api/v1` | dashboard | no | - | Base URL used by the dashboard sign-in/auth client. |
 | `NEXT_PUBLIC_GITHUB_APP_URL` | str | `unset` | dashboard | no | - | Link target for the GitHub App install button in the dashboard. |
 | `NEXT_PUBLIC_RADIUS_API_BASE_URL` | str | `http://localhost:8000` | dashboard | no | - | API origin as seen by the browser; also used for the dashboard CSP `connect-src`. Inlined at build time. |
+| `NEXT_PUBLIC_RADIUS_DEMO_SIGNIN` | bool | `false` | dashboard | no | - | Show the login form's "Quick Demo Sign-In" button, which uses the publicly known credentials of the seeded demo account. Build argument; only `docker-compose.dev.yml` sets it to `true` (the button also shows under `next dev`). Never set it for a deployment. |
 | `NEXT_PUBLIC_RADIUS_ORGANIZATION_ID` | str | `empty` | dashboard | no | - | Organization UUID the dashboard loads. The dashboard asks you to set it when empty. Inlined at build time. |
 | `RADIUS_API_BASE_URL` | str | `http://api:8000 (compose)` | dashboard | no | - | Server-side API origin used by the dashboard proxy. Falls back to NEXT_PUBLIC_RADIUS_API_BASE_URL. |
 | `RADIUS_API_KEY` | str | `(secret, no default)` | dashboard | yes | - | Server-only secret the dashboard proxy (`/api/radius/*`) sends as `X-Radius-API-Key`. Must never carry a `NEXT_PUBLIC_` prefix. |

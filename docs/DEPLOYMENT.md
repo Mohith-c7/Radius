@@ -118,9 +118,11 @@ Check them with `docker compose ps` (the STATUS column shows `healthy`) or
 | **`RADIUS_RATE_LIMIT_ENABLED`** | API: master switch for the token-bucket limiter. | `true` |
 | **`RADIUS_RATE_LIMIT_AUTH`** / **`_WEBHOOK`** / **`_GENERAL`** / **`_EXPENSIVE`** | API: `<requests>/<window seconds>` per bucket. In-memory, per replica. | `10/60`, `600/60`, `600/60`, `20/60` |
 | **`RADIUS_RATE_LIMIT_IP_MULTIPLIER`** | API: per-IP limit as a multiple of the per-key limit for general/expensive buckets. | `2` |
+| **`RADIUS_SIGNUP_ALLOWED_EMAILS`** / **`RADIUS_SIGNUP_ALLOWED_DOMAINS`** | Auth module: signup allowlist (R7). Comma-separated addresses (exact, case-insensitive) and domains (exact match on the part after `@`, no subdomains). When either is set, other addresses cannot sign up with a password, cannot sign in with a password or through Google/GitHub (new or already linked), and their existing sessions stop working. In uat/production a refused signup gets the normal `201` answer and no mail (A-12), and a refused login the normal invalid-credentials `401`; development answers a refused signup with `403`. Empty (default) keeps open signup, and with `RADIUS_ENV=production` the API logs a startup warning. **Set one for any public URL:** the dashboard is single-tenant, so every account acts on the configured organization. | `example.com` |
 | **`DASHBOARD_BASE_URL`** | Canonical public URL of the dashboard used in PR comment links. | `https://radius.yourcompany.com` |
 | **`NEXT_PUBLIC_RADIUS_API_BASE_URL`** | Public URL used by the browser to communicate with the API. | `https://api-radius.yourcompany.com` |
 | **`NEXT_PUBLIC_RADIUS_ORGANIZATION_ID`** | Tenant organization UUID loaded by the dashboard. | `00000000-0000-4000-8000-000000000001` |
+| **`NEXT_PUBLIC_RADIUS_DEMO_SIGNIN`** | Dashboard build argument: `true` shows the "Quick Demo Sign-In" button (public demo credentials). Only `docker-compose.dev.yml` sets it; leave it unset for a deployment. | `false` |
 | **`RADIUS_API_KEY`** | Server-only secret the dashboard proxy (`/api/radius/*`) attaches as `X-Radius-API-Key`. Never use a `NEXT_PUBLIC_` prefix; leave empty only with `RADIUS_ALLOW_INSECURE_DEV`. | *(empty; set a secret)* |
 
 ---

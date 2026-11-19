@@ -40,6 +40,11 @@ Legend: **Required** items are needed for a safe deployment; **Recommended** one
   Every request needs `X-Radius-Organization-Id` and the matching `X-Radius-API-Key`.
 - [ ] **Required.** Single-tenant only: `GITHUB_SINGLE_TENANT=true` is safe only when exactly one organization uses
   the GitHub App. Leave it `false` otherwise; unknown installations are then rejected with 403.
+- [ ] **Required for a public URL.** Set `RADIUS_SIGNUP_ALLOWED_EMAILS` and/or `RADIUS_SIGNUP_ALLOWED_DOMAINS`.
+  The dashboard is single-tenant: every account that signs up (password, Google or GitHub) acts on the
+  configured organization with the server API key. With an allowlist, other addresses cannot sign up, sign in
+  or keep a session. Without one, `RADIUS_ENV=production` logs a startup warning. Do not build the dashboard
+  with `NEXT_PUBLIC_RADIUS_DEMO_SIGNIN=true` (dev override only).
 - [ ] Recommended. Tenant isolation is by organization id in queries and 404 on cross-tenant intent access; a
   dedicated isolation test suite (QS-04) is not done.
 

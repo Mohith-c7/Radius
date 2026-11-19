@@ -1,4 +1,5 @@
 """Runtime configuration loaded from environment variables."""
+import logging
 import os
 import re
 from functools import lru_cache
@@ -15,6 +16,17 @@ KNOWN_PUBLIC_SESSION_SECRETS = frozenset(
     }
 )
 EMAIL_DELIVERY_MODES = ("smtp", "log")
+_DNS_LABEL = re.compile(r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?")
+LOGGER = logging.getLogger(__name__)
+
+
+def _csv(value: str) -> list[str]:
+    return [item.strip().lower() for item in value.split(",") if item.strip()]
+
+
+def _dns_name(value: str) -> bool:
+    labels = value.split(".")
+    return len(labels) >= 2 and all(_DNS_LABEL.fullmatch(label) for label in labels)
 
 
 class Settings(BaseSettings):
@@ -41,7 +53,53 @@ class Settings(BaseSettings):
     smtp_username: str | None = None
     smtp_password: str | None = None
     smtp_from_email: str | None = None
+    signup_allowed_emails: str = Field(default="", alias="RADIUS_SIGNUP_ALLOWED_EMAILS")
+    """Comma-separated e-mail addresses allowed to use the dashboard (exact match, case-insensitive). When this
+    or `RADIUS_SIGNUP_ALLOWED_DOMAINS` is set, any other address cannot sign up with a password, cannot be
+    provisioned or signed in through Google/GitHub, cannot sign in with a password and loses its existing
+    sessions. Empty with an empty domain list (default): everyone may sign up. Recommended for any public URL."""
+    signup_allowed_domains: str = Field(default="", alias="RADIUS_SIGNUP_ALLOWED_DOMAINS")
+    """Comma-separated e-mail domains allowed to use the dashboard, matched exactly against the part after `@`
+    (`example.com` does not admit `team.example.com`; list each subdomain). Same effect as
+    `RADIUS_SIGNUP_ALLOWED_EMAILS`; an address is allowed when either list matches."""
 
+    @field_validator("signup_allowed_emails")
+    @classmethod
+    def _valid_allowed_emails(cls, value: str) -> str:
+        entries = _csv(value or "")
+        for entry in entries:
+            local, at, domain = entry.rpartition("@")
+            if not at or not local or "@" in local or any(c.isspace() for c in entry) or not _dns_name(domain):
+                msg = "RADIUS_SIGNUP_ALLOWED_EMAILS entries must be full addresses such as alice@example.com."
+                raise ValueError(msg)
+        return ",".join(dict.fromkeys(entries))
+
+    @field_validator("signup_allowed_domains")
+    @classmethod
+    def _valid_allowed_domains(cls, value: str) -> str:
+        entries = [entry.rstrip(".") for entry in _csv(value or "")]
+        for entry in entries:
+            if "@" in entry or not _dns_name(entry):
+                msg = (
+                    "RADIUS_SIGNUP_ALLOWED_DOMAINS entries must be domains such as example.com "
+                    "(no '@', no wildcard)."
+                )
+                raise ValueError(msg)
+        return ",".join(dict.fromkeys(entries))
+
+    @property
+    def signup_allowlist_enabled(self) -> bool:
+        return bool(self.signup_allowed_emails or self.signup_allowed_domains)
+
+    def email_allowed(self, email: str) -> bool:
+        """R7: True when no allowlist is configured or ``email`` matches one of the lists."""
+        if not self.signup_allowlist_enabled:
+            return True
+        address = email.strip().lower()
+        if address in _csv(self.signup_allowed_emails):
+            return True
+        _, at, domain = address.rpartition("@")
+        return bool(at) and domain in _csv(self.signup_allowed_domains)
 
     @field_validator("session_cookie_domain")
     @classmethod
@@ -104,6 +162,12 @@ class Settings(BaseSettings):
             if uri and urlsplit(uri).scheme != "https":
                 msg = f"{name} must be an https URL in production."
                 raise ValueError(msg)
+        if not self.signup_allowlist_enabled:
+            # Not refused (existing deployments would stop), but loud: see docs/operations/HARDENING.md.
+            LOGGER.warning(
+                "RADIUS_ENV=production without RADIUS_SIGNUP_ALLOWED_EMAILS or RADIUS_SIGNUP_ALLOWED_DOMAINS: "
+                "anyone who can reach the dashboard can sign up and act on the configured organization."
+            )
         return self
 
 

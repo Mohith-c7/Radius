@@ -852,3 +852,31 @@ def test_password_sign_in_is_unaffected(client, idp, db):
     assert client.get("/api/v1/auth/me").json()["email"] == "pat@example.com"
     assert client.post("/api/v1/auth/logout").status_code == 204
     assert idp.calls == []  # no provider traffic at all
+
+
+# ------------------------------------------------------------- signup allowlist (R7)
+
+
+def _allow(monkeypatch, emails="", domains=""):
+    monkeypatch.setenv("RADIUS_SIGNUP_ALLOWED_EMAILS", emails)
+    monkeypatch.setenv("RADIUS_SIGNUP_ALLOWED_DOMAINS", domains)
+    get_settings.cache_clear()
+
+
+def test_allowlist_refuses_a_new_identity_without_provisioning(client, idp, db, monkeypatch):
+    _allow(monkeypatch, domains="corp.example")
+    assert error_of(sign_in(client, idp)) == "oauth_not_allowed"
+    assert count_users(db) == 0
+    assert db.scalars(select(AuthAccount)).all() == []
+    idp.sub, idp.email = "g-sub-corp", "Alice@Corp.Example"
+    assert sign_in(client, idp).headers["location"] == f"{FRONTEND}/"
+    assert client.get("/api/v1/auth/me").json()["email"] == "alice@corp.example"
+
+
+def test_allowlist_refuses_an_already_linked_identity(client, idp, db, monkeypatch):
+    assert sign_in(client, idp).headers["location"] == f"{FRONTEND}/"  # before the list
+    _allow(monkeypatch, emails="bob@example.com")
+    assert client.get("/api/v1/auth/me").status_code == 401  # the existing session is dead
+    assert error_of(sign_in(client, idp)) == "oauth_not_allowed"
+    _allow(monkeypatch, emails="bob@example.com,alice@example.com")
+    assert sign_in(client, idp).headers["location"] == f"{FRONTEND}/"

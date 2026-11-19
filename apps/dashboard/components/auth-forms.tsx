@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Check, Eye, EyeOff, Github, LoaderCircle } from "lucide-react";
 import { authRequest, oauthUrl, type AuthUser } from "../lib/auth";
+import { demoSignInEnabled } from "../lib/demo-signin";
 import { postSignupPath } from "../lib/post-signup";
 import { isVerifyCheck, validateNewPassword, verifyEmailBody } from "../lib/verify-email";
 import { useAuth } from "./auth-provider";
@@ -126,8 +127,12 @@ const OAUTH_ERRORS: Record<string, string> = {
   oauth_denied: "Sign in with the provider was cancelled or denied.",
   oauth_email_unverified: "The provider has not verified your email address. Verify it with the provider and try again.",
   oauth_link_refused:
-    "This email already has a Radius account that is not verified, so the provider cannot be linked automatically. Sign in with your password or verify your email first."
+    "This email already has a Radius account that is not verified, so the provider cannot be linked automatically. Sign in with your password or verify your email first.",
+  oauth_not_allowed: "This account is not allowed to sign in to this Radius deployment."
 };
+
+// Literal process.env reads: Next.js inlines them at build time.
+const SHOW_DEMO_SIGN_IN = demoSignInEnabled(process.env.NEXT_PUBLIC_RADIUS_DEMO_SIGNIN, process.env.NODE_ENV);
 
 function oauthErrorMessage(code: string | null): string {
   return code && Object.hasOwn(OAUTH_ERRORS, code) ? OAUTH_ERRORS[code] : "";
@@ -196,35 +201,37 @@ export function LoginForm() {
         </div>
         <ErrorMessage error={error} />
         <Submit loading={loading}>Sign In</Submit>
-        <button
-          type="button"
-          className="button secondary"
-          style={{ width: "100%", marginTop: "10px", justifyContent: "center" }}
-          onClick={async () => {
-            setEmail("demo@radius.dev");
-            setPassword("RadiusDemo123!");
-            setLoading(true);
-            setError("");
-            try {
-              await authRequest("/auth/login", {
-                method: "POST",
-                body: JSON.stringify({ email: "demo@radius.dev", password: "RadiusDemo123!", remember: true }),
-              });
-              await refresh();
-              router.replace("/analyses");
-            } catch (reason) {
-              setError(
-                reason instanceof Error
-                  ? reason.message
-                  : "We couldn't connect to Radius. Please try again."
-              );
-            } finally {
-              setLoading(false);
-            }
-          }}
-        >
-          ⚡ Quick Demo Sign-In
-        </button>
+        {SHOW_DEMO_SIGN_IN ? (
+          <button
+            type="button"
+            className="button secondary"
+            style={{ width: "100%", marginTop: "10px", justifyContent: "center" }}
+            onClick={async () => {
+              setEmail("demo@radius.dev");
+              setPassword("RadiusDemo123!");
+              setLoading(true);
+              setError("");
+              try {
+                await authRequest("/auth/login", {
+                  method: "POST",
+                  body: JSON.stringify({ email: "demo@radius.dev", password: "RadiusDemo123!", remember: true }),
+                });
+                await refresh();
+                router.replace("/analyses");
+              } catch (reason) {
+                setError(
+                  reason instanceof Error
+                    ? reason.message
+                    : "We couldn't connect to Radius. Please try again."
+                );
+              } finally {
+                setLoading(false);
+              }
+            }}
+          >
+            ⚡ Quick Demo Sign-In
+          </button>
+        ) : null}
       </form>
       <AuthFooter prompt="Don't have an account?" href="/signup" action="Create account" />
     </AuthFrame>
