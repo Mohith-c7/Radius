@@ -45,10 +45,14 @@ def _load(name: str):
         (True, VerdictV2Mode.ON),
         (False, VerdictV2Mode.OFF),
         (VerdictV2Mode.SHADOW, VerdictV2Mode.SHADOW),
+        ('"on"', VerdictV2Mode.ON),
+        ("'shadow'", VerdictV2Mode.SHADOW),
+        ('"typo"', VerdictV2Mode.OFF),
+        ('"on', VerdictV2Mode.OFF),
     ],
 )
 def test_flag_parsing_table(raw, expected) -> None:
-    assert parse_verdict_v2_mode(raw) is expected
+    assert parse_verdict_v2_mode(raw) == expected
 
 
 def test_database_module_is_registered_and_defines_the_tables() -> None:
