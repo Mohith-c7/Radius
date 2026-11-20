@@ -39,6 +39,11 @@ from radius_graph.domain import (
     GraphSnapshot,
 )
 from radius_graph.dto import BuildGraphCommand
+from radius_graph.incremental import (
+    IncrementalUnavailable,
+    ParsedBatch,
+    build_fingerprint,
+)
 from radius_graph.interfaces.graph_store import GraphStore
 from radius_graph.traversal import file_dependents
 from radius_parser.application import ParserApplicationService
@@ -64,6 +69,8 @@ from radius_testing.infrastructure.impact_mapping import (
     map_changes_to_tests,
 )
 from radius_testing.infrastructure.selection import PathBasedTestSelector
+
+from radius_worker.incremental import changed_paths_between, nearest_snapshot_ancestor
 
 LOGGER = get_logger(__name__)
 
@@ -159,6 +166,8 @@ class Phase1AnalysisOrchestrator:
         tamper_rules_enabled: bool = False,
         assertion_extraction_enabled: bool = False,
         flaky_policy: str = "exclude",
+        incremental_graph: bool = False,
+        incremental_max_changed_files: int = 200,
     ) -> None:
         self._analysis = analysis_service
         self._parser = parser_service
@@ -172,6 +181,8 @@ class Phase1AnalysisOrchestrator:
         self._tamper_rules_enabled = tamper_rules_enabled
         self._assertion_extraction_enabled = assertion_extraction_enabled
         self._flaky_policy = flaky_policy
+        self._incremental_graph = incremental_graph
+        self._incremental_max_changed_files = incremental_max_changed_files
         #: Called between pipeline phases; the worker sets it to a check that raises
         #: when the job lease is lost or the analysis was cancelled (superseded).
         self.checkpoint: Callable[[], None] = lambda: None
@@ -210,29 +221,41 @@ class Phase1AnalysisOrchestrator:
         # tests) from the blast radius based on an unvalidated model judgment,
         # which is a false-safety risk. See docs/audit/RADIUS_AUDIT.md.
 
-        with stage("parse"):
-            parse_result = self._parser.parse_repository_result(
-                ParseRepositoryCommand(repository_path=command.repository_path)
-            )
-        self.checkpoint()
-        if parse_result.parse_failures:
+        graph_version = build_fingerprint()
+        incremental = (
+            self._patch_base_graph(command, graph_version) if self._incremental_graph else None
+        )
+        if incremental is not None:
+            graph_snapshot, parse_failures = incremental
+            with stage("persist_graph"):
+                self._graph_store.save_snapshot(graph_snapshot)
+        else:
+            with stage("parse"):
+                parse_result = self._parser.parse_repository_result(
+                    ParseRepositoryCommand(repository_path=command.repository_path)
+                )
+            parse_failures = parse_result.parse_failures
+            self.checkpoint()
+            with stage("build_graph"):
+                self._graph.build_graph(
+                    BuildGraphCommand(
+                        repository_id=command.repository_id,
+                        analysis_id=command.analysis_id,
+                        parse_result=parse_result,
+                        graph_version=graph_version,
+                    )
+                )
+            del parse_result
+            graph_snapshot = self._require_graph_snapshot(command.analysis_id)
+        if parse_failures:
             LOGGER.warning(
                 "Some source files could not be parsed",
                 extra={
                     "analysis_id": str(command.analysis_id),
-                    "parse_failures": len(parse_result.parse_failures),
+                    "parse_failures": len(parse_failures),
                 },
             )
-        with stage("build_graph"):
-            graph_response = self._graph.build_graph(
-                BuildGraphCommand(
-                    repository_id=command.repository_id,
-                    analysis_id=command.analysis_id,
-                    parse_result=parse_result,
-                )
-            )
         self.checkpoint()
-        graph_snapshot = self._require_graph_snapshot(command.analysis_id)
         dependents = file_dependents(graph_snapshot.graph, changed_paths)
         with stage("discover_tests"):
             file_imports, repository_files = _resolved_file_imports(graph_snapshot)
@@ -278,7 +301,7 @@ class Phase1AnalysisOrchestrator:
                 path: selector.conventional_matches(path, discovered_tests)
                 for path in changed_paths
             },
-            parse_failures=frozenset(parse_result.parse_failures),
+            parse_failures=frozenset(parse_failures),
         )
         with stage("select_tests"):
             selection = self._testing.select_tests(
@@ -347,14 +370,104 @@ class Phase1AnalysisOrchestrator:
         return AnalysisExecutionResult(
             analysis_id=command.analysis_id,
             changed_file_count=len(changes.changed_files),
-            graph_node_count=graph_response.node_count,
-            graph_edge_count=graph_response.edge_count,
+            graph_node_count=graph_snapshot.node_count,
+            graph_edge_count=graph_snapshot.edge_count,
             affected_files=blast_radius.affected_files,
             selected_tests=selection.selected_count,
             confidence_score=confidence.confidence_score,
             risk_level=confidence.risk_level,
             verification_status=confidence.verification_status,
         )
+
+    def _patch_base_graph(
+        self, command: ExecuteAnalysisCommand, graph_version: str
+    ) -> tuple[GraphSnapshot, tuple[str, ...]] | None:
+        """The head graph patched from the nearest analysed ancestor, or ``None``.
+
+        ``None`` means "build the full graph": no stored snapshot of an ancestor with
+        the same build fingerprint, too many changed files, a git problem, or any
+        reason :func:`radius_graph.incremental.patch_graph` cannot prove the patched
+        graph equal to a full build. Never raises for those; storing is the caller's.
+        """
+
+        reusable = getattr(self._graph_store, "reusable_snapshots", None)
+        if command.head_ref is None or reusable is None:
+            return None
+        log = {"analysis_id": str(command.analysis_id)}
+        try:
+            with stage("incremental_base"):
+                found = nearest_snapshot_ancestor(
+                    command.repository_path,
+                    command.head_ref,
+                    reusable(command.repository_id, graph_version),
+                )
+                if found is None:
+                    LOGGER.info(
+                        "Full graph build: no analysed ancestor",
+                        extra={**log, "outcome": "incremental_no_base"},
+                    )
+                    return None
+                base_sha, base_analysis_id = found
+                changed = changed_paths_between(
+                    command.repository_path, base_sha, command.head_ref
+                )
+                if changed is None or len(changed) > self._incremental_max_changed_files:
+                    LOGGER.info(
+                        "Full graph build: too many changed files since the base",
+                        extra={
+                            **log,
+                            "outcome": "incremental_too_many_changes",
+                            "changed_files": None if changed is None else len(changed),
+                        },
+                    )
+                    return None
+                base = self._graph_store.get_snapshot(base_analysis_id)
+            if base is None or base.graph_version.value != graph_version:
+                return None
+            repository_path = command.repository_path
+
+            def parse(files) -> ParsedBatch:
+                result = self._parser.parse_source_files(repository_path, list(files))
+                return ParsedBatch(result.parsed_files, result.parse_failures)
+
+            with stage("incremental_graph"):
+                head_files = self._parser.discover_parseable(repository_path)
+                snapshot, build = self._graph.build_graph_incremental(
+                    repository_id=command.repository_id,
+                    analysis_id=command.analysis_id,
+                    base=base.graph,
+                    head_files=head_files,
+                    changed_paths=changed,
+                    parse=parse,
+                    repository_path=repository_path,
+                    graph_version=graph_version,
+                )
+            del base
+        except IncrementalUnavailable as exc:
+            LOGGER.info(
+                "Full graph build: incremental build not applicable",
+                extra={**log, "outcome": "incremental_fallback", "reason": exc.reason},
+            )
+            return None
+        except Exception:  # an optimisation must never break the analysis
+            LOGGER.warning(
+                "Incremental graph build failed; building the full graph",
+                extra={**log, "outcome": "incremental_error"},
+                exc_info=True,
+            )
+            return None
+        LOGGER.info(
+            "Graph patched from an analysed ancestor",
+            extra={
+                **log,
+                "outcome": "incremental_graph",
+                "base_commit": base_sha,
+                "changed_files": len(changed),
+                "reparsed_files": build.reparsed_files,
+                "reresolved_importers": build.reresolved_importers,
+            },
+        )
+        return snapshot, build.parse_failures
 
     def _execute_without_code_changes(
         self,

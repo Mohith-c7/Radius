@@ -81,6 +81,9 @@ class TsModuleResolver:
         self._root = repository_path.resolve() if repository_path else None
         self._configs: dict[str, TsConfig] = {}
         self._cache: dict[str, TsConfig | None] = {}
+        #: Every config file this resolver tried to read (``extends`` chains included),
+        #: so an incremental graph build can tell whether a JSON change matters.
+        self.config_files: set[str] = set()
         if self._root is not None:
             self._load_configs()
 
@@ -279,6 +282,7 @@ class TsModuleResolver:
 
     def _read_json(self, relative: str) -> dict | None:
         assert self._root is not None  # noqa: S101
+        self.config_files.add(posixpath.normpath(relative))
         path = self._root / relative
         try:
             if path.is_symlink() or not path.resolve().is_relative_to(self._root):

@@ -22,7 +22,7 @@ How to read it.
   (`RADIUS_LLM_*`) silently fall back to their default on a bad number.
 
 
-Variables documented: **192** (16 secret, 12 feature flags).
+Variables documented: **194** (16 secret, 12 feature flags).
 
 ## Core, API, GitHub and observability
 
@@ -90,6 +90,8 @@ Variables documented: **192** (16 secret, 12 feature flags).
 | `RADIUS_GIT_TIMEOUT_SECONDS` | float | `120.0` | worker | no | - | Time limit for every other git command (fetch, worktree, checkout, gc). The process group is killed on expiry and the job is retried. |
 | `RADIUS_HSTS_ENABLED` | bool | `false` | api | no | - | Send Strict-Transport-Security. Enable only when served over TLS. |
 | `RADIUS_HSTS_MAX_AGE` | int | `31536000` | api | no | - | `max-age` in seconds of the Strict-Transport-Security header when HSTS is enabled. |
+| `RADIUS_INCREMENTAL_GRAPH` | bool | `true` | worker | no | - | Build a pull request's dependency graph by patching the stored graph of the nearest analysed ancestor commit (re-parsing only changed files and the importers they can affect) instead of parsing the whole repository. Falls back to a full build whenever the result could differ. Set to false to always build the full graph. |
+| `RADIUS_INCREMENTAL_MAX_CHANGED_FILES` | int | `200` | worker | no | - | Above this many files changed between the head and the nearest analysed ancestor, the worker builds the full graph instead of patching one. |
 | `RADIUS_INTENT_ALLOW_CROSS_REPO` | bool | `false` | worker | no | - | Fetch issues named by closing references in OTHER repositories (owner/repo#n, issue URLs). Off by default: the installation token can read every repository of the installation, so honoring a link written by a PR author would expose that repository's issue text. Skipped links are recorded as absent (cross_repo_disabled). |
 | `RADIUS_INTENT_DEADLINE_SECONDS` | float | `30.0` | worker | no | - | Wall-clock budget for all intent ingestion calls of one analysis. |
 | `RADIUS_INTENT_EXTRACTION_MODE` | str | `sections` | worker | no | - | Deterministic intent extraction mode (worker, Stage A input). sections (default): acceptance-style sections, checklists, Gherkin and spec files only. summary (opt-in): additionally proposes low-weight criteria from a conventional-commit PR title and behavioural bullets under Summary/Changes/What/Why/Description headings; never confirmed, provenance author_pr_body. llm (opt-in, DEC-034): summary plus guarded LLM proposals from the PR title and body ONLY (the PR text is sent to a third-party model provider); needs RADIUS_LLM_INTENT_ENABLED, RADIUS_LLM_INTENT_ORGS and a configured provider (RADIUS_LLM_PROVIDER plus RADIUS_LLM_API_KEY or ANTHROPIC_API_KEY, docs/ai.md), otherwise it logs why and behaves as summary; proposals are llm_proposed, never confirmed, and block verified until a human confirms them. Unknown values mean sections. |

@@ -187,6 +187,7 @@ Render free tier (512 MB, 0.1 CPU) settings:
 | `RADIUS_WORKER_MAX_RSS_MB` | `300` (default) | Leaves about 200 MB for the API and the supervisor. |
 | `MALLOC_ARENA_MAX` | `2` | Fewer glibc malloc arenas for the API's threads. It lowers fragmentation, but it is not a limit and does not stop an OOM on its own. |
 | `RADIUS_WORKER_NICE` | `10` (default) | Keeps API requests responsive while an analysis runs. |
+| `RADIUS_INCREMENTAL_GRAPH` | `true` (default) | Builds each pull request's graph by patching the stored graph of the nearest analysed ancestor instead of parsing the whole repository (identical result; full build when that is not possible). Parsing dominates an analysis on a small CPU share. |
 
 Measured on this repository (a Python and TypeScript monorepo, a graph of about 27,000 nodes and 35,000 edges), with Verdict v2 on, intent ingestion on and summary mode, the worker peaks at about 150 to 210 MB. Before the memory fixes that shipped with the watchdog, it peaked at 420 to 480 MB. Much larger repositories can still exceed the limit; the watchdog then fails that analysis instead of taking the service down.
 

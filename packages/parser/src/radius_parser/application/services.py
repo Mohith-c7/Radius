@@ -50,6 +50,32 @@ class ParserApplicationService:
             self._discovery.discover(repository_path),
             command.changed_paths,
         )
+        return self.parse_source_files(repository_path, source_files)
+
+    def discover_parseable(self, repository_path: Path) -> list[SourceFile]:
+        """Discovered files a registered parser handles, in discovery (build) order.
+
+        File checksums are skipped when the discovery supports it (the dependency
+        graph does not use them, and hashing every file dominates discovery).
+        """
+
+        try:
+            discovered = self._discovery.discover(repository_path, checksums=False)
+        except TypeError:  # a discovery without the option
+            discovered = self._discovery.discover(repository_path)
+        return [
+            source_file
+            for source_file in discovered
+            if self._parser_registry.get_parser(source_file.language) is not None
+        ]
+
+    def parse_source_files(
+        self,
+        repository_path: Path,
+        source_files: list[SourceFile],
+    ) -> RepositoryParseResult:
+        """Parse already discovered files (an incremental build re-parses a few)."""
+
         parsed_files = []
         parse_failures: list[str] = []
         experimental: set[str] = set()

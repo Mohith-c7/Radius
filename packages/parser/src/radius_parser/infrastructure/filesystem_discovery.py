@@ -34,11 +34,16 @@ IGNORED_DIRECTORIES = {
 }
 
 
+#: Checksum placeholder of ``discover(..., checksums=False)``: hashing every file is
+#: the most expensive part of discovery and the dependency graph never uses it.
+UNHASHED = "unhashed"
+
+
 class FilesystemSourceDiscovery:
     """Discover source files from a local repository snapshot."""
 
-    def discover(self, repository_path: Path) -> list[SourceFile]:
-        """Return supported source files with stable checksums."""
+    def discover(self, repository_path: Path, *, checksums: bool = True) -> list[SourceFile]:
+        """Return supported source files with stable checksums (or ``UNHASHED``)."""
 
         root = repository_path.resolve()
         discovered: list[SourceFile] = []
@@ -55,7 +60,7 @@ class FilesystemSourceDiscovery:
                 SourceFile(
                     path=SourcePath(relative_path),
                     language=language,
-                    checksum=FileChecksum(self._checksum(path)),
+                    checksum=FileChecksum(self._checksum(path) if checksums else UNHASHED),
                     absolute_path=path,
                 )
             )

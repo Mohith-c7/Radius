@@ -117,6 +117,26 @@ class WorkerSettings(DatabaseSettings):
             "selected tests in CI and upload JUnit results."
         ),
     )
+    incremental_graph_enabled: bool = Field(
+        default=True,
+        alias="RADIUS_INCREMENTAL_GRAPH",
+        description=(
+            "Build a pull request's dependency graph by patching the stored graph of "
+            "the nearest analysed ancestor commit (re-parsing only changed files and "
+            "the importers they can affect) instead of parsing the whole repository. "
+            "Falls back to a full build whenever the result could differ. Set to "
+            "false to always build the full graph."
+        ),
+    )
+    incremental_max_changed_files: int = Field(
+        default=200,
+        ge=0,
+        alias="RADIUS_INCREMENTAL_MAX_CHANGED_FILES",
+        description=(
+            "Above this many files changed between the head and the nearest analysed "
+            "ancestor, the worker builds the full graph instead of patching one."
+        ),
+    )
     symbol_impact_enabled: bool = Field(
         default=False,
         alias="RADIUS_FEATURE_SYMBOL_IMPACT",
