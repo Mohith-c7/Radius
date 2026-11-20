@@ -1,0 +1,1 @@
+The upload-results action treats a whitespace-only `api-key` as missing: it skips the upload with the usual notice instead of sending the blank key (a guaranteed 401) and masking every space in the job log.
