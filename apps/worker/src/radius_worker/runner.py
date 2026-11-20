@@ -2,9 +2,13 @@
 
 import base64
 import contextlib
+import ctypes
+import gc
+import json
 import os
 import signal
 import socket
+import sys
 import threading
 import time
 import traceback
@@ -112,6 +116,40 @@ class LeaseLostError(RuntimeError):
     """This worker no longer holds the job lease (C-02); its result must be discarded."""
 
 
+class WorkerMemoryExceededError(RuntimeError):
+    """The previous worker process was killed by the supervisor's memory watchdog."""
+
+
+#: Set by ``radius_api.serve_with_worker`` on the worker it starts after the memory
+#: watchdog killed the previous one: ``{"pid": int, "rss_mb": int, "limit_mb": int}``.
+KILLED_PREDECESSOR_ENV = "RADIUS_WORKER_KILLED_PREDECESSOR"
+
+
+def memory_exceeded_message(rss_mb: object, limit_mb: object) -> str:
+    """User-visible error of a job whose worker was killed for using too much memory."""
+
+    return (
+        "Analysis exceeded the memory budget: the worker used "
+        f"{rss_mb} MB (limit RADIUS_WORKER_MAX_RSS_MB={limit_mb}) and was stopped."
+    )
+
+
+def release_memory() -> None:
+    """Collect garbage and hand freed heap back to the OS (glibc ``malloc_trim``).
+
+    Called between pipeline phases and after each job, so a large phase does not keep
+    its pages resident for the rest of the job. Never raises.
+    """
+
+    gc.collect()
+    if not sys.platform.startswith("linux"):
+        return
+    try:
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except (OSError, AttributeError):
+        pass
+
+
 def new_worker_id() -> str:
     """Unique id of this worker process (host, pid, random suffix)."""
 
@@ -202,6 +240,9 @@ def run_worker() -> None:
     if obs_metrics.metrics_enabled():
         obs_metrics.set_queue_depth_provider(runtime.queue_depths)
     _install_stop_handlers(runtime.stop_event)
+    note = os.environ.get(KILLED_PREDECESSOR_ENV, "")
+    if note:
+        runtime.recover_killed_predecessor(note)
     print("Radius worker ready")
     runtime.run_loop(poll_interval_seconds=settings.poll_interval_seconds)
     LOGGER.info("Radius worker stopped", extra={"outcome": "worker_stopped"})
@@ -346,6 +387,7 @@ class SqlAlchemyWorkerRuntime:
             self._run_claimed_job_leased(job, lease)
         finally:
             lease.stop()
+            release_memory()
 
     def _run_claimed_job_leased(self, job, lease: _LeaseHeartbeat) -> None:
         """Execute one claimed job inside its correlation/trace context.
@@ -423,6 +465,8 @@ class SqlAlchemyWorkerRuntime:
                 )
                 lease.ensure_held()
                 orchestrator.execute(command)
+                del orchestrator
+                release_memory()  # the parse/graph phase is done; v2 reads the checkout again
                 lease.ensure_held()
                 if self.settings.verdict_v2_mode != "off":
                     # Verdict v2 Stage A/B (VS-05, flag RADIUS_FEATURE_VERDICT_V2):
@@ -521,6 +565,49 @@ class SqlAlchemyWorkerRuntime:
                     github_client=self.github_client,
                     error=exc,
                 )
+
+    def recover_killed_predecessor(self, note: str) -> list:
+        """Release the job of the worker the supervisor's memory watchdog killed.
+
+        ``note`` is the JSON of :data:`KILLED_PREDECESSOR_ENV`. The killed worker could not
+        record anything, so without this its job would wait ``job_stale_after_seconds`` for
+        lease recovery and end with a generic error. Its job is requeued (backoff, counted
+        attempt) or, on the last attempt, failed with a readable "exceeded the memory
+        budget" error and its GitHub check completed. Never raises.
+        """
+
+        try:
+            data = json.loads(note)
+            pid = int(data["pid"])
+            message = memory_exceeded_message(data.get("rss_mb", "?"), data.get("limit_mb", "?"))
+            prefix = f"{socket.gethostname()[:60]}:{pid}:"
+            with self.session_factory() as session:
+                released = self._queue(session).release_dead_worker_jobs(prefix, message)
+                session.commit()
+                for analysis_id, failed in released:
+                    LOGGER.warning(
+                        "Job of a worker killed for memory released",
+                        extra={
+                            "analysis_id": str(analysis_id),
+                            "outcome": "memory_failed" if failed else "memory_requeued",
+                            "error": message,
+                        },
+                    )
+                    if failed:
+                        _publish_github_failure(
+                            session=session,
+                            analysis_id=analysis_id,
+                            settings=self.settings,
+                            github_client=self.github_client,
+                            error=WorkerMemoryExceededError(message),
+                        )
+            return released
+        except Exception as exc:  # noqa: BLE001 - lease recovery still bounds the job
+            LOGGER.warning(
+                "Could not release the killed worker's job; lease recovery will",
+                extra={"outcome": "memory_release_failed", "error": redact_secrets(exc)},
+            )
+            return []
 
     def reap_stuck_analyses(self) -> list:
         """Fail analyses that can no longer finish and complete their checks.

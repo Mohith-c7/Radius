@@ -168,3 +168,15 @@ To configure Radius to automatically verify Pull Requests:
 
 Some hosts give you one process slot only (for example a free Render web service, which has no background workers). Start the API image with `python -m radius_api.serve_with_worker` instead of its default command: it runs `alembic upgrade head`, keeps the worker running in a child process (restarted with backoff if it exits) and serves the API on `$PORT`. On shutdown the worker gets `RADIUS_EMBEDDED_WORKER_GRACE_SECONDS` (default 30) to finish its job. On POSIX the worker runs at nice `RADIUS_WORKER_NICE` (default 10, `0` disables) so a running analysis does not starve API requests (and the dashboard's session check) on a small CPU share. The API image already contains the worker code and `git`; set `REPOSITORY_CACHE_DIR` to a writable path such as `/tmp/radius-repositories`. Use separate services when you can: they scale and restart independently.
 
+**Memory limit.** One container runs the API and the worker, so a host limit (512 MB on a free Render web service) is shared by both. When the host limit is hit, the whole instance restarts and the API answers 502. On Linux, `serve_with_worker` therefore polls the worker's resident memory (its process tree) every second. If it exceeds `RADIUS_WORKER_MAX_RSS_MB` (default `300`, `0` disables it), it stops only the worker (SIGTERM, then SIGKILL after 3 s), logs a `worker_memory_exceeded` warning and starts a new worker. The new worker releases the killed job at once: the job is retried up to `WORKER_JOB_MAX_ATTEMPTS` (default 3, with the usual backoff), then the job and analysis are failed with "Analysis exceeded the memory budget ..." and the GitHub check is completed. If the whole container is killed instead, the job is recovered after `WORKER_JOB_STALE_AFTER_SECONDS` and also fails after `WORKER_JOB_MAX_ATTEMPTS`, so it never loops forever.
+
+Render free tier (512 MB, 0.1 CPU) settings:
+
+| Variable | Value | Why |
+| --- | --- | --- |
+| `RADIUS_WORKER_MAX_RSS_MB` | `300` (default) | Leaves about 200 MB for the API and the supervisor. |
+| `MALLOC_ARENA_MAX` | `2` | Fewer glibc malloc arenas for the API's threads. It lowers fragmentation, but it is not a limit and does not stop an OOM on its own. |
+| `RADIUS_WORKER_NICE` | `10` (default) | Keeps API requests responsive while an analysis runs. |
+
+Measured on this repository (a Python and TypeScript monorepo, a graph of about 27,000 nodes and 35,000 edges), with Verdict v2 on, intent ingestion on and summary mode, the worker peaks at about 150 to 210 MB. Before the memory fixes that shipped with the watchdog, it peaked at 420 to 480 MB. Much larger repositories can still exceed the limit; the watchdog then fails that analysis instead of taking the service down.
+
