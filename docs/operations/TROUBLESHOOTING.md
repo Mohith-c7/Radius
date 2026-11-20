@@ -48,8 +48,8 @@ the code and not reproduced on a live stack say **Unverified**.
 
 | Symptom | Cause |
 |---|---|
-| `insufficient_evidence`, "Selected tests were not executed; upload CI results to verify" | Normal on a default install: in-worker test execution is `disabled`. Upload JUnit/JSON from your CI, bound to the head SHA ([CI_INTEGRATION_GUIDE.md](../CI_INTEGRATION_GUIDE.md)) |
-| Still `insufficient_evidence` after upload | Results must cover the selected tests, match the analysed head SHA and not be all skipped (`scoring.py` gaps list the reason). With `RADIUS_FEATURE_VERDICT_V2` `off` or `shadow` the PR comment and check run are not re-published after a later upload; with `on` the upload enqueues a Verdict v2 republish |
+| `insufficient_evidence`, "Awaiting CI results for N selected test file(s); upload them to verify" (older reports: "Selected tests were not executed; upload CI results to verify") | Normal on a default install: in-worker test execution is `disabled`. Upload JUnit/JSON from your CI, bound to the head SHA ([CI_INTEGRATION_GUIDE.md](../CI_INTEGRATION_GUIDE.md)) |
+| Still `insufficient_evidence` after upload | Results must cover the selected tests, match the analysed head SHA and not be all skipped (`scoring.py` gaps list the reason). node:test's JUnit reporter writes no `file`, so label each file's report (see CI_INTEGRATION_GUIDE). With `RADIUS_FEATURE_VERDICT_V2` `off` or `shadow` the worker republishes the v1 check run and comment after the upload; with `on` the upload enqueues a Verdict v2 republish |
 | `insufficient_evidence` with "N flaky test(s) ... excluded from verification evidence" | Flaky handling is on: `WORKER_TEST_RERUNS` above 0 (default 0) with sandbox mode found a test that failed then passed. With `WORKER_FLAKY_POLICY=exclude` (default) that blocks `verified`; `fail` counts it as a failure ([FLAKY_TESTS.md](../FLAKY_TESTS.md)) |
 | `failed` | At least one test failed (stable failure) |
 | Score shown as "heuristic" | The 0-100 score is `heuristic_uncalibrated`, not a probability |
