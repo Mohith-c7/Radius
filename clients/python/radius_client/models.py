@@ -17,7 +17,7 @@ class Analysis(TypedDict):
 
     id: str
     repository_id: str
-    pull_request_id: str
+    pull_request_id: str | None  # None for a manual branch/commit analysis
     commit_sha: str
     status: str  # pending, running, completed, failed, cancelled (may grow)
     created_at: str

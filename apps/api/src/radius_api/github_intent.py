@@ -172,8 +172,8 @@ def _recent_analysis_ids(
     for analysis in analysis_service.list_analyses(
         AnalysisListQuery(repository_id=repository_id)
     ):
-        if analysis.id is None:
-            continue
+        if analysis.id is None or analysis.pull_request_id is None:
+            continue  # manual branch/commit analyses have no linked pull request
         current = latest.get(analysis.pull_request_id)
         if current is None or _aware(analysis.created_at) > _aware(current.created_at):
             latest[analysis.pull_request_id] = analysis

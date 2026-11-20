@@ -273,7 +273,7 @@
         "type": "object"
       },
       "Analysis": {
-        "description": "One verification run of a pull request head commit.",
+        "description": "One verification run of a pull request head commit, or of a branch/commit.",
         "examples": [
           {
             "blast_radius": null,
@@ -328,8 +328,16 @@
             "type": "string"
           },
           "pull_request_id": {
-            "format": "uuid",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null for a manual branch/commit analysis without a pull request."
           },
           "repository_id": {
             "format": "uuid",
@@ -2093,9 +2101,16 @@
             "type": "string"
           },
           "pullRequestId": {
-            "format": "uuid",
-            "title": "Pullrequestid",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pullrequestid"
           },
           "repositoryId": {
             "format": "uuid",
@@ -2105,7 +2120,6 @@
         },
         "required": [
           "repositoryId",
-          "pullRequestId",
           "commitSha"
         ],
         "title": "StartAnalysisRequest",

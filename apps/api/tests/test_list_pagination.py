@@ -36,7 +36,6 @@ def seeded():
             headers=headers,
             json={
                 "repositoryId": repository_ids[index % 2],
-                "pullRequestId": str(uuid4()),
                 "commitSha": f"{index:x}" * 40,
             },
         )

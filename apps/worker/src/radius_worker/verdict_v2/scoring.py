@@ -1201,7 +1201,11 @@ def _intent_context(
         from radius_shared.database import models as db_models
 
         analysis = session.get(db_models.Analysis, analysis_id)
-        pull = session.get(db_models.PullRequest, analysis.pull_request_id) if analysis else None
+        pull = (
+            session.get(db_models.PullRequest, analysis.pull_request_id)
+            if analysis is not None and analysis.pull_request_id is not None
+            else None
+        )
         value = getattr(pull, "author", None)
         author = value if isinstance(value, str) and value else None
     except Exception:  # noqa: BLE001 - unknown author: no self-confirmation check

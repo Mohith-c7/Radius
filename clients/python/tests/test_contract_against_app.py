@@ -58,7 +58,7 @@ def test_client_against_real_app(monkeypatch) -> None:
     analysis_id = http.post(
         "/api/v1/analyses",
         headers=seed_headers,
-        json={"repositoryId": repo, "pullRequestId": str(uuid4()), "commitSha": sha},
+        json={"repositoryId": repo, "commitSha": sha},
     ).json()["data"]["id"]
     http.post(
         f"/api/v1/analyses/{analysis_id}/intent/sources",

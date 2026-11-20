@@ -223,6 +223,8 @@ def _ensure_latest_for_pull_request(
 ) -> None:
     """Reject results for an analysis whose pull request head has moved on."""
 
+    if analysis.pull_request_id is None:
+        return  # a manual branch/commit analysis has no pull request head to move on
     siblings = analysis_service.list_analyses(
         AnalysisListQuery(
             repository_id=analysis.repository_id,

@@ -11,7 +11,7 @@ class AnalysisStarted:
 
     analysis_id: UUID
     repository_id: UUID
-    pull_request_id: UUID
+    pull_request_id: UUID | None
     commit_sha: str
     occurred_at: datetime
 

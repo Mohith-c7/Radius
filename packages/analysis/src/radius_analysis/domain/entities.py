@@ -60,7 +60,7 @@ class Analysis:
 
     id: UUID | None
     repository_id: UUID
-    pull_request_id: UUID
+    pull_request_id: UUID | None
     commit_sha: CommitSha
     status: AnalysisStatus = AnalysisStatus.PENDING
     started_at: datetime = field(default_factory=lambda: datetime.now(UTC))

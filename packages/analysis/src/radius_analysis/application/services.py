@@ -69,7 +69,7 @@ class AnalysisApplicationService:
             find_active = getattr(self._store, "find_active", None)
             existing = (
                 find_active(command.pull_request_id, command.commit_sha)
-                if find_active is not None
+                if find_active is not None and command.pull_request_id is not None
                 else None
             )
             if existing is not None:
@@ -263,12 +263,39 @@ class AnalysisApplicationService:
             command.base_ref,
             command.head_ref,
         )
+        if not diff_text.strip():
+            # A valid equal-ref diff is an intentional empty change set. For
+            # other empty diffs, compare with the head's parent when available.
+            if command.base_ref == command.head_ref:
+                return self._empty_diff_response(command.analysis_id)
+            get_parent_ref = getattr(self._diff_provider, "get_parent_ref", None)
+            if get_parent_ref is not None:
+                parent_ref = get_parent_ref(Path(command.repository_path), command.head_ref)
+                if parent_ref is None:
+                    return self._empty_diff_response(command.analysis_id)
+                diff_text = self._diff_provider.get_diff(
+                    Path(command.repository_path),
+                    parent_ref,
+                    command.head_ref,
+                )
+            else:
+                diff_text = self._diff_provider.get_diff(
+                    Path(command.repository_path), f"{command.head_ref}^", command.head_ref
+                )
+        if not diff_text.strip():
+            return self._empty_diff_response(command.analysis_id)
         return self.analyze_diff(
             AnalyzeDiffCommand(
                 analysis_id=command.analysis_id,
                 diff_text=diff_text,
             )
         )
+
+    def _empty_diff_response(self, analysis_id: UUID) -> ChangeAnalysisResponse:
+        if self._store.get_by_id(analysis_id) is None:
+            msg = f"Analysis {analysis_id} was not found."
+            raise NotFoundError(msg)
+        return ChangeAnalysisResponse(analysis_id=analysis_id, changed_files=())
 
     def save_blast_radius(
         self,

@@ -1,5 +1,6 @@
 """CI results only verify an analysis when they cover the selected tests."""
 
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
@@ -7,6 +8,7 @@ from radius_api.main import create_app
 from radius_confidence.domain import AnalysisEvidence, ImpactEvidence
 from radius_confidence.domain import TestEvidence as ConfidenceTestEvidence
 from radius_confidence.dto import GenerateConfidenceReportCommand
+from radius_repository.dto import UpsertPullRequestCommand
 from radius_testing.domain import SelectedTest
 from radius_testing.domain import TestCase as RadiusTestCase
 from radius_testing.domain import TestFramework as RadiusTestFramework
@@ -49,14 +51,25 @@ def _mapped_analysis(
             "visibility": "private",
         },
     ).json()["data"]["id"]
-    pull_request = str(uuid4())
+    pull_request = app.state.container.repository_service().upsert_pull_request(
+        UpsertPullRequestCommand(
+            repository_id=UUID(repo),
+            github_pr_number=101,
+            title="CI attribution fixture",
+            source_branch="feature",
+            target_branch="main",
+            author="octocat",
+            status="open",
+            opened_at=datetime.now(UTC),
+        )
+    ).id
     analysis_id = client.post(
         "/api/v1/analyses",
         headers=headers,
-        json={"repositoryId": repo, "pullRequestId": pull_request, "commitSha": HEAD},
+        json={"repositoryId": repo, "pullRequestId": str(pull_request), "commitSha": HEAD},
     ).json()["data"]["id"]
     if context is not None:
-        context.update(repo=repo, pull_request=pull_request)
+        context.update(repo=repo, pull_request=str(pull_request))
     analysis_uuid = UUID(analysis_id)
     container = app.state.container
     container.test_store.save_selection(
@@ -480,8 +493,8 @@ def test_upload_count_per_analysis_is_bounded(monkeypatch) -> None:
     assert second.status_code == 409
 
 
-def test_stale_check_ignores_analyses_of_other_repositories() -> None:
-    """Another tenant reusing a pull_request_id must not make uploads stale."""
+def test_foreign_pr_cannot_be_reused_across_repositories() -> None:
+    """A tenant cannot attach an analysis to another repository's pull request."""
 
     context: dict = {}
     client, headers, analysis_id = _mapped_analysis(context=context)
@@ -508,11 +521,11 @@ def test_stale_check_ignores_analyses_of_other_repositories() -> None:
             "pullRequestId": context["pull_request"],
             "commitSha": "b" * 40,
         },
-    ).json()["data"]["id"]
+    )
+    assert foreign.status_code == 404
 
     response = _upload(
         client, headers, analysis_id, _junit("tests.test_checkout"), commit_sha=HEAD
     )
 
     assert response.status_code == 200
-    assert foreign not in response.text

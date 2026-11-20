@@ -71,7 +71,7 @@ def world(factory, monkeypatch):
     analysis = client.post(
         "/api/v1/analyses",
         headers=base,
-        json={"repositoryId": repo, "pullRequestId": str(uuid4()), "commitSha": "a" * 40},
+        json={"repositoryId": repo, "commitSha": "a" * 40},
     ).json()["data"]["id"]
     sub = client.post(
         f"/api/v1/analyses/{analysis}/intent/sources",

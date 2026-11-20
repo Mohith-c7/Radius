@@ -1,7 +1,7 @@
 // Pure view helpers shared by the analysis lists, search, compare, overview and
 // help pages. No React or fetch here so they can be unit tested with node.
 
-import type { Analysis, ConfidenceReport, PullRequest, Repository } from "./api.ts";
+import type { Analysis, Branch, ConfidenceReport, PullRequest, Repository } from "./api.ts";
 
 /** Repository docs on GitHub (help and settings links). */
 export const DOCS_BASE = "https://github.com/Mohith-c7/Radius/blob/develop";
@@ -30,12 +30,26 @@ export type AnalysisLabel = {
   pullRequest: PullRequest | null;
 };
 
+/** "Branch/commit 1a2b3c4" for an analysis that has no pull request. */
+export function branchCommitLabel(commitSha: string | null | undefined): string {
+  const sha = (commitSha ?? "").trim().slice(0, 7);
+  return sha ? `Branch/commit ${sha}` : "Branch/commit";
+}
+
 export function analysisLabel(
-  analysis: Pick<Analysis, "id" | "pull_request_id">,
+  analysis: Pick<Analysis, "id" | "pull_request_id"> & { commit_sha?: string | null },
   pullRequests: PullRequestIndex,
   max = 60,
 ): AnalysisLabel {
-  const pr = analysis.pull_request_id ? pullRequests.get(analysis.pull_request_id) ?? null : null;
+  if (!analysis.pull_request_id) {
+    // A manual branch/commit verification: there is no pull request at all.
+    return {
+      title: branchCommitLabel(analysis.commit_sha),
+      secondary: `Analysis ${shortId(analysis.id)}`,
+      pullRequest: null,
+    };
+  }
+  const pr = pullRequests.get(analysis.pull_request_id) ?? null;
   if (pr) {
     return {
       title: `#${pr.github_pr_number} ${truncate(pr.title, max)}`,
@@ -45,9 +59,40 @@ export function analysisLabel(
   }
   return {
     title: `Analysis ${shortId(analysis.id)}`,
-    secondary: "Manual run or pull request not synced",
+    secondary: "Pull request not synced",
     pullRequest: null,
   };
+}
+
+/** Title and description of the analysis detail page heading. */
+export function analysisHeading(
+  analysis: Pick<Analysis, "pull_request_id" | "commit_sha">,
+  repositoryName: string,
+  pullRequest?: PullRequest | null,
+): { title: string; description: string } {
+  if (!analysis.pull_request_id) {
+    return {
+      title: "Branch/commit verification",
+      description: `${repositoryName} / ${branchCommitLabel(analysis.commit_sha)}`,
+    };
+  }
+  const pr = pullRequest
+    ? `PR #${pullRequest.github_pr_number} ${truncate(pullRequest.title, 60)}`
+    : `PR ${shortId(analysis.pull_request_id)}`;
+  return { title: "Pull request verification", description: `${repositoryName} / ${pr}` };
+}
+
+/** Option label of a pull request in the "Run Verification" form: "#12 Add login". */
+export function pullRequestOptionLabel(pr: Pick<PullRequest, "github_pr_number" | "title">, max = 70): string {
+  return `#${pr.github_pr_number} ${truncate(pr.title, max)}`;
+}
+
+/** The branch the "Run Verification" form starts on: the default branch when indexed, else the first. */
+export function initialBranch(
+  repository: Pick<Repository, "default_branch"> & { branches?: Branch[] | null },
+): Branch | null {
+  const branches = repository.branches ?? [];
+  return branches.find((b) => b.name === repository.default_branch) ?? branches[0] ?? null;
 }
 
 /** https://github.com/<owner>/<repo>/pull/<n>, or null for a malformed name or number. */
@@ -60,6 +105,26 @@ export function pullRequestUrl(fullName: string | null | undefined, number: numb
 function timestamp(value: string | null | undefined): number {
   const parsed = value ? Date.parse(value) : Number.NaN;
   return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+/** Status choices of the analyses list filter. */
+export const ANALYSIS_STATUS_FILTERS: readonly string[] = ["all", "pending", "running", "completed", "failed"];
+
+/**
+ * The analyses list filtered by status and repository ("all", empty or
+ * missing means no filter on that field). Status matching ignores case.
+ */
+export function filterAnalyses<T extends Pick<Analysis, "status" | "repository_id">>(
+  analyses: T[],
+  filters: { status?: string | null; repositoryId?: string | null },
+): T[] {
+  const status = (filters.status ?? "").trim().toLowerCase();
+  const repositoryId = (filters.repositoryId ?? "").trim();
+  return analyses.filter(
+    (analysis) =>
+      (!status || status === "all" || analysis.status.toLowerCase() === status) &&
+      (!repositoryId || repositoryId === "all" || analysis.repository_id === repositoryId),
+  );
 }
 
 /** Completed analyses with an id, newest first. */
