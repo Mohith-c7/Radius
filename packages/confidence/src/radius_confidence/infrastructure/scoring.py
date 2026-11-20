@@ -127,6 +127,9 @@ class DeterministicConfidenceScorer:
             "verification_confidence": self._verification_confidence(tests),
             "verification_gaps": gaps,
             "awaiting_results": awaiting_only,
+            # Nothing executable changed: "verified" means no test evidence is needed,
+            # not that tests ran (the summary must say which).
+            "no_executable_changes": nothing_to_test,
         }
         return ScoringResult(final_score, tuple(evidence), metrics)
 

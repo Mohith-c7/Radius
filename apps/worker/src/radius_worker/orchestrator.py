@@ -32,7 +32,12 @@ from radius_confidence.domain import (
 )
 from radius_confidence.dto import GenerateConfidenceReportCommand
 from radius_graph.application import GraphApplicationService
-from radius_graph.domain import GraphEdgeType, GraphNodeType, GraphSnapshot
+from radius_graph.domain import (
+    DependencyGraph,
+    GraphEdgeType,
+    GraphNodeType,
+    GraphSnapshot,
+)
 from radius_graph.dto import BuildGraphCommand
 from radius_graph.interfaces.graph_store import GraphStore
 from radius_graph.traversal import file_dependents
@@ -55,6 +60,7 @@ from radius_testing.dto import (
 )
 from radius_testing.infrastructure.impact_mapping import (
     ChangedFileRef,
+    is_non_executable,
     map_changes_to_tests,
 )
 from radius_testing.infrastructure.selection import PathBasedTestSelector
@@ -195,6 +201,9 @@ class Phase1AnalysisOrchestrator:
                 self._analyze_tampering(command, symbol_result)
         if self._assertion_extraction_enabled:
             self._extract_assertions(command)
+
+        if changed_paths and all(is_non_executable(path) for path in changed_paths):
+            return self._execute_without_code_changes(command, changes, changed_paths)
 
         # NOTE: the experimental LLM "semantic pruning" step is intentionally
         # NOT part of this pipeline. It could remove files (and therefore
@@ -340,6 +349,86 @@ class Phase1AnalysisOrchestrator:
             changed_file_count=len(changes.changed_files),
             graph_node_count=graph_response.node_count,
             graph_edge_count=graph_response.edge_count,
+            affected_files=blast_radius.affected_files,
+            selected_tests=selection.selected_count,
+            confidence_score=confidence.confidence_score,
+            risk_level=confidence.risk_level,
+            verification_status=confidence.verification_status,
+        )
+
+    def _execute_without_code_changes(
+        self,
+        command: ExecuteAnalysisCommand,
+        changes,
+        changed_paths: tuple[str, ...],
+    ) -> AnalysisExecutionResult:
+        """Fast path: every changed file is non-executable (docs, images, CI config).
+
+        Parsing, the graph and test discovery cannot change the outcome: the full
+        pipeline maps every such file to the ``non_executable`` bucket and needs no
+        test evidence. So none of them runs (no graph snapshot is stored); the
+        selection is recorded as empty and the confidence report says that no
+        executable code changed. Verdict v2 still runs afterwards.
+        """
+
+        selection = self._testing.select_tests(
+            SelectTestsCommand(
+                analysis_id=command.analysis_id,
+                changed_file_paths=changed_paths,
+                affected_file_paths=(),
+                available_tests=(),
+            )
+        )
+        self._testing.plan_test_run(PlanTestRunCommand(command.analysis_id))
+        test_evidence = replace(
+            self._run_or_defer_tests(command, 0), selected_test_files=0
+        )
+        blast_radius = self._analysis.compute_blast_radius(
+            ComputeBlastRadiusCommand(
+                analysis_id=command.analysis_id,
+                graph_snapshot=GraphSnapshot(
+                    repository_id=command.repository_id,
+                    analysis_id=command.analysis_id,
+                    graph=DependencyGraph(),
+                ),
+                changed_file_paths=changed_paths,
+                affected_test_paths=(),
+            )
+        )
+        with stage("confidence"):
+            confidence = self._confidence.generate_report(
+                GenerateConfidenceReportCommand(
+                    analysis_id=command.analysis_id,
+                    impact=ImpactEvidence(
+                        affected_files=blast_radius.affected_files,
+                        affected_symbols=blast_radius.affected_symbols,
+                        affected_modules=blast_radius.affected_modules,
+                        affected_tests=blast_radius.affected_tests,
+                        dependency_depth=blast_radius.dependency_depth,
+                    ),
+                    tests=test_evidence,
+                    analysis=AnalysisEvidence(
+                        changed_files=len(changed_paths),
+                        non_executable_files=tuple(
+                            path.replace("\\", "/") for path in changed_paths
+                        ),
+                    ),
+                ),
+            )
+        LOGGER.info(
+            "Analysis completed without code changes",
+            extra={
+                "analysis_id": str(command.analysis_id),
+                "outcome": "no_executable_changes",
+                "changed_files": len(changed_paths),
+                "verification_status": confidence.verification_status,
+            },
+        )
+        return AnalysisExecutionResult(
+            analysis_id=command.analysis_id,
+            changed_file_count=len(changes.changed_files),
+            graph_node_count=0,
+            graph_edge_count=0,
             affected_files=blast_radius.affected_files,
             selected_tests=selection.selected_count,
             confidence_score=confidence.confidence_score,
