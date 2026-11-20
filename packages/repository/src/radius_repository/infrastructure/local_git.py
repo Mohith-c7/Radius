@@ -95,6 +95,20 @@ def _safe_ref(value: object, what: str) -> str:
     return value
 
 
+def _fetch_refspecs(branches: tuple[str, ...], pull_request: int | None) -> tuple[str, ...]:
+    """Refspecs for one job: each base branch and the pull request head (invalid ones dropped)."""
+
+    out: list[str] = []
+    for branch in branches:
+        with contextlib.suppress(ValidationError):
+            name = _safe_ref(branch, "branch")
+            if ":" not in name and not name.startswith("refs/"):
+                out.append(f"+refs/heads/{name}:refs/remotes/origin/{name}")
+    if isinstance(pull_request, int) and not isinstance(pull_request, bool) and pull_request > 0:
+        out.append(f"+refs/pull/{pull_request}/head:refs/remotes/origin/pr/{pull_request}")
+    return tuple(out)
+
+
 class LocalGitRepositoryClient:
     """Clone, fetch, and check out repositories using the Git CLI.
 
@@ -174,6 +188,90 @@ class LocalGitRepositoryClient:
                 _rmtree(destination)
                 raise
             return destination
+
+    def sync_cache(
+        self,
+        clone_url: str,
+        destination: Path,
+        *,
+        branches: tuple[str, ...] = (),
+        pull_request: int | None = None,
+        commit: str | None = None,
+        extra_headers: tuple[str, ...] = (),
+    ) -> Path:
+        """Bring the per-repository object cache up to date for one job.
+
+        Cache hit: only the job's base ``branches`` and the pull request head are
+        fetched, not every ref. Cache miss: a fresh clone (:meth:`clone_or_fetch`).
+        A cache git cannot read, or whose recorded origin no longer validates, is
+        deleted and cloned again. When ``commit`` is still missing after a targeted
+        fetch (a push to a branch that was not fetched, a force-pushed PR), every ref
+        is fetched as before. Credentials go through :meth:`_run` exactly as for
+        :meth:`clone_or_fetch` (environment-only headers, never ``.git/config``).
+        Jobs never share a working tree: check out with :meth:`analysis_worktree`.
+        """
+
+        refspecs = _fetch_refspecs(branches, pull_request)
+        fetched = False
+        with self._locked(destination):
+            hit = destination.exists() and self._cache_usable(destination)
+            if destination.exists() and not hit:
+                LOGGER.warning(
+                    "Repository cache unusable; cloning again", extra={"cache": destination.name}
+                )
+                _rmtree(destination)
+            if hit and refspecs:
+                self._clear_stale_locks(destination)
+                try:
+                    self._run(
+                        ("git", "fetch", "origin", *refspecs),
+                        cwd=destination,
+                        extra_headers=extra_headers,
+                        remote_url=self._validated_origin(destination),
+                    )
+                    fetched = True
+                except ValidationError:
+                    LOGGER.info(
+                        "Targeted fetch failed; fetching every ref",
+                        extra={"cache": destination.name},
+                    )
+        if not fetched:
+            # miss: clone; a hit without refspecs or after a failed targeted fetch: fetch --all
+            self.clone_or_fetch(clone_url, destination, extra_headers=extra_headers)
+            if not hit and pull_request:
+                with contextlib.suppress(Exception):
+                    self.fetch_pull_request(destination, pull_request, extra_headers=extra_headers)
+        elif commit and not self.has_commit(destination, commit):
+            self.clone_or_fetch(clone_url, destination, extra_headers=extra_headers)
+        return destination
+
+    def has_commit(self, repository_path: Path, sha: str) -> bool:
+        """Whether the commit ``sha`` is in the repository (no network)."""
+
+        if not isinstance(sha, str) or not _COMMIT_SHA.match(sha):
+            return False
+        try:
+            self._run(("git", "cat-file", "-e", f"{sha}^{{commit}}"), cwd=repository_path)
+        except ValidationError:
+            return False
+        return True
+
+    def _cache_usable(self, repository_path: Path) -> bool:
+        """A readable git repository with a valid recorded origin (caller holds the lock)."""
+
+        if not (repository_path / ".git").is_dir():
+            return False
+        try:
+            # --git-dir pins the check to this cache: a broken .git must not make git
+            # fall back to a repository in a parent directory.
+            self._run(
+                ("git", f"--git-dir={repository_path / '.git'}", "for-each-ref", "--count=1"),
+                cwd=repository_path,
+            )
+            self._validated_origin(repository_path)
+        except ValidationError:
+            return False
+        return True
 
     def checkout(self, repository_path: Path, branch_name: str) -> None:
         """Detach the cache's own working tree at a commit or ref (forced).
