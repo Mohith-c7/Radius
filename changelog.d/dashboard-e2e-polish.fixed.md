@@ -1,0 +1,1 @@
+Notifications name the pull request ("#177 title") instead of a commit id, the repository page hides branches recorded as deleted on GitHub, and the repository page no longer scrolls sideways on narrow screens.

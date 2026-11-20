@@ -165,3 +165,32 @@ test("recentNotifications lists the five newest finished analyses", () => {
   assert.equal(items[0].commit, "66666666");
   assert.deepEqual(m.recentNotifications([list[0]]), []);
 });
+
+test("recentNotifications titles an analysis by its pull request when known", () => {
+  const done = { status: "completed", created_at: "2026-11-01T00:00:00Z", completed_at: null, repository_id: "r1" };
+  const list = [
+    { ...done, id: "8f30b83d-1", commit_sha: "8f30b83d0000", pull_request_id: "pr-177" },
+    { ...done, id: "abcdef12-2", commit_sha: "1234567890ab", pull_request_id: "pr-unsynced" },
+    { ...done, id: "00000000-3", commit_sha: "feedbeef0000", pull_request_id: null },
+  ];
+  const index = m.indexPullRequests([{ id: "pr-177", github_pr_number: 177, title: "Fix the links" }]);
+  const titles = Object.fromEntries(m.recentNotifications(list, 5, index).map((i) => [i.id, i.title]));
+  assert.equal(titles["8f30b83d-1"], "#177 Fix the links");
+  assert.equal(titles["abcdef12-2"], "Analysis abcdef12");
+  assert.equal(titles["00000000-3"], "Branch/commit feedbee");
+  assert.equal(m.recentNotifications(list)[0].repositoryId, "r1");
+});
+
+test("liveBranches hides branches whose deletion push recorded the zero commit", () => {
+  const branches = [
+    { name: "main", latest_commit_sha: "a".repeat(40) },
+    { name: "feature/merged", latest_commit_sha: "0".repeat(40) },
+    { name: "new", latest_commit_sha: null },
+  ];
+  assert.deepEqual(m.liveBranches(branches).map((b) => b.name), ["main", "new"]);
+  assert.deepEqual(m.liveBranches(null), []);
+  assert.equal(
+    m.initialBranch({ default_branch: "feature/merged", branches })?.name,
+    "main",
+  );
+});

@@ -77,6 +77,7 @@ import {
   defaultComparePair,
   indexPullRequests,
   initialBranch,
+  liveBranches,
   pullRequestMatches,
   pullRequestOptionLabel,
   pullRequestUrl,
@@ -576,6 +577,7 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
   if (state.status === "error") return <ErrorState message={state.error} />;
 
   const { repository, analyses, pullRequests } = state.data;
+  const branches = liveBranches(repository.branches);
 
   async function handleSyncPullRequests() {
     setSyncingPrs(true);
@@ -637,7 +639,7 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
         title={repository.full_name}
         description={`${repository.visibility} / ${repository.status}`}
         action={
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
             <button
               className="button secondary"
               onClick={handleSyncPullRequests}
@@ -690,7 +692,7 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
       <section className="metric-grid">
         <Metric label="Target branch" value={repository.default_branch} />
         <Metric label="Pull requests" value={pullRequests.length} />
-        <Metric label="Branches indexed" value={repository.branches?.length ?? 0} />
+        <Metric label="Branches indexed" value={branches.length} />
         <Metric label="Verification runs" value={analyses.length} />
       </section>
 
@@ -708,8 +710,8 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "12px", alignItems: "center", marginBottom: "16px" }}>
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "12px", alignItems: "center", marginBottom: "16px" }}>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
             <input
               type="text"
               value={targetBranchInput}
@@ -717,7 +719,7 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
               placeholder="e.g. main, master, develop"
               aria-label="Target branch"
               className="input"
-              style={{ width: "240px" }}
+              style={{ width: "240px", maxWidth: "100%" }}
             />
             <button
               className="button secondary"
@@ -729,15 +731,17 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
           </div>
         </div>
 
-        {repository.branches && repository.branches.length > 0 ? (
+        {branches.length > 0 ? (
           <div style={{ display: "grid", gap: "8px" }}>
-            {repository.branches.map((b) => {
+            {branches.map((b) => {
               const isDefault = b.name === repository.default_branch;
               return (
                 <div
                   key={b.id || b.name}
                   style={{
                     display: "flex",
+                    flexWrap: "wrap",
+                    gap: "8px",
                     justifyContent: "space-between",
                     alignItems: "center",
                     padding: "10px 14px",
@@ -746,9 +750,9 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
                     border: `1px solid ${isDefault ? "var(--green)" : "var(--line)"}`,
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", minWidth: 0 }}>
                     <GitBranch size={16} style={{ color: isDefault ? "var(--green)" : "var(--muted)" }} />
-                    <span style={{ fontWeight: 600 }}>{b.name}</span>
+                    <span style={{ fontWeight: 600, overflowWrap: "anywhere" }}>{b.name}</span>
                     {isDefault && (
                       <span
                         style={{
@@ -769,7 +773,7 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
                       </span>
                     )}
                   </div>
-                  <div style={{ display: "flex", gap: "8px" }}>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                     {!isDefault && (
                       <button
                         className="button secondary"
@@ -803,7 +807,7 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
 
       {/* Pull Requests Section */}
       <div className="card detail-card" style={{ marginBottom: "20px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
           <div>
             <h2 style={{ margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
               <GitPullRequest size={18} style={{ color: "var(--green)" }} />
@@ -833,6 +837,8 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
                   key={pr.id}
                   style={{
                     display: "flex",
+                    flexWrap: "wrap",
+                    gap: "10px",
                     justifyContent: "space-between",
                     alignItems: "center",
                     padding: "12px 16px",
@@ -841,11 +847,11 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
                     background: "var(--canvas)",
                   }}
                 >
-                  <div style={{ display: "grid", gap: "4px" }}>
+                  <div style={{ display: "grid", gap: "4px", minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                       <Link
                         href={`/pull-requests/${pr.id}`}
-                        style={{ fontWeight: 600, color: "var(--ink)", textDecoration: "none" }}
+                        style={{ fontWeight: 600, color: "var(--ink)", textDecoration: "none", overflowWrap: "anywhere" }}
                       >
                         #{pr.github_pr_number} {pr.title}
                       </Link>
@@ -874,14 +880,14 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
                     </div>
                     <div className="muted" style={{ fontSize: "12px", display: "flex", gap: "16px", flexWrap: "wrap" }}>
                       <span>Author: {pr.author}</span>
-                      <span>
+                      <span style={{ overflowWrap: "anywhere" }}>
                         Route: <code>{pr.source_branch}</code> → <code>{pr.target_branch}</code>
                       </span>
                       <span>Opened: {formatDate(pr.opened_at)}</span>
                     </div>
                   </div>
 
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
                     {matchingAnalysis ? (
                       <Link
                         href={`/analyses/${matchingAnalysis.id}`}
@@ -983,8 +989,8 @@ function TriggerAnalysisModal({
   // page) or loaded from the API (analyses page, where list rows may omit them).
   const [loadedBranches, setLoadedBranches] = useState<Record<string, Branch[]>>({});
   const branches = useMemo(() => {
-    if (selectedRepo?.branches?.length) return selectedRepo.branches;
-    return (selectedRepo?.id ? loadedBranches[selectedRepo.id] : undefined) ?? [];
+    if (selectedRepo?.branches?.length) return liveBranches(selectedRepo.branches);
+    return liveBranches((selectedRepo?.id ? loadedBranches[selectedRepo.id] : undefined) ?? []);
   }, [selectedRepo, loadedBranches]);
   const [branchName, setBranchName] = useState(() =>
     selectedRepo ? initialBranch(selectedRepo)?.name ?? "" : "",
