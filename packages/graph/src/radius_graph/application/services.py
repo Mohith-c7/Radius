@@ -1,6 +1,10 @@
 """Graph application service."""
 
-from radius_parser.domain.entities import ParsedSourceFile
+from collections.abc import Callable, Iterable, Sequence
+from pathlib import Path
+from uuid import UUID
+
+from radius_parser.domain.entities import ParsedSourceFile, SourceFile
 
 from radius_graph.domain.entities import (
     DependencyGraph,
@@ -12,6 +16,7 @@ from radius_graph.domain.enums import GraphEdgeType, GraphNodeType
 from radius_graph.domain.value_objects import GraphNodeId, GraphVersion
 from radius_graph.dto.commands import BuildGraphCommand
 from radius_graph.dto.responses import GraphSnapshotResponse
+from radius_graph.incremental import IncrementalBuild, ParsedBatch, patch_graph
 from radius_graph.infrastructure.module_resolver import ModuleResolver
 from radius_graph.interfaces.graph_store import GraphStore
 
@@ -51,6 +56,41 @@ class GraphApplicationService:
             snapshot = self._store.save_snapshot(snapshot)
 
         return GraphSnapshotResponse.from_entity(snapshot)
+
+    def build_graph_incremental(
+        self,
+        *,
+        repository_id: UUID,
+        analysis_id: UUID,
+        base: DependencyGraph,
+        head_files: Sequence[SourceFile],
+        changed_paths: Iterable[str],
+        parse: Callable[[Sequence[SourceFile]], ParsedBatch],
+        repository_path: Path,
+        graph_version: str,
+    ) -> tuple[GraphSnapshot, IncrementalBuild]:
+        """Patch an ancestor commit's graph into this head's graph (not stored yet).
+
+        Raises :class:`~radius_graph.incremental.IncrementalUnavailable` when the
+        result could differ from :meth:`build_graph`. The caller stores the snapshot,
+        so a storage error is never mistaken for a reason to fall back.
+        """
+
+        build = patch_graph(
+            base,
+            head_files=head_files,
+            changed_paths=changed_paths,
+            parse=parse,
+            repository_path=repository_path,
+            add_fragment=self._add_parsed_file,
+        )
+        snapshot = GraphSnapshot(
+            repository_id=repository_id,
+            analysis_id=analysis_id,
+            graph=build.graph,
+            graph_version=GraphVersion(graph_version),
+        )
+        return snapshot, build
 
     def _add_parsed_file(
         self,

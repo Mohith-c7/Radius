@@ -161,7 +161,14 @@ class ConfidenceApplicationService:
             analysis_id=analysis_id,
             confidence_score=score,
             risk_level=self._risk_level(score.value),
-            summary=self._summary(status, score.value, gaps, source, awaiting=awaiting),
+            summary=self._summary(
+                status,
+                score.value,
+                gaps,
+                source,
+                awaiting=awaiting,
+                no_executable_changes=bool(metrics.get("no_executable_changes", False)),
+            ),
             evidence=evidence,
             recommendations=self._recommendations(status, score.value, gaps, awaiting=awaiting),
             change_risk=metrics["change_risk"],
@@ -178,7 +185,15 @@ class ConfidenceApplicationService:
         source: str,
         *,
         awaiting: bool = False,
+        no_executable_changes: bool = False,
     ) -> str:
+        if no_executable_changes and status == VerificationStatus.VERIFIED.value:
+            return (
+                "Verified: no executable code changed (only documentation, images or "
+                "repository metadata), so no test evidence is required; no tests were "
+                f"selected or run. Heuristic score {score:.1f}/100 from {source} "
+                "(not a calibrated probability)."
+            )
         if awaiting and status == VerificationStatus.INSUFFICIENT_EVIDENCE.value:
             return (
                 "Not verified yet: every executable change is mapped to selected "

@@ -137,6 +137,57 @@ class AnalysisApplicationService:
             cancelled.append(analysis.id)
         return cancelled
 
+    def cancel_superseded(
+        self,
+        *,
+        pull_request_id: UUID,
+        head_sha: str,
+        superseded_shas: tuple[str, ...] | None = None,
+    ) -> list[UUID]:
+        """Cancel a pull request's unfinished analyses of commits a new head replaced.
+
+        Only analyses of ``pull_request_id`` are considered, so manual or branch
+        analyses (no pull request) are never touched. ``superseded_shas`` limits the
+        cancellation to those commits (a ``synchronize`` event names the previous
+        head); ``None`` means every commit other than ``head_sha``. A queued analysis
+        is cancelled at once; a running one (or one waiting for a retry) gets a cancel
+        request on its job, and the worker stops it at its next checkpoint and never
+        publishes its stale result. Returns the ids cancelled or asked to stop.
+        """
+
+        head = head_sha.strip().lower()
+        targets = (
+            {sha.strip().lower() for sha in superseded_shas}
+            if superseded_shas is not None
+            else None
+        )
+        reason = f"Superseded by a newer commit of the pull request ({head[:12]})."
+        request_cancel = getattr(self._pipeline, "request_cancel", None)
+        cancel_job = getattr(self._pipeline, "cancel_queued", None)
+        affected: list[UUID] = []
+        for status in (AnalysisStatus.PENDING, AnalysisStatus.RUNNING):
+            for analysis in self._store.list(pull_request_id=pull_request_id, status=status):
+                sha = analysis.commit_sha.value.lower()
+                if (
+                    analysis.id is None
+                    or analysis.pull_request_id != pull_request_id
+                    or sha == head
+                    or (targets is not None and sha not in targets)
+                ):
+                    continue
+                if request_cancel is not None:
+                    outcome = request_cancel(analysis.id, reason)
+                elif cancel_job is not None:
+                    outcome = "cancelled" if cancel_job(analysis.id, reason) else "none"
+                else:
+                    outcome = "cancelled" if status == AnalysisStatus.PENDING else "none"
+                if outcome == "cancelled":
+                    analysis.cancel()
+                    self._store.update_status(analysis.id, analysis.status)
+                if outcome in {"cancelled", "requested"}:
+                    affected.append(analysis.id)
+        return affected
+
     def get_analysis(self, analysis_id: UUID) -> AnalysisDetailResponse:
         """Return an analysis summary with changed-file evidence."""
 

@@ -26,6 +26,7 @@ from radius_analysis.infrastructure import (
     SubprocessGitDiffProvider,
     UnifiedDiffChangeAnalyzer,
 )
+from radius_analysis.infrastructure.sqlalchemy_job_queue import cancel_request_reason
 from radius_confidence.application import ConfidenceApplicationService
 from radius_confidence.domain import CURRENT_SCORE_KIND
 from radius_confidence.infrastructure import (
@@ -116,6 +117,14 @@ class LeaseLostError(RuntimeError):
     """This worker no longer holds the job lease (C-02); its result must be discarded."""
 
 
+class AnalysisCancelledError(RuntimeError):
+    """The analysis was cancelled while it ran (e.g. a newer commit superseded it)."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
 class WorkerMemoryExceededError(RuntimeError):
     """The previous worker process was killed by the supervisor's memory watchdog."""
 
@@ -198,6 +207,21 @@ class _LeaseHeartbeat:
         if self.lost.is_set():
             msg = "The job lease was lost; this worker stops working on it."
             raise LeaseLostError(msg)
+
+    def ensure_current(self, session: Session) -> None:
+        """A safe checkpoint: stop when the lease is lost or a cancel was requested.
+
+        A cancel request (``analysis_jobs.last_error = "Cancelled: ..."``, written
+        when a newer commit supersedes the analysis) raises
+        :class:`AnalysisCancelledError`. One column read through the job's own
+        ``session``, which never writes the job row (the claim and every lease
+        change are separate transactions), so the latest committed request is seen.
+        """
+
+        self.ensure_held()
+        reason = self._runtime._queue(session).cancel_requested(self._job.analysis_id)
+        if reason is not None:
+            raise AnalysisCancelledError(reason)
 
     def _run(self) -> None:
         interval = self._runtime.settings.heartbeat_interval
@@ -402,7 +426,11 @@ class SqlAlchemyWorkerRuntime:
             # selection, sandbox mount) lives in a per-analysis worktree that
             # this stack removes on every exit path (C-03).
             with self.session_factory() as session, contextlib.ExitStack() as checkout_stack:
-                skip_reason = _skip_reason(session, job.analysis_id)
+                requested = cancel_request_reason(job.last_error)
+                if requested is not None and job.attempts > 1:
+                    # A retry whose earlier attempt already opened the check run.
+                    raise AnalysisCancelledError(requested)
+                skip_reason = requested or _skip_reason(session, job.analysis_id)
                 if skip_reason is not None:
                     # Cancelled (e.g. PR closed) between enqueue and claim: do
                     # not clone, run or publish anything for it.
@@ -423,7 +451,7 @@ class SqlAlchemyWorkerRuntime:
                 # for the whole job.
                 _mark_analysis_running(session, job.analysis_id)
                 session.commit()
-                lease.ensure_held()
+                lease.ensure_current(session)
                 # Best-effort: shows "in progress" on the PR while we work. It
                 # never raises, so it cannot fail the analysis.
                 _publish_github_in_progress(
@@ -447,8 +475,10 @@ class SqlAlchemyWorkerRuntime:
                     transport=self.intent_transport,
                     etag_cache=self.intent_etag_cache,
                 )
-                lease.ensure_held()
+                lease.ensure_current(session)
                 orchestrator = _create_sql_orchestrator(session, self.settings)
+                # Checkpoints between pipeline phases: a superseded analysis stops early.
+                orchestrator.checkpoint = lambda: lease.ensure_current(session)
                 clone_headers = _github_clone_headers(
                     session=session,
                     analysis_id=job.analysis_id,
@@ -463,11 +493,11 @@ class SqlAlchemyWorkerRuntime:
                     extra_headers=clone_headers,
                     cleanup=checkout_stack,
                 )
-                lease.ensure_held()
+                lease.ensure_current(session)
                 orchestrator.execute(command)
                 del orchestrator
                 release_memory()  # the parse/graph phase is done; v2 reads the checkout again
-                lease.ensure_held()
+                lease.ensure_current(session)
                 if self.settings.verdict_v2_mode != "off":
                     # Verdict v2 Stage A/B (VS-05, flag RADIUS_FEATURE_VERDICT_V2):
                     # best-effort, own sessions, never raises; v1 is unaffected.
@@ -481,7 +511,10 @@ class SqlAlchemyWorkerRuntime:
                         command=command,
                         settings=self.settings,
                     )
-                lease.ensure_held()
+                # Last checkpoint, after this run's writes are flushed: a result that
+                # was superseded meanwhile is rolled back and never published.
+                session.flush()
+                lease.ensure_current(session)
                 if not self._queue(session).complete(job.analysis_id):
                     # Lost the lease between the last check and now: discard this
                     # run's artefacts (rolled back) and publish nothing.
@@ -508,6 +541,9 @@ class SqlAlchemyWorkerRuntime:
                     github_client=self.github_client,
                 )
                 session.commit()
+        except AnalysisCancelledError as exc:
+            self._finish_cancelled(job, exc.reason)
+            return
         except LeaseLostError as exc:
             LOGGER.warning(
                 "Job abandoned: lease lost",
@@ -520,6 +556,12 @@ class SqlAlchemyWorkerRuntime:
             )
             return
         except Exception as exc:
+            # Cancelled while it ran: the error is a consequence (e.g. the analysis
+            # row changed under the pipeline), not a failure to retry.
+            reason = self.cancel_requested(job.analysis_id)
+            if reason is not None:
+                self._finish_cancelled(job, reason)
+                return
             self._record_job_failure(job, exc)
             raise
         LOGGER.info(
@@ -531,6 +573,44 @@ class SqlAlchemyWorkerRuntime:
                 "outcome": "completed",
             },
         )
+
+    def cancel_requested(self, analysis_id) -> str | None:
+        """Reason of a cancel request on this analysis' unfinished job; never raises."""
+
+        try:
+            with self.session_factory() as session:
+                return self._queue(session).cancel_requested(analysis_id)
+        except Exception as exc:  # noqa: BLE001 - a failed check never stops the job
+            LOGGER.warning(
+                "Could not check for a cancel request; continuing",
+                extra={"analysis_id": str(analysis_id), "error": redact_secrets(exc)},
+            )
+            return None
+
+    def _finish_cancelled(self, job, reason: str) -> None:
+        """Record a cancelled job (nothing of the run is kept) and complete its check."""
+
+        with self.session_factory() as session:
+            held = self._queue(session).skip_claimed(job.analysis_id, reason)
+            session.commit()
+            LOGGER.info(
+                "Analysis job cancelled",
+                extra={
+                    "analysis_id": str(job.analysis_id),
+                    "job_id": str(job.id),
+                    "attempt": job.attempts,
+                    "outcome": "cancelled" if held else "lease_lost",
+                    "reason": reason,
+                },
+            )
+            if held:
+                _publish_github_cancelled(
+                    session=session,
+                    analysis_id=job.analysis_id,
+                    settings=self.settings,
+                    github_client=self.github_client,
+                    reason=reason,
+                )
 
     def _record_job_failure(self, job, exc: Exception) -> None:
         """Persist a failed attempt; on the final attempt fail the analysis too.
@@ -1072,6 +1152,10 @@ def _create_sql_orchestrator(
         tamper_rules_enabled=bool(settings and settings.tamper_rules_enabled),
         assertion_extraction_enabled=bool(settings and settings.assertion_extraction_enabled),
         flaky_policy=(settings.flaky_policy if settings else "exclude"),
+        incremental_graph=bool(settings and settings.incremental_graph_enabled),
+        incremental_max_changed_files=(
+            settings.incremental_max_changed_files if settings else 200
+        ),
     )
 
 
@@ -1393,6 +1477,55 @@ def _publish_github_failure(
     except Exception as publish_exc:  # pragma: no cover - best effort
         LOGGER.warning(
             "Could not publish GitHub failure status: %s",
+            redact_secrets(publish_exc),
+            extra={"analysis_id": str(analysis_id), "outcome": "publish_error"},
+        )
+
+
+def _publish_github_cancelled(
+    *,
+    session: Session,
+    analysis_id,
+    settings: WorkerSettings,
+    github_client: GitHubAppClient,
+    reason: str,
+) -> None:
+    """Complete the in-progress check of a cancelled analysis as neutral; never raises."""
+
+    github_settings = _github_settings(settings)
+    if not settings.github_publish_results or not github_settings.enabled:
+        return
+    try:
+        analysis = session.get(db_models.Analysis, analysis_id)
+        repository = (
+            session.get(db_models.Repository, analysis.repository_id)
+            if analysis is not None
+            else None
+        )
+        if analysis is None or repository is None or analysis.pull_request_id is None:
+            return
+        publisher = GitHubAnalysisPublisher(github_client)
+        if not hasattr(publisher, "publish_cancelled"):
+            return
+        installation_id = _github_installation_id(
+            session=session,
+            analysis_id=analysis_id,
+            settings=settings,
+        )
+        owner, repository_name = repository.owner, repository.name
+        head_sha = analysis.commit_sha
+        _end_read_transaction(session)  # C-04: no open transaction during the GitHub call
+        publisher.publish_cancelled(
+            installation_id=installation_id,
+            owner=owner,
+            repository_name=repository_name,
+            head_sha=head_sha,
+            reason=redact_secrets(reason, max_length=300),
+            dashboard_url=settings.dashboard_analysis_url(analysis_id),
+        )
+    except Exception as publish_exc:  # pragma: no cover - best effort
+        LOGGER.warning(
+            "Could not publish GitHub cancelled status: %s",
             redact_secrets(publish_exc),
             extra={"analysis_id": str(analysis_id), "outcome": "publish_error"},
         )
