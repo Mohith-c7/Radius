@@ -598,6 +598,9 @@ def test_only_the_adapter_module_may_import_a_provider_sdk():
                 for a in n.names
             }
             assert "anthropic" not in top_level
+        elif path.name == "openai_compatible.py":
+            # The OpenAI-compatible adapter is plain HTTP (DEC-041): httpx and nothing else.
+            assert mods & banned == {"httpx"}
         else:
             assert not (mods & banned), path.name
 

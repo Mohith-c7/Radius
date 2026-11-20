@@ -490,6 +490,14 @@ also upserts one row into the `verdict_v2_requests` outbox (replays collapse; no
 call, the API holds no GitHub credentials). The worker recomputes and updates the Check Run
 and PR comment in place.
 
+## GET /analyses/{analysisId}/ai-review
+
+Advisory AI merge-readiness review (DEC-041, worker flag `RADIUS_FEATURE_AI_REVIEW`, `docs/ai.md`). It is AI-generated and never a verdict. It does not change the verdict, the score or the check conclusion. Render every text field as plain text.
+
+- 200: `status` is `ok` (`summary`, `risks`, `tests`, `missing_evidence` and `next_steps`, each a list of `{text, files}`) or `unavailable` (`reason_code`, for example `provider_rate_limited`, `deadline` or `output_summary_verdict_claim`). `advisory` and `ai_generated` are always `true`. Also returned: `label`, `provider`, `model`, `prompt_version`, `generated_at` and `notes` (`dropped`, `injection_flags`, `diff_truncated`). `files` lists only paths Radius computed for the analysis. `Cache-Control: private, no-cache`.
+- 404 `ANALYSIS_NOT_FOUND`: the analysis is unknown or belongs to another organization. The two cases cannot be told apart.
+- 404 `NOT_FOUND` with `meta.reason = "not_generated"`: no review is stored (the feature is off, no provider is configured, or the review has not run yet).
+
 ## GET /analyses/{analysisId}/intent
 
 Latest snapshot. Header `ETag`.

@@ -550,7 +550,8 @@ class WorkerSettings(DatabaseSettings):
             "What/Why/Description headings; never confirmed, provenance author_pr_body. "
             "llm (opt-in, DEC-034): summary plus guarded LLM proposals from the PR title and "
             "body ONLY (the PR text is sent to a third-party model provider); needs "
-            "RADIUS_LLM_INTENT_ENABLED, RADIUS_LLM_INTENT_ORGS and ANTHROPIC_API_KEY, "
+            "RADIUS_LLM_INTENT_ENABLED, RADIUS_LLM_INTENT_ORGS and a configured provider "
+            "(RADIUS_LLM_PROVIDER plus RADIUS_LLM_API_KEY or ANTHROPIC_API_KEY, docs/ai.md), "
             "otherwise it logs why and behaves as summary; proposals are llm_proposed, never "
             "confirmed, and block verified until a human confirms them. "
             "Unknown values mean sections."
@@ -567,8 +568,45 @@ class WorkerSettings(DatabaseSettings):
             "separate 'Suggested tests (not run, not evidence)' block. Never executed, never "
             "evidence, never changes the verdict. Criterion text and changed symbol NAMES "
             "(no source code) are sent to a third-party model provider; needs "
-            "RADIUS_LLM_INTENT_ENABLED, RADIUS_LLM_INTENT_ORGS and ANTHROPIC_API_KEY, "
+            "RADIUS_LLM_INTENT_ENABLED, RADIUS_LLM_INTENT_ORGS and a configured provider "
+            "(RADIUS_LLM_PROVIDER plus RADIUS_LLM_API_KEY or ANTHROPIC_API_KEY, docs/ai.md), "
             "otherwise nothing is sent."
+        ),
+    )
+
+    ai_review_enabled: bool = Field(
+        default=False,
+        alias="RADIUS_FEATURE_AI_REVIEW",
+        description=(
+            "Advisory AI merge-readiness review (DEC-041, opt-in, default off). After the "
+            "analysis result is committed, an LLM writes a short explanation (what changes, "
+            "main risks, tests that matter, missing evidence, next steps) from Radius's "
+            "computed evidence plus diff excerpts, citing only files Radius computed. Shown "
+            "on the dashboard and as a collapsible 'AI review (advisory)' section of the PR "
+            "comment. It never changes the verdict, score or check conclusion. Diff excerpts "
+            "and file names are sent to the configured provider (RADIUS_LLM_PROVIDER, "
+            "RADIUS_LLM_API_KEY, ...; see docs/ai.md); with no provider configured nothing is "
+            "sent and nothing is stored."
+        ),
+    )
+    ai_review_timeout_seconds: float = Field(
+        default=30.0,
+        ge=5.0,
+        le=120.0,
+        alias="RADIUS_AI_REVIEW_TIMEOUT_S",
+        description=(
+            "Wall-clock cap for generating one AI review, including pacing waits and "
+            "retries. When it is reached the job continues without a review."
+        ),
+    )
+    ai_review_max_diff_chars: int = Field(
+        default=12_000,
+        ge=1_000,
+        le=60_000,
+        alias="RADIUS_AI_REVIEW_MAX_DIFF_CHARS",
+        description=(
+            "Characters of diff excerpts sent for one AI review (largest changed files "
+            "first, at most a quarter of this per file; lock files and binaries skipped)."
         ),
     )
 

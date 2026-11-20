@@ -7,8 +7,9 @@ their own modules (``anthropic_provider``) and are imported lazily; tests use
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 
 @dataclass(frozen=True)
@@ -20,6 +21,10 @@ class LlmRequest:
     max_output_tokens: int = 2048
     timeout_s: float = 30.0
     seed: int | None = None  # best-effort; not every provider honours it
+    #: Optional JSON Schema of the expected reply. Providers that support structured output
+    #: (OpenAI-compatible ``response_format``) send it; the caller still validates the reply.
+    json_schema: Mapping[str, Any] | None = None
+    schema_name: str = "radius_output"
 
 
 @dataclass(frozen=True)
@@ -32,10 +37,14 @@ class LlmResponse:
 
 
 class ProviderError(Exception):
-    """Base class. ``retryable`` tells the extractor whether to back off and retry."""
+    """Base class. ``retryable`` tells the extractor whether to back off and retry.
+
+    ``retry_after_s`` is the provider's own hint (HTTP ``Retry-After``), when it sent one.
+    """
 
     code = "provider_error"
     retryable = False
+    retry_after_s: float | None = None
 
 
 class ProviderTimeout(ProviderError):
@@ -59,6 +68,18 @@ class ProviderAuthError(ProviderError):
 
 class ProviderRequestError(ProviderError):
     code = "bad_request"
+
+
+class ProviderOutputTruncated(ProviderError):
+    """The reply hit the output token limit (unusable JSON); retrying would not help."""
+
+    code = "truncated"
+
+
+class ProviderBudgetExhausted(ProviderError):
+    """The per-analysis call budget, the daily cap or the wall-clock deadline is used up."""
+
+    code = "budget"
 
 
 class ProviderConfigError(ProviderError):

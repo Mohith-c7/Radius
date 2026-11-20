@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
+from radius_github.ai_review_markdown import append_section
 from radius_github.client import GitHubAppClient
 
 CHECK_RUN_NAME = "Radius confidence"
@@ -48,6 +49,8 @@ class GitHubAnalysisReport:
     verification_gaps: tuple[str, ...] = ()
     unmapped_files: tuple[str, ...] = ()
     score_kind: str = "heuristic_uncalibrated"
+    #: Pre-rendered advisory AI review section (DEC-041); appended to the PR comment only.
+    ai_review_markdown: str = ""
 
 
 _RISK_BADGES: dict[str, str] = {
@@ -242,7 +245,8 @@ class GitHubAnalysisPublisher:
                 "token": token,
                 "owner": report.owner,
                 "repo": report.repository_name,
-                "body": body,
+                # The advisory AI section goes to the comment only, never the Check Run.
+                "body": append_section(body, report.ai_review_markdown),
             }
             if existing_comment is None:
                 self._client.create_issue_comment(

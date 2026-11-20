@@ -1,7 +1,5 @@
 """FastAPI dependency wiring for Radius services."""
 
-import importlib.util
-import os
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -43,9 +41,9 @@ from radius_intent.infrastructure.llm import (
     LlmExtractionConfig,
     LlmProvider,
 )
-from radius_intent.infrastructure.llm.anthropic_provider import (
-    API_KEY_ENV,
-    AnthropicProvider,
+from radius_intent.infrastructure.llm.factory import (
+    LlmProviderSettings,
+    build_llm_provider,
 )
 from radius_intent.infrastructure.testability import DeterministicTestabilityRater
 from radius_intent.interfaces import (
@@ -58,6 +56,7 @@ from radius_repository.infrastructure import (
     InMemoryRepositoryStore,
     SqlAlchemyRepositoryStore,
 )
+from radius_shared.ai_review import InMemoryAiReviewRepository, SqlAiReviewRepository
 from radius_shared.database.session import (
     create_database_engine,
     create_session_factory,
@@ -90,22 +89,21 @@ _UNSET: Any = object()
 
 
 def _default_llm_provider(config: LlmExtractionConfig) -> LlmProvider | None:
-    """Build the Anthropic provider, or return ``None`` (fail closed, logged)."""
+    """Build the configured provider (``RADIUS_LLM_PROVIDER``), or ``None`` (fail closed).
 
-    if importlib.util.find_spec("anthropic") is None:
+    Long-lived (cached on the container), so no per-analysis budget or deadline: the
+    process-wide pacing, daily cap and retries still apply.
+    """
+
+    provider, _why = build_llm_provider(LlmProviderSettings.from_env(), per_analysis=False)
+    if provider is None:
+        # ``_why`` derives from the environment; a fixed message is logged instead.
         _LOG.warning(
-            "LLM intent extraction is enabled but the 'anthropic' package is "
-            "not installed (extra 'llm'); the LLM extractor is disabled."
+            "LLM intent extraction is enabled but no LLM provider is configured "
+            "(RADIUS_LLM_PROVIDER, RADIUS_LLM_API_KEY / ANTHROPIC_API_KEY, "
+            "RADIUS_LLM_BASE_URL, RADIUS_LLM_MODEL); the LLM extractor is disabled."
         )
-        return None
-    if not os.environ.get(API_KEY_ENV, "").strip():
-        _LOG.warning(
-            "LLM intent extraction is enabled but %s is not set; the LLM "
-            "extractor is disabled.",
-            API_KEY_ENV,
-        )
-        return None
-    return AnthropicProvider(config.model)
+    return provider
 
 
 @dataclass(slots=True)
@@ -135,6 +133,10 @@ class AppContainer:
     #: Verdict v2 alpha store and republish outbox (memory backend).
     verdict_v2_repository: InMemoryVerdictV2Repository = field(
         default_factory=InMemoryVerdictV2Repository
+    )
+    #: Advisory AI reviews (DEC-041), memory backend.
+    ai_review_repository: InMemoryAiReviewRepository = field(
+        default_factory=InMemoryAiReviewRepository
     )
     #: Criterion extractors used by the intent snapshot service, in priority
     #: order for ties. Append here to add one (for example the IN-04 LLM
@@ -454,6 +456,24 @@ def get_verdict_v2_repository(request: Request):
     failed = False
     try:
         yield SqlVerdictV2Repository(session)
+    except Exception:
+        failed = True
+        raise
+    finally:
+        _release_request_session(request, failed=failed)
+
+
+def get_ai_review_repository(request: Request):
+    """Return the AI review repository (one SQL session per request, or memory)."""
+
+    container = get_container(request)
+    if container.session_factory is None:
+        yield container.ai_review_repository
+        return
+    session = _acquire_request_session(request, container)
+    failed = False
+    try:
+        yield SqlAiReviewRepository(session)
     except Exception:
         failed = True
         raise

@@ -1,0 +1,16 @@
+/* Advisory AI review panel (DEC-041). Uses the dashboard tokens from app/globals.css. */
+.air-panel { margin-top: 24px; }
+.air-panel h2 { align-items: center; display: flex; gap: 8px; }
+.air-badge { background: var(--amber-soft); border: 1px solid #f0d3a5; border-radius: 20px; color: var(--amber); font-size: 11px; font-weight: 700; padding: 2px 8px; text-transform: uppercase; }
+.air-body { display: grid; gap: 12px; padding: 0 21px 21px; }
+.air-label { border-left: 3px solid var(--amber); font-size: 13px; margin: 0; overflow-wrap: anywhere; padding: 6px 10px; }
+.air-summary { font-size: 14px; margin: 0; overflow-wrap: anywhere; }
+.air-section h3 { font-size: 13px; margin: 0 0 6px; }
+.air-section ul { display: grid; gap: 6px; margin: 0; padding-left: 18px; }
+.air-section li { font-size: 13px; overflow-wrap: anywhere; }
+.air-files { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: 6px; }
+.air-files code { background: #f1f4f2; border-radius: 4px; font: 11px ui-monospace, Menlo, Consolas, monospace; padding: 1px 5px; }
+.air-state { align-items: center; background: #fafcfb; border: 1px dashed var(--line); border-radius: 10px; display: flex; gap: 8px; margin: 0; padding: 12px 14px; }
+.air-state.warn { background: var(--amber-soft); border: 1px solid #f0d3a5; color: var(--amber); }
+.air-state.error { background: #fdecec; border: 1px solid #f3c2c2; color: #8a1f1f; }
+.air-meta { color: var(--muted); font-size: 12px; margin: 0; }

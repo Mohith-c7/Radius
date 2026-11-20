@@ -86,8 +86,8 @@ from radius_worker.orchestrator import (
 )
 from radius_worker.poller import PullRequestPoller
 from radius_worker.queue import InMemoryAnalysisQueue
+from radius_worker.verdict_v2.publish import ai_review_section, v2_replaces_v1
 from radius_worker.verdict_v2.publish import publish_in_job as publish_v2_in_job
-from radius_worker.verdict_v2.publish import v2_replaces_v1
 from radius_worker.verdict_v2.requests import Recomputer as VerdictV2Recomputer
 from radius_worker.verdict_v2.requests import (
     process_pending as process_verdict_v2_requests,
@@ -427,6 +427,17 @@ class SqlAlchemyWorkerRuntime:
                     # run's artefacts (rolled back) and publish nothing.
                     raise LeaseLostError("The job lease was lost before completion.")
                 session.commit()
+                if self.settings.ai_review_enabled:
+                    # DEC-041: advisory AI review, after the verdict is committed (it can
+                    # never change it); own sessions, hard timeout, never raises.
+                    from radius_worker.ai_review import generate_ai_review_best_effort
+
+                    generate_ai_review_best_effort(
+                        session_factory=self.session_factory,
+                        analysis_id=job.analysis_id,
+                        settings=self.settings,
+                        command=command,
+                    )
                 # The result is durable. Publishing never raises and is
                 # idempotent (it updates the same check run), so a failure here
                 # cannot make the job run again or leave a half-recorded result.
@@ -1329,6 +1340,11 @@ def _github_report(
             discovered_tests_count=discovered_tests_count,
             verification_gaps=verification_gaps,
             unmapped_files=unmapped_files,
+            ai_review_markdown=(
+                ai_review_section(session, repository.organization_id, analysis.id)
+                if settings.ai_review_enabled
+                else ""
+            ),
         ),
         change_risk=confidence.change_risk,
         verification_status=confidence.verification_status,
