@@ -1,11 +1,11 @@
 import { AppLayout } from "../../components/layout";
-import { SettingsData } from "../../components/data-panels";
+import { SettingsPanel } from "../../components/settings-panel";
 
 export default function SettingsPage() {
   return (
     <AppLayout>
       <div className="page">
-        <SettingsData />
+        <SettingsPanel />
       </div>
     </AppLayout>
   );
