@@ -149,8 +149,12 @@ export async function validateSession(
   return result;
 }
 
-/** Destructive proxied calls (DELETE) need an admin; everything else any signed-in user. */
-export function roleAllows(user: SessionUser, method: string): boolean {
+/**
+ * Destructive proxied calls (DELETE) and every API key management call (`api-keys/...`, any
+ * method) need an admin; everything else any signed-in user. `segments` is the proxied path.
+ */
+export function roleAllows(user: SessionUser, method: string, segments: readonly string[] = []): boolean {
+  if (segments[0] === "api-keys") return user.role === "admin";
   if (method.toUpperCase() === "DELETE") return user.role === "admin";
   return true;
 }

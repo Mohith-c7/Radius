@@ -5096,6 +5096,26 @@
       "get": {
         "description": "List the organization's keys (prefix only).",
         "operationId": "list_api_keys",
+        "parameters": [
+          {
+            "description": "Signed session of the dashboard user acting (sent by the dashboard server, never by a browser). When present, that user must be an admin of the organization.",
+            "in": "header",
+            "name": "X-Radius-Session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Signed session of the dashboard user acting (sent by the dashboard server, never by a browser). When present, that user must be an admin of the organization.",
+              "title": "X-Radius-Session"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -5135,6 +5155,26 @@
       "post": {
         "description": "Create a key for the caller's organization; the token is shown once.",
         "operationId": "create_api_key",
+        "parameters": [
+          {
+            "description": "Signed session of the dashboard user acting (sent by the dashboard server, never by a browser). When present, that user must be an admin of the organization.",
+            "in": "header",
+            "name": "X-Radius-Session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Signed session of the dashboard user acting (sent by the dashboard server, never by a browser). When present, that user must be an admin of the organization.",
+              "title": "X-Radius-Session"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -5195,6 +5235,26 @@
       "get": {
         "description": "List create, rotate and revoke events.",
         "operationId": "list_api_key_audit",
+        "parameters": [
+          {
+            "description": "Signed session of the dashboard user acting (sent by the dashboard server, never by a browser). When present, that user must be an admin of the organization.",
+            "in": "header",
+            "name": "X-Radius-Session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Signed session of the dashboard user acting (sent by the dashboard server, never by a browser). When present, that user must be an admin of the organization.",
+              "title": "X-Radius-Session"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -5245,6 +5305,24 @@
               "format": "uuid",
               "title": "Key Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Signed session of the dashboard user acting (sent by the dashboard server, never by a browser). When present, that user must be an admin of the organization.",
+            "in": "header",
+            "name": "X-Radius-Session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Signed session of the dashboard user acting (sent by the dashboard server, never by a browser). When present, that user must be an admin of the organization.",
+              "title": "X-Radius-Session"
             }
           }
         ],
@@ -5304,6 +5382,24 @@
               "format": "uuid",
               "title": "Key Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Signed session of the dashboard user acting (sent by the dashboard server, never by a browser). When present, that user must be an admin of the organization.",
+            "in": "header",
+            "name": "X-Radius-Session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Signed session of the dashboard user acting (sent by the dashboard server, never by a browser). When present, that user must be an admin of the organization.",
+              "title": "X-Radius-Session"
             }
           }
         ],

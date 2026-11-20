@@ -1,0 +1,1 @@
+API key management (`/api/v1/api-keys`) called with a dashboard user's session now also requires that user to be an admin of the organization, not only an admin-scoped key. The dashboard proxy allows these routes for admin users only. Automation calling the API with its own admin key is unchanged.

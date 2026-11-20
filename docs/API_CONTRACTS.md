@@ -821,6 +821,8 @@ The generated OpenAPI 3.1 document is [`api/openapi.json`](api/openapi.json); re
 
 Managed API key administration. Every route needs the `admin` scope and only ever sees the caller's organization (`X-Radius-Organization-Id`). Keys look like `rdk_<8 hex>_<secret>`; the secret is returned once and cannot be retrieved later. See `docs/security/API_KEYS.md`.
 
+A request that also carries `X-Radius-Session` (a signed-in user's session, sent server to server by the dashboard proxy, whose own key has every scope) additionally needs that user to be an `admin` member of the organization; a developer, a member of another organization, or an invalid or revoked session gets 403. The audit actor is then `<key actor>/user=<userId>`. Requests without the header (automation with its own key) need only the `admin` scope. The dashboard proxy allows exactly these five routes, for admin users only.
+
 | Method and path | Purpose | Success |
 |---|---|---|
 | `POST /api-keys` | Body `{name, scopes[], expires_at?}`. Create a key. | 201 `{key, token}` |

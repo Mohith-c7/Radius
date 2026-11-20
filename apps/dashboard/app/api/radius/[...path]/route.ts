@@ -41,10 +41,11 @@ async function handle(request: NextRequest, ctx: { params: Promise<{ path: strin
       }
       return error(401, "UNAUTHENTICATED", "Sign in required.");
     }
-    if (!roleAllows(session.user, request.method)) {
+    if (!roleAllows(session.user, request.method, path)) {
       return error(403, "FORBIDDEN", "Your role does not allow this action.");
     }
-    // B-07: the API resolves the confirmer from this session (not from a label).
+    // B-07: the API resolves the confirmer from this session (not from a label); on
+    // api-keys routes it also checks that the session's user is an organization admin.
     sessionToken = cookieValue;
     actor = session.user.email;
   }
