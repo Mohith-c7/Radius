@@ -228,7 +228,7 @@ jobs:
         # Pinned by full SHA (develop; no release tag exists yet, PRD-32), so a pull
         # request cannot change the code that handles the key. One request per file
         # (six files); uploads for the same analysis accumulate on the server.
-        uses: Mohith-c7/Radius/actions/upload-results@77766ab61db853276cd639d06435053bd1b1d84f # 0.1.0 (develop)
+        uses: Mohith-c7/Radius/actions/upload-results@1099949af42ce60ccdc8cdd122bbebc9fe15f692 # v0.1.1
         with:
           api-url: ${{ steps.radius.outputs.api-url }}
           organization-id: ${{ vars.RADIUS_ORGANIZATION_ID }}
@@ -237,4 +237,4 @@ jobs:
           # The dashboard is served from the same origin as the API proxy here.
           dashboard-url: ${{ steps.radius.outputs.api-url }}
           # A cold single-container deployment can take a few minutes to create the analysis.
-          wait-seconds: "300"
+          wait-seconds: "900"
