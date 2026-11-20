@@ -290,7 +290,15 @@ Dependency Depth
 
 ## GET /analyses/{analysisId}/graph
 
-Returns graph metadata.
+Returns graph metadata and a bounded slice of the graph. A whole-repository graph can be tens of thousands of nodes, so the response is capped.
+
+Query parameters (all optional):
+
+- `scope`: `full` (default) returns the stored graph in stored order; `impact` returns the nodes on the analysis' changed files plus their neighbours within `depth` hops (either edge direction), nearest first. An analysis with no recorded changed files returns no nodes for `impact`.
+- `depth`: hops for `impact`, 0 to 5, default 1.
+- `limit`: maximum nodes returned, 1 to 5000, default 2000. Edges are only those between returned nodes, at most 4 per returned node.
+
+`node_count` and `edge_count` are always the totals of the stored graph. `scope`, `truncated` (true when the limit cut nodes or edges), `returned_node_count` and `returned_edge_count` describe `nodes` and `edges`. Out-of-range parameters return 422.
 
 ---
 

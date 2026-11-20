@@ -5,6 +5,8 @@ export const MAX_BODY_BYTES = 5 * 1024 * 1024; // 5 MiB (JUnit XML uploads)
 
 const ID = "[A-Za-z0-9_-]{1,64}";
 const ALLOWED: Array<{ pattern: RegExp; methods: readonly string[] }> = [
+  // Readiness (database + job queue) for the help page status line.
+  { pattern: new RegExp(`^ready$`), methods: ["GET"] },
   { pattern: new RegExp(`^repositories$`), methods: ["GET", "POST"] },
   // Must precede the generic repositories/<id> rule, which would match first.
   { pattern: new RegExp(`^repositories/connect-github$`), methods: ["POST"] },
@@ -19,6 +21,8 @@ const ALLOWED: Array<{ pattern: RegExp; methods: readonly string[] }> = [
   { pattern: new RegExp(`^analyses/${ID}/rerun$`), methods: ["POST"] },
   { pattern: new RegExp(`^analyses/${ID}/(blast-radius|confidence|tests|graph)$`), methods: ["GET"] },
   { pattern: new RegExp(`^analyses/${ID}/tests/results$`), methods: ["GET", "POST"] },
+  // Test insights page: read-only, repository-scoped by the API.
+  { pattern: new RegExp(`^analyses/${ID}/tests/(statistics|flaky|recent)$`), methods: ["GET"] },
   // Verdict v2 alpha (VS-09 / VS-10): this one read-only route. The undocumented
   // /verdict alias and anything below it stay rejected.
   { pattern: new RegExp(`^analyses/${ID}/verdict-v2$`), methods: ["GET"] },

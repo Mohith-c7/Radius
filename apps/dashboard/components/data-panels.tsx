@@ -8,6 +8,7 @@ import {
   Check,
   CheckCircle2,
   Copy,
+  ExternalLink,
   FileCode2,
   FolderGit2,
   GitBranch,
@@ -63,9 +64,23 @@ import {
 import { errorText, type SyncSummary } from "../lib/github-actions";
 import { initials, profileRows, roleLabel } from "../lib/account-model";
 import { useAuth } from "./auth-provider";
+import {
+  analysisLabel,
+  analysisMatches,
+  averageConfidence,
+  completedAnalyses,
+  defaultComparePair,
+  indexPullRequests,
+  pullRequestMatches,
+  pullRequestUrl,
+  repositoryMatches,
+  truncate,
+  type PullRequestIndex,
+} from "../lib/dashboard-model";
 import { scoreKindLabel } from "../lib/score-kind";
 import { AnalyzePullRequestButton, ConnectGitHubRepositoryCard, SyncSummaryList } from "./github-actions";
 import { ConfidenceRing, OpenLink, PageHeading, Status } from "./ui";
+import { CopyId } from "./copy-id";
 import { InteractiveGraphViewer } from "./interactive-graph";
 import { IntentPanel } from "./intent-panel";
 import { VerdictV2Panel } from "./verdict-v2-panel";
@@ -75,6 +90,7 @@ import {
   v1Presentation,
   type V2Input,
 } from "../lib/analysis-header-model";
+import { graphSummary, pickNewestCompletedAnalysis } from "../lib/graph-model";
 import "./analysis-header.css";
 
 type LoadState<T> =
@@ -177,18 +193,31 @@ function settledValue<T>(result: PromiseSettledResult<T>) {
   return result.status === "fulfilled" ? result.value : null;
 }
 
+/** PR id -> PR across all repositories; a repository whose list fails is skipped. */
+async function loadPullRequestIndex(repositories: Repository[]): Promise<PullRequestIndex> {
+  const lists = await Promise.allSettled(
+    repositories.filter((repo) => repo.id).map((repo) => listPullRequests(repo.id as string)),
+  );
+  return indexPullRequests(lists.flatMap((result) => settledValue(result) ?? []));
+}
+
 async function loadOverview() {
   const repositories = await listRepositories();
-  const analyses = await listAnalyses();
+  const [analyses, pullRequests] = await Promise.all([
+    listAnalyses(),
+    loadPullRequestIndex(repositories),
+  ]);
+  // Pending or running analyses have no confidence report yet: average the
+  // newest completed ones so a queue of new runs does not blank the metric.
   const reports = await Promise.allSettled(
-    analyses
+    completedAnalyses(analyses)
       .slice(0, 6)
-      .filter((analysis) => analysis.id)
       .map((analysis) => getConfidence(analysis.id as string)),
   );
   return {
     repositories,
     analyses,
+    pullRequests,
     reports: reports
       .filter((result): result is PromiseFulfilledResult<ConfidenceReport> => {
         return result.status === "fulfilled";
@@ -202,14 +231,8 @@ export function DashboardOverviewData() {
   if (state.status === "loading") return <LoadingState />;
   if (state.status === "error") return <ErrorState message={state.error} />;
 
-  const { repositories, analyses, reports } = state.data;
-  const average =
-    reports.length > 0
-      ? Math.round(
-          reports.reduce((total, report) => total + report.confidence_score, 0) /
-            reports.length,
-        )
-      : 0;
+  const { repositories, analyses, pullRequests, reports } = state.data;
+  const average = averageConfidence(reports) ?? 0;
   const attention = analyses.filter((item) =>
     ["failed", "cancelled"].includes(item.status.toLowerCase()),
   ).length;
@@ -233,7 +256,11 @@ export function DashboardOverviewData() {
         <Metric label="Attention needed" value={attention} />
       </section>
       <div className="content-grid">
-        <RecentAnalysesCard analyses={analyses.slice(0, 5)} repositories={repositories} />
+        <RecentAnalysesCard
+          analyses={analyses.slice(0, 5)}
+          repositories={repositories}
+          pullRequests={pullRequests}
+        />
         <section className="card">
           <div className="card-heading">
             <div>
@@ -263,9 +290,11 @@ export function DashboardOverviewData() {
 function RecentAnalysesCard({
   analyses,
   repositories,
+  pullRequests,
 }: {
   analyses: Analysis[];
   repositories: Repository[];
+  pullRequests: PullRequestIndex;
 }) {
   return (
     <section className="card">
@@ -281,7 +310,7 @@ function RecentAnalysesCard({
           <p className="muted">No analyses have been created yet.</p>
         </div>
       ) : (
-        <AnalysisTable analyses={analyses} repositories={repositories} />
+        <AnalysisTable analyses={analyses} repositories={repositories} pullRequests={pullRequests} />
       )}
     </section>
   );
@@ -861,20 +890,6 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
                       >
                         {pr.status}
                       </span>
-                      <span
-                        title={`Radius Internal PR UUID: ${pr.id}`}
-                        style={{
-                          fontSize: "11px",
-                          padding: "2px 6px",
-                          borderRadius: "4px",
-                          background: "rgba(255, 255, 255, 0.06)",
-                          border: "1px solid var(--border)",
-                          fontFamily: "monospace",
-                          color: "var(--muted)",
-                        }}
-                      >
-                        ID: {pr.id ? pr.id.slice(0, 8) : "-"}
-                      </span>
                     </div>
                     <div className="muted" style={{ fontSize: "12px", display: "flex", gap: "16px", flexWrap: "wrap" }}>
                       <span>Author: {pr.author}</span>
@@ -934,7 +949,11 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
       </div>
 
       <div className="detail-grid">
-        <RecentAnalysesCard analyses={analyses} repositories={[repository]} />
+        <RecentAnalysesCard
+          analyses={analyses}
+          repositories={[repository]}
+          pullRequests={indexPullRequests(pullRequests)}
+        />
         <aside className="card detail-card">
           <h2>Repository details</h2>
           <div className="stat-list">
@@ -1211,7 +1230,7 @@ export function AnalysesData() {
       listAnalyses(),
       listRepositories(),
     ]);
-    return { analyses, repositories };
+    return { analyses, repositories, pullRequests: await loadPullRequestIndex(repositories) };
   }, []);
 
   if (state.status === "loading") return <LoadingState label="Loading analyses" />;
@@ -1241,6 +1260,7 @@ export function AnalysesData() {
           <AnalysisTable
             analyses={state.data.analyses}
             repositories={state.data.repositories}
+            pullRequests={state.data.pullRequests}
           />
         </section>
       )}
@@ -1262,9 +1282,11 @@ export function AnalysesData() {
 function AnalysisTable({
   analyses,
   repositories,
+  pullRequests,
 }: {
   analyses: Analysis[];
   repositories: Repository[];
+  pullRequests: PullRequestIndex;
 }) {
   return (
     <div className="table-wrap">
@@ -1280,27 +1302,31 @@ function AnalysisTable({
           </tr>
         </thead>
         <tbody>
-          {analyses.map((analysis) => (
+          {analyses.map((analysis) => {
+            const label = analysisLabel(analysis, pullRequests);
+            return (
             <tr key={analysis.id ?? analysis.commit_sha}>
               <td>
                 <Link
                   href={`/analyses/${analysis.id}`}
+                  title={label.pullRequest?.title ?? analysis.id ?? undefined}
                   style={{ color: "inherit", fontWeight: 700, textDecoration: "none" }}
                 >
-                  {analysis.id}
+                  {label.title}
                 </Link>
-                {analysis.pull_request_id ? (
-                  <div className="subtext">
+                <div className="subtext">
+                  {label.pullRequest ? (
                     <Link
-                      href={`/pull-requests/${analysis.pull_request_id}`}
+                      href={`/pull-requests/${label.pullRequest.id}`}
+                      title={`Analysis ${analysis.id}`}
                       style={{ color: "var(--accent)", textDecoration: "none" }}
                     >
-                      PR ID: {shortSha(analysis.pull_request_id)}...
+                      {label.secondary}
                     </Link>
-                  </div>
-                ) : (
-                  <div className="subtext">No PR attached</div>
-                )}
+                  ) : (
+                    label.secondary
+                  )}
+                </div>
               </td>
               <td>{repositoryName(repositories, analysis.repository_id)}</td>
               <td>
@@ -1312,7 +1338,8 @@ function AnalysisTable({
               <td className="subtext">{formatDate(analysis.started_at)}</td>
               <td className="subtext">{formatDate(analysis.completed_at)}</td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -1335,23 +1362,28 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
       getAnalysis(analysisId),
       listRepositories(),
     ]);
-    const [blast, confidence, tests, graph, testResult] = await Promise.allSettled([
+    const [blast, confidence, tests, testResult, pullRequest] = await Promise.allSettled([
       getBlastRadius(analysisId),
       getConfidence(analysisId),
       getTests(analysisId),
-      getGraph(analysisId),
       getTestRunResult(analysisId),
+      listPullRequests(analysis.repository_id).then(
+        (prs) => prs.find((pr) => pr.id === analysis.pull_request_id) ?? null,
+      ),
     ]);
     return {
       analysis,
       repositories,
+      pullRequest: settledValue(pullRequest),
       blast: settledValue(blast),
       confidence: settledValue(confidence),
       tests: settledValue(tests),
-      graph: settledValue(graph),
       testResult: settledValue(testResult),
     };
   }, [analysisId, refreshKey]);
+  // The graph can be large and slow; the page never waits on it.
+  const graphState = useRadiusData(() => getGraph(analysisId), [analysisId, refreshKey]);
+  const graph = graphState.status === "ready" ? graphState.data : null;
 
   async function runAgain() {
     if (rerunning) return;
@@ -1375,8 +1407,9 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
   if (state.status === "loading") return <LoadingState label="Loading analysis" />;
   if (state.status === "error") return <ErrorState message={state.error} />;
 
-  const { analysis, repositories, blast, confidence, tests, graph, testResult } = state.data;
+  const { analysis, repositories, pullRequest, blast, confidence, tests, testResult } = state.data;
   const repo = repositoryName(repositories, analysis.repository_id);
+  const githubUrl = pullRequest ? pullRequestUrl(repo, pullRequest.github_pr_number) : null;
   const header = buildHeaderModel(
     confidence
       ? {
@@ -1394,9 +1427,34 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
   return (
     <>
       <PageHeading
-        eyebrow={`Analysis / ${analysis.id}`}
+        eyebrow="Analysis"
         title="Pull request verification"
-        description={`${repo} / PR ${analysis.pull_request_id}`}
+        description={
+          <>
+            {repo} /{" "}
+            {pullRequest ? (
+              <Link href={`/pull-requests/${pullRequest.id}`} className="text-link">
+                #{pullRequest.github_pr_number} {truncate(pullRequest.title, 80)}
+              </Link>
+            ) : (
+              "manual run or pull request not synced"
+            )}
+            {githubUrl && (
+              <>
+                {" · "}
+                <a href={githubUrl} target="_blank" rel="noopener noreferrer" className="text-link">
+                  View on GitHub
+                </a>
+              </>
+            )}
+            {analysis.id && (
+              <>
+                {" · "}
+                <CopyId label="Analysis ID" value={analysis.id} />
+              </>
+            )}
+          </>
+        }
         action={
           <button
             className="button secondary"
@@ -1527,13 +1585,13 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
       <VerdictV2Panel analysisId={analysisId} onVerdict={setV2} />
 
       <div id="impact" style={{ marginTop: "24px", display: "grid", gap: "20px" }}>
-        <BlastRadiusVisualizerCard blast={blast} graph={graph} analysisId={analysisId} />
+        <BlastRadiusVisualizerCard blast={blast} graphState={graphState} analysisId={analysisId} />
         {graph && graph.nodes.length > 0 && (
           <InteractiveGraphViewer
             nodes={graph.nodes}
             edges={graph.edges}
-            title={`Interactive CPG Slice & Dependency Visualizer (${graph.node_count} nodes, ${graph.edge_count} edges)`}
-            subtitle="Explore directly modified entrypoints, caller traversal, and targeted tests."
+            title="Interactive CPG Slice & Dependency Visualizer"
+            subtitle={graphSummary(graph)}
             height={520}
           />
         )}
@@ -1652,13 +1710,14 @@ function ConfidenceEvidenceCard({
 
 function BlastRadiusVisualizerCard({
   blast,
-  graph,
+  graphState,
   analysisId,
 }: {
   blast: BlastRadius | null;
-  graph: GraphSnapshot | null;
+  graphState: LoadState<GraphSnapshot>;
   analysisId: string;
 }) {
+  const graph = graphState.status === "ready" ? graphState.data : null;
   return (
     <section className="card detail-card">
       <div className="test-hub-header">
@@ -1697,10 +1756,17 @@ function BlastRadiusVisualizerCard({
         </div>
       </div>
 
+      {graphState.status === "loading" && <p className="muted">Loading dependency graph...</p>}
+      {graphState.status === "error" && (
+        <p className="muted">Dependency graph unavailable: {graphState.error}</p>
+      )}
+      {graph && graph.nodes.length === 0 && (
+        <p className="muted">No graph nodes on the changed files. {graphSummary(graph)}</p>
+      )}
       {graph && graph.nodes.length > 0 && (
         <div className="cpg-slice-card">
           <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "8px", color: "var(--muted)" }}>
-            CPG Dependency Slice Nodes ({graph.node_count} nodes, {graph.edge_count} edges)
+            CPG Dependency Slice Nodes: {graphSummary(graph)}
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
             {graph.nodes.slice(0, 16).map((node) => {
@@ -2092,17 +2158,19 @@ function TestSelectionHub({
 
 export function BlastRadiusData({ analysisId }: { analysisId: string }) {
   const state = useRadiusData(async () => {
-    const [blast, graph, analysis] = await Promise.all([
+    const [blast, analysis] = await Promise.all([
       getBlastRadius(analysisId),
-      getGraph(analysisId).catch(() => null),
       getAnalysis(analysisId).catch(() => null),
     ]);
-    return { blast, graph, analysis };
+    return { blast, analysis };
   }, [analysisId]);
+  // Loaded on its own so a slow or failed graph never blocks the page.
+  const graphState = useRadiusData(() => getGraph(analysisId), [analysisId]);
+  const graph = graphState.status === "ready" ? graphState.data : null;
 
   if (state.status === "loading") return <LoadingState label="Loading blast radius" />;
   if (state.status === "error") return <ErrorState message={state.error} />;
-  const { blast, graph, analysis } = state.data;
+  const { blast, analysis } = state.data;
   const rows = [
     ["Affected files", blast.affected_files],
     ["Affected symbols", blast.affected_symbols],
@@ -2165,12 +2233,20 @@ export function BlastRadiusData({ analysisId }: { analysisId: string }) {
           <InteractiveGraphViewer
             nodes={graph.nodes}
             edges={graph.edges}
-            title={`Interactive CPG Slice & Dependency Visualizer (${graph.node_count} nodes, ${graph.edge_count} edges)`}
-            subtitle="Explore directly modified entrypoints, caller traversal, and targeted tests."
+            title="Interactive CPG Slice & Dependency Visualizer"
+            subtitle={graphSummary(graph)}
             height={580}
           />
         </section>
-      ) : null}
+      ) : (
+        <p className="muted" style={{ marginBottom: "24px" }}>
+          {graphState.status === "loading"
+            ? "Loading dependency graph..."
+            : graphState.status === "error"
+              ? `Dependency graph unavailable: ${graphState.error}`
+              : `No graph nodes on the changed files. ${graph ? graphSummary(graph) : ""}`}
+        </p>
+      )}
 
 
 
@@ -2205,22 +2281,43 @@ export function BlastRadiusData({ analysisId }: { analysisId: string }) {
 
 export function GraphOverviewData() {
   const state = useRadiusData(async () => {
-    const analyses = await listAnalyses();
-    const latest = analyses.find((analysis) => analysis.id);
-    const graph = latest?.id ? await getGraph(latest.id) : null;
-    return { latest, graph };
+    // Only a completed analysis has a graph; a pending one would 404.
+    const latest = pickNewestCompletedAnalysis(await listAnalyses({ status: "completed" }));
+    if (!latest?.id) return { latest, graph: null, graphError: null };
+    try {
+      return { latest, graph: await getGraph(latest.id), graphError: null };
+    } catch (error) {
+      return { latest, graph: null, graphError: errorText(error) };
+    }
   }, []);
   if (state.status === "loading") return <LoadingState label="Loading dependency graph" />;
   if (state.status === "error") return <ErrorState message={state.error} />;
-  if (!state.data.latest || !state.data.graph) {
+  const { latest, graph, graphError } = state.data;
+  if (!latest?.id) {
     return (
       <EmptyState
-        title="No dependency graph available"
-        detail="Run an analysis with worker execution to build graph artifacts."
+        title="No completed analysis yet"
+        detail="The graph appears once an analysis has finished. Run an analysis with worker execution to build graph artifacts."
       />
     );
   }
-  return <GraphCard graph={state.data.graph} />;
+  if (!graph) {
+    return (
+      <EmptyState
+        title="No dependency graph for the latest completed analysis"
+        detail={`Analysis ${latest.id}: ${graphError ?? "the graph was not built."}`}
+      />
+    );
+  }
+  if (graph.nodes.length === 0) {
+    return (
+      <EmptyState
+        title="No graph nodes on the changed files"
+        detail={`Analysis ${latest.id}: ${graphSummary(graph)}`}
+      />
+    );
+  }
+  return <GraphCard graph={graph} />;
 }
 
 function GraphCard({ graph }: { graph: GraphSnapshot }) {
@@ -2229,32 +2326,44 @@ function GraphCard({ graph }: { graph: GraphSnapshot }) {
       nodes={graph.nodes}
       edges={graph.edges}
       title="Dependency Graph & Module Relationships"
-      subtitle={`Snapshot version ${graph.graph_version} / created ${formatDate(graph.created_at)} (${graph.node_count} nodes, ${graph.edge_count} edges)`}
+      subtitle={`Snapshot version ${graph.graph_version} / created ${formatDate(graph.created_at)}. ${graphSummary(graph)}`}
       height={600}
     />
   );
 }
 
 
-export function SearchData() {
-  const [query, setQuery] = useState("");
+export function SearchData({ initialQuery = "" }: { initialQuery?: string }) {
+  const [query, setQuery] = useState(initialQuery);
+  useEffect(() => setQuery(initialQuery), [initialQuery]);
   const state = useRadiusData(async () => {
     const [analyses, repositories] = await Promise.all([
       listAnalyses(),
       listRepositories(),
     ]);
-    return { analyses, repositories };
+    return { analyses, repositories, pullRequests: await loadPullRequestIndex(repositories) };
   }, []);
 
   const results = useMemo(() => {
-    if (state.status !== "ready") return [];
-    const lower = query.toLowerCase();
-    return state.data.analyses.filter((analysis) => {
-      const repo = repositoryName(state.data.repositories, analysis.repository_id);
-      return [analysis.id, analysis.commit_sha, analysis.status, repo]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(lower));
-    });
+    if (state.status !== "ready") return { analyses: [], pullRequests: [], repositories: [] };
+    const { analyses, repositories, pullRequests } = state.data;
+    const named = (id: string) => repositoryName(repositories, id);
+    return {
+      analyses: analyses.filter((analysis) =>
+        analysisMatches(analysis, query, {
+          repositoryName: named(analysis.repository_id),
+          pullRequest: pullRequests.get(analysis.pull_request_id),
+        }),
+      ),
+      pullRequests: query.trim()
+        ? [...pullRequests.values()].filter((pr) =>
+            pullRequestMatches(pr, query, named(pr.repository_id)),
+          )
+        : [],
+      repositories: query.trim()
+        ? repositories.filter((repository) => repositoryMatches(repository, query))
+        : [],
+    };
   }, [query, state]);
 
   if (state.status === "loading") return <LoadingState label="Loading search index" />;
@@ -2266,15 +2375,47 @@ export function SearchData() {
         <div className="search boxed-search">
           <Search size={18} />
           <input
+            aria-label="Search analyses, pull requests and repositories"
             autoFocus
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search by analysis ID, commit, status, or repository"
+            placeholder="Search by PR number or title, repository, analysis ID, or commit"
             value={query}
           />
         </div>
       </div>
+      {results.repositories.length > 0 && (
+        <section className="card detail-card wide-card">
+          <h2>Repositories</h2>
+          <RepositoryRows repositories={results.repositories} />
+        </section>
+      )}
+      {results.pullRequests.length > 0 && (
+        <section className="card detail-card wide-card">
+          <h2>Pull requests</h2>
+          <ul style={{ listStyle: "none", padding: 0, margin: "10px 0 0", display: "grid", gap: "8px" }}>
+            {results.pullRequests.slice(0, 20).map((pr) => (
+              <li key={pr.id}>
+                <Link href={`/pull-requests/${pr.id}`} className="text-link">
+                  #{pr.github_pr_number} {pr.title}
+                </Link>{" "}
+                <span className="subtext">{repositoryName(state.data.repositories, pr.repository_id)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <section className="card wide-card">
-        <AnalysisTable analyses={results} repositories={state.data.repositories} />
+        {results.analyses.length === 0 ? (
+          <div className="detail-card">
+            <p className="muted">No analyses match this search.</p>
+          </div>
+        ) : (
+          <AnalysisTable
+            analyses={results.analyses}
+            repositories={state.data.repositories}
+            pullRequests={state.data.pullRequests}
+          />
+        )}
       </section>
     </>
   );
@@ -2327,6 +2468,12 @@ export function PullRequestData({ pullRequestId }: { pullRequestId: string }) {
   if (state.status === "error") return <ErrorState message={state.error} />;
 
   const { analyses, repositories, pr } = state.data;
+  const githubUrl = pr
+    ? pullRequestUrl(
+        repositories.find((repo) => repo.id === pr.repository_id)?.full_name,
+        pr.github_pr_number,
+      )
+    : null;
   const pageTitle = pr?.title || (isNumeric ? `PR #${cleanNumber} analyses` : "Pull request analyses");
   const subtitle = pr
     ? `Route: ${pr.source_branch} → ${pr.target_branch} • Author: ${pr.author} • Status: ${pr.status}`
@@ -2359,6 +2506,18 @@ export function PullRequestData({ pullRequestId }: { pullRequestId: string }) {
                 Re-run Verification
               </button>
             )}
+            {githubUrl && (
+              <a
+                href={githubUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="button secondary"
+                style={{ display: "flex", alignItems: "center", gap: "6px" }}
+              >
+                <ExternalLink size={14} />
+                View on GitHub
+              </a>
+            )}
             <Link href="/repositories" className="button secondary">
               <FolderGit2 size={15} />
               All repositories
@@ -2369,7 +2528,7 @@ export function PullRequestData({ pullRequestId }: { pullRequestId: string }) {
 
       <section className="metric-grid" style={{ marginBottom: "16px" }}>
         <Metric label="GitHub PR Number" value={pr ? `#${pr.github_pr_number}` : (isNumeric ? `#${cleanNumber}` : "-")} />
-        <Metric label="Radius PR UUID" value={pr?.id ? pr.id.slice(0, 8) + "..." : (isUuid ? pullRequestId.slice(0, 8) + "..." : "-")} />
+        <Metric label="Opened" value={formatDate(pr?.opened_at)} />
         <Metric label="Status" value={pr?.status ?? "unknown"} />
         <Metric label="Verification Runs" value={analyses.length} />
       </section>
@@ -2378,12 +2537,8 @@ export function PullRequestData({ pullRequestId }: { pullRequestId: string }) {
         <div className="card" style={{ marginBottom: "16px", padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
           <div style={{ display: "flex", gap: "20px", alignItems: "center", flexWrap: "wrap", fontSize: "13px" }}>
             <div>
-              <span className="muted">Full Radius PR ID: </span>
-              <code style={{ fontSize: "12px", background: "rgba(255,255,255,0.06)", padding: "2px 6px", borderRadius: "4px" }}>{pr.id}</code>
-            </div>
-            <div>
-              <span className="muted">GitHub Number: </span>
-              <strong>#{pr.github_pr_number}</strong>
+              <span className="muted">Author: </span>
+              <strong>{pr.author}</strong>
             </div>
             <div>
               <span className="muted">Branch: </span>
@@ -2403,47 +2558,13 @@ export function PullRequestData({ pullRequestId }: { pullRequestId: string }) {
         />
       ) : (
         <section className="card">
-          <AnalysisTable analyses={analyses} repositories={repositories} />
+          <AnalysisTable
+            analyses={analyses}
+            repositories={repositories}
+            pullRequests={indexPullRequests(pr ? [pr] : [])}
+          />
         </section>
       )}
-    </>
-  );
-}
-
-export function SettingsData() {
-  return (
-    <>
-      <PageHeading
-        title="Settings"
-        description="Runtime configuration used by the dashboard API client."
-      />
-      <div className="detail-grid">
-        <section className="card detail-card">
-          <h2>API connection</h2>
-          <div className="stat-list">
-            <div>
-              <span>API base URL</span>
-              <strong>{radiusConfig.apiBaseUrl}</strong>
-            </div>
-            <div>
-              <span>Organization header</span>
-              <strong>{radiusConfig.organizationId || "Missing"}</strong>
-            </div>
-            <div>
-              <span>API key</span>
-              <strong>Held server-side (never sent to the browser)</strong>
-            </div>
-          </div>
-        </section>
-        <section className="card detail-card">
-          <h2>Required environment</h2>
-          <p className="muted">
-            Set <code>NEXT_PUBLIC_RADIUS_API_BASE_URL</code> and{" "}
-            <code>NEXT_PUBLIC_RADIUS_ORGANIZATION_ID</code> before running the
-            dashboard against a real backend.
-          </p>
-        </section>
-      </div>
     </>
   );
 }
@@ -2583,37 +2704,96 @@ export function OrganizationData() {
   );
 }
 
-export function CompareData() {
-  const state = useRadiusData(async () => {
-    const analyses = (await listAnalyses()).filter((analysis) => analysis.id).slice(0, 2);
-    const artifacts = await Promise.all(
-      analyses.map(async (analysis) => {
-        const [confidence, blast, tests] = await Promise.allSettled([
-          getConfidence(analysis.id as string),
-          getBlastRadius(analysis.id as string),
-          getTests(analysis.id as string),
-        ]);
-        return {
-          analysis,
-          confidence: settledValue(confidence),
-          blast: settledValue(blast),
-          tests: settledValue(tests),
-        };
-      }),
-    );
-    return artifacts;
-  }, []);
+async function loadCompareArtifacts(analysis: Analysis) {
+  const id = analysis.id as string;
+  const [confidence, blast, tests] = await Promise.allSettled([
+    getConfidence(id),
+    getBlastRadius(id),
+    getTests(id),
+  ]);
+  return {
+    analysis,
+    confidence: settledValue(confidence),
+    blast: settledValue(blast),
+    tests: settledValue(tests),
+  };
+}
 
-  if (state.status === "loading") return <LoadingState label="Loading comparison" />;
-  if (state.status === "error") return <ErrorState message={state.error} />;
-  if (state.data.length < 2) {
+export function CompareData() {
+  const options = useRadiusData(async () => {
+    const [analyses, repositories] = await Promise.all([listAnalyses(), listRepositories()]);
+    return {
+      completed: completedAnalyses(analyses),
+      pullRequests: await loadPullRequestIndex(repositories),
+    };
+  }, []);
+  const [picked, setPicked] = useState<[string | null, string | null] | null>(null);
+
+  if (options.status === "loading") return <LoadingState label="Loading comparison" />;
+  if (options.status === "error") return <ErrorState message={options.error} />;
+  const { completed, pullRequests } = options.data;
+  if (completed.length < 2) {
     return (
       <EmptyState
-        title="Need two analyses"
-        detail="Radius can compare verification evidence after at least two analyses exist."
+        title="Need two completed analyses"
+        detail="Radius can compare verification evidence after at least two analyses have completed."
       />
     );
   }
+  const [leftId, rightId] = picked ?? defaultComparePair(completed);
+  const pick = (side: 0 | 1, id: string) =>
+    setPicked(side === 0 ? [id, rightId] : [leftId, id]);
+  const optionLabel = (analysis: Analysis) => {
+    const label = analysisLabel(analysis, pullRequests, 50);
+    return label.pullRequest ? `${label.title} (${label.secondary})` : label.title;
+  };
+
+  return (
+    <>
+      <section className="card detail-card" style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
+        {([0, 1] as const).map((side) => (
+          <label key={side} style={{ display: "grid", gap: "6px", flex: "1 1 280px" }}>
+            <span className="muted">{side === 0 ? "Analysis A" : "Analysis B"}</span>
+            <select
+              className="input"
+              value={(side === 0 ? leftId : rightId) ?? ""}
+              onChange={(event) => pick(side, event.target.value)}
+            >
+              {completed.map((analysis) => (
+                <option key={analysis.id} value={analysis.id as string}>
+                  {optionLabel(analysis)}
+                </option>
+              ))}
+            </select>
+          </label>
+        ))}
+      </section>
+      <CompareTable
+        left={completed.find((analysis) => analysis.id === leftId) ?? null}
+        right={completed.find((analysis) => analysis.id === rightId) ?? null}
+        pullRequests={pullRequests}
+      />
+    </>
+  );
+}
+
+function CompareTable({
+  left: leftAnalysis,
+  right: rightAnalysis,
+  pullRequests,
+}: {
+  left: Analysis | null;
+  right: Analysis | null;
+  pullRequests: PullRequestIndex;
+}) {
+  const state = useRadiusData(async () => {
+    if (!leftAnalysis || !rightAnalysis) return null;
+    return Promise.all([loadCompareArtifacts(leftAnalysis), loadCompareArtifacts(rightAnalysis)]);
+  }, [leftAnalysis?.id, rightAnalysis?.id]);
+
+  if (state.status === "loading") return <LoadingState label="Loading comparison" />;
+  if (state.status === "error") return <ErrorState message={state.error} />;
+  if (!state.data) return null;
 
   const [left, right] = state.data;
   const rows = [
@@ -2651,8 +2831,8 @@ export function CompareData() {
           <thead>
             <tr>
               <th>Verification signal</th>
-              <th>{left.analysis.id}</th>
-              <th>{right.analysis.id}</th>
+              <th title={left.analysis.id ?? undefined}>{analysisLabel(left.analysis, pullRequests, 40).title}</th>
+              <th title={right.analysis.id ?? undefined}>{analysisLabel(right.analysis, pullRequests, 40).title}</th>
             </tr>
           </thead>
           <tbody>
@@ -2682,7 +2862,6 @@ export function PullRequestsOverviewData() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const loadData = async () => {
     try {
@@ -2707,7 +2886,8 @@ export function PullRequestsOverviewData() {
 
       const settledPRs = await Promise.all(prPromises);
       const allPRs = settledPRs.flat();
-      allPRs.sort((a, b) => new Date(b.pr.opened_at).getTime() - new Date(a.pr.opened_at).getTime());
+      const openedTime = (value?: string | null) => (value ? Date.parse(value) || 0 : 0);
+      allPRs.sort((a, b) => openedTime(b.pr.opened_at) - openedTime(a.pr.opened_at));
       setPullRequests(allPRs);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load pull requests.");
@@ -2751,30 +2931,12 @@ export function PullRequestsOverviewData() {
     }
   };
 
-  const copyToClipboard = (id: string) => {
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(id);
-    }
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
-
   if (loading) return <LoadingState label="Loading pull requests across repositories" />;
   if (error && pullRequests.length === 0) return <ErrorState message={error} />;
 
   const filtered = pullRequests.filter(({ pr, repo }) => {
     if (statusFilter !== "all" && pr.status !== statusFilter) return false;
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      pr.title.toLowerCase().includes(q) ||
-      String(pr.github_pr_number).includes(q) ||
-      pr.id.toLowerCase().includes(q) ||
-      pr.author.toLowerCase().includes(q) ||
-      repo.name.toLowerCase().includes(q) ||
-      pr.source_branch.toLowerCase().includes(q) ||
-      pr.target_branch.toLowerCase().includes(q)
-    );
+    return pullRequestMatches(pr, searchQuery, repo.full_name || repo.name);
   });
 
   const openCount = pullRequests.filter((p) => p.pr.status === "open").length;
@@ -2795,7 +2957,7 @@ export function PullRequestsOverviewData() {
             <Search size={16} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "var(--muted)" }} />
             <input
               type="text"
-              placeholder="Search by title, #number, Radius UUID, author..."
+              placeholder="Search by title, #number, author, branch..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="input"
@@ -2885,34 +3047,17 @@ export function PullRequestsOverviewData() {
                             #{pr.github_pr_number} {pr.title}
                           </Link>
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            <span
-                              title={`Full Radius PR UUID: ${pr.id}`}
-                              style={{
-                                fontSize: "11px",
-                                padding: "1px 6px",
-                                borderRadius: "4px",
-                                background: "rgba(255, 255, 255, 0.06)",
-                                border: "1px solid var(--border)",
-                                fontFamily: "monospace",
-                                color: "var(--muted)",
-                              }}
-                            >
-                              UUID: {pr.id.slice(0, 8)}...
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => copyToClipboard(pr.id)}
-                              title="Copy full Radius PR UUID"
-                              style={{
-                                background: "transparent",
-                                border: "none",
-                                padding: "2px",
-                                cursor: "pointer",
-                                color: copiedId === pr.id ? "var(--green, #22c55e)" : "var(--muted)",
-                              }}
-                            >
-                              {copiedId === pr.id ? <Check size={12} /> : <Copy size={12} />}
-                            </button>
+                            {pullRequestUrl(repo.full_name, pr.github_pr_number) && (
+                              <a
+                                href={pullRequestUrl(repo.full_name, pr.github_pr_number) as string}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="subtext"
+                                style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
+                              >
+                                View on GitHub <ExternalLink size={11} />
+                              </a>
+                            )}
                           </div>
                         </div>
                       </td>

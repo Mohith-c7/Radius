@@ -10,6 +10,8 @@ test("allowlist accepts known routes and methods", () => {
   assert.equal(proxy.checkRoute(["repositories", "r1", "pull-requests", "42"], "GET"), "ok");
   assert.equal(proxy.checkRoute(["analyses", "a1", "tests", "results"], "POST"), "ok");
   assert.equal(proxy.checkRoute(["analyses", "a1", "graph"], "GET"), "ok");
+  assert.equal(proxy.checkRoute(["ready"], "GET"), "ok");
+  assert.equal(proxy.checkRoute(["ready"], "POST"), "method");
 });
 
 test("allowlist rejects unknown paths, traversal, and bad methods", () => {
