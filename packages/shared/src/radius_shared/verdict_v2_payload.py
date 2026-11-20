@@ -197,6 +197,15 @@ def _criterion(
     confirmed_by = raw.get("confirmed_by")
     if isinstance(confirmed_by, str) and confirmed_by:  # B-07, optional
         extra = {**extra, "confirmed_by": confirmed_by[:160]}
+    scope = raw.get("scope")
+    if isinstance(scope, Mapping) and isinstance(scope.get("in_scope"), bool):  # DEC-043
+        extra = {
+            **extra,
+            "scope": {
+                "paths": [str(p) for p in scope.get("paths") or []][:50],
+                "in_scope": scope["in_scope"],
+            },
+        }
     return {
         **extra,
         "criterion_id": raw.get("criterion_id", ""),

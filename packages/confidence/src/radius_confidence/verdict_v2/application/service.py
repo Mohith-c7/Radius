@@ -19,6 +19,7 @@ from radius_evidence.domain.serialization import canonical_json, sha256_hex
 from radius_evidence.domain.states import CriterionStateResult, UimResult
 from radius_evidence.domain.support import SupportResult
 from radius_evidence.domain.versions import ALGO_VERSION
+from radius_evidence.policy.scope import NOT_AFFECTED
 
 from radius_confidence.verdict_v2.domain.model import (
     CriterionVerdict,
@@ -85,6 +86,14 @@ def build_criterion_verdict(
         best_link=_best_link(support.items),
         mutation=dict(mutation or {}),
         confirmed_by=criterion.confirmed_by,
+        scope=(
+            {
+                "paths": list(criterion.scope_paths),
+                "in_scope": not any(r.code == NOT_AFFECTED for r in state.reasons),
+            }
+            if criterion.scope_paths
+            else None
+        ),
         provenance=criterion.provenance,
         hints=tuple(
             sorted(

@@ -160,6 +160,42 @@ def default_spec_provenance(command: Any) -> str:
     return Provenance.AUTHOR_HEAD_SPEC.value
 
 
+def _norm_text(text: str) -> str:
+    return " ".join(str(text).split()).casefold()
+
+
+def spec_paths_by_text(text: str) -> dict[str, tuple[str, ...]]:
+    """``{normalised criterion text: paths}`` of a ``.radius/intent.yml`` text.
+
+    Parsed by the intent package's own spec parser, so the paths are exactly what the
+    analysis would read. Criteria with the same text are merged (union of paths: wider
+    scope, never narrower).
+    """
+
+    from radius_intent.infrastructure.extraction.candidates import Collector
+    from radius_intent.infrastructure.extraction.spec_file import extract_spec
+    from radius_intent.infrastructure.extraction.text import split_lines
+
+    collector = Collector("spec")
+    extract_spec(split_lines(text), "spec", collector)
+    out: dict[str, tuple[str, ...]] = {}
+    for cand in collector.candidates:
+        key = _norm_text(cand.text)
+        paths = tuple(getattr(cand.hints, "paths", ()) or ())
+        out[key] = tuple(sorted({*out.get(key, ()), *paths}))
+    return out
+
+
+def default_base_spec_paths(command: Any) -> dict[str, tuple[str, ...]]:
+    """DEC-043: criterion paths of ``.radius/intent.yml`` at the BASE ref (empty if none)."""
+
+    base, _, _ = _snapshots(command)
+    data = base.read(SPEC_PATH) if base is not None else None
+    if data is None:
+        return {}
+    return spec_paths_by_text(data.decode("utf-8", errors="replace"))
+
+
 def default_symbol_changes(command: Any) -> Any:
     from radius_analysis.symbol_changes import extract_symbol_changes
 
@@ -336,6 +372,8 @@ class Producers:
     symbol_changes: Callable[[Any], Any] = default_symbol_changes
     #: Provenance of the head ``.radius/intent.yml`` (``base_spec`` only if unchanged on base).
     spec_provenance: Callable[[Any], str] = default_spec_provenance
+    #: DEC-043: ``(command) -> {criterion text: paths}`` of the BASE spec copy.
+    base_spec_paths: Callable[[Any], dict[str, tuple[str, ...]]] = default_base_spec_paths
     tamper: Callable[[Any, Any], Any] = default_tamper
     link_criteria: Callable[..., Any] = default_link_criteria
     link_tests: Callable[..., Any] = default_link_tests
@@ -491,6 +529,43 @@ class VerdictStageACollector:
             return author
         return value if value in ALL_PROVENANCE else author
 
+    def _with_scope_paths(
+        self, facts: IntentFacts, criteria: Any, spec_provenance: str, command: Any
+    ) -> Any:
+        """DEC-043: attach the BASE-copy ``paths:`` that decide whether the PR affects a
+        ``.radius/intent.yml`` criterion.
+
+        Unchanged spec (``base_spec``): the paths as read. Changed or added spec: the
+        paths of the base criterion with the same text, so editing ``paths:`` in the PR
+        cannot move a criterion out of scope; a criterion with no base copy, or a base
+        that cannot be read, keeps no scope paths and always stays in scope.
+        """
+
+        spec_ids = {
+            str(getattr(c, "id", "")) for c in facts.criteria if _source_kind(c) == "spec_file"
+        }
+        if not spec_ids:
+            return criteria
+        base: dict[str, tuple[str, ...]] | None = None
+        if spec_provenance != Provenance.BASE_SPEC.value:
+            try:
+                base = guarded(
+                    lambda: self._producers.base_spec_paths(command),
+                    self._limits.step_timeout_s,
+                )
+            except Exception as exc:  # noqa: BLE001 - unknown base: nothing is scoped out
+                LOGGER.warning(
+                    "Verdict v2 base spec read failed", extra={"reason_code": type(exc).__name__}
+                )
+                base = {}
+        items = []
+        for c in criteria.items:
+            paths: tuple[str, ...] = ()
+            if c.criterion_id in spec_ids:
+                paths = c.hints_paths if base is None else base.get(_norm_text(c.text), ())
+            items.append(replace(c, scope_paths=paths) if paths else c)
+        return adapters.Adapted(tuple(items), criteria.dropped)
+
     # -- API --------------------------------------------------------------
 
     def resolve_head(self, analysis_id: UUID, command: Any) -> str | None:
@@ -528,6 +603,7 @@ class VerdictStageACollector:
         if criteria.dropped.get("criteria_over_limit"):
             run.mark(TRUNCATED)
         run.mark(*criteria.notes)
+        criteria = self._with_scope_paths(facts, criteria, spec_provenance, command)
         if adapters.has_unconfirmed_inferred_intent(facts.criteria):
             run.mark(adapters.UNCONFIRMED_INFERRED_MARKER)
 
@@ -754,6 +830,7 @@ class VerdictStageACollector:
             algo_versions=dict(sorted(run.algo.items())),
             repo_config=repo_config,
             mutation=mutation_input,
+            changed_paths=_changed_paths(changeset, sym_items),
         )
 
     @staticmethod
@@ -798,6 +875,20 @@ def _scoped_sources(
         extra={"files_total": len(sources), "files_linked": len(scoped)},
     )
     return scoped
+
+
+def _changed_paths(changeset: Any, symbols: Sequence[Any]) -> tuple[str, ...] | None:
+    """Every changed file (new and old paths); ``None`` when the list may be incomplete."""
+
+    files = getattr(changeset, "files", None)
+    if files is None or getattr(changeset, "truncated", False):
+        return None
+    paths: set[str] = {s.path for s in symbols}
+    for f in files:
+        for p in (getattr(f, "path", None), getattr(f, "old_path", None)):
+            if isinstance(p, str) and p:
+                paths.add(p.replace("\\", "/"))
+    return tuple(sorted(paths))
 
 
 def _changeset_ref(changeset: Any) -> str:

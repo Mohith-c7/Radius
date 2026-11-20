@@ -289,10 +289,21 @@ def _plural(n: int, word: str) -> str:
     return f"{n} {word}" if n == 1 else f"{n} {word}s"
 
 
+#: Excluded-state reason codes with a fixed wording (others: the code, underscores as spaces).
+EXCLUDED_WHY = {"not_affected_by_pr": "not affected by this PR"}
+
+
+def _excluded_why(c: CriterionView) -> str:
+    code = c.reasons[0].code if c.reasons else ""
+    if code in EXCLUDED_WHY:
+        return EXCLUDED_WHY[code]
+    return escape.token(code, 40, fallback="").replace("_", " ")
+
+
 def _evidence_cell(c: CriterionView, tau: float | None) -> str:
     if c.state == "excluded":
-        why = escape.token(c.reasons[0].code if c.reasons else "", 40, fallback="")
-        return f"not scored ({why.replace('_', ' ')})" if why else "not scored"
+        why = _excluded_why(c)
+        return f"not scored ({why})" if why else "not scored"
     if not c.items:
         return "no linked test"
     counted = _counted(c)
@@ -347,7 +358,10 @@ def explain_criterion(
     s_txt = _f2(c.S)
     tau_txt = _f2(tau) if tau is not None else None
     if c.state == "excluded":
-        sentences.append(f"{label} is excluded from scoring.")
+        why = _excluded_why(c)
+        sentences.append(
+            f"{label} is excluded from scoring ({why})." if why else f"{label} is excluded from scoring."
+        )
     elif c.state == "contradicted":
         sentences.append(f"{label} is contradicted: a linked test failed.")
     elif c.state == "proven":

@@ -97,6 +97,11 @@ from radius_evidence.policy.apply import (
 )
 from radius_evidence.policy.repo_config import resolve_repo_config
 from radius_evidence.policy.report import policy_block, waiver_block
+from radius_evidence.policy.scope import (
+    NOT_AFFECTED,
+    NOT_AFFECTED_DETAIL,
+    criterion_in_scope,
+)
 from radius_shared.logging import get_logger
 from radius_shared.verdict_v2_flag import VerdictV2Mode
 from radius_shared.verdict_v2_payload import StoredVerdict
@@ -482,6 +487,20 @@ def compute_pipeline(
             ),
             (),
         )
+    # DEC-043: a standing spec criterion whose base-branch ``paths:`` match no changed
+    # file is not affected by this PR. It is excluded, so it never weighs on UIM, R2b or
+    # R2c. A contradicted criterion is never hidden (a failing linked test stays R1a).
+    for c in sa.criteria:
+        st = states[c.criterion_id]
+        if st.state in (SupportState.EXCLUDED, SupportState.CONTRADICTED):
+            continue
+        if not criterion_in_scope(c.scope_paths, sa.changed_paths):
+            states[c.criterion_id] = CriterionStateResult(
+                c.criterion_id,
+                SupportState.EXCLUDED,
+                (Reason(NOT_AFFECTED, NOT_AFFECTED_DETAIL),),
+                (),
+            )
     active = {
         c.criterion_id
         for c in sa.criteria

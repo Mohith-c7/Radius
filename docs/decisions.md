@@ -625,3 +625,23 @@ Decision:
 | Route the pruner through the new provider | An LLM shrinking the blast radius can hide risk; not done. |
 
 Consequences: with the flag and a key set, diff excerpts and file names go to a third party whose free tier may train on them (`docs/ai.md`, Privacy). The daily cap and pacing are per process and in memory, so a restart resets them. The review is generated once per analysis job; it is not regenerated when CI results arrive later, so its "missing evidence" can be stale. It is not registered in the prompt-injection harness (`tests/security/prompt_injection`), whose invariants assume the criteria schema; its injection cases live in `apps/worker/tests/test_ai_review.py`. Not verified: a real provider call from Render, and PostgreSQL (SQLite only).
+
+## DEC-043: Standing `.radius/intent.yml` criteria a pull request does not touch are excluded
+
+Context: the repository's own `.radius/intent.yml` lists standing invariants that apply to every pull request. On a pull request that changes none of their code (PR #176, a docker-compose one-liner), Stage B gates their hinted tests: no changed symbol links to them (`l_cs = l_st = 0`). So every standing criterion stayed unsupported, the unsupported intent mass was 1.0, and R2b made the pull request `insufficient_evidence` on its own. The owner decided that untouched standing criteria are excluded.
+
+Decision:
+
+1. **Scope rule.** A criterion with origin `spec_file` that has `paths:` is in scope only when at least one changed file matches one of them (glob, exact file or directory, the `paths:` hint semantics). Otherwise its state is `excluded` with the reason `not_affected_by_pr` (DEC-008: no new state). It is applied in Stage B after waivers, never to a `contradicted` criterion. Excluded criteria are outside UIM, R2b and R2c by construction.
+2. **Base copy decides.** Stage A stores the deciding paths in `CriterionInput.scope_paths` and every changed file (new and old paths) in `StageAInput.changed_paths`; both fields are optional and omitted when unset, so earlier digests are unchanged. With an unchanged spec (`base_spec`) the paths are read as is. With a changed spec (`author_head_spec`) they come from the base-branch criterion with the same text, so a PR cannot narrow its own scope. A criterion with no base copy keeps no scope paths and stays in scope.
+3. **Unaffected:** criteria without `paths:`, PR-derived criteria (title, body, commits, issues, LLM), and anything with unknown facts (changed files unknown or incomplete, invalid glob).
+4. **No applicable intent** stays `insufficient_evidence` through R2e (DEC-031). R2a covers changed behavioral code without in-scope criteria. `verified` is never the default.
+5. **Payload.** `criteria[].scope = {paths, in_scope}` is optional (`verdict_v2.schema.json`, API `CriterionOut.scope`). The comment says "not scored (not affected by this PR)". The repository spec gives `advisory-check` and `stale-head` `paths:`, so all seven standing criteria are scoped.
+
+| Option | Trade-off |
+| --- | --- |
+| Count a hinted test without a changed-symbol path | Would let an unrelated passing test vouch for a change it never exercises; rejected. |
+| Use the head copy's `paths:` | The PR author could exclude a criterion by editing its paths in the same PR; rejected. |
+| Lower the weight of untouched criteria instead of excluding them | Still counts in UIM and stays hard to explain; the excluded state already exists. |
+
+Consequences: a standing criterion whose code moves without its `paths:` being updated is excluded silently until the spec is fixed. Matching a base criterion by its text means that rewording a criterion in a PR makes it new, so it stays in scope (conservative). Deleting a criterion from the head spec still removes it, as before this decision.

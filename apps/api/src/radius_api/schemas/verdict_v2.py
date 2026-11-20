@@ -74,6 +74,17 @@ class HintOut(_Out):
     )
 
 
+class CriterionScopeOut(_Out):
+    paths: list[str] = Field(
+        default_factory=list,
+        description="UNTRUSTED. The criterion's paths from the BASE copy of .radius/intent.yml.",
+    )
+    in_scope: bool = Field(
+        description="False: no changed file matches the paths; the criterion is excluded "
+        "(reason not_affected_by_pr) and does not count towards uim, R2b or R2c (DEC-043)."
+    )
+
+
 class EvidenceItemOut(_Out):
     evidence_id: str
     test_id: str
@@ -199,6 +210,11 @@ class CriterionOut(_Out):
         "user is linked to one, else a user or API key handle). A suffix says '(unverified "
         "confirmer)' when the GitHub link is unknown, or why the confirmation was not counted. "
         "Render as text only.",
+    )
+    scope: CriterionScopeOut | None = Field(
+        default=None,
+        description="Optional (DEC-043): present for a .radius/intent.yml criterion whose "
+        "base-branch paths decide whether this pull request affects it.",
     )
 
 
