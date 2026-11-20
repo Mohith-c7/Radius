@@ -32,7 +32,7 @@ export type SessionOptions = {
 
 export const POSITIVE_TTL_MS = 15_000;
 export const NEGATIVE_TTL_MS = 5_000;
-export const VALIDATE_TIMEOUT_MS = 5_000;
+export const VALIDATE_TIMEOUT_MS = 10_000;
 const MAX_CACHE_ENTRIES = 500;
 
 type Entry = { result: SessionCheck; expiresAt: number };
