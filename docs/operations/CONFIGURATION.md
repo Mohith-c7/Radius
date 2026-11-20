@@ -22,7 +22,7 @@ How to read it.
   (`RADIUS_LLM_*`) silently fall back to their default on a bad number.
 
 
-Variables documented: **192** (16 secret, 12 feature flags).
+Variables documented: **194** (16 secret, 12 feature flags).
 
 ## Core, API, GitHub and observability
 
@@ -124,6 +124,8 @@ Variables documented: **192** (16 secret, 12 feature flags).
 | `RADIUS_UPLOAD_MAX_BODY_BYTES` | int | `20971520` | api | no | - | Body cap in bytes for CI test-report uploads. |
 | `RADIUS_VERDICT_V2_CHECK_CONCLUSIONS` | str | `advisory` | worker | no | - | Check Run conclusion mapping for Verdict v2 (alpha). advisory (default): never success; verified, insufficient_evidence and needs_review are neutral, failed is failure only when decided by R1a/R1b/R1c (failing linked test, failing CI, high-severity tamper). strict: verified is success. |
 | `RADIUS_VERDICT_V2_CONFIRM_POLICY` | str | `allow_unverified` | worker | no | - | Who may lift the unconfirmed-intent block and the author-hint cap by confirming a criterion (B-07). The confirmer is the authenticated principal recorded by the API. A confirmer linked to the PR author's GitHub login never counts. allow_unverified (default): a confirmer whose GitHub link is unknown counts but is labelled 'unverified confirmer' in the verdict. require_second_person: only a confirmer verifiably linked to a different GitHub account counts. An unrecognised value stops the worker at start. |
+| `RADIUS_VERDICT_V2_STAGE_A_TIMEOUT_SECONDS` | float | `300.0` | worker | no | - | Verdict v2: total time budget of Stage A (fact collection from the checkout) for one analysis, mutation evidence excluded. A step that runs past it is cut short, logged as 'Verdict v2 producer timed out' and marks the verdict truncated. The default suits a slow host (0.1 CPU); a fast host finishes early and pays nothing extra. |
+| `RADIUS_VERDICT_V2_STEP_TIMEOUT_SECONDS` | float | `120.0` | worker | no | - | Verdict v2: time budget of one Stage A step (reading sources, criterion and test linking, assertion extraction, relevance), never more than what is left of RADIUS_VERDICT_V2_STAGE_A_TIMEOUT_SECONDS. |
 | `RADIUS_WEBHOOK_MAX_BODY_BYTES` | int | `5242880` | api | no | - | Body cap in bytes for GitHub webhook deliveries. |
 | `RADIUS_WORKER_KILLED_PREDECESSOR` | json | `unset` | worker | no | - | Internal, do not set: `serve_with_worker` passes it to the worker it starts after the memory watchdog killed the previous one (`{pid, rss_mb, limit_mb}`), so that worker releases the killed job at once instead of waiting for lease recovery. |
 | `RADIUS_WORKER_MAX_RSS_MB` | int | `300` | api | no | - | Single-container hosting only (`python -m radius_api.serve_with_worker`, Linux): memory watchdog limit in MB for the embedded worker's resident memory (its process tree). Above it the worker is stopped and restarted; its job is retried up to `WORKER_JOB_MAX_ATTEMPTS` and then failed with "Analysis exceeded the memory budget". Keeps one large analysis from taking the whole container (and the API) out of memory. `0` disables it; ignored on Windows. |

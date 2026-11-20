@@ -1,0 +1,1 @@
+Worker: each job reuses the cached clone of its repository and fetches only the pull request head and base branch (a fresh clone when the cache is missing or unusable, every ref when the analysed commit is still missing). Jobs still check out into private worktrees; credentials are passed exactly as before.

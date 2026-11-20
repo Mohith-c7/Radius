@@ -38,10 +38,12 @@ from radius_evidence.domain.versions import (
 from radius_shared.logging import get_logger
 
 from radius_worker.verdict_v2 import adapters
+from radius_worker.verdict_v2.link_scope import scope_link_sources
 from radius_worker.verdict_v2.sources import (
     HeadShaPort,
     IntentFacts,
     IntentPort,
+    read_hinted_files,
     read_python_sources,
     resolve_head_sha,
 )
@@ -63,6 +65,12 @@ class ProducerTimeoutError(Exception):
     """A guarded producer exceeded its time budget."""
 
 
+#: Default Stage A budgets, sized for a slow host (0.1 CPU); the worker settings
+#: ``RADIUS_VERDICT_V2_STAGE_A_TIMEOUT_SECONDS`` / ``..._STEP_TIMEOUT_SECONDS`` set them.
+DEFAULT_TIMEOUT_S = 300.0
+DEFAULT_STEP_TIMEOUT_S = 120.0
+
+
 @dataclass(frozen=True, slots=True)
 class CollectLimits:
     """Soft budgets (design 3.8); hitting one yields the ``truncated`` marker."""
@@ -70,8 +78,8 @@ class CollectLimits:
     max_criteria: int = 50
     max_symbols: int = 5000
     max_tests: int = 3000
-    timeout_s: float = 120.0
-    step_timeout_s: float = 60.0
+    timeout_s: float = DEFAULT_TIMEOUT_S
+    step_timeout_s: float = DEFAULT_STEP_TIMEOUT_S
     #: Hard stop for the mutation producer (its own wall clock is smaller; this is the
     #: watchdog that abandons it if the sandbox hangs). Set from the worker settings.
     mutation_timeout_s: float = 660.0
@@ -166,24 +174,32 @@ def default_tamper(changeset: Any, command: Any) -> Any:
     return analyze_tampering(changeset, base, head, diff_text=command.diff_text or None)
 
 
-def _ref_resolves(repository_path: Any, ref: str) -> bool:
-    """True when ``ref`` names a commit in the checkout (a missing base must not read as "no policy")."""
+def _resolve_commit(repository_path: Any, ref: str) -> str | None:
+    """The commit sha ``ref`` names in the checkout, or ``None``."""
 
     import subprocess
 
     if not ref or ref.startswith("-"):
-        return False
+        return None
     try:
         result = subprocess.run(  # noqa: S603 - fixed argv, ref validated above
             ["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],  # noqa: S607
             cwd=repository_path,
             capture_output=True,
+            text=True,
             check=False,
             timeout=15,
         )
     except (OSError, subprocess.SubprocessError):
-        return False
-    return result.returncode == 0
+        return None
+    sha = result.stdout.strip().lower()
+    return sha if result.returncode == 0 and sha else None
+
+
+def _ref_resolves(repository_path: Any, ref: str) -> bool:
+    """True when ``ref`` names a commit in the checkout (a missing base must not read as "no policy")."""
+
+    return _resolve_commit(repository_path, ref) is not None
 
 
 def default_repo_config(command: Any) -> dict[str, Any]:
@@ -203,11 +219,14 @@ def default_repo_config(command: Any) -> dict[str, Any]:
         return collect_repo_config(None, None, base_ref=base_ref)
     head_ref = getattr(command, "head_ref", None)
     head = GitSnapshot(repository, head_ref) if head_ref else DirectorySnapshot(repository)
+    # The runner passes a branch ref (``origin/<target branch>``). Record the commit it
+    # named: the comment renders only a sha, so a branch name showed as "unknown".
+    base_sha = _resolve_commit(repository, base_ref)
     return collect_repo_config(
-        GitSnapshot(repository, base_ref).read,
+        GitSnapshot(repository, base_sha or base_ref).read,
         head.read,
-        base_ref=base_ref,
-        base_available=_ref_resolves(repository, base_ref),
+        base_ref=base_sha or base_ref,
+        base_available=base_sha is not None,
     )
 
 
@@ -334,6 +353,8 @@ class Producers:
     #: ``StageAInput.mutation`` stays ``None``. Sandbox backend only (see ``mutation.py``).
     mutation: Callable[[Any], Any] | None = None
     read_sources: Callable[[Path], tuple[dict[str, str], bool]] = read_python_sources
+    #: ``(root, paths) -> {path: text}``: only the test files ``tests:`` hints name.
+    hinted_sources: Callable[[Path, Sequence[str]], dict[str, str]] = read_hinted_files
 
 
 # ------------------------------------------------------------------ collector
@@ -347,6 +368,8 @@ class _Run:
     degraded: list[str] = field(default_factory=list)
     algo: dict[str, str] = field(default_factory=dict)
     started: float = field(default_factory=time.monotonic)
+    #: Wall time per step in ms (logged once per collect; no content).
+    timings: dict[str, int] = field(default_factory=dict)
 
     def remaining(self) -> float:
         return self.limits.timeout_s - (time.monotonic() - self.started)
@@ -378,26 +401,43 @@ class _Run:
             if timeout_s is None
             else timeout_s
         )
+        began = time.monotonic()
         try:
             return guarded(fn, budget)
         except ProducerTimeoutError:
             self.mark(f"producer_timeout:{name}")
             if blocking_timeout:
                 self.mark(TRUNCATED)
+            self.log_timeout(name, budget)
         except Exception as exc:  # noqa: BLE001 - isolation by contract
             self.mark(f"producer_failed:{name}")
             LOGGER.warning(
                 "Verdict v2 producer failed",
                 extra={"producer": name, "reason_code": type(exc).__name__},
             )
+        finally:
+            self.timings[name] = int((time.monotonic() - began) * 1000)
         return default
 
+    def log_timeout(self, name: str, budget: float) -> None:
+        LOGGER.warning(
+            "Verdict v2 producer timed out",
+            extra={
+                "producer": name,
+                "budget_s": round(max(budget, 0.0), 1),
+                "elapsed_ms": int((time.monotonic() - self.started) * 1000),
+            },
+        )
+
     def critical[T](self, name: str, fn: Callable[[], T]) -> T:
+        budget = min(self.limits.step_timeout_s, self.remaining())
+        began = time.monotonic()
         try:
-            return guarded(fn, min(self.limits.step_timeout_s, self.remaining()))
+            return guarded(fn, budget)
         except StageAError:
             raise
         except ProducerTimeoutError as exc:
+            self.log_timeout(name, budget)
             raise StageAError(f"{name}_timeout") from exc
         except Exception as exc:  # noqa: BLE001
             LOGGER.warning(
@@ -405,6 +445,8 @@ class _Run:
                 extra={"producer": name, "reason_code": type(exc).__name__},
             )
             raise StageAError(f"{name}_failed") from exc
+        finally:
+            self.timings[name] = int((time.monotonic() - began) * 1000)
 
 
 class VerdictStageACollector:
@@ -477,10 +519,11 @@ class VerdictStageACollector:
             )
             raise StageAError("intent_load_failed") from exc
 
+        spec_provenance = self._spec_provenance(facts, command)
         criteria = adapters.criterion_inputs(
             facts.criteria,
             limit=self._limits.max_criteria,
-            spec_provenance=self._spec_provenance(facts, command),
+            spec_provenance=spec_provenance,
         )
         if criteria.dropped.get("criteria_over_limit"):
             run.mark(TRUNCATED)
@@ -525,11 +568,29 @@ class VerdictStageACollector:
             }
 
         root = Path(command.repository_path)
+        # ``tests:`` hints link directly to the tests they name once those tests are found
+        # in the hinted files. This reads and parses only those files, first and with its
+        # own budget, so it never depends on whole-repo linking finishing in time.
+        hint_files = sorted(
+            {h.replace("\\", "/").split("::", 1)[0] for c in criteria.items for h in c.hints_tests}
+        )
+        hinted_texts: dict[str, str] = {}
+        hinted_ids: set[str] = set()
+        if hint_files:
+            hinted_texts, hinted_ids = run.step(
+                "hinted_tests",
+                lambda: _hinted_tests(prod.hinted_sources(root, hint_files)),
+                ({}, set()),
+                timeout_s=self._limits.step_timeout_s,
+            )
+
         sources, src_truncated = run.step(
             "read_sources", lambda: prod.read_sources(root), ({}, False)
         )
         if src_truncated:
             run.mark(TRUNCATED)
+        for path, text in hinted_texts.items():
+            sources.setdefault(path, text)
 
         link_targets = self._link_targets(changeset, sym_items)
         crit_sym = adapters.Adapted((), {})
@@ -554,8 +615,14 @@ class VerdictStageACollector:
         sym_test = adapters.Adapted((), {})
         test_links = None
         if link_targets:
+            # Whole-repo linking parses every file it is given: give it only the test
+            # files that can reach a changed file (plus the hinted ones).
             test_links = run.step(
-                "symbol_test_links", lambda: prod.link_tests(sources, link_targets), None
+                "symbol_test_links",
+                lambda: prod.link_tests(
+                    _scoped_sources(sources, link_targets, hinted_texts), link_targets
+                ),
+                None,
             )
             if prod.dynamic_links is not None and test_links is not None:
                 test_links = run.step(
@@ -611,7 +678,10 @@ class VerdictStageACollector:
 
         changed_tests = adapters.changed_test_ids(sym_items)
         test_files = sorted(
-            {t.split("::", 1)[0] for t in {*(e.test_id for e in edges_st), *changed_tests}}
+            {
+                t.split("::", 1)[0]
+                for t in {*(e.test_id for e in edges_st), *changed_tests, *hinted_ids}
+            }
         )
         features = adapters.Adapted((), {})
         aset = None
@@ -628,7 +698,7 @@ class VerdictStageACollector:
 
         known_tests = {a.test_id for a in features.items} | {e.test_id for e in edges_st}
         known_tests |= set(changed_tests)
-        hints = adapters.hint_test_edges(criteria.items, known_tests)
+        hints = adapters.hint_test_edges(criteria.items, known_tests | hinted_ids)
         run.mark(*hints.notes)
         relevance_edges: tuple[Any, ...] = ()
         if prod.relevance is not None and criteria.items and known_tests:
@@ -649,6 +719,18 @@ class VerdictStageACollector:
             run.mark("relevance_unavailable")
         crit_test = adapters.merge_criterion_test_edges(
             hints.items, relevance_edges, author_hint_cap=LinkMapping().author_hint_cap
+        )
+        LOGGER.info(
+            "Verdict v2 stage A collected",
+            extra={
+                "analysis_id": str(analysis_id),
+                "elapsed_ms": int((time.monotonic() - run.started) * 1000),
+                "step_ms": dict(run.timings),
+                "degraded": list(run.degraded),
+                "spec_provenance": spec_provenance,
+                "hint_edges": len(hints.items),
+                "criterion_test_edges": len(crit_test),
+            },
         )
 
         return StageAInput(
@@ -689,6 +771,33 @@ class VerdictStageACollector:
                 except (AttributeError, TypeError, ValueError):
                     continue
         return out
+
+
+def _hinted_tests(texts: dict[str, str]) -> tuple[dict[str, str], set[str]]:
+    """``(texts, test ids)`` of the hinted files: the tests that really exist there."""
+
+    from radius_testing.linking.naming import python_test_records
+
+    return texts, {r.test_id for r in python_test_records(texts)}
+
+
+def _scoped_sources(
+    sources: dict[str, str], targets: Sequence[Any], keep: dict[str, str]
+) -> dict[str, str]:
+    """:func:`scope_link_sources`, falling back to every source if scoping fails."""
+
+    try:
+        scoped = scope_link_sources(sources, targets, keep)
+    except Exception as exc:  # noqa: BLE001 - scoping is an optimisation only
+        LOGGER.warning(
+            "Verdict v2 link scoping failed", extra={"reason_code": type(exc).__name__}
+        )
+        return sources
+    LOGGER.info(
+        "Verdict v2 link scope",
+        extra={"files_total": len(sources), "files_linked": len(scoped)},
+    )
+    return scoped
 
 
 def _changeset_ref(changeset: Any) -> str:

@@ -984,12 +984,24 @@ def load_persisted_analysis_command(
     # The stored URL is untrusted data (A-01/A-02): LocalGitRepositoryClient
     # re-validates it (https, allow-listed host, owner/repo shape) before git runs
     # and never sends the installation token to another host.
-    repository_path = git_client.clone_or_fetch(
-        clone_url,
-        destination,
-        extra_headers=extra_headers,
-    )
-    if hasattr(git_client, "fetch_pull_request") and pr_number:
+    if hasattr(git_client, "sync_cache"):
+        # Reuse the cached clone: fetch only the base branch and the PR head (a fresh
+        # clone on a miss or an unusable cache, every ref if the commit is still missing).
+        repository_path = git_client.sync_cache(
+            clone_url,
+            destination,
+            branches=(target_branch,) if target_branch else (),
+            pull_request=pr_number,
+            commit=commit_sha,
+            extra_headers=extra_headers,
+        )
+    else:
+        repository_path = git_client.clone_or_fetch(
+            clone_url,
+            destination,
+            extra_headers=extra_headers,
+        )
+    if not hasattr(git_client, "sync_cache") and hasattr(git_client, "fetch_pull_request") and pr_number:
         try:
             git_client.fetch_pull_request(
                 repository_path,

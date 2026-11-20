@@ -118,6 +118,48 @@ def test_load_persisted_analysis_command_passes_clone_headers(
         assert git_client.extra_headers == ("Authorization: Bearer token",)
 
 
+class SyncingGitClient:
+    """A client with a reusable cache: the runner must sync it, not clone_or_fetch."""
+
+    def __init__(self) -> None:
+        self.synced: dict | None = None
+        self.checked_out = None
+
+    def checkout(self, repository_path: Path, branch_name: str) -> None:
+        self.checked_out = branch_name
+
+    def sync_cache(self, clone_url, destination, **kwargs) -> Path:
+        self.synced = {"destination": destination, **kwargs}
+        return destination
+
+    def clone_or_fetch(self, *args, **kwargs) -> Path:  # pragma: no cover - must not run
+        raise AssertionError("the runner must reuse the cache through sync_cache")
+
+
+def test_load_persisted_analysis_command_syncs_only_the_base_and_pr_refs(
+    tmp_path: Path,
+) -> None:
+    with _session_factory()() as session:
+        analysis, _, pull_request = _persist_analysis_context(session)
+        git_client = SyncingGitClient()
+
+        command = load_persisted_analysis_command(
+            session=session,
+            analysis_id=analysis.id,
+            repository_cache_dir=tmp_path / "cache",
+            git_client=git_client,
+            extra_headers=("Authorization: Bearer token",),
+        )
+
+        synced = git_client.synced
+        assert synced["branches"] == (pull_request.target_branch,)
+        assert synced["pull_request"] == pull_request.github_pr_number
+        assert synced["commit"] == analysis.commit_sha
+        assert synced["extra_headers"] == ("Authorization: Bearer token",)
+        assert command.repository_path == synced["destination"]
+        assert git_client.checked_out == analysis.commit_sha
+
+
 def test_github_clone_headers_use_stored_installation_id() -> None:
     with _session_factory()() as session:
         analysis, _, _ = _persist_analysis_context(

@@ -63,6 +63,40 @@ def read_python_sources(
     return sources, truncated
 
 
+def read_hinted_files(
+    root: Path, paths: Sequence[str], *, max_files: int = 200, max_bytes: int = MAX_FILE_BYTES
+) -> dict[str, str]:
+    """Read the ``.py`` files named by ``tests:`` hints, keyed by posix path.
+
+    Only these few files are read, so hinted tests resolve even when the whole-repo
+    read or linking runs out of time. Same guards as :func:`read_python_sources`:
+    relative paths only, no symlinks, nothing outside ``root``, no oversize files.
+    """
+
+    out: dict[str, str] = {}
+    resolved_root = root.resolve()
+    for raw in sorted(set(paths))[:max_files]:
+        rel = raw.replace("\\", "/").removeprefix("./")
+        parts = rel.split("/")
+        if (
+            not rel.endswith(".py")
+            or rel.startswith("/")
+            or ":" in rel
+            or any(p in ("", ".", "..") or p in SKIP_DIRS for p in parts)
+        ):
+            continue
+        path = root.joinpath(*parts)
+        try:
+            if path.is_symlink() or resolved_root not in path.resolve().parents:
+                continue
+            if not path.is_file() or path.stat().st_size > max_bytes:
+                continue
+            out[rel] = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+    return out
+
+
 def resolve_head_sha(command: Any, *, timeout_s: float = 10.0) -> str | None:
     """A 40-hex head sha from ``command.head_ref`` or ``git rev-parse`` (None if unknown)."""
 
