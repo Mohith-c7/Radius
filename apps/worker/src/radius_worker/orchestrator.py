@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 from uuid import UUID
@@ -166,6 +166,9 @@ class Phase1AnalysisOrchestrator:
         self._tamper_rules_enabled = tamper_rules_enabled
         self._assertion_extraction_enabled = assertion_extraction_enabled
         self._flaky_policy = flaky_policy
+        #: Called between pipeline phases; the worker sets it to a check that raises
+        #: when the job lease is lost or the analysis was cancelled (superseded).
+        self.checkpoint: Callable[[], None] = lambda: None
 
     def execute(self, command: ExecuteAnalysisCommand) -> AnalysisExecutionResult:
         """Execute one analysis and mark its lifecycle status."""
@@ -182,6 +185,7 @@ class Phase1AnalysisOrchestrator:
     def _execute(self, command: ExecuteAnalysisCommand) -> AnalysisExecutionResult:
         with stage("analyze_changes"):
             changes = self._analyze_changes(command)
+        self.checkpoint()
         changed_paths = tuple(item.path for item in changes.changed_files)
         if self._symbol_changes_enabled or self._tamper_rules_enabled:
             symbol_result = self._extract_symbol_changes(
@@ -201,6 +205,7 @@ class Phase1AnalysisOrchestrator:
             parse_result = self._parser.parse_repository_result(
                 ParseRepositoryCommand(repository_path=command.repository_path)
             )
+        self.checkpoint()
         if parse_result.parse_failures:
             LOGGER.warning(
                 "Some source files could not be parsed",
@@ -217,6 +222,7 @@ class Phase1AnalysisOrchestrator:
                     parse_result=parse_result,
                 )
             )
+        self.checkpoint()
         graph_snapshot = self._require_graph_snapshot(command.analysis_id)
         dependents = file_dependents(graph_snapshot.graph, changed_paths)
         with stage("discover_tests"):

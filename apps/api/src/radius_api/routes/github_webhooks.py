@@ -517,6 +517,19 @@ def _handle_pull_request(
             commit_sha=pull_request_payload.head.sha,
         )
     )
+    previous_head = payload.get("before")
+    if action == "synchronize" and isinstance(previous_head, str) and previous_head:
+        # A push replaced the head: stop analysing the previous head (queued work is
+        # dropped; a running job stops at its next checkpoint). Only that commit is
+        # named, so an out-of-order delivery can never cancel the newest head.
+        cancelled = [
+            str(item)
+            for item in analysis_service.cancel_superseded(
+                pull_request_id=UUID(str(pull_request.id)),
+                head_sha=pull_request_payload.head.sha,
+                superseded_shas=(previous_head,),
+            )
+        ]
     # IN-02: the payload already holds title and body; store them as intent now
     # (best-effort, no network). The worker adds issues, commits and the spec.
     record_pull_request_intent(
@@ -534,6 +547,7 @@ def _handle_pull_request(
         repositoryId=str(repository.id),
         pullRequestId=str(pull_request.id),
         analysisId=str(analysis.id),
+        cancelledAnalysisIds=cancelled,
     )
 
 

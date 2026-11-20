@@ -30,7 +30,8 @@ export function Status({ status }: { status: string }) {
   const positive = ["verified", "healthy", "connected", "completed", "low"].includes(
     normalized,
   );
-  const neutral = ["running", "pending", "synchronizing", "open", "medium"].includes(
+  // "cancelled" is neutral: a newer commit superseded the run, nothing went wrong.
+  const neutral = ["running", "pending", "cancelled", "synchronizing", "open", "medium"].includes(
     normalized,
   );
   const icon = positive ? (

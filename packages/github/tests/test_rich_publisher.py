@@ -413,3 +413,32 @@ def test_score_is_labelled_uncalibrated_heuristic_everywhere() -> None:
     assert label in run["summary"]
     assert label in client.comments[0]["body"]
     assert "uncalibrated heuristic" in client.comments[0]["body"].split("### Verification Metrics")[1]
+
+
+def test_publish_cancelled_completes_the_open_check_as_neutral() -> None:
+    client = FakeGitHubClient(check_runs=[{"id": 78, "started_at": "2026-10-01T00:00:00Z"}])
+
+    GitHubAnalysisPublisher(client).publish_cancelled(
+        installation_id=5,
+        owner="acme",
+        repository_name="radius",
+        head_sha="4" * 40,
+        reason="Superseded by a newer commit of the pull request (5555555).",
+    )
+
+    updated = client.updated_check_runs[0]
+    assert updated["check_run_id"] == 78
+    assert (updated["status"], updated["conclusion"]) == ("completed", "neutral")
+    assert updated["title"] == "Radius: analysis cancelled"
+    assert "No verification was performed" in updated["summary"]
+    assert "Superseded by a newer commit" in updated["text"]
+
+
+def test_publish_cancelled_never_creates_a_check() -> None:
+    client = FakeGitHubClient()
+
+    GitHubAnalysisPublisher(client).publish_cancelled(
+        installation_id=5, owner="acme", repository_name="radius", head_sha="5" * 40, reason="x"
+    )
+
+    assert client.check_runs == [] and client.updated_check_runs == []

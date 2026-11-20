@@ -172,9 +172,6 @@ def test_closing_cancels_pending_job_and_analysis_but_not_a_running_one(
     engine, _, client = _sql_client(tmp_path, monkeypatch)
     try:
         first = post_json(client, "pull_request", load("pull_request_opened"), "p1").json()["data"]
-        second = post_json(client, "pull_request", load("pull_request_synchronize"), "p2").json()[
-            "data"
-        ]
         # A worker has claimed the first job and is running it.
         with Session(engine) as session:
             job = (
@@ -185,6 +182,10 @@ def test_closing_cancels_pending_job_and_analysis_but_not_a_running_one(
             job.status = db_enums.AnalysisJobStatus.RUNNING
             job.attempts = 1
             session.commit()
+        # The push only asks the running job to stop (its worker owns the rows).
+        second = post_json(client, "pull_request", load("pull_request_synchronize"), "p2").json()[
+            "data"
+        ]
         closed = post_json(client, "pull_request", load("pull_request_closed"), "p3").json()["data"]
     finally:
         get_api_settings.cache_clear()
