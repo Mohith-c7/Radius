@@ -188,9 +188,13 @@ class _RecordingStore(InMemoryTestStore):
     def lock_result_uploads(self, analysis_id):
         self.calls.append("lock")
 
-    def get_result_upload(self, analysis_id, body_sha256):
+    def get_result_upload(
+        self, analysis_id, body_sha256, report_slot_id="legacy", run_id=None, run_attempt=None
+    ):
         self.calls.append("get")
-        return super().get_result_upload(analysis_id, body_sha256)
+        return super().get_result_upload(
+            analysis_id, body_sha256, report_slot_id, run_id, run_attempt
+        )
 
     def save_result_upload(self, upload):
         self.calls.append("save")

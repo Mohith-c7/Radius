@@ -63,6 +63,9 @@ class TestStore(Protocol):
         self,
         analysis_id: UUID,
         body_sha256: str,
+        report_slot_id: str = "legacy",
+        run_id: str | None = None,
+        run_attempt: int | None = None,
     ) -> TestResultUpload | None:
         """Return an earlier upload of the identical report body, if any."""
 
@@ -72,6 +75,29 @@ class TestStore(Protocol):
         Saving a body hash that is already stored for the analysis returns the
         stored upload unchanged.
         """
+
+    def append_verification_event(
+        self,
+        upload_id: UUID,
+        status: str,
+        reason_code: str | None,
+        verifier_version: str,
+        policy_version: str,
+        details: dict,
+        attestation_digest: str | None = None,
+        attestation_bundle: bytes | None = None,
+    ) -> None:
+        """Append an immutable provenance verification event."""
+
+    def get_or_create_evidence_manifest(
+        self,
+        analysis_id: UUID,
+        repository_id: UUID,
+        head_sha: str,
+        manifest: dict,
+        digest_sha256: str,
+    ) -> dict:
+        """Persist or return the immutable Radius-generated test manifest."""
 
     def lock_result_uploads(self, analysis_id: UUID) -> None:
         """Serialise result ingestion for one analysis until the transaction ends.
