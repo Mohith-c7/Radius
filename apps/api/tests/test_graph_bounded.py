@@ -180,3 +180,47 @@ def test_other_organization_still_cannot_read_the_graph() -> None:
         response = client.get(url, headers=other, params=params)
         assert response.status_code == 403
         assert "data" not in response.json() or response.json()["data"] is None
+
+
+def test_node_and_edge_lists_are_paginated_with_backward_compatible_meta() -> None:
+    client, headers, url = _setup()
+
+    nodes = client.get(f"{url}/nodes", headers=headers).json()
+    page = client.get(
+        f"{url}/nodes", headers=headers, params={"limit": 2, "offset": 1}
+    ).json()
+    edges = client.get(
+        f"{url}/edges", headers=headers, params={"limit": 2, "offset": 2}
+    ).json()
+
+    assert [node["id"] for node in nodes["data"]] == [
+        f"file:src/{name}.py" for name in "abcde"
+    ]
+    assert nodes["meta"]["count"] == 5
+    assert nodes["meta"]["pagination"] == {
+        "limit": 500,
+        "offset": 0,
+        "total": 5,
+        "returned": 5,
+    }
+    assert [node["id"] for node in page["data"]] == ["file:src/b.py", "file:src/c.py"]
+    assert page["meta"]["count"] == 2
+    assert page["meta"]["pagination"]["total"] == 5
+    assert edges["data"] == [
+        {
+            "source_id": "file:src/c.py",
+            "target_id": "file:src/d.py",
+            "edge_type": "imports",
+        }
+    ]
+    assert edges["meta"]["pagination"] == {
+        "limit": 2,
+        "offset": 2,
+        "total": 3,
+        "returned": 1,
+    }
+    for path in ("nodes", "edges"):
+        too_big = client.get(f"{url}/{path}", headers=headers, params={"limit": 5001})
+        assert too_big.status_code == 422
+        other = {"X-Radius-Organization-Id": str(uuid4())}
+        assert client.get(f"{url}/{path}", headers=other).status_code == 403

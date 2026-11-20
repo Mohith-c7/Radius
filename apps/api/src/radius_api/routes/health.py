@@ -27,8 +27,13 @@ class HealthResponse(BaseModel):
 
 
 @router.get("/health", response_model=ApiResponse[HealthResponse])
-def get_health() -> ApiResponse[HealthResponse]:
-    """Return service health metadata."""
+async def get_health() -> ApiResponse[HealthResponse]:
+    """Return service health metadata.
+
+    ``async`` on purpose: it does no I/O (settings are cached), so it answers on the
+    event loop and never queues behind slow synchronous handlers for a worker
+    thread. The platform health check has a 5 s timeout.
+    """
 
     settings = get_api_settings()
     return success_response(

@@ -297,7 +297,7 @@ Returns graph metadata and a bounded slice of the graph. A whole-repository grap
 
 Query parameters (all optional):
 
-- `scope`: `full` (default) returns the stored graph in stored order; `impact` returns the nodes on the analysis' changed files plus their neighbours within `depth` hops (either edge direction), nearest first. An analysis with no recorded changed files returns no nodes for `impact`.
+- `scope`: `full` (default) returns the stored graph in stored order (by node id); `impact` returns the nodes on the analysis' changed files plus their neighbours within `depth` hops (either edge direction), nearest first. An analysis with no recorded changed files returns no nodes for `impact`.
 - `depth`: hops for `impact`, 0 to 5, default 1.
 - `limit`: maximum nodes returned, 1 to 5000, default 2000. Edges are only those between returned nodes, at most 4 per returned node.
 
@@ -307,15 +307,15 @@ Query parameters (all optional):
 
 ## GET /analyses/{analysisId}/graph/nodes
 
-Returns nodes.
+Returns one page of nodes in stored order (by node id).
 
-Not paginated: returns the full array with `meta.count`.
+Query parameters: `limit` (1 to 5000, default 500) and `offset` (default 0). `data` stays a plain array; `meta.count` is the number returned and `meta.pagination` holds `limit`, `offset`, `total` and `returned`. Out-of-range parameters return 422.
 
 ---
 
 ## GET /analyses/{analysisId}/graph/edges
 
-Returns graph edges.
+Returns one page of graph edges in stored order (by source id, target id, edge type), with the same `limit` / `offset` parameters and `meta` as `/graph/nodes`.
 
 ---
 
