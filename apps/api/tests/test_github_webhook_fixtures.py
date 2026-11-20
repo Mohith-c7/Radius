@@ -186,7 +186,10 @@ def test_synchronize_and_force_push_each_start_an_analysis_for_the_new_head() ->
     assert len(ids) == 3
     # One pull request row throughout.
     assert opened["pullRequestId"] == sync["pullRequestId"] == forced["pullRequestId"]
-    assert len(app.state.container.analysis_queue) == 3
+    # Each push supersedes the previous head's queued analysis; only the newest runs.
+    assert sync["cancelledAnalysisIds"] == [opened["analysisId"]]
+    assert forced["cancelledAnalysisIds"] == [sync["analysisId"]]
+    assert len(app.state.container.analysis_queue) == 1
 
 
 @pytest.mark.parametrize(
@@ -294,9 +297,12 @@ def test_persisted_flow_installation_link_dedup_and_redelivery(tmp_path, monkeyp
 
     assert edited.json()["data"]["ignored"] is True
     assert closed.json()["data"]["ignored"] is True
-    # Closing cancelled the three queued analyses; reopening starts a new one
-    # for the (unchanged) head instead of reusing a cancelled analysis.
-    assert len(closed.json()["data"]["cancelledAnalysisIds"]) == 3
+    # Each push cancelled the previous head's queued analysis, and closing cancelled
+    # the last one; reopening starts a new one for the (unchanged) head instead of
+    # reusing a cancelled analysis.
+    assert sync.json()["data"]["cancelledAnalysisIds"] == [opened.json()["data"]["analysisId"]]
+    assert forced.json()["data"]["cancelledAnalysisIds"] == [sync.json()["data"]["analysisId"]]
+    assert closed.json()["data"]["cancelledAnalysisIds"] == [forced.json()["data"]["analysisId"]]
     assert reopened.json()["data"]["analysisId"] != sync.json()["data"]["analysisId"]
     with Session(engine) as session:
         analyses = session.query(db_models.Analysis).all()

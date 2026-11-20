@@ -200,6 +200,12 @@ def record_pull_request(
                 commit_sha=sha,
             )
         )
+        # GitHub reports ``sha`` as the current head, so unfinished analyses of other
+        # commits of this pull request are stale: cancel them (or ask their worker to
+        # stop). Pull-request-less (manual, branch) analyses are never touched.
+        cancel_superseded = getattr(analysis_service, "cancel_superseded", None)
+        if cancel_superseded is not None:
+            cancel_superseded(pull_request_id=UUID(str(upserted.id)), head_sha=sha)
     return upserted, analysis
 
 

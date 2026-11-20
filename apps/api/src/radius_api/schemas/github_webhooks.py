@@ -73,7 +73,9 @@ class GitHubWebhookResult(BaseModel):
     #: Why a delivery was ignored when it is not simply an unhandled event
     #: (``repository_disconnected``, ``installation_suspended``, ...).
     ignored_reason: str | None = Field(default=None, alias="ignoredReason")
-    #: Queued-not-started analyses cancelled by this delivery (PR closed, repo removed).
+    #: Analyses cancelled by this delivery: queued work of a closed PR or removed
+    #: repository, and older heads a ``synchronize`` push superseded (a running one
+    #: is asked to stop at its next checkpoint).
     cancelled_analysis_ids: list[str] = Field(
         default_factory=list, alias="cancelledAnalysisIds"
     )

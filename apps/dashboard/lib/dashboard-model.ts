@@ -118,7 +118,14 @@ function timestamp(value: string | null | undefined): number {
 }
 
 /** Status choices of the analyses list filter. */
-export const ANALYSIS_STATUS_FILTERS: readonly string[] = ["all", "pending", "running", "completed", "failed"];
+export const ANALYSIS_STATUS_FILTERS: readonly string[] = [
+  "all",
+  "pending",
+  "running",
+  "completed",
+  "failed",
+  "cancelled",
+];
 
 /**
  * The analyses list filtered by status and repository ("all", empty or
