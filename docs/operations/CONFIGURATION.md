@@ -201,7 +201,7 @@ Variables documented: **164** (15 secret, 10 feature flags).
 | Variable | Type | Default | Service | Secret | Status | Description |
 |---|---|---|---|---|---|---|
 | `NEXT_PUBLIC_API_URL` | str | `http://localhost:8000/api/v1` | dashboard | no | - | Base URL used by the dashboard sign-in/auth client. |
-| `NEXT_PUBLIC_GITHUB_APP_URL` | str | `unset` | dashboard | no | - | Link target for the GitHub App install button in the dashboard, for example `https://github.com/apps/<app-slug>/installations/new`. When unset, the button is hidden. |
+| `NEXT_PUBLIC_GITHUB_APP_URL` | str | `unset` | dashboard | no | - | Link target for the GitHub App install button in the dashboard. |
 | `NEXT_PUBLIC_RADIUS_API_BASE_URL` | str | `http://localhost:8000` | dashboard | no | - | API origin as seen by the browser; also used for the dashboard CSP `connect-src`. Inlined at build time. |
 | `NEXT_PUBLIC_RADIUS_DEMO_SIGNIN` | bool | `false` | dashboard | no | - | Show the login form's "Quick Demo Sign-In" button, which uses the publicly known credentials of the seeded demo account. Build argument; only `docker-compose.dev.yml` sets it to `true` (the button also shows under `next dev`). Never set it for a deployment. |
 | `NEXT_PUBLIC_RADIUS_ORGANIZATION_ID` | str | `empty` | dashboard | no | - | Organization UUID the dashboard loads. The dashboard asks you to set it when empty. Inlined at build time. |
