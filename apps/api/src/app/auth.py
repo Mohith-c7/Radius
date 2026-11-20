@@ -1,6 +1,7 @@
 """Authentication services: password hashing, signed sessions, and opaque action tokens."""
 
 import hashlib
+import logging
 import os
 import secrets
 from datetime import UTC, datetime, timedelta
@@ -12,7 +13,7 @@ from argon2.exceptions import InvalidHashError, VerifyMismatchError
 from fastapi import HTTPException, status
 from radius_shared.database.base import Base as DomainBase
 from radius_shared.database.enums import UserRole
-from radius_shared.database.models import Organization
+from radius_shared.database.models import Organization, Repository
 from radius_shared.database.models import User as DomainUser
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
@@ -22,6 +23,7 @@ from .config import KNOWN_PUBLIC_SESSION_SECRETS, get_settings
 from .models import AuthAccount, AuthSession, AuthToken, User
 from .oauth import OAuthError
 
+LOGGER = logging.getLogger(__name__)
 password_hasher = PasswordHasher()
 SESSION_TTL = timedelta(days=14)
 
@@ -217,16 +219,67 @@ def consume_action_token(db: Session, raw_token: str, purpose: str) -> User:
     return user
 
 
+_WORKSPACE_SUFFIX = "'s Workspace"
+
+
+def _default_organization(db: Session, organization_id: str | None) -> Organization | None:
+    """The configured single-tenant organization, or None (unset, or missing: logged)."""
+    if not organization_id:
+        return None
+    org = db.get(Organization, UUID(organization_id))
+    if org is None:
+        LOGGER.error(
+            "auth.membership RADIUS_DEFAULT_ORGANIZATION_ID=%s does not exist; users keep "
+            "personal workspaces until it is created (python -m radius_api.bootstrap)",
+            organization_id,
+        )
+    return org
+
+
+def _is_empty_personal_workspace(
+    db: Session, org: Organization, domain_user: DomainUser | None
+) -> bool:
+    """True for an organization created by sign-in that holds nothing worth keeping: the
+    ``"<name>'s Workspace"`` name, no GitHub installation, no repository (connected or not)
+    and no member other than this user."""
+    if domain_user is None or not org.name.endswith(_WORKSPACE_SUFFIX):
+        return False
+    if org.github_installation_id is not None:
+        return False
+    has_repository = db.scalar(
+        select(Repository.id).where(Repository.organization_id == org.id).limit(1)
+    )
+    if has_repository is not None:
+        return False
+    other_member = db.scalar(
+        select(DomainUser.id)
+        .where(DomainUser.organization_id == org.id, DomainUser.id != domain_user.id)
+        .limit(1)
+    )
+    return other_member is None
+
+
 def provision_domain_user_and_org(
     db: Session,
     user: User,
     github_user_id: int | None = None,
 ) -> tuple[Organization, DomainUser]:
-    """Check if domain User and Organization exist in the shared schema, creating them if not."""
+    """Make sure the user has a domain ``User`` row and an ``Organization``; called at sign-in.
+
+    Without ``RADIUS_DEFAULT_ORGANIZATION_ID`` (multi-tenant) a user without an organization gets
+    a personal workspace. With it (single-tenant) a new user joins that organization, and a user
+    still sitting in an empty auto-created personal workspace is moved into it; a user whose
+    organization holds anything (repositories, an installation, other members) is never moved.
+    In the default organization a verified address on ``RADIUS_ADMIN_EMAILS`` becomes admin;
+    nobody is demoted here.
+    """
     try:
         DomainBase.metadata.create_all(bind=db.get_bind(), checkfirst=True)
     except Exception:
         pass
+
+    settings = get_settings()
+    default_org = _default_organization(db, settings.default_organization_id)
 
     domain_user = db.scalar(
         select(DomainUser).where(DomainUser.email == user.email.lower())
@@ -236,9 +289,30 @@ def provision_domain_user_and_org(
     if domain_user is not None and domain_user.organization_id is not None:
         org = db.get(Organization, domain_user.organization_id)
 
+    if default_org is not None:
+        if org is None:
+            org = default_org
+        elif org.id != default_org.id:
+            if _is_empty_personal_workspace(db, org, domain_user):
+                LOGGER.info(
+                    "auth.membership moved user=%s from personal workspace %s to default organization %s",
+                    user.id,
+                    org.id,
+                    default_org.id,
+                )
+                org = default_org
+            else:
+                LOGGER.warning(
+                    "auth.membership user=%s stays in organization %s: it is not an empty personal "
+                    "workspace, so it is not moved to the default organization %s",
+                    user.id,
+                    org.id,
+                    default_org.id,
+                )
+
     if org is None:
         clean_name = (user.name or "").strip() or user.email.split("@")[0]
-        workspace_name = f"{clean_name}'s Workspace"
+        workspace_name = f"{clean_name}{_WORKSPACE_SUFFIX}"
         org = Organization(name=workspace_name)
         db.add(org)
         db.flush()
@@ -268,6 +342,23 @@ def provision_domain_user_and_org(
         db.add(domain_user)
     elif domain_user.organization_id != org.id:
         domain_user.organization_id = org.id
+
+    if (
+        default_org is not None
+        and org.id == default_org.id
+        and user.email_verified
+        and settings.is_admin_email(user.email)
+    ):
+        # Promote only. A listed address that is removed later keeps the role until an
+        # operator changes it: an automatic demotion could lock the only admin out.
+        if user.role != UserRole.ADMIN.value or domain_user.role != UserRole.ADMIN:
+            LOGGER.info(
+                "auth.membership user=%s granted admin in organization %s (RADIUS_ADMIN_EMAILS)",
+                user.id,
+                org.id,
+            )
+        user.role = UserRole.ADMIN.value
+        domain_user.role = UserRole.ADMIN
 
     if hasattr(user, "organization_id") and (
         not user.organization_id or user.organization_id != str(org.id)

@@ -35,6 +35,12 @@ const ALLOWED: Array<{ pattern: RegExp; methods: readonly string[] }> = [
   { pattern: new RegExp(`^analyses/${ID}/intent/criteria$`), methods: ["POST"] },
   { pattern: new RegExp(`^analyses/${ID}/intent/criteria/${ID}$`), methods: ["PATCH"] },
   { pattern: new RegExp(`^analyses/${ID}/intent/criteria/${ID}/history$`), methods: ["GET"] },
+  // Managed API keys (PRD-12): admin users only (roleAllows), and the API re-checks the
+  // forwarded session's user is an admin of the organization. Exactly these methods.
+  { pattern: new RegExp(`^api-keys$`), methods: ["GET", "POST"] },
+  { pattern: new RegExp(`^api-keys/audit$`), methods: ["GET"] },
+  { pattern: new RegExp(`^api-keys/${ID}/rotate$`), methods: ["POST"] },
+  { pattern: new RegExp(`^api-keys/${ID}$`), methods: ["DELETE"] },
 ];
 
 export type ProxyConfig = {
@@ -83,6 +89,11 @@ function isIntentWrite(segments: string[] | undefined, method: string | undefine
   );
 }
 
+/** Managed API key routes: admin-only in the dashboard, and the API needs the session. */
+export function isApiKeysRoute(segments: string[] | undefined): boolean {
+  return !!segments && segments[0] === "api-keys";
+}
+
 const FORWARDED_CONTENT_TYPES = ["application/json", "application/xml", "text/xml"];
 
 /** Build upstream URL; only the configured base is ever used. */
@@ -122,6 +133,11 @@ export function buildUpstreamHeaders(
       const actor = route.actor !== undefined ? route.actor : incoming.get("x-radius-actor");
       if (actor && ACTOR_PATTERN.test(actor)) headers.set("X-Radius-Actor", actor);
     }
+  }
+  if (isApiKeysRoute(route.segments) && route.session && SESSION_TOKEN_PATTERN.test(route.session)) {
+    // The proxy's key has every scope, so the API must also see WHO is acting: it requires
+    // this session's user to be an admin of the organization. Never a client-chosen actor.
+    headers.set("X-Radius-Session", route.session);
   }
   const ct = (incoming.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
   if (FORWARDED_CONTENT_TYPES.includes(ct)) headers.set("Content-Type", ct);

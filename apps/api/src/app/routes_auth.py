@@ -370,7 +370,9 @@ def login(payload: Login, response: Response, db: Session = Depends(get_db)):
             ),
         )
     _login_failures.pop(email, None)
-    if not user.organization_id:
+    # Single-tenant (RADIUS_DEFAULT_ORGANIZATION_ID): sync membership and admin role at every
+    # sign-in, like OAuth does; otherwise only a user without an organization is provisioned.
+    if not user.organization_id or get_settings().default_organization_id:
         provision_domain_user_and_org(db, user)
         db.refresh(user)
     set_session(response, db, user, payload.remember)
