@@ -24,6 +24,9 @@ from radius_api.token_fingerprint import looks_like_managed_token
 _INVALID_KEY = "Invalid Radius API key for organization."
 _CI_UPLOAD_PATH = re.compile(r"^/api/v1/(analyses/[^/]+/tests/results|coverage)/?$")
 _ADMIN_PATH = re.compile(r"^/api/v1/api-keys(/|$)")
+# CI must find the analysis for its head commit before it can upload results
+# (actions/upload-results). A ci-upload key may make this one read, nothing else.
+_CI_LOOKUP_PATH = re.compile(r"^/api/v1/analyses/lookup/?$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,10 +103,21 @@ def get_api_principal(
 
     principal = _authenticate(request, organization_id, api_key)
     needed = required_scope(request.method, request.url.path)
-    if needed not in effective_scopes(principal.scopes):
+    scopes = effective_scopes(principal.scopes)
+    if needed not in scopes and not _ci_lookup_allowed(request, scopes):
         msg = f"API key lacks the required '{needed}' scope."
         raise AccessDeniedError(msg)
     return principal
+
+
+def _ci_lookup_allowed(request: Request, scopes: frozenset[str]) -> bool:
+    """A ci-upload key may resolve its analysis (GET /analyses/lookup) only."""
+
+    return (
+        SCOPE_CI_UPLOAD in scopes
+        and request.method in {"GET", "HEAD"}
+        and _CI_LOOKUP_PATH.match(request.url.path) is not None
+    )
 
 
 def _authenticate(
