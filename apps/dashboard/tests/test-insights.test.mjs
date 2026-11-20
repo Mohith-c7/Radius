@@ -35,10 +35,12 @@ test("test insight routes are allowlisted read-only", () => {
   assert.equal(proxy.checkRoute(["analyses", "a1", "tests", "recent", "x"], "GET"), "not_found");
 });
 
-test("api-keys routes stay off the proxy allowlist", () => {
-  assert.equal(proxy.checkRoute(["api-keys"], "GET"), "not_found");
-  assert.equal(proxy.checkRoute(["api-keys"], "POST"), "not_found");
-  assert.equal(proxy.checkRoute(["api-keys", "audit"], "GET"), "not_found");
+// api-keys routes are allowlisted only together with the admin role gate and
+// the API's admin-session check; tests/proxy-api-keys.test.mjs covers both.
+test("api-keys routes are allowlisted only with exact methods", () => {
+  assert.equal(proxy.checkRoute(["api-keys"], "GET"), "ok");
+  assert.equal(proxy.checkRoute(["api-keys"], "PATCH"), "method");
+  assert.equal(proxy.checkRoute(["api-keys", "audit"], "POST"), "method");
 });
 
 test("statusKind normalizes common JUnit outcomes", () => {
