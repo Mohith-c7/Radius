@@ -35,6 +35,7 @@ TAG_STABILITY: dict[str, str] = {
     "intent": "beta",
     "api-keys": "beta",
     "verdict-v2": "alpha",
+    "ai-review": "alpha",
     "github-webhooks": "internal",
     "authentication": "internal",
 }
@@ -59,6 +60,10 @@ TAG_DESCRIPTIONS: dict[str, str] = {
     "coverage": "Per-test coverage ingestion and queries (shape may still change).",
     "intent": "Intent snapshots, sources and criteria with ETag/If-Match concurrency.",
     "verdict-v2": "Verdict v2 preview. Alpha, behind RADIUS_FEATURE_VERDICT_V2; hidden here.",
+    "ai-review": (
+        "Advisory, AI-generated merge-readiness review (RADIUS_FEATURE_AI_REVIEW). Never a "
+        "verdict; render as plain text."
+    ),
     "github-webhooks": "GitHub App webhook receiver. Called by GitHub only; not a client API.",
     "authentication": "Dashboard session endpoints. Internal; not part of the client contract.",
 }

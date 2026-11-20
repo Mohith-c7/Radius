@@ -32,6 +32,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 from uuid import UUID
 
+from radius_github.ai_review_markdown import append_section
 from radius_github.client import GitHubAppClient
 from radius_github.publisher import CHECK_RUN_NAME
 from radius_github.verdict_v2 import markdown as v2_markdown
@@ -131,10 +132,18 @@ class VerdictV2Publisher:
         view: VerdictV2View,
         dashboard_url: str | None,
         digest_known: str | None = None,
+        comment_suffix: str = "",
     ) -> tuple[str, bool]:
-        """Create or update in place; returns ``(digest, wrote)``."""
+        """Create or update in place; returns ``(digest, wrote)``.
+
+        ``comment_suffix`` (the advisory AI review section, DEC-042) is appended to the
+        comment only, never to the Check Run, and is part of the digest.
+        """
 
         title, conclusion, summary, body, digest = self.render(view)
+        comment_body = append_section(body, comment_suffix)
+        if comment_body != body:
+            digest = rendered_digest(title, conclusion, summary, comment_body)
         if digest_known is not None and digest_known == digest:
             return digest, False
         check = _latest_check_run(
@@ -162,14 +171,24 @@ class VerdictV2Publisher:
         comments = self._client.list_issue_comments(
             token=token, owner=owner, repo=repo, issue_number=pull_request_number
         )
-        plan = v2_markdown.plan_upsert(comments, body)
+        plan = v2_markdown.plan_upsert(comments, comment_body)
+        if plan.action == "skip" and comment_body != body:
+            # The v2 marker digest covers the verdict body only; refresh the comment when
+            # just the advisory AI section is new or changed.
+            existing = v2_markdown.find_existing_comment(comments) or {}
+            if existing.get("body") != comment_body:
+                plan = v2_markdown.UpsertPlan("update", plan.comment_id)
         if plan.action == "create":
             self._client.create_issue_comment(
-                token=token, owner=owner, repo=repo, issue_number=pull_request_number, body=body
+                token=token,
+                owner=owner,
+                repo=repo,
+                issue_number=pull_request_number,
+                body=comment_body,
             )
         elif plan.action == "update" and plan.comment_id is not None:
             self._client.update_issue_comment(
-                token=token, owner=owner, repo=repo, comment_id=plan.comment_id, body=body
+                token=token, owner=owner, repo=repo, comment_id=plan.comment_id, body=comment_body
             )
         return digest, True
 
@@ -253,6 +272,21 @@ def is_stale_marker(reason_code: str | None) -> bool:
     return bool(reason_code) and str(reason_code).startswith(STALE_MARKER_PREFIXES)
 
 
+def ai_review_section(session: Session, organization_id: UUID, analysis_id: UUID) -> str:
+    """The advisory AI review section for the comment, or ``""`` (never raises)."""
+
+    try:
+        from radius_github.ai_review_markdown import render_ai_review_section
+        from radius_shared.ai_review import SqlAiReviewRepository
+
+        # A savepoint, so a failed read cannot abort the publishing transaction.
+        with session.begin_nested():
+            stored = SqlAiReviewRepository(session).get(organization_id, analysis_id)
+        return render_ai_review_section(stored.to_payload() if stored else None)
+    except Exception:  # noqa: BLE001 - an AI section must never block publishing
+        return ""
+
+
 def publish_latest(
     session: Session,
     *,
@@ -332,6 +366,11 @@ def publish_latest(
             view=view,
             dashboard_url=dashboard_url,
             digest_known=stored.published_digest,
+            comment_suffix=(
+                ai_review_section(session, organization_id, analysis_id)
+                if getattr(settings, "ai_review_enabled", False)
+                else ""
+            ),
         )
     except Exception as exc:
         raise PublishError(

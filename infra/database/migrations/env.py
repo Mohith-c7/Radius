@@ -3,7 +3,13 @@
 from logging.config import fileConfig
 
 from alembic import context
-from radius_shared.database import coverage, intent, models, verdict_v2  # noqa: F401
+from radius_shared.database import (  # noqa: F401
+    ai_review,
+    coverage,
+    intent,
+    models,
+    verdict_v2,
+)
 from radius_shared.database.base import metadata
 from radius_shared.database.migration_lock import acquire_migration_lock
 from sqlalchemy import engine_from_config, pool

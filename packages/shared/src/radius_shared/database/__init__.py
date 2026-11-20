@@ -1,6 +1,7 @@
 """Shared Radius database primitives."""
 
 from radius_shared.database import (
+    ai_review,
     api_keys,
     base,
     coverage,
@@ -19,6 +20,7 @@ from radius_shared.database.session import (
 )
 
 __all__ = [
+    "ai_review",
     "api_keys",
     "base",
     "coverage",

@@ -31,6 +31,7 @@ from radius_api.middleware.hardening import install_http_hardening
 from radius_api.middleware.security_headers import SecurityHeadersMiddleware
 from radius_api.observability import configure_api_observability
 from radius_api.openapi_contract import install_openapi_contract
+from radius_api.routes.ai_review import router as ai_review_router
 from radius_api.routes.analyses import router as analyses_router
 from radius_api.routes.api_keys import router as api_keys_router
 from radius_api.routes.confidence import router as confidence_router
@@ -142,6 +143,7 @@ def create_app() -> FastAPI:
     app.include_router(confidence_router, prefix="/api/v1")
     app.include_router(coverage_router, prefix="/api/v1")
     app.include_router(intent_router, prefix="/api/v1")
+    app.include_router(ai_review_router, prefix="/api/v1")
     app.include_router(
         create_verdict_v2_router(documented=settings.verdict_v2_mode != VerdictV2Mode.OFF),
         prefix="/api/v1",

@@ -91,6 +91,7 @@ import { CopyId } from "./copy-id";
 import { InteractiveGraphViewer } from "./interactive-graph";
 import { IntentPanel } from "./intent-panel";
 import { VerdictV2Panel } from "./verdict-v2-panel";
+import { AiReviewPanel } from "./ai-review-panel";
 import {
   buildHeaderModel,
   toneColor,
@@ -1637,6 +1638,7 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
 
       <IntentPanel analysisId={analysisId} />
       <VerdictV2Panel analysisId={analysisId} onVerdict={setV2} />
+      <AiReviewPanel analysisId={analysisId} />
 
       <div id="impact" style={{ marginTop: "24px", display: "grid", gap: "20px" }}>
         <BlastRadiusVisualizerCard blast={blast} graphState={graphState} analysisId={analysisId} />

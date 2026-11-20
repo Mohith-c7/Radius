@@ -272,6 +272,179 @@
         "title": "AddCriterionRequest",
         "type": "object"
       },
+      "AiReviewItemOut": {
+        "additionalProperties": false,
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "AiReviewItemOut",
+        "type": "object"
+      },
+      "AiReviewNotesOut": {
+        "additionalProperties": true,
+        "properties": {
+          "diff_truncated": {
+            "default": false,
+            "title": "Diff Truncated",
+            "type": "boolean"
+          },
+          "dropped": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Dropped",
+            "type": "array"
+          },
+          "injection_flags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Injection Flags",
+            "type": "array"
+          }
+        },
+        "title": "AiReviewNotesOut",
+        "type": "object"
+      },
+      "AiReviewOut": {
+        "additionalProperties": false,
+        "description": "The stored review of one analysis, or why it is unavailable.",
+        "properties": {
+          "advisory": {
+            "const": true,
+            "default": true,
+            "title": "Advisory",
+            "type": "boolean"
+          },
+          "ai_generated": {
+            "const": true,
+            "default": true,
+            "title": "Ai Generated",
+            "type": "boolean"
+          },
+          "analysis_id": {
+            "title": "Analysis Id",
+            "type": "string"
+          },
+          "generated_at": {
+            "title": "Generated At",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "missing_evidence": {
+            "items": {
+              "$ref": "#/components/schemas/AiReviewItemOut"
+            },
+            "title": "Missing Evidence",
+            "type": "array"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "next_steps": {
+            "items": {
+              "$ref": "#/components/schemas/AiReviewItemOut"
+            },
+            "title": "Next Steps",
+            "type": "array"
+          },
+          "notes": {
+            "$ref": "#/components/schemas/AiReviewNotesOut"
+          },
+          "prompt_version": {
+            "title": "Prompt Version",
+            "type": "string"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Code"
+          },
+          "risks": {
+            "items": {
+              "$ref": "#/components/schemas/AiReviewItemOut"
+            },
+            "title": "Risks",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "unavailable"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "tests": {
+            "items": {
+              "$ref": "#/components/schemas/AiReviewItemOut"
+            },
+            "title": "Tests",
+            "type": "array"
+          }
+        },
+        "required": [
+          "analysis_id",
+          "status",
+          "label",
+          "prompt_version",
+          "generated_at"
+        ],
+        "title": "AiReviewOut",
+        "type": "object"
+      },
       "Analysis": {
         "description": "One verification run of a pull request head commit, or of a branch/commit.",
         "examples": [
@@ -418,6 +591,44 @@
           }
         },
         "title": "ApiKeyRotateRequest",
+        "type": "object"
+      },
+      "ApiResponse_AiReviewOut_": {
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AiReviewOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "meta": {
+            "additionalProperties": true,
+            "title": "Meta",
+            "type": "object"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "ApiResponse[AiReviewOut]",
         "type": "object"
       },
       "ApiResponse_BuildResultView_": {
@@ -3003,6 +3214,76 @@
           "analyses"
         ],
         "x-stability": "stable"
+      }
+    },
+    "/api/v1/analyses/{analysis_id}/ai-review": {
+      "get": {
+        "description": "Return the advisory, AI-generated merge-readiness review (never a verdict).",
+        "operationId": "get_ai_review",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_AiReviewOut_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid organization credentials."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Analysis not found (also for other organizations), or meta.reason is not_generated (no AI review stored for this analysis)."
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [
+          {
+            "RadiusApiKey": [],
+            "RadiusOrganization": []
+          }
+        ],
+        "summary": "Get the advisory AI review of an analysis",
+        "tags": [
+          "ai-review"
+        ],
+        "x-stability": "alpha"
       }
     },
     "/api/v1/analyses/{analysis_id}/blast-radius": {
@@ -7497,6 +7778,11 @@
     }
   },
   "tags": [
+    {
+      "description": "Advisory, AI-generated merge-readiness review (RADIUS_FEATURE_AI_REVIEW). Never a verdict; render as plain text.",
+      "name": "ai-review",
+      "x-stability": "alpha"
+    },
     {
       "description": "Analyses (verification runs) of a pull request head commit.",
       "name": "analyses",

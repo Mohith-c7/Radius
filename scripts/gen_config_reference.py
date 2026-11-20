@@ -276,7 +276,7 @@ def _llm_entries() -> list[Entry]:
     rows = [
         ("RADIUS_LLM_INTENT_ENABLED", "bool", d.enabled, "IN-04: master switch for LLM-assisted criterion extraction. The LLM only proposes criteria, never a verdict (DEC-009)."),
         ("RADIUS_LLM_INTENT_ORGS", "csv", ",".join(sorted(d.orgs)), "Organization ids allowed to use it (`*` = all). Egress also needs the flag above (DEC-015)."),
-        ("RADIUS_LLM_INTENT_MODEL", "str", d.model, "Model id for the Anthropic adapter."),
+        ("RADIUS_LLM_INTENT_MODEL", "str", d.model, "Older name of RADIUS_LLM_MODEL (used only when RADIUS_LLM_MODEL is unset)."),
         ("RADIUS_LLM_INTENT_MAX_OUTPUT_TOKENS", "int", d.max_output_tokens, "Output token cap per call."),
         ("RADIUS_LLM_INTENT_TIMEOUT_S", "float", d.timeout_s, "Per-call timeout in seconds."),
         ("RADIUS_LLM_INTENT_SEED", "int", d.seed, "Sampling seed passed to the provider."),
@@ -290,6 +290,27 @@ def _llm_entries() -> list[Entry]:
     out = []
     for name, typ, default, desc in rows:
         out.append(Entry(name, typ, _default_text(default), desc, {"api"}, src_i, "opt-in, off by default" if name.endswith("_ENABLED") else ""))
+    from radius_intent.infrastructure.llm.factory import LlmProviderSettings
+
+    p = LlmProviderSettings()
+    src_f = "packages/intent/src/radius_intent/infrastructure/llm/factory.py"
+    prow = [
+        ("RADIUS_LLM_PROVIDER", "str", p.provider, "LLM adapter for every LLM feature: `anthropic` (SDK, extra `llm`) or `openai_compatible` (plain HTTP chat completions: Google Gemini, Groq; see docs/ai.md). With no key nothing is sent."),
+        ("RADIUS_LLM_BASE_URL", "str", "empty", "openai_compatible only: base URL ending before `/chat/completions`, for example `https://openrouter.ai/api/v1` (OpenRouter) or `https://generativelanguage.googleapis.com/v1beta/openai/` (Gemini). HTTPS required (http only for localhost)."),
+        ("RADIUS_LLM_API_KEY", "str", "unset", "Provider key (OpenRouter, Gemini AI Studio or Groq key). For `anthropic`, ANTHROPIC_API_KEY is used when this is unset. Never logged."),
+        ("RADIUS_LLM_MODEL", "str", "empty", "Model id for every LLM feature; for openai_compatible a comma-separated fallback list (404, 429 or an empty reply moves to the next), for example `nvidia/nemotron-3-ultra-550b-a55b:free,google/gemma-4-31b-it:free`. Falls back to RADIUS_LLM_INTENT_MODEL, then to the Anthropic default; required for openai_compatible."),
+        ("RADIUS_LLM_TIMEOUT_S", "float", p.timeout_s, "Upper bound of one LLM call, model fallbacks included (connect timeout 5 s)."),
+        ("RADIUS_LLM_DEADLINE_S", "float", p.deadline_s, "Wall-clock budget of one feature for one analysis (intent extraction, suggested tests), including pacing waits and retries."),
+        ("RADIUS_LLM_MAX_CALLS_PER_ANALYSIS", "int", p.max_calls_per_analysis, "Calls one feature may make for one analysis (retries count)."),
+        ("RADIUS_LLM_MIN_INTERVAL_S", "float", p.min_interval_s, "Minimum spacing between any two HTTP requests of this process (4 s = at most 15 per minute; OpenRouter free allows 20)."),
+        ("RADIUS_LLM_MAX_CALLS_PER_DAY", "int", p.max_calls_per_day, "HTTP requests allowed in any rolling 24 hours per process (0 = no cap; model fallbacks count). Kept in memory; a restart resets it. Set below your provider's daily quota (OpenRouter free: 50, or 1000 after buying 10 credits)."),
+        ("RADIUS_LLM_MAX_ATTEMPTS", "int", p.max_attempts, "Attempts per call on 429, 5xx and timeouts, with exponential backoff (2 s, 4 s ...) or the provider's Retry-After (more than 20 s: give up)."),
+        ("RADIUS_LLM_JSON_MODE", "str", p.json_mode, "openai_compatible structured output: `json_object` (default), `schema` (the feature's JSON Schema as json_schema) or `off`. A provider that rejects it is retried once without it; a reply that is not JSON is re-asked once with a stricter instruction."),
+        ("RADIUS_LLM_REASONING_EFFORT", "str", "empty", "openai_compatible only: sent as `reasoning_effort` when set (`none`, `minimal`, `low`, `medium`, `high`). `low` is recommended for Gemini."),
+        ("RADIUS_LLM_TEMPERATURE", "float", "unset", "openai_compatible only: sent when set; unset keeps the provider default (recommended for Gemini 3 models)."),
+    ]
+    for name, typ, default, desc in prow:
+        out.append(Entry(name, typ, _default_text(default), desc, {"api", "worker"}, src_f, ""))
     rrows = [
         ("RADIUS_LLM_LINK_RERANK_ENABLED", "bool", r.enabled, "LK-02: optional LLM re-ranker of criterion-to-symbol candidates. Sends criterion text, symbol names and file paths (no source code). Library only: not called by the API or worker today."),
         ("RADIUS_LLM_LINK_RERANK_ORGS", "csv", ",".join(sorted(r.orgs)), "Organization ids allowed to use the re-ranker (`*` = all)."),
@@ -303,7 +324,7 @@ def _llm_entries() -> list[Entry]:
 def extra_entries() -> list[Entry]:
     e = Entry
     items = [
-        e("ANTHROPIC_API_KEY", "str", "unset", "Credential for the Anthropic adapter, read only when LLM intent extraction is enabled for the org. Missing key or missing `anthropic` package: the API logs a warning and skips the LLM extractor.", {"api"}, "packages/intent/src/radius_intent/infrastructure/llm/anthropic_provider.py"),
+        e("ANTHROPIC_API_KEY", "str", "unset", "Credential for the Anthropic adapter (RADIUS_LLM_PROVIDER=anthropic, used when RADIUS_LLM_API_KEY is unset). Missing key or missing `anthropic` package: the LLM features log a warning and stay off.", {"api", "worker"}, "packages/intent/src/radius_intent/infrastructure/llm/factory.py"),
         e("GEMINI_API_KEY", "str", "unset", "Legacy Gemini SemanticPruner. Used only when RADIUS_FEATURE_GEMINI_PRUNER is also true. Sends caller source and diffs to Google; not covered by the DEC-021 egress policy. Leave unset.", {"none (legacy)"}, "packages/analysis/src/radius_analysis/ai/pruner.py"),
         e("RADIUS_FEATURE_GEMINI_PRUNER", "bool", "false", "Explicit opt-in for the legacy Gemini SemanticPruner. The pruner is not called by the live analysis pipeline (only by `scripts/run_phase2_poc.py` and tests).", {"none (legacy)"}, "packages/analysis/src/radius_analysis/ai/pruner.py", "legacy opt-in, not on the live path"),
         e("RADIUS_FEATURE_ASSERTION_EXTRACTION", "bool", "false", "LK-04 library entry point also reads this flag from the process environment (the worker reads it through its settings, see above).", {"worker"}, "packages/testing/src/radius_testing/assertions/service.py"),

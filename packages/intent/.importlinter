@@ -51,7 +51,7 @@ forbidden_modules =
     radius_intent.infrastructure
 
 [importlinter:contract:llm-core-has-no-sdk]
-name = LLM extraction core imports no provider SDK or HTTP client (only anthropic_provider may, lazily)
+name = LLM extraction core imports no provider SDK or HTTP client (only the adapters anthropic_provider, lazily, and openai_compatible, httpx, may)
 type = forbidden
 source_modules =
     radius_intent.infrastructure.llm.config
@@ -60,6 +60,7 @@ source_modules =
     radius_intent.infrastructure.llm.merge
     radius_intent.infrastructure.llm.provider
     radius_intent.infrastructure.llm.resilience
+    radius_intent.infrastructure.llm.guarded
 forbidden_modules =
     anthropic
     openai

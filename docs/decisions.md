@@ -590,3 +590,38 @@ Decision:
 | Keep `diagnostic_uploads` always in the digest | Simpler, but every stored verdict gets a new revision after deploy. Rejected. |
 
 Consequences: operators must set the flag on both services. Turning it on re-revisions a verdict once, because the inputs changed meaning. Not verified: a live GitHub-hosted workflow run producing an attestation, PostgreSQL, private-repository bundles. Open: with the flag on, a verified upload re-scores v1 confidence from the aggregate of all uploads of the analysis, diagnostic ones included.
+
+## DEC-042: Provider-neutral LLM layer on a free OpenAI-compatible provider, and an advisory AI merge-readiness review
+
+Context: every AI hook (LLM intent extraction, suggested tests) was Anthropic-only and off in production, and the owner has no credit card, so the production model must be free. The `sections` extraction mode found no criteria on 29 of 29 PRs, so developers get little explanation of why a PR is or is not verified. DEC-009 and DEC-030 still bind: the PR author is the adversary, and LLM output proposes and never decides.
+
+Decision:
+
+1. **One provider layer.** `RADIUS_LLM_PROVIDER` = `anthropic` (default, unchanged) or `openai_compatible`. The latter is a plain-HTTP (`httpx`) chat-completions adapter configured with `RADIUS_LLM_BASE_URL`, `RADIUS_LLM_API_KEY` and `RADIUS_LLM_MODEL`. The model setting is a comma-separated fallback list: 404, 429 or an empty reply moves to the next model. `RADIUS_LLM_MODEL` replaces `RADIUS_LLM_INTENT_MODEL`, which stays as a fallback name. Recommended production provider: OpenRouter `:free` models (no card; 20 requests a minute, 50 a day). Gemini and Groq are documented in `docs/ai.md`. GitHub Models was retired on 2026-07-30.
+2. **Guarded calls.** Every provider is wrapped in `GuardedProvider`:
+   - a per-feature, per-analysis call budget;
+   - process-wide pacing (`RADIUS_LLM_MIN_INTERVAL_S`, default 4 s) and a rolling 24-hour cap (`RADIUS_LLM_MAX_CALLS_PER_DAY`, default 45). Both count every HTTP request, fallbacks included;
+   - a wall-clock deadline;
+   - retries with backoff on timeouts, 429 and 5xx that honour `Retry-After`, give up beyond 20 s, and raise the final error as non-retryable.
+
+   `response_format` is sent (`json_object` by default). A provider that rejects it is retried once without it. A reply that does not parse as JSON is re-asked once with a stricter instruction. Every feature still validates its own strict schema. Keys and response bodies are never logged or put in error messages. Base URLs must be HTTPS (plain HTTP for localhost only) and redirects are not followed.
+3. **Features through it.**
+   - LLM intent extraction and suggested tests now send a JSON Schema and use the configured provider. Their egress gates, caps and `llm_proposed` provenance are unchanged.
+   - The legacy Gemini pruner is not moved. The live pipeline does not call it, and pruning the blast radius with an LLM could make a change look safer than it is.
+4. **AI merge-readiness review** (`RADIUS_FEATURE_AI_REVIEW`, default off).
+   - **When.** It runs in the worker after the analysis result and the job completion are committed, and before publishing. It runs in a daemon thread with a hard timeout (`RADIUS_AI_REVIEW_TIMEOUT_S`, 30 s), using its own sessions, and never raises.
+   - **Input.** Radius's computed evidence: changed files, blast-radius counts, selected tests, test runs, verification gaps and the stored Verdict v2 state. Also the PR title and capped diff excerpts. All of it is sanitised and placed in nonce-delimited data blocks.
+   - **Output.** One fixed schema: summary, risks, tests, missing evidence and next steps. Citations are restricted to computed files; risks and tests must cite at least one. Verdict or approval claims, links, markup, mentions, commands, secrets and nonce or prompt leaks are dropped; in the summary they reject the whole review. A malformed document gets one stricter re-ask.
+   - **Storage and access.** It is stored in `analysis_ai_reviews` (one row per analysis, organization-scoped; migration `20261120_0025` after `20261119_0022`) as `ok` or `unavailable` with a reason code. It is served by `GET /analyses/{id}/ai-review`, labelled `advisory` and `ai_generated`.
+   - **Display.** The dashboard panel renders it as plain text. It is appended as a collapsible "AI review (advisory)" section to the PR comment only (v1 and v2 publishers), never to the Check Run.
+   - **Isolation.** Nothing in verdict, score or conclusion code reads it.
+
+| Option | Trade-off |
+| --- | --- |
+| Official SDKs per provider | More dependencies and three error models; the OpenAI-compatible protocol covers every free option with one adapter. |
+| Store the review inside the Verdict v2 bundle | Would mix advisory text into the payload that drives the verdict and its digest, and v2 may be off; rejected for a separate table. |
+| Run the review before the verdict is committed and feed it into Stage A | Would let model output influence the verdict (DEC-009); rejected. |
+| Publish first, then the review, then republish the comment | Two GitHub writes per analysis; the bounded 30 s before publishing was preferred. Republishes after CI (v2 outbox) pick the review up anyway. |
+| Route the pruner through the new provider | An LLM shrinking the blast radius can hide risk; not done. |
+
+Consequences: with the flag and a key set, diff excerpts and file names go to a third party whose free tier may train on them (`docs/ai.md`, Privacy). The daily cap and pacing are per process and in memory, so a restart resets them. The review is generated once per analysis job; it is not regenerated when CI results arrive later, so its "missing evidence" can be stale. It is not registered in the prompt-injection harness (`tests/security/prompt_injection`), whose invariants assume the criteria schema; its injection cases live in `apps/worker/tests/test_ai_review.py`. Not verified: a real provider call from Render, and PostgreSQL (SQLite only).

@@ -84,7 +84,11 @@ class LlmExtractionConfig:
         return cls(
             enabled=env.get(ENV_ENABLED, "").strip().lower() in _TRUE,
             orgs=orgs,
-            model=env.get(ENV_MODEL, "").strip() or d.model,
+            # RADIUS_LLM_MODEL (shared by every LLM feature) wins over the older
+            # RADIUS_LLM_INTENT_MODEL; see radius_intent.infrastructure.llm.factory.
+            model=env.get("RADIUS_LLM_MODEL", "").strip()
+            or env.get(ENV_MODEL, "").strip()
+            or d.model,
             max_output_tokens=_int(
                 env, "RADIUS_LLM_INTENT_MAX_OUTPUT_TOKENS", d.max_output_tokens
             ),

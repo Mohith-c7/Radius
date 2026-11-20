@@ -26,6 +26,8 @@ const ALLOWED: Array<{ pattern: RegExp; methods: readonly string[] }> = [
   // Verdict v2 alpha (VS-09 / VS-10): this one read-only route. The undocumented
   // /verdict alias and anything below it stay rejected.
   { pattern: new RegExp(`^analyses/${ID}/verdict-v2$`), methods: ["GET"] },
+  // Advisory AI review (DEC-042): this one read-only route.
+  { pattern: new RegExp(`^analyses/${ID}/ai-review$`), methods: ["GET"] },
   // Intent API (IN-08 / IN-11): exactly these routes and methods.
   { pattern: new RegExp(`^analyses/${ID}/intent$`), methods: ["GET"] },
   { pattern: new RegExp(`^analyses/${ID}/intent/(snapshots|diff)$`), methods: ["GET"] },

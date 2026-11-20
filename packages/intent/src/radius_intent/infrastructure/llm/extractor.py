@@ -85,6 +85,31 @@ OUTPUT_SCHEMA_HINT = (
     '"start":<int>,"end":<int>,"text":"<short testable restatement>"}]}'
 )
 
+#: JSON Schema of the reply, sent as structured output where the provider supports it
+#: (OpenAI-compatible ``response_format``). The guard still validates every reply.
+CRITERIA_JSON_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "criteria": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "source_id": {"type": "string"},
+                    "quote": {"type": "string"},
+                    "start": {"type": "integer"},
+                    "end": {"type": "integer"},
+                    "text": {"type": "string"},
+                },
+                "required": ["source_id", "quote", "start", "end", "text"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["criteria"],
+    "additionalProperties": False,
+}
+
 # Rejections that concern one proposal; the rest of the document may still be used.
 _ITEM_LEVEL = frozenset(
     {
@@ -345,6 +370,8 @@ class LlmCriterionExtractor:
             max_output_tokens=cfg.max_output_tokens,
             timeout_s=cfg.timeout_s,
             seed=cfg.seed,
+            json_schema=CRITERIA_JSON_SCHEMA,
+            schema_name="radius_criteria",
         )
         model = self._provider.model_id
         for attempt in range(1, cfg.max_attempts + 1):
