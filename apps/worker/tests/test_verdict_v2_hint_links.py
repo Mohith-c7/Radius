@@ -26,6 +26,7 @@ from radius_worker.verdict_v2.collect import (
     CollectLimits,
     Producers,
     VerdictStageACollector,
+    default_link_tests,
     default_repo_config,
 )
 from radius_worker.verdict_v2.link_scope import scope_link_sources
@@ -59,7 +60,9 @@ def _write(repo: Path, rel: str, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def _pr_repo(tmp_path: Path, change: tuple[str, str]) -> NS:
+def _pr_repo(
+    tmp_path: Path, change: tuple[str, str], extra: tuple[tuple[str, str], ...] = ()
+) -> NS:
     """Base branch ``develop`` holds the spec and tests; the PR changes one file."""
 
     repo = tmp_path / "r"
@@ -67,6 +70,8 @@ def _pr_repo(tmp_path: Path, change: tuple[str, str]) -> NS:
     _git(repo, "init", "-q", "-b", "develop")
     _write(repo, "pkg/flag.py", "def parse(v):\n    return v in ('on', 'true', '1')\n")
     _write(repo, "pkg/tests/test_flag.py", TEST_SRC)
+    for rel, text in extra:
+        _write(repo, rel, text)
     _write(repo, ".radius/intent.yml", SPEC)
     _write(repo, "docker-compose.yml", "services: {}\n")
     _git(repo, "add", "-A")
@@ -149,6 +154,48 @@ def test_chain_base_spec_hint_link_ci_outcome_supports_the_criterion(code_pr) ->
     assert row["state"] == "proven", row["reasons"]
     assert "author_supplied_hint" not in row["flags"]
     assert (HINT, "counted") in [(i["test_id"], i["status"]) for i in row["items"]]
+
+
+PARAM_TEST_SRC = (
+    "import pytest\n\nfrom pkg.flag import parse\n\n\n"
+    "@pytest.mark.parametrize(('raw', 'expected'), [('on', True), ('x', False), ('1', True)])\n"
+    "def test_flag_parsing_table(raw, expected):\n    assert parse(raw) is expected\n"
+)
+MORE_SRC = "from pkg.flag import parse\n\n\ndef test_more():\n    assert parse('on')\n"
+
+
+def test_hinted_test_keeps_its_symbol_link_when_whole_repo_linking_times_out(
+    tmp_path: Path,
+) -> None:
+    """Production PR #184: whole-repo linking timed out on a 0.1 CPU host.
+
+    The base_spec ``tests:`` hint still linked the criterion to the test, but the test had
+    no symbol path, so it showed link strength 0.00 and ``gated:test_link_below_min``
+    although it calls the changed function directly.
+    """
+
+    cmd = _pr_repo(
+        tmp_path,
+        ("pkg/flag.py", "def parse(v):\n    return str(v).strip().lower() in ('on', 'true', '1')\n"),
+        extra=(("pkg/tests/test_flag.py", PARAM_TEST_SRC), ("pkg/tests/test_more.py", MORE_SRC)),
+    )
+
+    def link_tests(srcs, targets):
+        if "pkg/tests/test_more.py" in srcs:  # the whole-repo call
+            raise TimeoutError
+        return default_link_tests(srcs, targets)
+
+    cases = [
+        ReportedTestCase("pkg/tests/test_flag.py", None, f"test_flag_parsing_table[{c}]", "passed")
+        for c in ("on-True", "x-False", "1-True")
+    ]
+    report = _run(cmd, *cases, producers=Producers(link_tests=link_tests))
+    stage_a = report.bundle["stage_a"]
+    assert "producer_timeout:symbol_test_links" in stage_a["degraded"]
+    assert [(e["test_id"], e["kind"]) for e in stage_a["symbol_test"]] == [(HINT, "direct_call")]
+    (row,) = report.payload["criteria"]
+    (item,) = [i for i in row["items"] if i["test_id"] == HINT]
+    assert (item["status"], item["l_st"]) == ("counted", 0.9), item
 
 
 def test_compose_only_pr_links_the_hint_but_stage_b_gates_it_without_a_changed_symbol(

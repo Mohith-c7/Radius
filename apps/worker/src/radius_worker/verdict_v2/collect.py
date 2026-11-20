@@ -669,6 +669,18 @@ class VerdictStageACollector:
             sources.setdefault(path, text)
 
         link_targets = self._link_targets(changeset, sym_items)
+        # Link the hinted tests to the changed code on their own, from only the files they
+        # need: whole-repo linking can time out on a slow host, which used to leave a
+        # hinted test with no symbol path (link strength 0, gated test_link_below_min).
+        hinted_links = None
+        if link_targets and hinted_texts:
+            hinted_links = run.step(
+                "hinted_test_links",
+                lambda: prod.link_tests(
+                    _hinted_link_sources(sources, link_targets, hinted_texts), link_targets
+                ),
+                None,
+            )
         crit_sym = adapters.Adapted((), {})
         crit_linkset = None
         if criteria.items and sym_items:
@@ -712,10 +724,13 @@ class VerdictStageACollector:
                     getattr(test_links, "algo_version", "") or SYMBOL_TEST_LINKS_VERSION
                 )
         run.mark(*sym_test.notes)
-        edges_st = sym_test.items
+        hinted_st = adapters.symbol_test_edges(hinted_links).items
+        edges_st = adapters.merge_symbol_test_edges(sym_test.items, hinted_st)
+        if test_links is None:
+            test_links = hinted_links
         tests_in_links = sorted({e.test_id for e in edges_st})
         if len(tests_in_links) > self._limits.max_tests:
-            keep = set(tests_in_links[: self._limits.max_tests])
+            keep = set(tests_in_links[: self._limits.max_tests]) | {e.test_id for e in hinted_st}
             edges_st = tuple(e for e in edges_st if e.test_id in keep)
             run.mark(TRUNCATED)
 
@@ -856,6 +871,19 @@ def _hinted_tests(texts: dict[str, str]) -> tuple[dict[str, str], set[str]]:
     from radius_testing.linking.naming import python_test_records
 
     return texts, {r.test_id for r in python_test_records(texts)}
+
+
+def _hinted_link_sources(
+    sources: dict[str, str], targets: Sequence[Any], hinted: dict[str, str]
+) -> dict[str, str]:
+    """The hinted test files, the changed files and the package/fixture files they need."""
+
+    wanted = set(hinted) | {str(getattr(t, "path", "")) for t in targets}
+    return {
+        p: s
+        for p, s in sources.items()
+        if p in wanted or p.rsplit("/", 1)[-1] in {"__init__.py", "conftest.py"}
+    }
 
 
 def _scoped_sources(

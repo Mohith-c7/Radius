@@ -516,6 +516,20 @@ def symbol_test_edges(linkset: Any) -> Adapted[SymbolTestEdgeInput]:
     return Adapted(tuple(out[k] for k in sorted(out)), dropped)
 
 
+def merge_symbol_test_edges(
+    *groups: Iterable[SymbolTestEdgeInput],
+) -> tuple[SymbolTestEdgeInput, ...]:
+    """One edge per ``(symbol, test)``: the highest score wins (ties: the earlier group)."""
+
+    out: dict[tuple[str, str], SymbolTestEdgeInput] = {}
+    for group in groups:
+        for edge in group:
+            key = (edge.symbol_id, edge.test_id)
+            if key not in out or edge.score > out[key].score:
+                out[key] = edge
+    return tuple(out[k] for k in sorted(out))
+
+
 def hint_test_edges(
     criteria: Iterable[CriterionInput],
     known_test_ids: Iterable[str],
