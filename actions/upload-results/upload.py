@@ -523,6 +523,9 @@ def _finish(out: Outcome, report: Reporter, dashboard: str) -> None:
 
 def run(sleep=None) -> int:  # noqa: ANN001
     key = os.environ.get("RADIUS_API_KEY", "")
+    if not key.strip():
+        # A blank secret is a missing one: never send it, and never scrub spaces as a "key".
+        key = ""
     report = Reporter(key)
     fail_mode = _flag("RADIUS_FAIL_ON_UPLOAD_ERROR")
     out = Outcome()
@@ -556,7 +559,7 @@ def run(sleep=None) -> int:  # noqa: ANN001
         if not key:
             out.status = "skipped-no-secret"
             report.notice(
-                "No Radius API key available (the secret is unset or empty, e.g. a "
+                "No Radius API key available (the secret is unset, empty or blank, e.g. a "
                 "Dependabot or fork run). Skipping upload."
             )
             _finish(out, report, dashboard)
