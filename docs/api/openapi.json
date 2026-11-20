@@ -3126,7 +3126,7 @@
     },
     "/api/v1/analyses/{analysis_id}/graph": {
       "get": {
-        "description": "Return graph metadata and artifact for an analysis.",
+        "description": "Return graph metadata and a bounded slice of the graph for an analysis.\n\n``node_count`` / ``edge_count`` are the stored totals; ``returned_*_count``,\n``scope`` and ``truncated`` describe the slice in ``nodes`` / ``edges``.",
         "operationId": "get_graph",
         "parameters": [
           {
@@ -3137,6 +3137,50 @@
               "format": "uuid",
               "title": "Analysis Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "`full`: the stored graph in stored order. `impact`: nodes on the analysis' changed files plus their `depth`-hop neighbours.",
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "default": "full",
+              "description": "`full`: the stored graph in stored order. `impact`: nodes on the analysis' changed files plus their `depth`-hop neighbours.",
+              "enum": [
+                "full",
+                "impact"
+              ],
+              "title": "Scope",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Hops from changed files (impact).",
+            "in": "query",
+            "name": "depth",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "Hops from changed files (impact).",
+              "maximum": 5,
+              "minimum": 0,
+              "title": "Depth",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Maximum nodes returned; `truncated` reports a cut.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 2000,
+              "description": "Maximum nodes returned; `truncated` reports a cut.",
+              "maximum": 5000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
             }
           }
         ],
