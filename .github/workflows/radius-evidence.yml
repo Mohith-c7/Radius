@@ -263,7 +263,7 @@ jobs:
         # Pinned by full SHA (develop; no release tag exists yet, PRD-32), so a pull
         # request cannot change the code that handles the key. One request per file
         # (six files); uploads for the same analysis accumulate on the server.
-        uses: Mohith-c7/Radius/actions/upload-results@1099949af42ce60ccdc8cdd122bbebc9fe15f692 # v0.1.1
+        uses: Mohith-c7/Radius/actions/upload-results@e91c7ab752d6cfc9d874560864900df799c9e103 # v0.1.2: retries outlast an API restart
         with:
           api-url: ${{ steps.radius.outputs.api-url }}
           organization-id: ${{ vars.RADIUS_ORGANIZATION_ID }}
