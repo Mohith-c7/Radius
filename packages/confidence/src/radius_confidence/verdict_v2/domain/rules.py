@@ -452,12 +452,23 @@ def evaluate_rules(
     return tuple(results[rule_id] for rule_id in order)
 
 
-def decide(rules: Sequence[RuleResult]) -> RuleResult:
-    """The first fired rule (R4 always fires when nothing else does)."""
+#: Verdicts from most to least severe: a fired rule of an earlier verdict always decides.
+VERDICT_PRIORITY: tuple[Verdict, ...] = (
+    Verdict.FAILED,
+    Verdict.INSUFFICIENT_EVIDENCE,
+    Verdict.NEEDS_REVIEW,
+    Verdict.VERIFIED,
+)
 
-    for rule in rules:
-        if rule.fired:
-            return rule
+
+def decide(rules: Sequence[RuleResult]) -> RuleResult:
+    """The deciding rule: the fired rule of the most severe verdict (R4 always fires
+    when nothing else does)."""
+
+    fired = {verdict_of(rule.id): rule for rule in rules if rule.fired}
+    for verdict in VERDICT_PRIORITY:
+        if verdict in fired:
+            return fired[verdict]
     msg = "no rule fired; R4 must fire when no earlier rule does"
     raise ValueError(msg)
 
