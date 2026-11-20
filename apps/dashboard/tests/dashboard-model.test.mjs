@@ -139,3 +139,29 @@ test("describeReadiness reports the real /ready result", () => {
   assert.equal(m.describeReadiness({ status: 401 }).tone, "neutral");
   assert.equal(m.describeReadiness("error").tone, "warning");
 });
+
+test("PR search accepts '#154' as well as '154' for the PR number", () => {
+  for (const query of ["#154", "154", " #154 ", "#15", "develop"]) {
+    assert.ok(m.pullRequestMatches(pr, query, "Mohith-c7/Radius"), query);
+  }
+  assert.equal(m.pullRequestMatches(pr, "#999", "Mohith-c7/Radius"), false);
+  assert.equal(m.pullRequestMatches(pr, pr.id, "x/y"), false, "internal ids are not searchable");
+});
+
+test("recentNotifications lists the five newest finished analyses", () => {
+  const list = [
+    { id: "p", status: "pending", commit_sha: "aaaaaaaaaa", created_at: "2026-11-20T12:00:00Z", completed_at: null },
+    ...[1, 2, 3, 4, 5, 6].map((n) => ({
+      id: `c${n}`,
+      status: n === 6 ? "FAILED" : "completed",
+      commit_sha: `${n}`.repeat(12),
+      created_at: "2026-11-01T00:00:00Z",
+      completed_at: `2026-11-1${n}T00:00:00Z`,
+    })),
+  ];
+  const items = m.recentNotifications(list);
+  assert.deepEqual(items.map((i) => i.id), ["c6", "c5", "c4", "c3", "c2"]);
+  assert.equal(items[0].failed, true);
+  assert.equal(items[0].commit, "66666666");
+  assert.deepEqual(m.recentNotifications([list[0]]), []);
+});
