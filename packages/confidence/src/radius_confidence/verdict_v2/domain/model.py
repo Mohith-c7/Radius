@@ -103,6 +103,9 @@ class CriterionVerdict(Serializable):
     mutation: dict[str, Any] = field(default_factory=dict)
     #: B-07 (optional): who confirmed or edited the criterion; ``None`` when nobody did.
     confirmed_by: str | None = field(default=None, metadata={"omit_none": True})
+    #: DEC-043 (optional): ``{"paths": [...], "in_scope": bool}`` for a spec criterion
+    #: whose base-branch ``paths:`` decide whether this PR affects it.
+    scope: dict[str, Any] | None = field(default=None, metadata={"omit_none": True})
 
 
 @dataclass(frozen=True, slots=True)

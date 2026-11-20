@@ -30,6 +30,10 @@ class CriterionInput(Serializable):
     #: B-07 (optional): label of the actor who confirmed or edited the criterion (shown in the
     #: verdict). ``None`` for criteria nobody confirmed; never trusted as an identity.
     confirmed_by: str | None = field(default=None, metadata={"omit_none": True})
+    #: DEC-043 (optional): the ``paths:`` that decide whether a ``.radius/intent.yml``
+    #: criterion is affected by the PR, taken from the BASE copy of the spec. ``None``:
+    #: never scoped out (PR-derived criterion, no paths, or no base copy to trust).
+    scope_paths: tuple[str, ...] | None = field(default=None, metadata={"omit_none": True})
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,6 +192,9 @@ class StageAInput(Serializable):
     repo_config: dict[str, Any] = field(default_factory=dict)
     #: Contract 5: mutation measurement (RADIUS_FEATURE_MUTATION). ``None`` = not run.
     mutation: MutationInput | None = field(default=None, metadata={"omit_none": True})
+    #: DEC-043: every file the PR changed (new and old paths). ``None`` = unknown, and then
+    #: no criterion is scoped out.
+    changed_paths: tuple[str, ...] | None = field(default=None, metadata={"omit_none": True})
 
 
 @dataclass(frozen=True, slots=True)

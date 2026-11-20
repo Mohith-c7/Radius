@@ -154,14 +154,15 @@ def test_chain_base_spec_hint_link_ci_outcome_supports_the_criterion(code_pr) ->
 def test_compose_only_pr_links_the_hint_but_stage_b_gates_it_without_a_changed_symbol(
     compose_only_pr,
 ) -> None:
-    """Production case (PR #176): the hint is now linked and shown with its CI outcome.
+    """The hint is linked and shown with its CI outcome.
 
     Stage B still gates a test that reaches no changed symbol (``l_cs = l_st = 0``,
-    design: "audit rows, gated"), so the criterion stays unevidenced. Whether standing
-    criteria untouched by a PR should count is an owner decision, not changed here.
+    design: "audit rows, gated"). The criterion has no ``paths:``, so DEC-043 keeps it in
+    scope (a criterion with paths would be excluded as not affected, see
+    test_verdict_v2_scope.py).
     """
 
-    report = _run(compose_only_pr, PASSED)
+    report = _run(compose_only_pr, PASSED, criteria=(spec_criterion(paths=()),))
     _assert_trusted_hint_edge(report, compose_only_pr.base_sha)
     (row,) = report.payload["criteria"]
     assert [(i["test_id"], i["outcome"]) for i in row["items"]] == [(HINT, "passed")]
@@ -170,7 +171,7 @@ def test_compose_only_pr_links_the_hint_but_stage_b_gates_it_without_a_changed_s
 
 
 def test_without_ci_results_the_hint_is_linked_and_awaits_ci(compose_only_pr) -> None:
-    report = _run(compose_only_pr)
+    report = _run(compose_only_pr, criteria=(spec_criterion(paths=()),))
     assert report.status == "ok", report.reason_code
     assert [e["test_id"] for e in report.bundle["stage_a"]["criterion_test"]] == [HINT]
     (row,) = report.payload["criteria"]
@@ -187,14 +188,14 @@ def test_hint_to_a_missing_test_never_invents_one(compose_only_pr) -> None:
 
 def test_hinted_tests_link_when_the_whole_repo_read_times_out(compose_only_pr, caplog) -> None:
     def slow_read(root):
-        time.sleep(1.0)
+        time.sleep(4.0)
         return {}, False
 
     caplog.set_level(logging.WARNING)
     report = _run(
         compose_only_pr,
         producers=Producers(read_sources=slow_read),
-        limits=CollectLimits(step_timeout_s=0.5),
+        limits=CollectLimits(step_timeout_s=2.0),
     )
     stage_a = report.bundle["stage_a"]
     assert "producer_timeout:read_sources" in stage_a["degraded"]

@@ -877,7 +877,7 @@ const STATE_META: Record<SupportState | "unknown", StateMeta> = {
     label: "Excluded",
     tone: "neutral",
     icon: "minus",
-    description: "Not counted (not testable or rejected).",
+    description: "Not counted (not testable, rejected, waived, or not affected by this PR).",
   },
   unknown: {
     label: "Unknown state",

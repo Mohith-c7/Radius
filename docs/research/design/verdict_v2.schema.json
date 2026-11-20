@@ -636,6 +636,16 @@
           "confirmed_by": {
             "type": "string",
             "description": "B-07 (optional, DEC-040): who confirmed or edited the criterion, taken from the authenticated principal (a GitHub login when the signed-in user is linked to one, else a user or API key handle). A suffix says '(unverified confirmer)' when the GitHub link is unknown, or why the confirmation was not counted. Render as text only."
+          },
+          "scope": {
+            "type": "object",
+            "description": "DEC-043 (optional): present for a .radius/intent.yml criterion whose paths decide whether the PR affects it. paths are read from the BASE copy of the spec. in_scope false means no changed file matches them: the criterion is excluded with reason code not_affected_by_pr and does not count towards uim, R2b or R2c.",
+            "required": ["paths", "in_scope"],
+            "properties": {
+              "paths": { "type": "array", "items": { "type": "string" } },
+              "in_scope": { "type": "boolean" }
+            },
+            "additionalProperties": false
           }
         }
       }

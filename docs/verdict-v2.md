@@ -64,7 +64,7 @@ When a v2 result is available for an analysis, the page header (verdict pill, he
 | WEAK (`weak`) | some support, but below the threshold, or no strong assertion |
 | UNSUPPORTED (`unevidenced`) | little or no support, often no linked test |
 | CONTRADICTED | a linked test failed |
-| EXCLUDED | not scored (for example too vague to test) |
+| EXCLUDED | not scored: too vague to test, rejected, waived, or not affected by this PR (next section) |
 
 Short tags after the state (`tampered`, `flaky`, `unconfirmed`, `awaiting CI`, `weak link`, `stale evidence`, `needs typed evidence`, `author-supplied hint`) are flags that apply to that criterion.
 
@@ -181,6 +181,16 @@ Limits: this is a state refresh, not a new analysis. Links between criteria and 
 - **Criterion weights** written in `.radius/intent.yml` are honoured only for `base_spec` and `human_confirmed` criteria; every other criterion counts as weight 1.0. A tiny weight on an unproven criterion could otherwise hide it from the unsupported-intent-mass rule.
 - **`paths:` hints and file paths written in a criterion's text** (the `explicit` linker) are author-controlled links. When no other linker supports the same criterion-to-code link, its strength is capped like a `tests:` hint (`l_cs` at most `author_hint_cap`, 0.70), and it counts towards intent coverage only when it names a concrete symbol (`path::function`). A glob, a directory or a bare file mention no longer covers the whole change, and an author-hinted symbol does not vouch for the other symbols of its file. Links from `base_spec` or `human_confirmed` criteria are untouched.
 - Existing stored verdicts keep their numbers until their inputs change or a new analysis runs (the algorithm version string is unchanged).
+
+## Standing criteria a pull request does not touch (DEC-043)
+
+A criterion from `.radius/intent.yml` that declares `paths:` applies to a pull request only when the PR changes at least one file under those paths. Paths follow the hint semantics of the spec: a repository-relative glob (`*`, `?`, `**`), an exact file, or a directory (`src/auth` and `src/auth/` both cover every file below). Otherwise the criterion is EXCLUDED with the reason `not_affected_by_pr`. The comment shows "not scored (not affected by this PR)". The payload carries `criteria[].scope = {paths, in_scope}`. The criterion is left out of the unsupported intent mass and of R2b and R2c.
+
+- **The base copy decides.** When the PR changes `.radius/intent.yml` (`author_head_spec`), the `paths:` of the base-branch criterion with the same text are used. Editing `paths:` in the same PR cannot move a criterion out of scope. A criterion that is new in the PR (no base copy with the same text), or a base spec that cannot be read, is never scoped out.
+- **Unaffected:** criteria without `paths:`, and every criterion from the PR title, description, commits, linked issues or the LLM extractor. Confirming a standing criterion in the intent panel does not change its scope.
+- **Never hidden:** a contradicted criterion (a failing linked test) is not excluded, and a failing CI case fails the PR through R1b whatever the scope.
+- **Nothing applies:** if every criterion is excluded and no behavioral code changed, R2e decides `insufficient_evidence` ("no in-scope criterion"), and `verified` is never returned by default. Behavioral code without any in-scope criterion is R2a.
+- **Unknown facts keep a criterion in scope:** an incomplete list of changed files (a truncated symbol extraction), or a `paths:` entry that is not a valid glob.
 
 ## Policy and waivers (VD-04, VD-05)
 

@@ -495,6 +495,7 @@ Hand-checkable values (cap_static 0.6, i 0.8, l_st 0.9, l_cs = r = 1): one stron
 | Order | Condition | State | Flags / reason code |
 |---|---|---|---|
 | 1 | lifecycle `rejected`/`orphaned` (not in input) or testability in {`subjective_or_vague`, `untestable_external`} | `excluded` | reason `not_testable` or `rejected` |
+| 1b | (DEC-043, applied after waivers) a `.radius/intent.yml` criterion whose base-copy `paths:` match no changed file, unless it is `contradicted` | `excluded` | reason `not_affected_by_pr` |
 | 2 | any item attached to `c` (same gates as `usable` except outcome) has outcome `FAILED` or `ERROR` | `contradicted` | reason `failing_linked_test` with evidence ids. Independence discounts support, never a failure: a failing test counts however it was authored |
 | 3 | testability `non_functional_measurable` (no typed evidence in the alpha) | `unevidenced` | flag `needs_typed_evidence` (EV-15 will lift it) |
 | 4 | `S(c) >= tau_support` and a strong item exists | `proven` | |
