@@ -4,6 +4,7 @@ import os
 import re
 from functools import lru_cache
 from urllib.parse import urlsplit
+from uuid import UUID
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -63,16 +64,54 @@ class Settings(BaseSettings):
     (`example.com` does not admit `team.example.com`; list each subdomain). Same effect as
     `RADIUS_SIGNUP_ALLOWED_EMAILS`; an address is allowed when either list matches."""
 
-    @field_validator("signup_allowed_emails")
-    @classmethod
-    def _valid_allowed_emails(cls, value: str) -> str:
+    default_organization_id: str | None = Field(default=None, alias="RADIUS_DEFAULT_ORGANIZATION_ID")
+    """Single-tenant deployments: UUID of the one organization every signed-in user belongs to (normally the
+    same value as `GITHUB_DEFAULT_ORGANIZATION_ID` and the dashboard's `NEXT_PUBLIC_RADIUS_ORGANIZATION_ID`).
+    A new user joins it instead of getting a personal workspace. An existing user whose organization is an
+    auto-created personal workspace with no repositories, no GitHub installation and no other member is moved
+    into it at the next sign-in; anyone else is left where they are and the API logs it. The organization must
+    exist (`python -m radius_api.bootstrap`); when it does not, sign-in logs an error and keeps the old
+    behaviour. Unset (default): every new user gets a personal workspace (multi-tenant behaviour)."""
+    admin_emails: str = Field(default="", alias="RADIUS_ADMIN_EMAILS")
+    """Comma-separated e-mail addresses (exact match, case-insensitive) that get the admin role in
+    `RADIUS_DEFAULT_ORGANIZATION_ID` when they sign in with a verified address. Everyone else keeps their role
+    (new users are developers); an existing admin is never demoted automatically. Ignored (with a startup
+    warning) without `RADIUS_DEFAULT_ORGANIZATION_ID`."""
+
+    @staticmethod
+    def _address_list(value: str, name: str) -> str:
         entries = _csv(value or "")
         for entry in entries:
             local, at, domain = entry.rpartition("@")
             if not at or not local or "@" in local or any(c.isspace() for c in entry) or not _dns_name(domain):
-                msg = "RADIUS_SIGNUP_ALLOWED_EMAILS entries must be full addresses such as alice@example.com."
+                msg = f"{name} entries must be full addresses such as alice@example.com."
                 raise ValueError(msg)
         return ",".join(dict.fromkeys(entries))
+
+    @field_validator("signup_allowed_emails")
+    @classmethod
+    def _valid_allowed_emails(cls, value: str) -> str:
+        return cls._address_list(value, "RADIUS_SIGNUP_ALLOWED_EMAILS")
+
+    @field_validator("admin_emails")
+    @classmethod
+    def _valid_admin_emails(cls, value: str) -> str:
+        return cls._address_list(value, "RADIUS_ADMIN_EMAILS")
+
+    @field_validator("default_organization_id")
+    @classmethod
+    def _valid_default_organization(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        try:
+            return str(UUID(value.strip()))
+        except ValueError as exc:
+            msg = "RADIUS_DEFAULT_ORGANIZATION_ID must be an organization UUID."
+            raise ValueError(msg) from exc
+
+    def is_admin_email(self, email: str) -> bool:
+        """True when ``email`` is on ``RADIUS_ADMIN_EMAILS``; the caller checks it is verified."""
+        return email.strip().lower() in _csv(self.admin_emails)
 
     @field_validator("signup_allowed_domains")
     @classmethod
@@ -167,6 +206,15 @@ class Settings(BaseSettings):
             LOGGER.warning(
                 "RADIUS_ENV=production without RADIUS_SIGNUP_ALLOWED_EMAILS or RADIUS_SIGNUP_ALLOWED_DOMAINS: "
                 "anyone who can reach the dashboard can sign up and act on the configured organization."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _admin_emails_need_default_org(self) -> "Settings":
+        if self.admin_emails and not self.default_organization_id:
+            LOGGER.warning(
+                "RADIUS_ADMIN_EMAILS is set without RADIUS_DEFAULT_ORGANIZATION_ID and is ignored: "
+                "admin roles are only granted in the default organization."
             )
         return self
 
