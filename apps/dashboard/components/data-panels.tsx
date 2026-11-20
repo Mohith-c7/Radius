@@ -76,11 +76,13 @@ import {
   pullRequestMatches,
   pullRequestUrl,
   repositoryMatches,
+  truncate,
   type PullRequestIndex,
 } from "../lib/dashboard-model";
 import { scoreKindLabel } from "../lib/score-kind";
 import { AnalyzePullRequestButton, ConnectGitHubRepositoryCard, SyncSummaryList } from "./github-actions";
 import { ConfidenceRing, OpenLink, PageHeading, Status } from "./ui";
+import { CopyId } from "./copy-id";
 import { InteractiveGraphViewer } from "./interactive-graph";
 import { IntentPanel } from "./intent-panel";
 import { VerdictV2Panel } from "./verdict-v2-panel";
@@ -890,20 +892,6 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
                       >
                         {pr.status}
                       </span>
-                      <span
-                        title={`Radius Internal PR UUID: ${pr.id}`}
-                        style={{
-                          fontSize: "11px",
-                          padding: "2px 6px",
-                          borderRadius: "4px",
-                          background: "rgba(255, 255, 255, 0.06)",
-                          border: "1px solid var(--border)",
-                          fontFamily: "monospace",
-                          color: "var(--muted)",
-                        }}
-                      >
-                        ID: {pr.id ? pr.id.slice(0, 8) : "-"}
-                      </span>
                     </div>
                     <div className="muted" style={{ fontSize: "12px", display: "flex", gap: "16px", flexWrap: "wrap" }}>
                       <span>Author: {pr.author}</span>
@@ -1376,15 +1364,19 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
       getAnalysis(analysisId),
       listRepositories(),
     ]);
-    const [blast, confidence, tests, testResult] = await Promise.allSettled([
+    const [blast, confidence, tests, testResult, pullRequest] = await Promise.allSettled([
       getBlastRadius(analysisId),
       getConfidence(analysisId),
       getTests(analysisId),
       getTestRunResult(analysisId),
+      listPullRequests(analysis.repository_id).then(
+        (prs) => prs.find((pr) => pr.id === analysis.pull_request_id) ?? null,
+      ),
     ]);
     return {
       analysis,
       repositories,
+      pullRequest: settledValue(pullRequest),
       blast: settledValue(blast),
       confidence: settledValue(confidence),
       tests: settledValue(tests),
@@ -1417,8 +1409,9 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
   if (state.status === "loading") return <LoadingState label="Loading analysis" />;
   if (state.status === "error") return <ErrorState message={state.error} />;
 
-  const { analysis, repositories, blast, confidence, tests, testResult } = state.data;
+  const { analysis, repositories, pullRequest, blast, confidence, tests, testResult } = state.data;
   const repo = repositoryName(repositories, analysis.repository_id);
+  const githubUrl = pullRequest ? pullRequestUrl(repo, pullRequest.github_pr_number) : null;
   const header = buildHeaderModel(
     confidence
       ? {
@@ -1436,9 +1429,34 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
   return (
     <>
       <PageHeading
-        eyebrow={`Analysis / ${analysis.id}`}
+        eyebrow="Analysis"
         title="Pull request verification"
-        description={`${repo} / PR ${analysis.pull_request_id}`}
+        description={
+          <>
+            {repo} /{" "}
+            {pullRequest ? (
+              <Link href={`/pull-requests/${pullRequest.id}`} className="text-link">
+                #{pullRequest.github_pr_number} {truncate(pullRequest.title, 80)}
+              </Link>
+            ) : (
+              "manual run or pull request not synced"
+            )}
+            {githubUrl && (
+              <>
+                {" · "}
+                <a href={githubUrl} target="_blank" rel="noopener noreferrer" className="text-link">
+                  View on GitHub
+                </a>
+              </>
+            )}
+            {analysis.id && (
+              <>
+                {" · "}
+                <CopyId label="Analysis ID" value={analysis.id} />
+              </>
+            )}
+          </>
+        }
         action={
           <button
             className="button secondary"
@@ -2512,7 +2530,7 @@ export function PullRequestData({ pullRequestId }: { pullRequestId: string }) {
 
       <section className="metric-grid" style={{ marginBottom: "16px" }}>
         <Metric label="GitHub PR Number" value={pr ? `#${pr.github_pr_number}` : (isNumeric ? `#${cleanNumber}` : "-")} />
-        <Metric label="Radius PR UUID" value={pr?.id ? pr.id.slice(0, 8) + "..." : (isUuid ? pullRequestId.slice(0, 8) + "..." : "-")} />
+        <Metric label="Opened" value={formatDate(pr?.opened_at)} />
         <Metric label="Status" value={pr?.status ?? "unknown"} />
         <Metric label="Verification Runs" value={analyses.length} />
       </section>
@@ -2521,20 +2539,12 @@ export function PullRequestData({ pullRequestId }: { pullRequestId: string }) {
         <div className="card" style={{ marginBottom: "16px", padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
           <div style={{ display: "flex", gap: "20px", alignItems: "center", flexWrap: "wrap", fontSize: "13px" }}>
             <div>
-              <span className="muted">Full Radius PR ID: </span>
-              <code style={{ fontSize: "12px", background: "rgba(255,255,255,0.06)", padding: "2px 6px", borderRadius: "4px" }}>{pr.id}</code>
-            </div>
-            <div>
-              <span className="muted">GitHub Number: </span>
-              <strong>#{pr.github_pr_number}</strong>
+              <span className="muted">Author: </span>
+              <strong>{pr.author}</strong>
             </div>
             <div>
               <span className="muted">Branch: </span>
               <code>{pr.source_branch}</code> → <code>{pr.target_branch}</code>
-            </div>
-            <div>
-              <span className="muted">Opened: </span>
-              {formatDate(pr.opened_at)}
             </div>
           </div>
         </div>
@@ -2926,7 +2936,6 @@ export function PullRequestsOverviewData() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const loadData = async () => {
     try {
@@ -2996,30 +3005,12 @@ export function PullRequestsOverviewData() {
     }
   };
 
-  const copyToClipboard = (id: string) => {
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(id);
-    }
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
-
   if (loading) return <LoadingState label="Loading pull requests across repositories" />;
   if (error && pullRequests.length === 0) return <ErrorState message={error} />;
 
   const filtered = pullRequests.filter(({ pr, repo }) => {
     if (statusFilter !== "all" && pr.status !== statusFilter) return false;
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      pr.title.toLowerCase().includes(q) ||
-      String(pr.github_pr_number).includes(q) ||
-      pr.id.toLowerCase().includes(q) ||
-      pr.author.toLowerCase().includes(q) ||
-      repo.name.toLowerCase().includes(q) ||
-      pr.source_branch.toLowerCase().includes(q) ||
-      pr.target_branch.toLowerCase().includes(q)
-    );
+    return pullRequestMatches(pr, searchQuery, repo.full_name || repo.name);
   });
 
   const openCount = pullRequests.filter((p) => p.pr.status === "open").length;
@@ -3040,7 +3031,7 @@ export function PullRequestsOverviewData() {
             <Search size={16} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "var(--muted)" }} />
             <input
               type="text"
-              placeholder="Search by title, #number, Radius UUID, author..."
+              placeholder="Search by title, #number, author, branch..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="input"
@@ -3130,34 +3121,17 @@ export function PullRequestsOverviewData() {
                             #{pr.github_pr_number} {pr.title}
                           </Link>
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            <span
-                              title={`Full Radius PR UUID: ${pr.id}`}
-                              style={{
-                                fontSize: "11px",
-                                padding: "1px 6px",
-                                borderRadius: "4px",
-                                background: "rgba(255, 255, 255, 0.06)",
-                                border: "1px solid var(--border)",
-                                fontFamily: "monospace",
-                                color: "var(--muted)",
-                              }}
-                            >
-                              UUID: {pr.id.slice(0, 8)}...
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => copyToClipboard(pr.id)}
-                              title="Copy full Radius PR UUID"
-                              style={{
-                                background: "transparent",
-                                border: "none",
-                                padding: "2px",
-                                cursor: "pointer",
-                                color: copiedId === pr.id ? "var(--green, #22c55e)" : "var(--muted)",
-                              }}
-                            >
-                              {copiedId === pr.id ? <Check size={12} /> : <Copy size={12} />}
-                            </button>
+                            {pullRequestUrl(repo.full_name, pr.github_pr_number) && (
+                              <a
+                                href={pullRequestUrl(repo.full_name, pr.github_pr_number) as string}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="subtext"
+                                style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
+                              >
+                                View on GitHub <ExternalLink size={11} />
+                              </a>
+                            )}
                           </div>
                         </div>
                       </td>

@@ -99,7 +99,9 @@ function matches(query: string, values: Array<string | number | null | undefined
 }
 
 function prFields(pr: PullRequest | null | undefined) {
-  return pr ? [`#${pr.github_pr_number}`, pr.title, pr.source_branch, pr.author] : [];
+  return pr
+    ? [`#${pr.github_pr_number}`, pr.title, pr.source_branch, pr.target_branch, pr.author]
+    : [];
 }
 
 /** Analysis search: id prefix, commit sha, status, repository, PR number and title. */
@@ -117,8 +119,11 @@ export function analysisMatches(
   ]);
 }
 
+/** PR search: "#154" and "154" both match PR 154 (a leading "#" is ignored for the number). */
 export function pullRequestMatches(pr: PullRequest, query: string, repositoryName: string): boolean {
-  return matches(query, [...prFields(pr), repositoryName, pr.id]);
+  const number = query.trim().replace(/^#/, "");
+  if (/^\d+$/.test(number) && String(pr.github_pr_number).startsWith(number)) return true;
+  return matches(query, [...prFields(pr), repositoryName]);
 }
 
 export function repositoryMatches(repository: Pick<Repository, "full_name">, query: string): boolean {
@@ -138,4 +143,29 @@ export function describeReadiness(result: "loading" | "error" | { status: number
     return { tone: "neutral", text: "Sign in to check the Radius API status." };
   }
   return { tone: "warning", text: `The Radius API is not ready (HTTP ${result.status}).` };
+}
+
+export type AnalysisNotification = {
+  id: string;
+  failed: boolean;
+  commit: string;
+  /** completed_at when present, else created_at (ISO string). */
+  at: string;
+};
+
+/** Header bell: the newest analyses that finished (completed or failed), newest first. */
+export function recentNotifications(
+  analyses: Array<Pick<Analysis, "id" | "status" | "commit_sha" | "created_at" | "completed_at">>,
+  limit = 5,
+): AnalysisNotification[] {
+  return analyses
+    .filter((a) => a.id && ["completed", "failed"].includes(a.status.toLowerCase()))
+    .map((a) => ({
+      id: a.id as string,
+      failed: a.status.toLowerCase() === "failed",
+      commit: a.commit_sha.slice(0, 8),
+      at: a.completed_at ?? a.created_at,
+    }))
+    .sort((x, y) => timestamp(y.at) - timestamp(x.at))
+    .slice(0, limit);
 }

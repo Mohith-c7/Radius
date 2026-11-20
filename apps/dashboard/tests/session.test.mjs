@@ -90,6 +90,11 @@ test("API down, 5xx, malformed body and timeout all fail closed (not cached)", a
   assert.deepEqual(r, { ok: false, reason: "unavailable" });
 });
 
+test("the default validation timeout tolerates a busy API (10 s) and still fails closed", () => {
+  // A single small container runs the API and the worker; 5 s timed out while an analysis ran.
+  assert.equal(session.VALIDATE_TIMEOUT_MS, 10_000);
+});
+
 test("positive answers are cached, then expire", async () => {
   let t = 1_000_000;
   const f = makeFetch(() => jsonResponse(200, user));
