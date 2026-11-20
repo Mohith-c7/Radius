@@ -35,7 +35,7 @@ The Radius Check Run is published when the analysis completes. With `RADIUS_FEAT
 
 ## 2. GitHub Actions Workflow
 
-Copy [examples/radius-ci-workflow.yml](examples/radius-ci-workflow.yml) to `.github/workflows/radius.yml` in your repository. It uses the composite action `.github/actions/radius-verify` (a thin wrapper around `scripts/radius_ci.py`, so there is one integration) with:
+Copy [examples/radius-ci-workflow.yml](examples/radius-ci-workflow.yml) to `.github/workflows/radius-evidence.yml` in your repository. It uses the composite action `.github/actions/radius-verify` (a thin wrapper around `scripts/radius_ci.py`, so there is one integration) with:
 
 | `command` | What it does |
 | --- | --- |
@@ -107,10 +107,10 @@ Or, in GitHub Actions, after the test step:
 - uses: Mohith-c7/Radius/.github/actions/radius-verify@develop
   if: always()
   with:
-    api-url: ${{ secrets.RADIUS_API_BASE_URL }}
-    organization-id: ${{ secrets.RADIUS_ORG_ID }}
+    api-url: ${{ vars.RADIUS_API_URL }}
+    organization-id: ${{ vars.RADIUS_ORGANIZATION_ID }}
     analysis-id: ${{ steps.radius_analysis.outputs.analysis_id }}
-    api-key: ${{ secrets.RADIUS_API_KEY }}
+    api-key: ${{ secrets.RADIUS_CI_UPLOAD_KEY }}
     junit-path: junit.xml
 ```
 
