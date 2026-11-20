@@ -1,4 +1,4 @@
-export type AuthUser = { id: string; name: string; email: string; email_verified: boolean; role: string };
+export type AuthUser = { id: string; name: string; email: string; email_verified: boolean; role: string; organization_id?: string | null };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
 

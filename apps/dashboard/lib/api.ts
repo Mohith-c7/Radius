@@ -6,6 +6,7 @@ import {
   syncPullRequestsRequest,
   type SyncSummary,
 } from "./github-actions.ts";
+import { paginationTotal } from "./account-model.ts";
 
 export type UUID = string;
 
@@ -431,6 +432,12 @@ export function listAnalyses(params: {
       offset: params.offset ? String(Math.max(params.offset, 0)) : undefined,
     })}`,
   );
+}
+
+/** Number of analyses in the organization, read from the list's pagination meta (fetches one row). */
+export async function countAnalyses(): Promise<number> {
+  const result = await radiusRequest<Analysis[]>("/analyses?limit=1");
+  return paginationTotal(result.meta, result.data.length);
 }
 
 export function getAnalysis(analysisId: UUID) {

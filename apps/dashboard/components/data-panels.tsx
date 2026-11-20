@@ -12,11 +12,14 @@ import {
   FolderGit2,
   GitBranch,
   GitPullRequest,
+  KeyRound,
   Loader2,
+  LogOut,
   Play,
   Plus,
   RefreshCw,
   Search,
+  ShieldCheck,
   Sparkles,
   TestTube2,
   Trash2,
@@ -37,6 +40,7 @@ import {
   TestRunResult,
   TestSelection,
   connectRepository,
+  countAnalyses,
   disconnectRepository,
   getAnalysis,
   getBlastRadius,
@@ -57,6 +61,8 @@ import {
   uploadTestResults,
 } from "../lib/api";
 import { errorText, type SyncSummary } from "../lib/github-actions";
+import { initials, profileRows, roleLabel } from "../lib/account-model";
+import { useAuth } from "./auth-provider";
 import { scoreKindLabel } from "../lib/score-kind";
 import { AnalyzePullRequestButton, ConnectGitHubRepositoryCard, SyncSummaryList } from "./github-actions";
 import { ConfidenceRing, OpenLink, PageHeading, Status } from "./ui";
@@ -2438,6 +2444,141 @@ export function SettingsData() {
           </p>
         </section>
       </div>
+    </>
+  );
+}
+
+export function ProfileData() {
+  const router = useRouter();
+  const { user, signOut } = useAuth();
+  if (!user) return <LoadingState label="Loading your account" />;
+
+  return (
+    <>
+      <PageHeading
+        eyebrow="Account"
+        title="Your profile"
+        description="The account you are signed in with, as recorded by Radius."
+      />
+      <div className="detail-grid">
+        <section className="card detail-card">
+          <div className="profile-heading">
+            <span className="profile-avatar">{initials(user.name, user.email)}</span>
+            <div>
+              <h2 style={{ margin: 0 }}>{user.name || user.email}</h2>
+              <p className="muted">{user.email}</p>
+            </div>
+          </div>
+          <div className="stat-list">
+            {profileRows(user).map((row) => (
+              <div key={row.label}>
+                <span>{row.label}</span>
+                <strong>{row.value}</strong>
+              </div>
+            ))}
+          </div>
+        </section>
+        <aside className="card detail-card">
+          <ShieldCheck size={22} color="#19815c" />
+          <h2 style={{ marginTop: 14 }}>Sign-in</h2>
+          <p className="muted">
+            To set or change a password, Radius emails a one-time link to {user.email}.
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 18 }}>
+            <Link className="button secondary" href="/forgot-password">
+              <KeyRound size={15} />
+              Set or reset password
+            </Link>
+            <button
+              className="button secondary"
+              type="button"
+              onClick={async () => {
+                await signOut();
+                router.replace("/login");
+              }}
+            >
+              <LogOut size={15} />
+              Sign out
+            </button>
+          </div>
+          <div style={{ marginTop: 21 }}>
+            <OpenLink href="/organization">View organization</OpenLink>
+          </div>
+        </aside>
+      </div>
+    </>
+  );
+}
+
+async function loadOrganization() {
+  const [repositories, analysisCount] = await Promise.all([listRepositories(), countAnalyses()]);
+  return { repositories, analysisCount };
+}
+
+export function OrganizationData() {
+  const { user } = useAuth();
+  const state = useRadiusData(loadOrganization, []);
+  if (state.status === "loading") return <LoadingState label="Loading organization" />;
+  if (state.status === "error") return <ErrorState message={state.error} />;
+
+  const { repositories, analysisCount } = state.data;
+  return (
+    <>
+      <PageHeading
+        eyebrow="Administration"
+        title="Organization"
+        description="The organization this Radius deployment works in, with its connected repositories."
+        action={
+          <Link href="/repositories" className="button">
+            <FolderGit2 size={16} />
+            Manage repositories
+          </Link>
+        }
+      />
+      <div className="detail-grid">
+        <section className="card">
+          <div className="card-heading">
+            <div>
+              <h2>Connected repositories</h2>
+              <p>Repositories Radius analyzes for this organization</p>
+            </div>
+            <OpenLink href="/repositories">View all</OpenLink>
+          </div>
+          <RepositoryRows repositories={repositories} />
+        </section>
+        <aside className="card detail-card">
+          <ShieldCheck size={21} color="#19815c" />
+          <h2 style={{ marginTop: 14 }}>Organization</h2>
+          <div className="stat-list">
+            <div>
+              <span>Organization ID</span>
+              <strong style={{ wordBreak: "break-all" }}>
+                {radiusConfig.organizationId || "Not configured"}
+              </strong>
+            </div>
+            <div>
+              <span>Connected repositories</span>
+              <strong>{repositories.length}</strong>
+            </div>
+            <div>
+              <span>Analyses</span>
+              <strong>{analysisCount}</strong>
+            </div>
+            <div>
+              <span>Your role</span>
+              <strong>{roleLabel(user?.role)}</strong>
+            </div>
+          </div>
+        </aside>
+      </div>
+      <section className="card detail-card wide-card">
+        <h2>Members</h2>
+        <p className="muted">
+          Everyone who signs in to this deployment works in this organization. Radius does not
+          list members or send invitations yet. Your own role is shown above; disconnecting a
+          repository needs the admin role.
+        </p>
+      </section>
     </>
   );
 }
