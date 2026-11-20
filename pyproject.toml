@@ -65,6 +65,8 @@ dev = [
   "black==26.10.1",
   "import-linter==2.15",
   "pytest==9.2.0",
+  # Parallel test runs (radius-evidence.yml).
+  "pytest-xdist==3.8.0",
   "ruff==0.17.3",
 ]
 

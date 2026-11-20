@@ -31,46 +31,59 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Select test suites
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      python-matrix: ${{ steps.scope.outputs.python-matrix }}
+      dashboard: ${{ steps.scope.outputs.dashboard }}
+    steps:
+      - name: Checkout the pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      # Radius needs a result for every selected test, so a suite is skipped only when
+      # the pull request cannot change anything its tests read: see the rules and the
+      # shard list in scripts/ci/evidence_scope.py. If the diff fails, everything runs.
+      - name: Decide which suites this pull request needs
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # A two-dot diff against the base tip is a superset of the pull request's own
+          # changes (it also lists base commits the branch lacks), so it can only add suites.
+          if git fetch --quiet --no-tags --depth=1 origin "$BASE_SHA" \
+            && changed="$(git diff --name-only --no-renames "$BASE_SHA" "$HEAD_SHA")"; then
+            printf '%s\n' "$changed" | python3 scripts/ci/evidence_scope.py >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Could not diff against the base commit; running every suite."
+            python3 scripts/ci/evidence_scope.py --all >> "$GITHUB_OUTPUT"
+          fi
+
   python:
     name: Python tests (${{ matrix.shard }})
+    needs: changes
+    if: ${{ needs.changes.outputs.python-matrix != '[]' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
+      # The shards come from SHARDS in scripts/ci/evidence_scope.py, balanced on measured
+      # durations. Together they are exactly coverage.yml's set: apps/api/tests
+      # apps/worker/tests packages/*/tests tests (tests/test_evidence_scope.py checks it).
       matrix:
-        include:
-          # Together exactly coverage.yml's set: apps/api/tests apps/worker/tests packages/*/tests tests.
-          # "rest" is every packages/*/tests directory not named by another shard, so a new
-          # package is picked up without editing this list.
-          - shard: api
-            paths: apps/api/tests
-          - shard: worker
-            paths: apps/worker/tests tests
-          - shard: evidence
-            paths: packages/evidence/tests packages/linking/tests packages/confidence/tests
-          - shard: intent
-            paths: packages/intent/tests packages/analysis/tests
-          - shard: rest
-            paths: rest
+        include: ${{ fromJSON(needs.changes.outputs.python-matrix) }}
 
-    # Same services as CI and coverage.yml, so no test has to be excluded.
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: radius
-          POSTGRES_USER: radius
-          POSTGRES_PASSWORD: radius
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U radius -d radius"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 12
-
+    # No PostgreSQL service: no test here needs one. The Postgres cases in
+    # packages/intent and packages/shared skip unless *_TEST_POSTGRES_URL is set (no
+    # workflow sets it) and tests/test_smoke_e2e.py needs RADIUS_SMOKE=1. The API's auth
+    # engine reads DATABASE_URL at import; each xdist worker gets its own SQLite file
+    # (scripts/ci/pytest_worker_database.py), as a serial run without DATABASE_URL would.
     env:
-      DATABASE_URL: postgresql+psycopg://radius:radius@localhost:5432/radius
       # RADIUS_ENV stays unset, as in coverage.yml: package tests assert the default.
       STORAGE_BACKEND: sql
 
@@ -83,19 +96,38 @@ jobs:
           persist-credentials: false
 
       - name: Set up Python
+        id: python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: pyproject.toml
 
+      # The installed environment is cached whole, keyed on the exact interpreter and
+      # the dependency files, so a hit skips the install. The workspace packages are on
+      # pytest's pythonpath (pyproject.toml), not installed.
+      - name: Restore the Python environment
+        id: venv
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .venv
+          key: radius-evidence-venv-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml', 'uv.lock') }}
+
       - name: Install Python dependencies
+        if: ${{ steps.venv.outputs.cache-hit != 'true' }}
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+          python -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/python -m pip install -e ".[dev]"
+
+      # Later steps (and any `python` a test starts) use the environment.
+      - name: Activate the Python environment
+        run: |
+          echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
       - name: Build sandbox test image
-        if: ${{ matrix.shard == 'rest' }}
+        if: ${{ matrix.shard == 'testing' }}
         # packages/testing/tests/test_sandbox_runner.py runs real containers, as in CI.
         run: |
           printf 'FROM mirror.gcr.io/library/python:3.12-slim\nRUN pip install --no-cache-dir pytest==9.2.0\n' \
@@ -105,19 +137,19 @@ jobs:
         env:
           TEST_PATHS: ${{ matrix.paths }}
           SHARD: ${{ matrix.shard }}
+          # scripts/ci/pytest_worker_database.py: one SQLite file per xdist worker.
+          RADIUS_TEST_DB_DIR: ${{ runner.temp }}/radius-test-db
+          PYTHONPATH: scripts/ci
         run: |
           if [ "$TEST_PATHS" = "rest" ]; then
-            TEST_PATHS=""
-            for dir in packages/*/tests; do
-              case "$dir" in
-                packages/evidence/*|packages/linking/*|packages/confidence/*|packages/intent/*|packages/analysis/*) ;;
-                *) TEST_PATHS="$TEST_PATHS $dir" ;;
-              esac
-            done
+            TEST_PATHS="$(python scripts/ci/evidence_scope.py --rest)"
           fi
-          echo "Test paths:$TEST_PATHS"
+          echo "Test paths: $TEST_PATHS"
+          # -n auto: one pytest-xdist worker per core. The controller writes a single
+          # JUnit report with the same file/classname/name identities as a serial run.
           # shellcheck disable=SC2086  # split on purpose: a list of directories
-          python -m pytest $TEST_PATHS -p no:cacheprovider \
+          python -m pytest $TEST_PATHS -p no:cacheprovider -p pytest_worker_database \
+            -n auto --durations=10 \
             -o junit_family=xunit1 --junitxml="reports/junit-python-${SHARD}.xml"
 
       - name: Keep the report
@@ -131,6 +163,8 @@ jobs:
 
   dashboard:
     name: Dashboard tests
+    needs: changes
+    if: ${{ needs.changes.outputs.dashboard == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -140,34 +174,29 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-        with:
-          version: 9.15.0
-
+      # No pnpm install: the node tests import only node: builtins and local .ts/.mjs
+      # files (type-stripped), never a package from node_modules.
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
-          cache: pnpm
-
-      - name: Install Node dependencies
-        run: pnpm install --frozen-lockfile
 
       # Node's junit reporter names no test file, so each file gets its own report and
       # scripts/ci/merge_node_junit.py writes the repository-relative path into every case.
+      # The files run in parallel; their spec output is printed afterwards, file by file.
       - name: Run node tests with JUnit output
         working-directory: apps/dashboard
         run: |
-          mkdir -p ../../reports/node
+          mkdir -p ../../reports/node ../../reports/node-logs
           status=0
-          for file in tests/*.test.mjs; do
-            name="$(basename "$file")"
+          # shellcheck disable=SC2016  # $1 belongs to the inner shell
+          printf '%s\n' tests/*.test.mjs | xargs -P "$(nproc)" -I{} sh -c '
+            name="$(basename "$1")"
             node --experimental-strip-types --test \
-              --test-reporter=spec --test-reporter-destination=stdout \
+              --test-reporter=spec --test-reporter-destination="../../reports/node-logs/${name}.log" \
               --test-reporter=junit --test-reporter-destination="../../reports/node/${name}.xml" \
-              "$file" || status=1
-          done
+              "$1"' _ {} || status=1
+          cat ../../reports/node-logs/*.log
           exit "$status"
 
       - name: Merge node reports
@@ -187,14 +216,17 @@ jobs:
 
   upload:
     name: Upload results to Radius
-    needs: [python, dashboard]
+    needs: [changes, python, dashboard]
     # Failing tests are evidence too, so this also runs after a red test job.
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && needs.changes.result == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # The upload step may wait up to wait-seconds (15 minutes) for the analysis.
+    timeout-minutes: 20
     env:
       # Only a boolean leaves the secrets context here; the key itself goes to the upload step alone.
       HAS_UPLOAD_KEY: ${{ secrets.RADIUS_CI_UPLOAD_KEY != '' }}
+      # False when the pull request changes nothing any suite reads (docs or changelog only).
+      RAN_TESTS: ${{ needs.changes.outputs.python-matrix != '[]' || needs.changes.outputs.dashboard == 'true' }}
     steps:
       - name: Resolve Radius settings
         id: radius
@@ -204,7 +236,10 @@ jobs:
         run: |
           api="${API_URL%/}"
           api="${api%/api/v1}"
-          if [ "$HAS_UPLOAD_KEY" != "true" ]; then
+          if [ "$RAN_TESTS" != "true" ]; then
+            echo "::notice::No test suite can be affected by this pull request (docs or changelog only); nothing to upload."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          elif [ "$HAS_UPLOAD_KEY" != "true" ]; then
             echo "::notice::RADIUS_CI_UPLOAD_KEY is not available (fork, Dependabot or not configured); skipping the Radius upload."
             echo "enabled=false" >> "$GITHUB_OUTPUT"
           elif [ -z "$api" ] || [ -z "$ORG_ID" ]; then
