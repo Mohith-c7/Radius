@@ -269,3 +269,102 @@ def test_ambiguous_runner_relative_path_attributes_nothing() -> None:
 
     unique = attribute_selected_tests(("svc_a/tests/test_api.py",), cases)
     assert unique.passed == ("svc_a/tests/test_api.py",)
+
+
+UNSELECTED = """<testsuite tests="3" failures="1" skipped="1">
+  <testcase classname="tests.test_pay" name="test_charge"/>
+  <testcase classname="tests.test_cart" name="test_add"><failure>boom</failure></testcase>
+  <testcase classname="tests.test_cart" name="test_skip"><skipped/></testcase>
+</testsuite>"""
+
+
+def _analysis_store():
+    """SQL store with one analysis row (history rows reference it)."""
+
+    from datetime import UTC, datetime
+
+    from radius_shared.database import models as db
+    from radius_shared.database.enums import AnalysisStatus, RepositoryVisibility
+
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session = Session(engine)
+    org = db.Organization(id=uuid4(), name="Org")
+    repo = db.Repository(
+        id=uuid4(), organization_id=org.id, github_repository_id=4242, name="app",
+        owner="org", default_branch="main", clone_url="https://github.com/org/app.git",
+        visibility=RepositoryVisibility.PRIVATE,
+    )
+    analysis = db.Analysis(
+        id=uuid4(), repository_id=repo.id, pull_request_id=uuid4(), commit_sha=SHA,
+        status=AnalysisStatus.COMPLETED, started_at=datetime.now(UTC),
+        created_at=datetime.now(UTC),
+    )
+    session.add_all([org, repo, analysis])
+    session.flush()
+    return SqlAlchemyTestStore(session), analysis
+
+
+def test_every_uploaded_case_is_recorded_for_history_and_statistics() -> None:
+    store, analysis = _analysis_store()
+    service = _service(store)
+
+    response = service.ingest_test_report(analysis.id, UNSELECTED, SHA)
+    service.ingest_test_report(analysis.id, UNSELECTED, SHA)  # replay: no duplicates
+
+    assert response.selected_tests is None  # attribution unchanged: nothing selected
+    history = store.get_test_history(analysis.id)
+    assert sorted((row["test_path"], row["status"]) for row in history) == [
+        ("tests.test_cart::test_add", "failed"),
+        ("tests.test_cart::test_skip", "skipped"),
+        ("tests.test_pay::test_charge", "passed"),
+    ]
+    stats = store.get_test_statistics(analysis.id)
+    assert (stats["total_runs"], stats["pass_count"], stats["failure_count"]) == (3, 1, 1)
+    recent = store.get_recent_executions(analysis.repository_id, 10)
+    assert {row["commit_sha"] for row in recent} == {SHA}
+
+
+def test_recorded_cases_are_capped_failures_first_and_failures_stick() -> None:
+    store, analysis = _analysis_store()
+    service = TestingApplicationService(
+        discoverer=_NoDiscovery(),
+        selector=PathBasedTestSelector(),
+        store=store,
+        planner=StaticTestCommandPlanner(),
+        max_recorded_executions=2,
+    )
+
+    service.ingest_test_report(analysis.id, PASSING, SHA)
+    service.ingest_test_report(analysis.id, UNSELECTED, SHA)
+
+    rows = {row["test_path"]: row["status"] for row in store.get_test_history(analysis.id)}
+    assert rows == {"tests.test_pay::test_charge": "passed", "tests.test_cart::test_add": "failed"}
+    service.ingest_test_report(analysis.id, FAILING, SHA)
+    rows = {row["test_path"]: row["status"] for row in store.get_test_history(analysis.id)}
+    assert rows["tests.test_pay::test_charge"] == "failed"
+
+
+def test_cap_zero_records_no_case_rows() -> None:
+    store = InMemoryTestStore()
+    service = TestingApplicationService(
+        discoverer=_NoDiscovery(),
+        selector=PathBasedTestSelector(),
+        store=store,
+        planner=StaticTestCommandPlanner(),
+        max_recorded_executions=0,
+    )
+
+    service.ingest_test_report(uuid4(), UNSELECTED, SHA)
+
+    assert all(not rows for rows in store._history.values())
+
+
+def test_in_memory_store_records_every_uploaded_case() -> None:
+    store = InMemoryTestStore()
+    analysis_id = uuid4()
+
+    _service(store).ingest_test_report(analysis_id, UNSELECTED, SHA)
+
+    stats = store.get_test_statistics(analysis_id)
+    assert (stats["total_runs"], stats["pass_count"], stats["failure_count"]) == (3, 1, 1)

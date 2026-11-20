@@ -1,9 +1,13 @@
 // Pure helpers for the Settings page (CI upload setup). Unit tested.
 
 export const UPLOAD_KEY_SCOPE = "ci-upload";
+// The names .github/workflows/radius-evidence.yml reads: two variables, one secret.
 export const GITHUB_API_URL_VAR = "RADIUS_API_URL";
-export const GITHUB_ORG_SECRET = "RADIUS_ORG_ID";
-export const GITHUB_KEY_SECRET = "RADIUS_API_KEY";
+export const GITHUB_ORG_VAR = "RADIUS_ORGANIZATION_ID";
+export const GITHUB_KEY_SECRET = "RADIUS_CI_UPLOAD_KEY";
+/** The released upload action, pinned by full commit SHA. */
+export const UPLOAD_ACTION_REF =
+  "Mohith-c7/Radius/actions/upload-results@1099949af42ce60ccdc8cdd122bbebc9fe15f692 # v0.1.1";
 
 /**
  * The API origin the upload action needs (it appends /api/v1 itself), derived
@@ -50,13 +54,15 @@ export function uploadWorkflowSnippet(): string {
     "      - run: pytest --junitxml=junit.xml",
     "      - name: Upload results to Radius",
     "        if: ${{ !cancelled() }}",
-    "        # Pin to a full commit SHA in production.",
-    "        uses: Mohith-c7/Radius/actions/upload-results@develop",
+    "        # Pinned by full commit SHA, so a change to the action cannot reach your key.",
+    `        uses: ${UPLOAD_ACTION_REF}`,
     "        with:",
     `          api-url: \${{ vars.${GITHUB_API_URL_VAR} }}`,
-    `          organization-id: \${{ secrets.${GITHUB_ORG_SECRET} }}`,
+    `          organization-id: \${{ vars.${GITHUB_ORG_VAR} }}`,
     `          api-key: \${{ secrets.${GITHUB_KEY_SECRET} }}`,
     "          junit-path: junit.xml",
+    "          # A cold deployment can take a few minutes to create the analysis.",
+    '          wait-seconds: "900"',
     "",
   ].join("\n");
 }

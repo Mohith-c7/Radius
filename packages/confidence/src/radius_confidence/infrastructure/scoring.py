@@ -360,11 +360,15 @@ class DeterministicConfidenceScorer:
             )
             score -= 5
         if tests.failed == 0 and tests.passed > 0:
+            # Uploaded CI results carry a selection count (possibly 0) and their
+            # totals cover every reported case, selected or not; only a run of
+            # the selection itself (no count) may call its tests "selected".
+            kind = "selected" if tests.selected_test_files is None else "uploaded"
             evidence.append(
                 ConfidenceEvidence(
                     category=EvidenceCategory.TESTS,
                     label="passed",
-                    message=f"{tests.passed} of {tests.total_tests} selected test(s) passed.",
+                    message=f"{tests.passed} of {tests.total_tests} {kind} test(s) passed.",
                     impact=EvidenceImpact.POSITIVE,
                     value=float(tests.passed),
                 )

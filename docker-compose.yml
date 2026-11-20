@@ -84,6 +84,8 @@ services:
       RADIUS_TRACING_ENABLED: ${RADIUS_TRACING_ENABLED:-false}
       RADIUS_OTLP_ENDPOINT: ${RADIUS_OTLP_ENDPOINT:-}
       RADIUS_METRICS_ENABLED: ${RADIUS_METRICS_ENABLED:-false}
+      # Per-analysis cap on test history rows from uploaded CI reports.
+      RADIUS_MAX_RECORDED_EXECUTIONS: ${RADIUS_MAX_RECORDED_EXECUTIONS:-2000}
       # HTTP hardening (docs/security/HTTP_HARDENING.md). Empty/false = code defaults.
       CORS_ORIGINS: ${CORS_ORIGINS:-}
       RADIUS_HSTS_ENABLED: ${RADIUS_HSTS_ENABLED:-false}

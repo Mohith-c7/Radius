@@ -38,6 +38,7 @@ from radius_testing.dto.responses import (
 from radius_testing.infrastructure.junit_parser import JUnitReportParser
 from radius_testing.infrastructure.result_matching import (
     attribute_selected_tests,
+    merge_cases,
     report_cases,
 )
 from radius_testing.infrastructure.test_targets import refine_test_targets
@@ -48,6 +49,7 @@ from radius_testing.interfaces.store import TestStore
 from radius_testing.provenance import build_manifest
 
 MAX_RESULT_UPLOADS_PER_ANALYSIS = 256
+DEFAULT_MAX_RECORDED_EXECUTIONS = 2_000
 
 
 class TestingApplicationService:
@@ -61,8 +63,10 @@ class TestingApplicationService:
         planner: TestCommandPlanner,
         runner: TestRunner | None = None,
         parser: JUnitReportParser | None = None,
+        max_recorded_executions: int = DEFAULT_MAX_RECORDED_EXECUTIONS,
     ) -> None:
         self._discoverer = discoverer
+        self._max_recorded_executions = max(0, max_recorded_executions)
         self._selector = selector
         self._store = store
         self._planner = planner
@@ -357,6 +361,13 @@ class TestingApplicationService:
         aggregate = aggregate_uploads(analysis_id, uploads)
         self._store.save_run_result(aggregate)
         cases = tuple(case for item in uploads for case in item.cases)
+        # History and statistics only: every reported case (not just the
+        # selected files) becomes one execution row, capped per analysis.
+        # Attribution below is computed from ``cases`` exactly as before.
+        if self._max_recorded_executions:
+            self._store.record_case_executions(
+                analysis_id, merge_cases(cases), self._max_recorded_executions
+            )
 
         selection = self._store.get_selection(analysis_id)
         attribution = None
@@ -487,3 +498,4 @@ def contradictory_cases(cases: tuple[ReportedTestCase, ...]) -> tuple[str, ...]:
         for key, seen in outcomes.items()
         if {CaseOutcome.PASSED, CaseOutcome.FAILED} <= seen
     )
+

@@ -20,12 +20,17 @@ test("ciUploadEndpoint appends the versioned prefix once", () => {
   assert.equal(m.ciUploadEndpoint(""), "");
 });
 
-test("the workflow snippet uses the upload action with secrets, not literal values", () => {
+test("the workflow snippet matches radius-evidence.yml and the upload action inputs", () => {
   const snippet = m.uploadWorkflowSnippet();
-  assert.match(snippet, /actions\/upload-results@/);
+  assert.match(
+    snippet,
+    /uses: Mohith-c7\/Radius\/actions\/upload-results@1099949af42ce60ccdc8cdd122bbebc9fe15f692 # v0\.1\.1/,
+  );
   assert.match(snippet, /api-url: \$\{\{ vars\.RADIUS_API_URL \}\}/);
-  assert.match(snippet, /organization-id: \$\{\{ secrets\.RADIUS_ORG_ID \}\}/);
-  assert.match(snippet, /api-key: \$\{\{ secrets\.RADIUS_API_KEY \}\}/);
+  assert.match(snippet, /organization-id: \$\{\{ vars\.RADIUS_ORGANIZATION_ID \}\}/);
+  assert.match(snippet, /api-key: \$\{\{ secrets\.RADIUS_CI_UPLOAD_KEY \}\}/);
+  assert.match(snippet, /wait-seconds: "900"/);
+  assert.doesNotMatch(snippet, /RADIUS_ORG_ID|secrets\.RADIUS_API_KEY|@develop/);
   assert.match(snippet, /if: \$\{\{ !cancelled\(\) \}\}/);
   assert.doesNotMatch(snippet, /rdk_/);
   assert.equal(m.UPLOAD_KEY_SCOPE, "ci-upload");

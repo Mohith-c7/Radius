@@ -190,3 +190,17 @@ def test_selected_test_attribution_is_recorded_as_evidence() -> None:
     assert ("selected_test_only_skipped", "tests/test_c.py") in labels
     assert any(label == "contradictory_test_result" for label, _ in labels)
     assert result.metrics["verification_status"] == "failed"
+
+
+def test_passed_evidence_says_uploaded_unless_the_run_was_the_selection() -> None:
+    def passed_message(evidence: ConfidenceTestEvidence) -> str:
+        _, items = DeterministicConfidenceScorer().score(_SMALL_IMPACT, evidence)
+        return next(item.message for item in items if item.label == "passed")
+
+    uploaded = ConfidenceTestEvidence(10, 9, 0, 1, selected_test_files=0)
+    attributed = ConfidenceTestEvidence(10, 9, 0, 1, selected_test_files=2)
+    selection_run = ConfidenceTestEvidence(10, 9, 0, 1)
+
+    assert passed_message(uploaded) == "9 of 10 uploaded test(s) passed."
+    assert passed_message(attributed) == "9 of 10 uploaded test(s) passed."
+    assert passed_message(selection_run) == "9 of 10 selected test(s) passed."

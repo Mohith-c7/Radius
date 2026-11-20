@@ -30,3 +30,27 @@ export function CopyId({ label, value }: { label: string; value: string }) {
     </span>
   );
 }
+
+/** A labelled copy button (Settings: CI values, a new API key token). */
+export function CopyButton({ value, label = "Copy" }: { value: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      className="copy-button"
+      disabled={!value}
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(value);
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1500);
+        } catch {
+          setCopied(false);
+        }
+      }}
+    >
+      {copied ? <Check size={14} /> : <Copy size={14} />}
+      {copied ? "Copied" : label}
+    </button>
+  );
+}

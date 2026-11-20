@@ -87,11 +87,21 @@ export function pullRequestOptionLabel(pr: Pick<PullRequest, "github_pr_number" 
   return `#${pr.github_pr_number} ${truncate(pr.title, max)}`;
 }
 
+const DELETED_SHA = /^0{40}$/;
+
+/**
+ * Branches that still exist on GitHub. A push webhook for a deleted branch
+ * records the all-zero commit, so those rows are hidden (and never verified).
+ */
+export function liveBranches<T extends Pick<Branch, "latest_commit_sha">>(branches: T[] | null | undefined): T[] {
+  return (branches ?? []).filter((branch) => !DELETED_SHA.test(branch.latest_commit_sha ?? ""));
+}
+
 /** The branch the "Run Verification" form starts on: the default branch when indexed, else the first. */
 export function initialBranch(
   repository: Pick<Repository, "default_branch"> & { branches?: Branch[] | null },
 ): Branch | null {
-  const branches = repository.branches ?? [];
+  const branches = liveBranches(repository.branches);
   return branches.find((b) => b.name === repository.default_branch) ?? branches[0] ?? null;
 }
 
@@ -214,14 +224,21 @@ export type AnalysisNotification = {
   id: string;
   failed: boolean;
   commit: string;
+  /** "#177 PR title" when the pull request is known, as on the analysis lists. */
+  title: string;
+  repositoryId: string | null;
   /** completed_at when present, else created_at (ISO string). */
   at: string;
 };
 
+type NotifiableAnalysis = Pick<Analysis, "id" | "status" | "commit_sha" | "created_at" | "completed_at"> &
+  Partial<Pick<Analysis, "pull_request_id" | "repository_id">>;
+
 /** Header bell: the newest analyses that finished (completed or failed), newest first. */
 export function recentNotifications(
-  analyses: Array<Pick<Analysis, "id" | "status" | "commit_sha" | "created_at" | "completed_at">>,
+  analyses: NotifiableAnalysis[],
   limit = 5,
+  pullRequests: PullRequestIndex = new Map(),
 ): AnalysisNotification[] {
   return analyses
     .filter((a) => a.id && ["completed", "failed"].includes(a.status.toLowerCase()))
@@ -229,6 +246,12 @@ export function recentNotifications(
       id: a.id as string,
       failed: a.status.toLowerCase() === "failed",
       commit: a.commit_sha.slice(0, 8),
+      title: analysisLabel(
+        { id: a.id, pull_request_id: a.pull_request_id ?? null, commit_sha: a.commit_sha },
+        pullRequests,
+        48,
+      ).title,
+      repositoryId: a.repository_id ?? null,
       at: a.completed_at ?? a.created_at,
     }))
     .sort((x, y) => timestamp(y.at) - timestamp(x.at))

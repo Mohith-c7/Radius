@@ -4,6 +4,7 @@ from typing import Protocol
 from uuid import UUID
 
 from radius_testing.domain.entities import (
+    ReportedTestCase,
     TestCase,
     TestResultUpload,
     TestRunPlan,
@@ -45,6 +46,18 @@ class TestStore(Protocol):
 
     def get_run_result(self, analysis_id: UUID) -> TestRunResult | None:
         """Return test execution result."""
+
+    def record_case_executions(
+        self,
+        analysis_id: UUID,
+        cases: tuple[ReportedTestCase, ...],
+        limit: int,
+    ) -> int:
+        """Record one history row per reported case, at most ``limit`` per analysis.
+
+        Idempotent per (analysis, case); a case later reported failed is
+        updated to failed. Returns the number of rows inserted.
+        """
 
     def get_test_history(self, analysis_id: UUID) -> list[dict]:
         """Return test execution history for an analysis."""

@@ -4,10 +4,23 @@ import Link from "next/link";
 import { Bell } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 
-import { listAnalyses } from "../lib/api";
-import { recentNotifications, type AnalysisNotification } from "../lib/dashboard-model";
+import { listAnalyses, listPullRequests, type Analysis } from "../lib/api";
+import { indexPullRequests, recentNotifications, type AnalysisNotification } from "../lib/dashboard-model";
 
 type Load = "idle" | "loading" | "error" | AnalysisNotification[];
+
+/** The newest finished analyses, titled "#177 PR title" when their pull request is known. */
+async function loadNotifications(): Promise<AnalysisNotification[]> {
+  const analyses: Analysis[] = await listAnalyses({ limit: 50 });
+  const shown = recentNotifications(analyses);
+  const repositoryIds = [...new Set(shown.map((item) => item.repositoryId).filter((id): id is string => !!id))];
+  // A repository whose pull requests cannot be listed keeps the short-id title.
+  const lists = await Promise.allSettled(repositoryIds.map((id) => listPullRequests(id)));
+  const pullRequests = indexPullRequests(
+    lists.flatMap((result) => (result.status === "fulfilled" ? result.value : [])),
+  );
+  return recentNotifications(analyses, 5, pullRequests);
+}
 
 function when(value: string) {
   const date = new Date(value);
@@ -48,8 +61,8 @@ export function NotificationsMenu() {
     setOpen(next);
     if (next && (items === "idle" || items === "error")) {
       setItems("loading");
-      listAnalyses({ limit: 50 })
-        .then((analyses) => setItems(recentNotifications(analyses)))
+      loadNotifications()
+        .then(setItems)
         .catch(() => setItems("error"));
     }
   }
@@ -93,9 +106,11 @@ export function NotificationsMenu() {
               {items.map((item) => (
                 <li key={item.id}>
                   <Link href={`/analyses/${item.id}`} className="text-link" onClick={() => setOpen(false)}>
-                    {item.failed ? "Analysis failed" : "Analysis completed"} · {item.commit}
+                    {item.title}
                   </Link>
-                  <div className="subtext">{when(item.at)}</div>
+                  <div className="subtext">
+                    {item.failed ? "Analysis failed" : "Analysis completed"} · {when(item.at)}
+                  </div>
                 </li>
               ))}
             </ul>
