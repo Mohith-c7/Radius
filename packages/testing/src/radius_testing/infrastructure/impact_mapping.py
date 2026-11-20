@@ -41,7 +41,9 @@ NON_EXECUTABLE_NAMES = frozenset(
         ".mailmap",
     }
 )
-NON_EXECUTABLE_DIRS = frozenset({"docs", "doc"})
+#: Top-level directories that hold no runtime code (``.github``: workflows, templates,
+#: CODEOWNERS; CI configuration is not code under test).
+NON_EXECUTABLE_DIRS = frozenset({"docs", "doc", ".github", "changelog.d"})
 
 # Changes to these files can alter the behavior of any test, and their impact
 # is not visible in the import graph.
