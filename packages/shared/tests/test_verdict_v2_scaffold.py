@@ -45,6 +45,11 @@ def _load(name: str):
         (True, VerdictV2Mode.ON),
         (False, VerdictV2Mode.OFF),
         (VerdictV2Mode.SHADOW, VerdictV2Mode.SHADOW),
+        ('"on"', VerdictV2Mode.ON),
+        ("'shadow'", VerdictV2Mode.SHADOW),
+        ('" off "', VerdictV2Mode.OFF),
+        ('"on', VerdictV2Mode.OFF),
+        ("\"typo\"", VerdictV2Mode.OFF),
     ],
 )
 def test_flag_parsing_table(raw, expected) -> None:
