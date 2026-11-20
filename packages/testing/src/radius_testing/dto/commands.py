@@ -1,5 +1,6 @@
 """Testing application command DTOs."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import UUID
@@ -9,10 +10,18 @@ from radius_testing.domain.entities import TestCase
 
 @dataclass(frozen=True, slots=True)
 class DiscoverTestsCommand:
-    """Command to discover tests in a repository snapshot."""
+    """Command to discover tests in a repository snapshot.
+
+    ``file_imports`` (repository file -> repository files it imports, from the
+    dependency graph) lets each test's ``target_path`` come from what the test
+    really imports instead of its file name; ``repository_files`` are the files
+    known to exist.
+    """
 
     repository_path: Path
     repository_id: UUID | None = None
+    file_imports: Mapping[str, tuple[str, ...]] | None = None
+    repository_files: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)

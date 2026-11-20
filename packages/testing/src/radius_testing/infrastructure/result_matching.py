@@ -182,22 +182,39 @@ def _xml_cases(text: str) -> tuple[ReportedTestCase, ...]:
     except Exception:  # noqa: BLE001 - malformed reports yield no evidence
         return ()
     cases: list[ReportedTestCase] = []
-    for testcase in root.iter("testcase"):
-        if testcase.findall("failure") or testcase.findall("error"):
-            outcome = CaseOutcome.FAILED
-        elif testcase.findall("skipped"):
-            outcome = CaseOutcome.SKIPPED  # a skipped case is not evidence the file ran
+    # A ``file`` on an enclosing <testsuite> (jest-junit, Playwright, per-file
+    # wrappers around node:test output) locates every case inside it.
+    if root.tag == "testcase":
+        return (_xml_case(root, None),)
+    # Iterative depth-first walk in document order (no recursion limit to hit).
+    stack = [(iter(root), root.get("file") if root.tag == "testsuite" else None)]
+    while stack:
+        children, inherited_file = stack[-1]
+        child = next(children, None)
+        if child is None:
+            stack.pop()
+            continue
+        if child.tag == "testcase":
+            cases.append(_xml_case(child, inherited_file))
         else:
-            outcome = CaseOutcome.PASSED
-        cases.append(
-            ReportedTestCase(
-                file=testcase.get("file"),
-                classname=testcase.get("classname"),
-                name=testcase.get("name"),
-                outcome=outcome,
-            )
-        )
+            own = child.get("file") if child.tag == "testsuite" else None
+            stack.append((iter(child), own or inherited_file))
     return tuple(cases)
+
+
+def _xml_case(testcase, inherited_file: str | None) -> ReportedTestCase:
+    if testcase.findall("failure") or testcase.findall("error"):
+        outcome = CaseOutcome.FAILED
+    elif testcase.findall("skipped"):
+        outcome = CaseOutcome.SKIPPED  # a skipped case is not evidence the file ran
+    else:
+        outcome = CaseOutcome.PASSED
+    return ReportedTestCase(
+        file=testcase.get("file") or inherited_file,
+        classname=testcase.get("classname"),
+        name=testcase.get("name"),
+        outcome=outcome,
+    )
 
 
 def _json_cases(text: str) -> tuple[ReportedTestCase, ...]:
