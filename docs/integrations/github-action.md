@@ -8,7 +8,7 @@ This is separate from `.github/actions/radius-verify` (plan, upload and gate wit
 
 ## Quick start
 
-Add the step after your tests, in the same job. Create two repository secrets: `RADIUS_API_KEY` (an API key with the `ci-upload` scope) and `RADIUS_ORG_ID`, plus the variable or secret `RADIUS_API_URL`.
+Add the step after your tests, in the same job. Create the repository secret `RADIUS_CI_UPLOAD_KEY` (an API key with the `ci-upload` scope) and the repository variables `RADIUS_ORGANIZATION_ID` and `RADIUS_API_URL`, the names the Radius Settings page shows.
 
 ```yaml
 name: tests
@@ -32,8 +32,8 @@ jobs:
         uses: <owner>/Radius/actions/upload-results@<full-sha> # vX.Y.Z
         with:
           api-url: ${{ vars.RADIUS_API_URL }}
-          organization-id: ${{ secrets.RADIUS_ORG_ID }}
-          api-key: ${{ secrets.RADIUS_API_KEY }}
+          organization-id: ${{ vars.RADIUS_ORGANIZATION_ID }}
+          api-key: ${{ secrets.RADIUS_CI_UPLOAD_KEY }}
           junit-path: junit.xml
 ```
 
@@ -125,7 +125,7 @@ This repository runs the action on itself in `.github/workflows/radius-evidence.
 | Symptom | Likely cause and fix |
 | --- | --- |
 | `skipped-fork` notice | PR from a fork; no secrets available. Expected. |
-| `skipped-no-secret` | `RADIUS_API_KEY` not set for this event (Dependabot has a separate secrets store), or the secret name is wrong. |
+| `skipped-no-secret` | The `api-key` input is empty: `RADIUS_CI_UPLOAD_KEY` is not set for this event (Dependabot has a separate secrets store), or the secret name is wrong. |
 | `No JUnit XML files matched` | The test step did not write a report, wrote it elsewhere, or the glob is relative to a different directory. Remember `if: !cancelled()` so a failing test step still uploads. |
 | `HTTP 401` | Wrong or revoked key. |
 | `HTTP 403 ... ci-upload` | The key lacks the `ci-upload` scope or belongs to another organization. |
