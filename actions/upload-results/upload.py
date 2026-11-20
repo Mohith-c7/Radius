@@ -34,9 +34,11 @@ from pathlib import Path
 
 USER_AGENT = "radius-upload-results/1"
 TIMEOUT_SECONDS = 30
-MAX_ATTEMPTS = 4
+MAX_ATTEMPTS = 6
 MAX_RETRY_AFTER_SECONDS = 60.0
-BACKOFF_BASE_SECONDS = 2.0
+# Waits 5, 10, 20, 40 and 80 s (2.6 min in all): enough to ride out a restart of a
+# small API host (Render free tier restarts take 1-2 minutes).
+BACKOFF_BASE_SECONDS = 5.0
 DEFAULT_MAX_FILE_MB = 10.0
 MAX_FILES = 64
 RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
