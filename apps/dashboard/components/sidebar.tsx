@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
-import { Activity, BarChart3, Boxes, CircleHelp, FolderGit2, GitCompareArrows, GitPullRequest, LogOut, Search, Settings, Users } from "lucide-react";
+import { Activity, BarChart3, Boxes, CircleHelp, FlaskConical, FolderGit2, GitCompareArrows, GitPullRequest, LogOut, Search, Settings, Users } from "lucide-react";
 import { useAuth } from "./auth-provider";
 
 const navigation = [
@@ -13,6 +13,7 @@ const navigation = [
   { href: "/analyses", label: "Analyses", icon: Activity },
   { href: "/graph", label: "Dependency graph", icon: Boxes },
   { href: "/compare", label: "Compare analyses", icon: GitCompareArrows },
+  { href: "/test-insights", label: "Test insights", icon: FlaskConical },
   { href: "/search", label: "Search", icon: Search }
 ];
 

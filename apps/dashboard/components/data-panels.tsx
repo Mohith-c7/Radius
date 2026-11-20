@@ -56,7 +56,6 @@ import {
   listPullRequests,
   listRepositories,
   radiusConfig,
-  radiusConfigured,
   rerunAnalysis,
   startAnalysis,
   syncPullRequestsDetailed,
@@ -73,7 +72,6 @@ import {
   ANALYSIS_STATUS_FILTERS,
   averageConfidence,
   filterAnalyses,
-  DOCS_BASE,
   completedAnalyses,
   defaultComparePair,
   indexPullRequests,
@@ -2596,78 +2594,6 @@ export function PullRequestData({ pullRequestId }: { pullRequestId: string }) {
           />
         </section>
       )}
-    </>
-  );
-}
-
-export function SettingsData() {
-  return (
-    <>
-      <PageHeading
-        title="Settings"
-        description="Runtime configuration used by the dashboard API client."
-      />
-      <div className="detail-grid">
-        <section className="card detail-card">
-          <h2>API connection</h2>
-          <div className="stat-list">
-            <div>
-              <span>API base URL</span>
-              <strong>{radiusConfig.apiBaseUrl}</strong>
-            </div>
-            <div>
-              <span>Organization header</span>
-              <strong>{radiusConfig.organizationId || "Missing"}</strong>
-            </div>
-            <div>
-              <span>API key</span>
-              <strong>Held server-side (never sent to the browser)</strong>
-            </div>
-          </div>
-        </section>
-        {!radiusConfigured && (
-          <section className="card detail-card">
-            <h2>Required environment</h2>
-            <p className="muted">
-              Set <code>NEXT_PUBLIC_RADIUS_API_BASE_URL</code> and{" "}
-              <code>NEXT_PUBLIC_RADIUS_ORGANIZATION_ID</code> before running the
-              dashboard against a real backend.
-            </p>
-          </section>
-        )}
-        <section className="card detail-card">
-          <h2>Upload CI test results</h2>
-          <p className="muted">
-            Radius selects tests; your CI runs them and uploads the JUnit XML as
-            evidence for the pull request head commit.
-          </p>
-          <ul className="muted" style={{ margin: "10px 0 0", paddingLeft: "18px", display: "grid", gap: "6px" }}>
-            <li>
-              Endpoint: <code>POST /api/v1/analyses/{"{analysis_id}"}/tests/results?commit_sha=&lt;head sha&gt;</code>{" "}
-              with one JUnit XML or JSON report per request. A missing{" "}
-              <code>commit_sha</code> is rejected with 422, a different commit with 409.
-            </li>
-            <li>
-              Use an API key with the <code>ci-upload</code> scope, stored as a CI secret.
-            </li>
-            <li>
-              In GitHub Actions, add the <code>actions/upload-results</code> step from the
-              Radius repository after your tests (inputs <code>api-url</code>,{" "}
-              <code>organization-id</code>, <code>api-key</code>, <code>junit-path</code>). It
-              looks up the analysis from the repository, PR and head SHA and never fails your
-              job by default.
-            </li>
-          </ul>
-          <p style={{ marginTop: "12px", display: "flex", gap: "16px", flexWrap: "wrap" }}>
-            <a className="text-link" href={`${DOCS_BASE}/docs/integrations/github-action.md`} target="_blank" rel="noopener noreferrer">
-              Upload action guide <ExternalLink size={14} />
-            </a>
-            <a className="text-link" href={`${DOCS_BASE}/docs/CI_INTEGRATION_GUIDE.md`} target="_blank" rel="noopener noreferrer">
-              CI integration guide <ExternalLink size={14} />
-            </a>
-          </p>
-        </section>
-      </div>
     </>
   );
 }
