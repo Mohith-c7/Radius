@@ -1,7 +1,8 @@
 """In-memory testing infrastructure."""
 
+from dataclasses import replace
 from datetime import UTC, datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from radius_testing.domain.entities import (
     TestCase,
@@ -25,6 +26,8 @@ class InMemoryTestStore:
         self._statistics: dict[UUID, dict] = {}  # analysis_id -> statistics
         self._recent: dict[UUID, list[dict]] = {}  # analysis_id -> recent executions
         self._uploads: dict[UUID, list[TestResultUpload]] = {}
+        self._evidence_manifests: dict[UUID, dict] = {}
+        self._verification_events: list[dict] = []
 
     def save_test_cases(
         self,
@@ -192,27 +195,120 @@ class InMemoryTestStore:
         self,
         analysis_id: UUID,
         body_sha256: str,
+        report_slot_id: str = "legacy",
+        run_id: str | None = None,
+        run_attempt: int | None = None,
     ) -> TestResultUpload | None:
         """Return an earlier upload of the identical report body, if any."""
 
         for upload in self._uploads.get(analysis_id, ()):
-            if upload.body_sha256 == body_sha256:
+            if (
+                upload.body_sha256 == body_sha256
+                and upload.report_slot_id == report_slot_id
+                and upload.run_id == run_id
+                and upload.run_attempt == run_attempt
+            ):
                 return upload
         return None
 
     def save_result_upload(self, upload: TestResultUpload) -> TestResultUpload:
         """Append one upload; an identical body is stored only once."""
 
-        existing = self.get_result_upload(upload.analysis_id, upload.body_sha256)
+        existing = self.get_result_upload(
+            upload.analysis_id,
+            upload.body_sha256,
+            upload.report_slot_id,
+            upload.run_id,
+            upload.run_attempt,
+        )
+        if upload.run_id is not None:
+            slot_use = next(
+                (
+                    item
+                    for item in self._uploads.get(upload.analysis_id, ())
+                    if item.run_id == upload.run_id
+                    and item.run_attempt == upload.run_attempt
+                    and item.report_slot_id == upload.report_slot_id
+                ),
+                None,
+            )
+            if slot_use is not None:
+                if (
+                    slot_use.body_sha256 != upload.body_sha256
+                    or slot_use.analysis_id != upload.analysis_id
+                ):
+                    raise ValueError("REPLAY_CONFLICT")
+                return slot_use
         if existing is not None:
             return existing
         self._uploads.setdefault(upload.analysis_id, []).append(upload)
         return upload
+
+    def get_or_create_evidence_manifest(
+        self,
+        analysis_id: UUID,
+        repository_id: UUID,
+        head_sha: str,
+        manifest: dict,
+        digest_sha256: str,
+    ) -> dict:
+        existing = self._evidence_manifests.get(analysis_id)
+        value = {
+            "id": str(uuid4()),
+            "analysis_id": str(analysis_id),
+            "repository_id": str(repository_id),
+            "head_sha": head_sha,
+            "manifest": manifest,
+            "digest_sha256": digest_sha256,
+        }
+        if existing is not None:
+            if existing["digest_sha256"] != digest_sha256:
+                raise ValueError("MANIFEST_IMMUTABLE")
+            return existing
+        self._evidence_manifests[analysis_id] = value
+        return value
+
+    def append_verification_event(
+        self,
+        upload_id: UUID,
+        status: str,
+        reason_code: str | None,
+        verifier_version: str,
+        policy_version: str,
+        details: dict,
+        attestation_digest: str | None = None,
+        attestation_bundle: bytes | None = None,
+    ) -> None:
+        self._verification_events.append(
+            {
+                "upload_id": str(upload_id),
+                "status": status,
+                "reason_code": reason_code,
+                "verifier_version": verifier_version,
+                "policy_version": policy_version,
+                "attestation_digest": attestation_digest,
+                "attestation_bundle": attestation_bundle,
+                "details": dict(details),
+            }
+        )
 
     def lock_result_uploads(self, analysis_id: UUID) -> None:
         """No-op: in-memory ingestion runs synchronously on one event loop."""
 
     def list_result_uploads(self, analysis_id: UUID) -> tuple[TestResultUpload, ...]:
         """Return all uploads for an analysis, oldest first."""
-
-        return tuple(self._uploads.get(analysis_id, ()))
+        events_by_id = {
+            item["upload_id"]: item for item in self._verification_events
+        }
+        return tuple(
+            replace(
+                upload,
+                provenance_status=events_by_id.get(str(upload.id), {}).get(
+                    "status", upload.provenance_status
+                ),
+                provenance_reason_code=events_by_id.get(str(upload.id), {}).get(
+                    "reason_code", upload.provenance_reason_code
+                ),
+            )
+            for upload in self._uploads.get(analysis_id, ())
+        )

@@ -462,8 +462,13 @@ def test_resolve_head_sha(monkeypatch, tmp_path: Path) -> None:
     assert sources.resolve_head_sha(NS(head_ref=None, repository_path=tmp_path)) is None
 
 
-def upload(commit, *cases, flaky=()):
-    return NS(commit_sha=commit, cases=cases, result=NS(flaky_tests=flaky))
+def upload(commit, *cases, flaky=(), provenance_status="verified_provenance"):
+    return NS(
+        commit_sha=commit,
+        cases=cases,
+        result=NS(flaky_tests=flaky),
+        provenance_status=provenance_status,
+    )
 
 
 def test_outcomes_from_uploads_bind_to_head_and_merge() -> None:
@@ -483,6 +488,37 @@ def test_outcomes_from_uploads_bind_to_head_and_merge() -> None:
     assert facts.uploads == 2
     assert [c.outcome.value for c in facts.cases] == ["failed"]  # failed beats passed
     assert facts.flaky_test_ids == frozenset({TEST_ID})
+
+
+def test_untrusted_uploads_do_not_satisfy_trusted_result_receipt() -> None:
+    sa = StageAInput(
+        analysis_id="a", repository_id="r", head_sha=SHA, changeset_ref="x",
+        criteria=(), symbols=(), criterion_symbol=(), symbol_test=(),
+        criterion_test=(), assertions=(), tamper=(),
+        changed_test_ids=frozenset({TEST_ID}),
+    )
+    uploads = [
+        upload(
+            SHA,
+            ReportedTestCase("tests/test_a.py", None, "test_f", "passed"),
+            provenance_status="untrusted",
+        ),
+        upload(
+            SHA,
+            ReportedTestCase("tests/test_a.py", None, "test_g", "passed"),
+        ),
+    ]
+    facts = sources.outcomes_from_uploads(uploads, sa, trusted_only=True)
+    assert facts.uploads == 1
+    assert facts.diagnostic_uploads == 1
+    assert facts.trusted_evidence is True
+    assert [c.raw_name for c in facts.cases] == ["test_g"]
+
+    # flag off (the default): every head-bound upload counts, as before the flag
+    legacy = sources.outcomes_from_uploads(uploads, sa)
+    assert legacy.uploads == 2
+    assert legacy.diagnostic_uploads == 0
+    assert legacy.trusted_evidence is False
     assert sources.NoOutcomes().load(uuid4(), sa) == sources.OutcomeFacts()
     assert sources.StaticIntent().load(uuid4()) == IntentFacts()
 

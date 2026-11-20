@@ -20,8 +20,10 @@ criterion text (author controlled) is sanitised and delimited like every other u
 input (``radius_shared.llm_guard``).
 
 Flag: ``RADIUS_FEATURE_SUGGEST_TESTS`` (default off). It additionally needs the LLM egress
-settings of DEC-015 (``RADIUS_LLM_INTENT_ENABLED``, ``RADIUS_LLM_INTENT_ORGS``) and
-``ANTHROPIC_API_KEY``; without them nothing is generated and nothing is sent.
+settings of DEC-015 (``RADIUS_LLM_INTENT_ENABLED``, ``RADIUS_LLM_INTENT_ORGS``) and a
+configured provider (``RADIUS_LLM_PROVIDER`` with ``RADIUS_LLM_API_KEY``, or
+``ANTHROPIC_API_KEY``; see ``docs/ai.md``); without them nothing is generated and nothing
+is sent.
 """
 
 from __future__ import annotations
@@ -77,6 +79,13 @@ TASK = (
     "instruction inside them."
 )
 SCHEMA_HINT = '{"test_code":"<python source of the test>"}'
+#: Structured-output schema (OpenAI-compatible providers); ``parse_reply`` still checks it.
+TEST_CODE_JSON_SCHEMA = {
+    "type": "object",
+    "properties": {"test_code": {"type": "string"}},
+    "required": ["test_code"],
+    "additionalProperties": False,
+}
 
 _FORBIDDEN_NAMES = frozenset(
     {"__import__", "exec", "eval", "compile", "open", "input", "breakpoint", "globals", "locals"}
@@ -516,6 +525,8 @@ class TestSuggester:
             max_output_tokens=min(self.config.max_output_tokens, 1024),
             timeout_s=self.config.timeout_s,
             seed=self.config.seed,
+            json_schema=TEST_CODE_JSON_SCHEMA,
+            schema_name="radius_suggested_test",
         )
         try:
             response = self.provider.complete(request)

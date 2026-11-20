@@ -11,6 +11,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     Numeric,
     String,
     Text,
@@ -438,6 +439,25 @@ class TestResultUpload(UuidPrimaryKeyMixin, Base):
     )
     commit_sha: Mapped[str] = mapped_column(String(64), nullable=False)
     body_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    repository_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("repositories.id"), nullable=True
+    )
+    report_slot_id: Mapped[str] = mapped_column(
+        String(128), default="legacy", server_default="legacy", nullable=False
+    )
+    run_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    run_attempt: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    manifest_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("test_evidence_manifests.id"), nullable=True
+    )
+    manifest_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    artifact_bytes: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    attestation_bundle: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    attestation_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    provenance_status: Mapped[str] = mapped_column(
+        String(32), default="untrusted", server_default="untrusted", nullable=False
+    )
+    provenance_reason_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     total_tests: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     passed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -454,11 +474,68 @@ class TestResultUpload(UuidPrimaryKeyMixin, Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "analysis_id",
-            "body_sha256",
-            name="uq_test_result_uploads_analysis_id_body_sha256",
+            "analysis_id", "report_slot_id", "run_id", "run_attempt", "body_sha256",
+            name="uq_test_result_uploads_analysis_slot_body",
+        ),
+        UniqueConstraint(
+            "repository_id", "run_id", "run_attempt", "report_slot_id",
+            name="uq_test_result_uploads_repo_run_attempt_slot",
+        ),
+        UniqueConstraint(
+            "repository_id", "attestation_digest",
+            name="uq_test_result_uploads_repo_attestation_digest",
         ),
         Index("ix_test_result_uploads_analysis_id", "analysis_id"),
+        Index("ix_test_result_uploads_manifest_id", "manifest_id"),
+    )
+
+
+class TestEvidenceManifest(UuidPrimaryKeyMixin, Base):
+    """Immutable Radius-generated manifest and report-slot authority."""
+
+    __tablename__ = "test_evidence_manifests"
+
+    analysis_id: Mapped[UUID] = mapped_column(
+        ForeignKey("analyses.id"), nullable=False, unique=True
+    )
+    repository_id: Mapped[UUID] = mapped_column(
+        ForeignKey("repositories.id"), nullable=False
+    )
+    head_sha: Mapped[str] = mapped_column(String(64), nullable=False)
+    manifest_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    canonical_manifest: Mapped[dict] = mapped_column(JSON, nullable=False)
+    digest_sha256: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+    __table_args__ = (
+        Index("ix_test_evidence_manifests_analysis_id", "analysis_id"),
+        Index("ix_test_evidence_manifests_repository_id", "repository_id"),
+    )
+
+
+class TestEvidenceVerificationEvent(UuidPrimaryKeyMixin, Base):
+    """Append-only provenance verification result for an immutable report upload."""
+
+    __tablename__ = "test_evidence_verification_events"
+
+    upload_id: Mapped[UUID] = mapped_column(
+        ForeignKey("test_result_uploads.id"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    reason_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    verifier_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    policy_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    attestation_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    attestation_bundle: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    details: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    verified_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+    __table_args__ = (
+        Index("ix_test_evidence_verification_upload", "upload_id"),
     )
 
 

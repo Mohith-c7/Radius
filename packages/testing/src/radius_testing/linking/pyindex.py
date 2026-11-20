@@ -19,7 +19,8 @@ from __future__ import annotations
 
 import ast
 import sys
-from collections.abc import Iterable, Mapping
+from collections import OrderedDict
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from posixpath import dirname
 
@@ -37,6 +38,60 @@ _SETUP_NAMES = (
 )  # fmt: skip
 _MODULE_SETUP = ("setUpModule", "tearDownModule", "setup_module", "teardown_module")
 _STDLIB = frozenset(sys.stdlib_module_names)
+#: Parsed module trees kept in memory at once. A module's AST is ~40x its source size
+#: (7 MB of Python -> ~280 MB), so trees are re-parsed from source on demand instead of
+#: all being held for the whole run; results are identical, only memory and CPU change.
+TREE_CACHE_FILES = 64
+
+
+def _iter_defs(
+    body: list[ast.stmt], prefix: str = "", cls: str | None = None
+) -> Iterator[tuple[str, ast.stmt, str | None]]:
+    """``(qualname, def/class node, enclosing class)`` in source order (nested blocks too)."""
+
+    for stmt in body:
+        if isinstance(stmt, _FUNC):
+            yield prefix + stmt.name, stmt, cls
+        elif isinstance(stmt, ast.ClassDef):
+            qual = prefix + stmt.name
+            yield qual, stmt, cls
+            yield from _iter_defs(stmt.body, qual + ".", qual)
+        elif isinstance(stmt, ast.If | ast.Try | ast.With | ast.For | ast.While):
+            for inner in _nested_bodies(stmt):
+                yield from _iter_defs(inner, prefix, cls)
+
+
+class _Trees:
+    """LRU of parsed module trees and their def nodes, re-parsed from source on a miss."""
+
+    def __init__(self, sources: Mapping[str, str], size: int | None = None) -> None:
+        self._sources = sources
+        self._size = max(1, TREE_CACHE_FILES if size is None else size)
+        self._lru: OrderedDict[str, tuple[ast.Module, dict[str, ast.AST]]] = OrderedDict()
+
+    def put(self, path: str, tree: ast.Module) -> None:
+        defs: dict[str, ast.AST] = {}
+        for qual, node, _cls in _iter_defs(tree.body):
+            defs.setdefault(qual, node)  # first definition wins, as in ``_collect_defs``
+        self._lru[path] = (tree, defs)
+        self._lru.move_to_end(path)
+        while len(self._lru) > self._size:
+            self._lru.popitem(last=False)
+
+    def _get(self, path: str) -> tuple[ast.Module, dict[str, ast.AST]]:
+        cached = self._lru.get(path)
+        if cached is None:
+            self.put(path, ast.parse(self._sources[path]))  # parsed once before: cannot fail
+            cached = self._lru[path]
+        else:
+            self._lru.move_to_end(path)
+        return cached
+
+    def tree(self, path: str) -> ast.Module:
+        return self._get(path)[0]
+
+    def node(self, path: str, qualname: str) -> ast.AST:
+        return self._get(path)[1][qualname]
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,10 +99,16 @@ class DefInfo:
     path: str
     qualname: str
     kind: str  # function | method | class
-    node: ast.AST
-    class_qual: str | None
-    start: int
-    end: int
+    trees: _Trees = field(compare=False, repr=False)
+    class_qual: str | None = None
+    start: int = 0
+    end: int = 0
+
+    @property
+    def node(self) -> ast.AST:
+        """The def/class node (re-parsed from source when its tree was evicted)."""
+
+        return self.trees.node(self.path, self.qualname)
 
     @property
     def entity(self) -> Entity:
@@ -66,12 +127,16 @@ class Binding:
 @dataclass(slots=True)
 class FileModel:
     path: str
-    tree: ast.Module | None
+    trees: _Trees | None  # None: the file did not parse
     defs: dict[str, DefInfo] = field(default_factory=dict)
     imports: dict[str, Binding] = field(default_factory=dict)
     stars: list[str] = field(default_factory=list)  # resolved module paths
     assigns: dict[str, tuple[str, ...]] = field(default_factory=dict)
     raw_imports: list[tuple[str, str | None, str | None, int]] = field(default_factory=list)
+
+    @property
+    def tree(self) -> ast.Module | None:
+        return None if self.trees is None else self.trees.tree(self.path)
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,9 +229,15 @@ class ProjectIndex:
         self._module_refs_cache: dict[str, FuncRefs] = {}
         self._fixtures: dict[Entity, FixtureDef] = {}
         self.parse_failures: list[str] = []
+        self._trees = _Trees(sources)
         for path in sorted(sources):
             if path.endswith(".py"):
-                self.files[path] = self._parse(path, sources[path])
+                self.files[path] = model = self._parse(path, sources[path])
+                # A fixture depends on its own def node only: find it while the tree is cached.
+                for info in model.defs.values():
+                    fx = self._fixture_def(info)
+                    if fx is not None:
+                        self._fixtures[info.entity] = fx
         for path in self.files:
             parts = path[:-3].split("/")
             if parts[-1] == "__init__":
@@ -177,11 +248,6 @@ class ProjectIndex:
                 self._dotted.setdefault(".".join(parts[i:]), []).append(path)
         for model in self.files.values():
             self._resolve_imports(model)
-        for model in self.files.values():
-            for info in model.defs.values():
-                fx = self._fixture_def(info)
-                if fx is not None:
-                    self._fixtures[info.entity] = fx
 
     # ------------------------------------------------------------------ parse
     def _parse(self, path: str, source: str) -> FileModel:
@@ -190,8 +256,9 @@ class ProjectIndex:
         except (SyntaxError, ValueError):
             self.parse_failures.append(path)
             return FileModel(path, None)
-        model = FileModel(path, tree)
-        self._collect_defs(tree.body, path, "", None, model)
+        self._trees.put(path, tree)
+        model = FileModel(path, self._trees)
+        self._collect_defs(tree.body, path, model)
         for stmt in tree.body:
             self._collect_module_assign(stmt, model)
         for node in ast.walk(tree):
@@ -203,27 +270,16 @@ class ProjectIndex:
                     model.raw_imports.append((node.module or "", alias.name, alias.asname, node.level))
         return model
 
-    def _collect_defs(
-        self, body: list[ast.stmt], path: str, prefix: str, cls: str | None, model: FileModel
-    ) -> None:
-        for stmt in body:
-            if isinstance(stmt, _FUNC):
-                qual = prefix + stmt.name
-                start = min([stmt.lineno, *(d.lineno for d in stmt.decorator_list)])
-                model.defs.setdefault(
-                    qual,
-                    DefInfo(path, qual, "method" if cls else "function", stmt, cls, start, stmt.end_lineno or stmt.lineno),
-                )
-            elif isinstance(stmt, ast.ClassDef):
-                qual = prefix + stmt.name
-                start = min([stmt.lineno, *(d.lineno for d in stmt.decorator_list)])
-                model.defs.setdefault(
-                    qual, DefInfo(path, qual, "class", stmt, cls, start, stmt.end_lineno or stmt.lineno)
-                )
-                self._collect_defs(stmt.body, path, qual + ".", qual, model)
-            elif isinstance(stmt, ast.If | ast.Try | ast.With | ast.For | ast.While):
-                for inner in _nested_bodies(stmt):
-                    self._collect_defs(inner, path, prefix, cls, model)
+    def _collect_defs(self, body: list[ast.stmt], path: str, model: FileModel) -> None:
+        for qual, stmt, cls in _iter_defs(body):
+            if qual in model.defs:
+                continue  # first definition wins
+            assert isinstance(stmt, (*_FUNC, ast.ClassDef))
+            kind = "class" if isinstance(stmt, ast.ClassDef) else ("method" if cls else "function")
+            start = min([stmt.lineno, *(d.lineno for d in stmt.decorator_list)])
+            model.defs[qual] = DefInfo(
+                path, qual, kind, self._trees, cls, start, stmt.end_lineno or stmt.lineno
+            )
 
     @staticmethod
     def _collect_module_assign(stmt: ast.stmt, model: FileModel) -> None:

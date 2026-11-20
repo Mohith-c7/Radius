@@ -14,7 +14,8 @@ quote grounding, caps, egress gate, circuit breaker, token ledger) for one narro
 * each run is recorded as a :class:`LlmRunRecord` (model, token usage, latency, drops,
   degradation) for the extraction trace.
 
-The Anthropic SDK stays an optional extra and is imported lazily by the provider.
+The provider comes from ``RADIUS_LLM_PROVIDER`` (``anthropic`` or ``openai_compatible``, for
+example a free Gemini key); see ``factory.py`` and ``docs/ai.md``.
 """
 
 from __future__ import annotations
@@ -156,17 +157,16 @@ _SHARED_LEDGER = InMemoryUsageLedger()
 def build_provider(
     config: LlmExtractionConfig, env: Mapping[str, str]
 ) -> tuple[LlmProvider | None, str]:
-    """Build the Anthropic provider. ``(None, reason)`` without key or SDK. No network."""
+    """Build the configured provider (``RADIUS_LLM_PROVIDER``). ``(None, reason)`` without
+    a key, SDK or base URL. No network. ``config`` is accepted for the factory signature;
+    the model comes from ``RADIUS_LLM_MODEL`` (or ``RADIUS_LLM_INTENT_MODEL``)."""
 
-    import importlib.util
+    from radius_intent.infrastructure.llm.factory import (
+        LlmProviderSettings,
+        build_llm_provider,
+    )
 
-    if not env.get(API_KEY_ENV, "").strip():
-        return None, f"{API_KEY_ENV} is not set"
-    if importlib.util.find_spec("anthropic") is None:
-        return None, "the 'anthropic' package is not installed (extra 'llm')"
-    from radius_intent.infrastructure.llm.anthropic_provider import AnthropicProvider
-
-    return AnthropicProvider(config.model, environ=env), "ok"
+    return build_llm_provider(LlmProviderSettings.from_env(env))
 
 
 def build_llm_mode_extractors(
@@ -197,7 +197,10 @@ def build_llm_mode_extractors(
         elif code == "org_not_listed":
             detail = "the organization is not listed in RADIUS_LLM_INTENT_ORGS"
         else:
-            detail = "no LLM provider could be created (is the API key set and the SDK installed?)"
+            detail = (
+                "no LLM provider could be created (is the API key set? check RADIUS_LLM_PROVIDER, "
+                "RADIUS_LLM_API_KEY / ANTHROPIC_API_KEY, RADIUS_LLM_BASE_URL, RADIUS_LLM_MODEL)"
+            )
         _LOG.warning(
             "RADIUS_INTENT_EXTRACTION_MODE=llm is selected but the LLM part is disabled: %s; "
             "falling back to the deterministic summary extraction.",

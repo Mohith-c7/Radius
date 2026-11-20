@@ -1,0 +1,1 @@
+CI uploads with a `ci-upload` API key can now resolve their analysis via `GET /api/v1/analyses/lookup`; before, `actions/upload-results` got HTTP 403 ("lacks the required read scope") and no test results reached Radius.

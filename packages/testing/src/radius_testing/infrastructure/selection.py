@@ -10,6 +10,7 @@ from radius_testing.domain.entities import (
     TestSelectionDecision,
 )
 from radius_testing.domain.enums import TestDecision, TestSelectionReason
+from radius_testing.infrastructure.test_targets import target_from_imports
 
 
 class PathBasedTestSelector:
@@ -51,10 +52,12 @@ class PathBasedTestSelector:
                 skipped_tests=(),
                 total_discovered_count=len(tests),
             )
+        # Name-convention targets only: a target read from the test's imports is
+        # already followed through the graph (and may be pruned by symbol impact).
         by_target = {
             test.target_path.value: test
             for test in tests
-            if test.target_path is not None
+            if test.target_path is not None and not target_from_imports(test)
         }
         selected: dict[str, SelectedTest] = {}
 
@@ -171,7 +174,9 @@ class PathBasedTestSelector:
         matches = {
             test.path.value
             for test in tests
-            if test.target_path is not None and test.target_path.value == normalized
+            if test.target_path is not None
+            and test.target_path.value == normalized
+            and not target_from_imports(test)
         }
         matches.update(
             candidate

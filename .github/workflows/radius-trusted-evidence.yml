@@ -1,0 +1,211 @@
+name: Radius trusted test evidence
+
+on:
+  workflow_call:
+    inputs:
+      analysis-id:
+        description: Radius analysis UUID returned for this pull request.
+        type: string
+        required: true
+      api-url:
+        description: HTTPS base URL of the Radius API.
+        type: string
+        required: true
+      pull-request-number:
+        description: Pull request number associated with the Radius analysis.
+        type: string
+        required: true
+      python-version:
+        description: Python version used by the selected pytest suites.
+        type: string
+        default: "3.12"
+        required: false
+      requirements-file:
+        description: Optional requirements file installed only in the unprivileged test job.
+        type: string
+        default: ""
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    outputs:
+      digest: ${{ steps.manifest.outputs.digest }}
+      slots: ${{ steps.manifest.outputs.slots }}
+      helper-repository: ${{ steps.source.outputs.repository }}
+      helper-sha: ${{ steps.source.outputs.sha }}
+    steps:
+      - name: Resolve the called workflow's immutable source revision
+        id: source
+        run: |
+          python - <<'PY'
+          import base64, json, os, urllib.parse, urllib.request
+          url = os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"]
+          parts = urllib.parse.urlsplit(url)
+          query = urllib.parse.parse_qsl(parts.query, keep_blank_values=True)
+          query.append(("audience", "api://radius/evidence-upload"))
+          url = urllib.parse.urlunsplit((parts.scheme, parts.netloc, parts.path, urllib.parse.urlencode(query), parts.fragment))
+          request = urllib.request.Request(url, headers={"Authorization": "bearer " + os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]})
+          with urllib.request.urlopen(request, timeout=15) as response:
+              token = json.load(response)["value"]
+          payload = token.split(".")[1]
+          claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+          ref = claims.get("job_workflow_ref", "").split("@", 1)[0].split("/")
+          sha = claims.get("job_workflow_sha", "")
+          if len(ref) < 5 or not all(ref[:2]) or len(sha) != 40 or any(c not in "0123456789abcdef" for c in sha.lower()):
+              raise SystemExit("Invalid called workflow identity")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write("repository=" + "/".join(ref[:2]) + "\n")
+              output.write("sha=" + sha + "\n")
+          PY
+      - name: Checkout pinned Radius helper
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ steps.source.outputs.repository }}
+          ref: ${{ steps.source.outputs.sha }}
+          path: radius-tool
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+        with:
+          python-version: "3.12"
+      - name: Request server-authoritative manifest
+        id: manifest
+        env:
+          RADIUS_API_URL: ${{ inputs.api-url }}
+          RADIUS_ANALYSIS_ID: ${{ inputs.analysis-id }}
+        run: >-
+          python radius-tool/scripts/radius_trusted_evidence.py manifest
+          --api-url "$RADIUS_API_URL" --analysis-id "$RADIUS_ANALYSIS_ID"
+          --output manifest.json
+      - name: Upload manifest for isolated test job
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: radius-manifest
+          path: manifest.json
+          if-no-files-found: error
+          retention-days: 1
+
+  tests:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.slots != '[]' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        slot: ${{ fromJSON(needs.prepare.outputs.slots) }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout pull request source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Checkout pinned Radius helper
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ needs.prepare.outputs.helper-repository }}
+          ref: ${{ needs.prepare.outputs.helper-sha }}
+          path: radius-tool
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+        with:
+          python-version: ${{ inputs.python-version }}
+      - name: Install pytest and optional test dependencies
+        env:
+          REQUIREMENTS_FILE: ${{ inputs.requirements-file }}
+        run: |
+          python -m pip install --disable-pip-version-check pytest==9.2.0
+          if [ -n "$REQUIREMENTS_FILE" ]; then
+            python -m pip install --disable-pip-version-check -r "$REQUIREMENTS_FILE"
+          fi
+      - name: Download manifest
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: radius-manifest
+          path: radius-input
+      - name: Execute authorized tests and create JUnit report
+        env:
+          RADIUS_REPORT_SLOT_ID: ${{ matrix.slot.slot_id }}
+        run: >-
+          python radius-tool/scripts/radius_trusted_evidence.py run-slot
+          --manifest radius-input/manifest.json --slot-id "$RADIUS_REPORT_SLOT_ID"
+          --report report.xml --exit-code test-exit-code.txt
+      - name: Upload report for isolated attestation job
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: radius-report-${{ matrix.slot.slot_id }}
+          path: report.xml
+          if-no-files-found: error
+          retention-days: 1
+
+  attest-and-upload:
+    needs: [prepare, tests]
+    if: ${{ always() && needs.prepare.result == 'success' && needs.tests.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        slot: ${{ fromJSON(needs.prepare.outputs.slots) }}
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - name: Checkout pinned Radius helper
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ needs.prepare.outputs.helper-repository }}
+          ref: ${{ needs.prepare.outputs.helper-sha }}
+          path: radius-tool
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+        with:
+          python-version: "3.12"
+      - name: Download server manifest
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: radius-manifest
+          path: radius-input
+      - name: Download report slot
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: radius-report-${{ matrix.slot.slot_id }}
+          path: radius-report
+      - name: Build signed predicate
+        env:
+          RADIUS_ANALYSIS_ID: ${{ inputs.analysis-id }}
+          RADIUS_REPORT_SLOT_ID: ${{ matrix.slot.slot_id }}
+        run: >-
+          python radius-tool/scripts/radius_trusted_evidence.py predicate
+          --manifest radius-input/manifest.json
+          --analysis-id "$RADIUS_ANALYSIS_ID" --slot-id "$RADIUS_REPORT_SLOT_ID"
+          --report radius-report/report.xml
+          --output predicate.json
+      - name: Attest report slot
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: radius-report/report.xml
+          predicate-type: https://github.com/Mohith-c7/Radius/attestations/test-results/v1
+          predicate-path: predicate.json
+      - name: Upload report to Radius
+        env:
+          RADIUS_API_URL: ${{ inputs.api-url }}
+          RADIUS_ANALYSIS_ID: ${{ inputs.analysis-id }}
+          RADIUS_PR_NUMBER: ${{ inputs.pull-request-number }}
+          RADIUS_REPORT_SLOT_ID: ${{ matrix.slot.slot_id }}
+        run: >-
+          python radius-tool/scripts/radius_trusted_evidence.py upload
+          --api-url "$RADIUS_API_URL" --analysis-id "$RADIUS_ANALYSIS_ID"
+          --pr-number "$RADIUS_PR_NUMBER" --slot-id "$RADIUS_REPORT_SLOT_ID"
+          --report radius-report/report.xml

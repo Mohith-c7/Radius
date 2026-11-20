@@ -357,6 +357,17 @@ def test_scope_enforcement_on_existing_routes(monkeypatch) -> None:
     path = f"/api/v1/analyses/{uuid4()}/tests/results"
     assert status_of("POST", path, "ci-upload", json={}) != 403
     assert status_of("POST", path, "read", json={}) == 403
+    # CI resolves its analysis first: ci-upload may call the lookup, and only it.
+    lookup = "/api/v1/analyses/lookup?pullRequest=1&commitSha=abcdef1&repository=o/r"
+
+    def scope_denied(method, path, scope, **kw):
+        response = client.request(method, path, headers=_headers(ORG_A, tokens[scope]), **kw)
+        return response.status_code == 403 and "scope" in response.text
+
+    assert not scope_denied("GET", lookup, "ci-upload")
+    assert not scope_denied("GET", lookup, "read")
+    assert scope_denied("GET", f"/api/v1/analyses/{uuid4()}", "ci-upload")
+    assert scope_denied("GET", "/api/v1/analyses", "ci-upload")
 
 
 def test_wrong_org_unknown_and_malformed_keys_look_identical(monkeypatch) -> None:

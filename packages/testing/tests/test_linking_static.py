@@ -315,3 +315,16 @@ def test_typescript_oversize_file_is_skipped_with_note():
     tgt = LinkTarget("typescript:src/util.ts::slug", "src/util.ts", "slug", "function", "typescript")
     result = StaticLinker().link(files, [tgt])
     assert result.links == () and result.notes
+
+
+@pytest.mark.parametrize(("name", "files", "tgt", "_expect", "kw"), CASES, ids=[c[0] for c in CASES])
+def test_evicting_parsed_trees_does_not_change_links(monkeypatch, name, files, tgt, _expect, kw):
+    """Memory bound: with a one-file tree cache every file is re-parsed on demand."""
+
+    from radius_testing.linking import pyindex
+
+    want = run(files, tgt, **kw)
+    monkeypatch.setattr(pyindex, "TREE_CACHE_FILES", 1)
+    got = run(files, tgt, **kw)
+    assert sorted(got.links, key=repr) == sorted(want.links, key=repr), name
+    assert got.notes == want.notes

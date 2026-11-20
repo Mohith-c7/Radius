@@ -14,6 +14,8 @@ LOGGER = get_logger(__name__)
 
 WEBHOOK_PATH = "/api/v1/webhooks/github"
 _UPLOAD_PATH = re.compile(r"^/api/v1/analyses/[^/]+/tests/results/?$")
+#: Trusted CI evidence upload (multipart: report artifact + slot form fields).
+_VERIFIED_UPLOAD_PATH = re.compile(r"^/api/v1/analyses/[^/]+/tests/verified-results/?$")
 _BODY_METHODS = frozenset({"POST", "PUT", "PATCH"})
 
 
@@ -28,7 +30,7 @@ class BodyLimits:
     def for_path(self, path: str) -> int:
         if path.rstrip("/") == WEBHOOK_PATH:
             return self.webhook
-        if _UPLOAD_PATH.match(path):
+        if _UPLOAD_PATH.match(path) or _VERIFIED_UPLOAD_PATH.match(path):
             return self.upload
         return self.default
 
@@ -40,6 +42,8 @@ def _allowed_content_types(path: str) -> tuple[str, ...] | None:
         # Raw CI reports are validated by the route; webhook bodies are
         # authenticated by HMAC over the exact bytes, whatever the media type.
         return None
+    if _VERIFIED_UPLOAD_PATH.match(path):
+        return ("multipart/form-data",)
     return ("application/json",)
 
 

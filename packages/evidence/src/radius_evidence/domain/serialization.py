@@ -22,12 +22,13 @@ def encode(value: Any) -> Any:
     """Convert a contract value into plain JSON types."""
 
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
-        # fields marked ``omit_none`` (optional contract-5 additions) vanish when None, so
-        # payloads and digests of earlier contracts stay byte-identical
+        # fields marked ``omit_none`` (optional contract-5 additions) vanish when None, and
+        # fields marked ``omit_default`` vanish while they hold their default, so payloads
+        # and digests of earlier contracts stay byte-identical
         return {
             f.name: encode(getattr(value, f.name))
             for f in dataclasses.fields(value)
-            if not (f.metadata.get("omit_none") and getattr(value, f.name) is None)
+            if not _omitted(f, getattr(value, f.name))
         }
     if isinstance(value, Enum):
         return value.value
@@ -43,6 +44,16 @@ def encode(value: Any) -> Any:
         return {str(k): encode(v) for k, v in value.items()}
     msg = f"cannot serialize {type(value).__name__}"
     raise TypeError(msg)
+
+
+def _omitted(f: dataclasses.Field[Any], value: Any) -> bool:
+    if f.metadata.get("omit_none") and value is None:
+        return True
+    return bool(
+        f.metadata.get("omit_default")
+        and type(value) is type(f.default)
+        and value == f.default
+    )
 
 
 def _sort_key(value: Any) -> str:

@@ -72,3 +72,21 @@ With `RADIUS_INTENT_EXTRACTION_MODE=summary`, the PR author's title and bullets 
 **Prompt injection.** The PR author controls the text sent to the model. Defences, none of which relies on the model behaving: the text is sanitised and placed in nonce-delimited data blocks with an instruction to treat them as data; the model has no tools; its reply must be one strict JSON document (unknown fields, verdict-like fields, URLs, commands, the nonce, secrets or system-prompt fragments reject it); every proposal must quote the PR text verbatim and be grounded in its quote, so the model cannot introduce content the author did not write; the output is only ever a `proposed` criterion or a suggested snippet. What injection can still do: make the model propose weak, odd or many criteria (capped; the verdict cannot be `verified` while any is unconfirmed, and a human sees each), waste tokens (per-analysis and per-organization token caps, a circuit breaker), or write a misleading test snippet. A snippet is only displayed after the gate (parse, only changed-symbol imports, no `open`/`exec`/`eval`/dunder access, a strong assertion on a changed symbol) and is rendered in a fenced block with invisible characters removed; it is never executed by Radius, so it cannot run code, but a reader who copies it into their repository is trusting it as they would trust any pasted code. Not stopped: a human who confirms an LLM proposal without reading it; a plausible but wrong snippet that passes the gate.
 
 **Integrity of the verdict.** The scoring, the rules and the states do not take any LLM output as input; the suggestions are attached after scoring and are stripped of any evidence flag by the payload builder. A wrong, absent or hostile model changes at most the list of proposals and the suggestions, which is tested with a fake model.
+
+## Advisory AI review (DEC-042)
+
+The PR author controls the title, the diff and the file names, and all of them reach the AI review. The review cannot fake a `verified`, for these reasons:
+
+- **Order and isolation.**
+  - It runs after the verdict, the score and the check conclusion are committed.
+  - It is stored apart from them (`analysis_ai_reviews`), and no verdict code reads it.
+  - It is appended to the PR comment only, never to the Check Run.
+- **Input and output guards.**
+  - Its inputs sit in nonce-delimited data blocks.
+  - Its output must match a fixed schema and cite only files Radius computed.
+  - Verdict or approval claims, links, markup, mentions, commands and leaks are dropped.
+  - A summary that contains any of these discards the whole review.
+- **Rendering.** The dashboard renders it as plain text. The comment escapes Markdown and writes `<`, `>` and `@` as HTML entities.
+
+Remaining risk: a schema-valid, grounded but misleading explanation, for example one that understates a risk. It is labelled AI-generated and advisory, and the deterministic verdict is shown beside it. Injection cases are in `apps/worker/tests/test_ai_review.py`.
+

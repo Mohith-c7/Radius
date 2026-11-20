@@ -31,10 +31,12 @@ from radius_api.middleware.hardening import install_http_hardening
 from radius_api.middleware.security_headers import SecurityHeadersMiddleware
 from radius_api.observability import configure_api_observability
 from radius_api.openapi_contract import install_openapi_contract
+from radius_api.routes.ai_review import router as ai_review_router
 from radius_api.routes.analyses import router as analyses_router
 from radius_api.routes.api_keys import router as api_keys_router
 from radius_api.routes.confidence import router as confidence_router
 from radius_api.routes.coverage import router as coverage_router
+from radius_api.routes.evidence import router as test_evidence_router
 from radius_api.routes.github_webhooks import router as github_webhooks_router
 from radius_api.routes.graph import router as graph_router
 from radius_api.routes.health import queue_depth_provider
@@ -137,9 +139,11 @@ def create_app() -> FastAPI:
     app.include_router(analyses_router, prefix="/api/v1")
     app.include_router(graph_router, prefix="/api/v1")
     app.include_router(tests_router, prefix="/api/v1")
+    app.include_router(test_evidence_router, prefix="/api/v1")
     app.include_router(confidence_router, prefix="/api/v1")
     app.include_router(coverage_router, prefix="/api/v1")
     app.include_router(intent_router, prefix="/api/v1")
+    app.include_router(ai_review_router, prefix="/api/v1")
     app.include_router(
         create_verdict_v2_router(documented=settings.verdict_v2_mode != VerdictV2Mode.OFF),
         prefix="/api/v1",

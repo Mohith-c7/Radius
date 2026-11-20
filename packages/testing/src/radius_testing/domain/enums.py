@@ -10,6 +10,9 @@ class TestFramework(StrEnum):
     JEST = "jest"
     VITEST = "vitest"
     MOCHA = "mocha"
+    NODE_TEST = "node_test"
+    """Node's built-in runner (``import test from "node:test"``)."""
+    PLAYWRIGHT = "playwright"
     UNKNOWN = "unknown"
 
 

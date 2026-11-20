@@ -29,11 +29,13 @@ TAG_STABILITY: dict[str, str] = {
     "analyses": "stable",
     "confidence": "stable",
     "tests": "stable",
+    "test-evidence": "internal",
     "graph": "beta",
     "coverage": "beta",
     "intent": "beta",
     "api-keys": "beta",
     "verdict-v2": "alpha",
+    "ai-review": "alpha",
     "github-webhooks": "internal",
     "authentication": "internal",
 }
@@ -53,10 +55,15 @@ TAG_DESCRIPTIONS: dict[str, str] = {
     "analyses": "Analyses (verification runs) of a pull request head commit.",
     "confidence": "Evidence-gated confidence report and verification status of an analysis.",
     "tests": "Test selection and CI test-result upload for an analysis.",
+    "test-evidence": "Feature-gated GitHub Actions provenance manifests and trusted test report ingestion.",
     "graph": "Dependency graph of an analysis (shape may still change).",
     "coverage": "Per-test coverage ingestion and queries (shape may still change).",
     "intent": "Intent snapshots, sources and criteria with ETag/If-Match concurrency.",
     "verdict-v2": "Verdict v2 preview. Alpha, behind RADIUS_FEATURE_VERDICT_V2; hidden here.",
+    "ai-review": (
+        "Advisory, AI-generated merge-readiness review (RADIUS_FEATURE_AI_REVIEW). Never a "
+        "verdict; render as plain text."
+    ),
     "github-webhooks": "GitHub App webhook receiver. Called by GitHub only; not a client API.",
     "authentication": "Dashboard session endpoints. Internal; not part of the client contract.",
 }

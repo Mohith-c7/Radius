@@ -475,6 +475,46 @@ class SqlAlchemyAnalysisJobQueue:
         self._session.flush()
         return reaped
 
+    def release_dead_worker_jobs(
+        self, claimed_by_prefix: str, error: str
+    ) -> list[tuple[UUID, bool]]:
+        """Release the running jobs of a worker process that is known to be dead.
+
+        Used when the embedded-worker supervisor killed the worker (memory watchdog), so the
+        job does not wait ``stale_after`` for lease recovery. Each job matching
+        ``claimed_by_prefix`` (``host:pid:``) gets ``error`` as ``last_error`` and is
+        requeued with backoff, or failed together with its analysis when its attempts are
+        exhausted. Returns ``(analysis_id, failed)`` per released job.
+        """
+
+        if not claimed_by_prefix:
+            return []
+        rows = self._session.scalars(
+            select(db_models.AnalysisJob).where(
+                db_models.AnalysisJob.status == db_enums.AnalysisJobStatus.RUNNING,
+                db_models.AnalysisJob.claimed_by.startswith(claimed_by_prefix, autoescape=True),
+            )
+        ).all()
+        released: list[tuple[UUID, bool]] = []
+        for row in rows:
+            row.locked_at = None
+            row.claimed_by = None
+            row.last_error = _safe_error(error)
+            failed = row.attempts >= self._max_attempts
+            if failed:
+                row.status = db_enums.AnalysisJobStatus.FAILED
+                self.mark_analysis_failed(row.analysis_id)
+            else:
+                row.status = db_enums.AnalysisJobStatus.PENDING
+                row.available_at = self._next_available_at(row.attempts)
+                analysis = self._session.get(db_models.Analysis, row.analysis_id)
+                if analysis is not None and analysis.status == db_enums.AnalysisStatus.RUNNING:
+                    analysis.status = db_enums.AnalysisStatus.PENDING
+            _log_transition(row, "failed" if failed else "requeued", logging.WARNING)
+            released.append((row.analysis_id, failed))
+        self._session.flush()
+        return released
+
     def recover_stale_jobs(self) -> int:
         """Return stale running jobs back to pending (or fail exhausted ones)."""
 

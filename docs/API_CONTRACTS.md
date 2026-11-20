@@ -501,6 +501,14 @@ also upserts one row into the `verdict_v2_requests` outbox (replays collapse; no
 call, the API holds no GitHub credentials). The worker recomputes and updates the Check Run
 and PR comment in place.
 
+## GET /analyses/{analysisId}/ai-review
+
+Advisory AI merge-readiness review (DEC-042, worker flag `RADIUS_FEATURE_AI_REVIEW`, `docs/ai.md`). It is AI-generated and never a verdict. It does not change the verdict, the score or the check conclusion. Render every text field as plain text.
+
+- 200: `status` is `ok` (`summary`, `risks`, `tests`, `missing_evidence` and `next_steps`, each a list of `{text, files}`) or `unavailable` (`reason_code`, for example `provider_rate_limited`, `deadline` or `output_summary_verdict_claim`). `advisory` and `ai_generated` are always `true`. Also returned: `label`, `provider`, `model`, `prompt_version`, `generated_at` and `notes` (`dropped`, `injection_flags`, `diff_truncated`). `files` lists only paths Radius computed for the analysis. `Cache-Control: private, no-cache`.
+- 404 `ANALYSIS_NOT_FOUND`: the analysis is unknown or belongs to another organization. The two cases cannot be told apart.
+- 404 `NOT_FOUND` with `meta.reason = "not_generated"`: no review is stored (the feature is off, no provider is configured, or the review has not run yet).
+
 ## GET /analyses/{analysisId}/intent
 
 Latest snapshot. Header `ETag`.
@@ -857,3 +865,14 @@ Existing routes now also require a scope: `read` for GET, `write` for other muta
 | `GET /coverage/symbol?analysis_id=&file_path=&symbol=` | Test case ids that executed one symbol. | 200, 404 when none |
 
 Unknown analyses and analyses of another organization are both 404.
+
+## Trusted CI test evidence (P0.1)
+
+These workflow-only routes are disabled (404) unless `RADIUS_FEATURE_TRUSTED_EVIDENCE=true` and the pinned caller/reusable-workflow policy is configured. They authenticate GitHub Actions OIDC separately from the GitHub App used to validate repository, pull-request, workflow-run, and attestation records. Manual analyses and fork pull requests cannot produce trusted evidence. With the flag on, legacy `/tests/results` uploads are diagnostic-only (`verification_status: "untrusted"`, no v1 re-score); with it off they behave as before. See [security/TRUSTED_TEST_EVIDENCE.md](security/TRUSTED_TEST_EVIDENCE.md) and DEC-041.
+
+| Method and path | Purpose | Success |
+|---|---|---|
+| `GET /analyses/{id}/tests/manifest` | Return Radius's persisted, immutable selected-test manifest, canonical digest, and authorized report slots for the matching PR head. | 200 manifest and `digest_sha256` |
+| `POST /analyses/{id}/tests/verified-results` | Multipart upload (`multipart/form-data`, same body cap as `/tests/results`): JUnit `artifact`, server-authorized `report_slot_id`, and `pull_request_number`. Radius retrieves and cryptographically verifies the matching GitHub Artifact Attestation (predicate type `https://github.com/Mohith-c7/Radius/attestations/test-results/v1`) before granting `verified_provenance`. | 200 ingestion with provenance status |
+
+Exact retries are idempotent by analysis, repository, run/attempt, slot, report digest, manifest and attestation identity. Reuse of a slot with different bytes is rejected. With the flag on, only `verified_provenance` contributes to trusted test-result receipt or scoring; other uploads remain diagnostic. Verdict v2 remains advisory.

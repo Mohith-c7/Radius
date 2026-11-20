@@ -225,6 +225,9 @@ class TestUploadResponse:
     failed: int
     skipped: int
     reported_cases: int
+    report_slot_id: str = "legacy"
+    provenance_status: str = "untrusted"
+    provenance_reason_code: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
