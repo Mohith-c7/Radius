@@ -1,0 +1,63 @@
+# Radius intent for the Radius repository itself (schema version 1, see
+# packages/intent/README.md and docs/intent/intent.example.yml).
+#
+# This file is read at every pull request head, so these criteria apply to EVERY
+# pull request: they are standing invariants of Verdict v2 and the CI upload path,
+# each tied to tests that .github/workflows/radius-evidence.yml runs and uploads.
+# What a single pull request is supposed to do comes from its own title and body
+# (RADIUS_INTENT_EXTRACTION_MODE=summary) and is confirmed in the intent panel.
+#
+# The weights are deliberately low (0.1). Unsupported intent mass is a weighted
+# share, so heavy standing criteria that are always supported would dilute an
+# unsupported criterion of the pull request itself and hide it from rule R2b.
+#
+# Every `tests:` entry must name an existing test; keep it in sync when tests move.
+# Once this file is identical on the base branch its criteria are `base_spec`
+# (no author-hint cap); a pull request that changes it gets `author_head_spec`.
+version: 1
+criteria:
+  - id: flag-fail-closed
+    text: "An unrecognised RADIUS_FEATURE_VERDICT_V2 value is parsed as off, so a typo never switches Verdict v2 on"
+    weight: 0.1
+    paths: ["packages/shared/src/radius_shared/verdict_v2_flag.py"]
+    tests:
+      - packages/shared/tests/test_verdict_v2_scaffold.py::test_flag_parsing_table
+  - id: rule-order
+    text: "Verdict v2 rules are evaluated in the documented order and the first rule that fires decides the verdict"
+    weight: 0.1
+    paths: ["packages/confidence/src/radius_confidence/verdict_v2/domain/rules.py"]
+    tests:
+      - packages/confidence/tests/test_verdict_v2_rules.py::test_each_rule_fires_alone
+      - packages/confidence/tests/test_verdict_v2_rules.py::test_priority_and_combinations
+  - id: advisory-check
+    text: "With an unset or unrecognised RADIUS_VERDICT_V2_CHECK_CONCLUSIONS the Check Run conclusion stays advisory, and a verdict awaiting CI is published as a completed neutral check"
+    weight: 0.1
+    tests:
+      - apps/worker/tests/test_verdict_v2_publish.py::test_unknown_conclusions_value_stays_advisory
+      - apps/worker/tests/test_verdict_v2_publish.py::test_pending_verdict_is_completed_neutral_not_left_running
+  - id: stale-head
+    text: "A verdict computed for a commit that is no longer the pull request head is never published"
+    weight: 0.1
+    tests:
+      - apps/worker/tests/test_verdict_v2_publish.py::test_stale_heads_are_never_published
+  - id: upload-skip
+    text: "The upload-results action sends no request when the API key is empty or the run comes from a fork"
+    weight: 0.1
+    paths: ["actions/upload-results/upload.py"]
+    tests:
+      - tests/test_upload_results_action.py::test_fork_skips_without_any_request
+      - tests/test_upload_results_action.py::test_missing_secret_skips_gracefully
+  - id: upload-key-safety
+    text: "The upload-results action refuses HTTP redirects and never prints the API key, even when the server echoes it"
+    weight: 0.1
+    paths: ["actions/upload-results/upload.py"]
+    tests:
+      - tests/test_upload_results_action.py::test_redirect_not_followed
+      - tests/test_upload_results_action.py::test_secret_never_printed_even_if_server_echoes_it
+  - id: spec-diagnostics
+    text: "An invalid .radius/intent.yml is reported as diagnostics with a code and a line number instead of raising"
+    weight: 0.1
+    paths: ["packages/intent/src/radius_intent/infrastructure/extraction/spec_file.py"]
+    tests:
+      - packages/intent/tests/test_spec_file.py::test_validation_errors_carry_codes_and_line_numbers
+      - packages/intent/tests/test_spec_file.py::test_structural_errors_are_reported_not_raised
