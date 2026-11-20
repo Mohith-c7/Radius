@@ -170,6 +170,11 @@ export const radiusConfig = {
   organizationId: process.env.NEXT_PUBLIC_RADIUS_ORGANIZATION_ID ?? "",
 };
 
+/** True when both build-time settings were provided (not the localhost default). */
+export const radiusConfigured = Boolean(
+  process.env.NEXT_PUBLIC_RADIUS_API_BASE_URL && process.env.NEXT_PUBLIC_RADIUS_ORGANIZATION_ID,
+);
+
 // The browser never talks to the Radius API directly and never holds the API
 // key. Requests go to the same-origin proxy (app/api/radius), which attaches
 // the server-only RADIUS_API_KEY. During SSR (no window) the absolute
@@ -312,6 +317,12 @@ export async function radiusRequest<T>(
   };
 }
 
+/** GET /ready through the proxy; resolves to the HTTP status (never throws on non-2xx). */
+export async function getReadiness(): Promise<{ status: number }> {
+  const response = await fetch(apiUrl("/ready"), { cache: "no-store" });
+  return { status: response.status };
+}
+
 /** API list endpoints are paginated (default 100, hard maximum 500); ask for the maximum page. */
 export const LIST_PAGE_SIZE = 500;
 
@@ -340,8 +351,9 @@ export type PullRequest = {
   target_branch: string;
   author: string;
   status: string;
-  opened_at: string;
-  merged_at: string | null;
+  /** Sent by the API since the dashboard UX fixes; older APIs omit it. */
+  opened_at?: string | null;
+  merged_at?: string | null;
 };
 
 export function getPullRequestByNumber(repositoryId: UUID, prNumber: number) {
