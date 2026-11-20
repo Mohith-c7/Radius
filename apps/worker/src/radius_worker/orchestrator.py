@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from uuid import UUID
 
@@ -280,6 +280,10 @@ class Phase1AnalysisOrchestrator:
         self._testing.plan_test_run(PlanTestRunCommand(command.analysis_id))
         with stage("run_tests"):
             test_evidence = self._run_or_defer_tests(command, selection.selected_count)
+        if test_evidence.run_outcome == TestRunOutcome.NOT_RUN:
+            # Lets the verdict say how many selected test files await CI results
+            # (or that none were selected) instead of a generic "not executed".
+            test_evidence = replace(test_evidence, selected_test_files=selection.selected_count)
 
         with stage("blast_radius"):
             blast_radius = self._analysis.compute_blast_radius(

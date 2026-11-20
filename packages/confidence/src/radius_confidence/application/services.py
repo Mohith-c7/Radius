@@ -155,14 +155,15 @@ class ConfidenceApplicationService:
         metrics = result.metrics
         status = metrics["verification_status"]
         gaps = tuple(metrics.get("verification_gaps", ()))
+        awaiting = bool(metrics.get("awaiting_results", False))
         return ConfidenceReport(
             id=None,
             analysis_id=analysis_id,
             confidence_score=score,
             risk_level=self._risk_level(score.value),
-            summary=self._summary(status, score.value, gaps, source),
+            summary=self._summary(status, score.value, gaps, source, awaiting=awaiting),
             evidence=evidence,
-            recommendations=self._recommendations(status, score.value, gaps),
+            recommendations=self._recommendations(status, score.value, gaps, awaiting=awaiting),
             change_risk=metrics["change_risk"],
             verification_confidence=metrics["verification_confidence"],
             analysis_completeness=metrics["analysis_completeness"],
@@ -175,7 +176,15 @@ class ConfidenceApplicationService:
         score: float,
         gaps: tuple[str, ...],
         source: str,
+        *,
+        awaiting: bool = False,
     ) -> str:
+        if awaiting and status == VerificationStatus.INSUFFICIENT_EVIDENCE.value:
+            return (
+                "Not verified yet: every executable change is mapped to selected "
+                f"tests. {gaps[0]}. Heuristic score {score:.1f}/100 from {source} "
+                "(not a calibrated probability)."
+            )
         verdict = {
             VerificationStatus.VERIFIED.value: (
                 "Verified: every executable change is covered by selected tests "
@@ -208,7 +217,15 @@ class ConfidenceApplicationService:
         status: str,
         score: float,
         gaps: tuple[str, ...] = (),
+        *,
+        awaiting: bool = False,
     ) -> tuple[str, ...]:
+        if awaiting and status == VerificationStatus.INSUFFICIENT_EVIDENCE.value:
+            return (
+                "Do not treat this pull request as verified until CI results arrive.",
+                "Run the selected tests in CI and upload the JUnit report bound to the "
+                "head commit; the verdict is recomputed when it arrives.",
+            )
         if status == VerificationStatus.FAILED.value:
             return ("Block merge until the failing selected tests are fixed.",)
         if status == VerificationStatus.INSUFFICIENT_EVIDENCE.value:
