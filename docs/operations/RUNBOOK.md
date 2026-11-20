@@ -101,7 +101,7 @@ and that your proxy forwards the path.
 - Check runs missing or stuck in progress: the worker completes in-progress check runs on failure and the reaper completes them
   for expired analyses. If a check never appears, confirm `GITHUB_PUBLISH_RESULTS=true` and that App id and key are set on the **worker**.
 - Check run shows `insufficient_evidence` after CI passed: expected until results are uploaded. With
-  `RADIUS_FEATURE_VERDICT_V2` `off` or `shadow` the v1 check is not re-published after a later upload (README); with `on`
+  `RADIUS_FEATURE_VERDICT_V2` `off` or `shadow` the worker republishes the v1 check about 30 s after an upload; with `on`
   the upload enqueues a Verdict v2 republish (`verdict_v2_requests`, reason `ci_results`).
 
 ## Sandbox (test execution) failures

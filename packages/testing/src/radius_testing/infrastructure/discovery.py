@@ -1,5 +1,15 @@
-"""Conventional filesystem test discovery."""
+"""Conventional filesystem test discovery.
 
+A file is a test when its path follows a test convention *and* its content
+defines at least one test: helper modules under ``tests/`` and scripts that only
+look like tests (``scripts/load_test.py``) are not tests, because CI running
+them reports nothing and every selected-but-unreported file blocks the verdict.
+The framework is read from what the file imports (``node:test``, ``vitest``,
+``@playwright/test``, ``@jest/globals``, ``mocha``); the file suffix is only a
+fallback.
+"""
+
+import re
 from pathlib import Path
 from uuid import NAMESPACE_URL, uuid5
 
@@ -29,6 +39,22 @@ NON_TEST_SUPPORT_DIRECTORIES = {
 }
 
 
+_MAX_SNIFF_BYTES = 1_000_000
+_PY_TEST_DEFINITION = re.compile(r"^[ \t]*(?:async[ \t]+)?def[ \t]+test|^[ \t]*class[ \t]+Test", re.M)
+_JS_TEST_CALL = re.compile(r"\b(?:test|it|describe|suite)(?:\.\w+)*\s*\(")
+_JS_RUNNER_IMPORT = re.compile(
+    r"""(?:\bfrom\s*|\brequire\s*\(\s*|\bimport\s*\(?\s*)["']"""
+    r"""(node:test|vitest|@playwright/test|@jest/globals|mocha)["']"""
+)
+_RUNNER_FRAMEWORKS = {
+    "node:test": TestFramework.NODE_TEST,
+    "vitest": TestFramework.VITEST,
+    "@playwright/test": TestFramework.PLAYWRIGHT,
+    "@jest/globals": TestFramework.JEST,
+    "mocha": TestFramework.MOCHA,
+}
+
+
 class ConventionalTestDiscoverer:
     """Discover tests from conventional file paths."""
 
@@ -43,13 +69,19 @@ class ConventionalTestDiscoverer:
             relative = path.relative_to(root).as_posix()
             if not self._is_test_path(relative):
                 continue
+            content = self._sniff(path)
+            if content is not None and not self._defines_tests(relative, content):
+                continue
+            framework = self._framework(relative, content)
             tests.append(
                 TestCase(
                     id=uuid5(NAMESPACE_URL, f"radius:test:{relative}"),
                     name=TestName(Path(relative).stem),
                     path=TestPath(relative),
-                    framework=self._framework(relative),
-                    test_type=TestType.UNIT,
+                    framework=framework,
+                    test_type=(
+                        TestType.E2E if framework == TestFramework.PLAYWRIGHT else TestType.UNIT
+                    ),
                     target_path=self._target_path(relative),
                 )
             )
@@ -82,10 +114,31 @@ class ConventionalTestDiscoverer:
         return in_test_dir and is_code_file and not name.startswith(("_", "."))
 
     @staticmethod
-    def _framework(path: str) -> TestFramework:
+    def _sniff(path: Path) -> str | None:
+        """Return the file text, or ``None`` when it cannot be read cheaply."""
+
+        try:
+            if path.stat().st_size > _MAX_SNIFF_BYTES:
+                return None
+            return path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return None
+
+    @staticmethod
+    def _defines_tests(path: str, content: str) -> bool:
+        if path.endswith(".py"):
+            return _PY_TEST_DEFINITION.search(content) is not None
+        return _JS_TEST_CALL.search(content) is not None
+
+    @staticmethod
+    def _framework(path: str, content: str | None = None) -> TestFramework:
         suffixes = Path(path).suffixes
         if suffixes[-1:] == [".py"]:
             return TestFramework.PYTEST
+        if content:
+            match = _JS_RUNNER_IMPORT.search(content)
+            if match is not None:
+                return _RUNNER_FRAMEWORKS[match.group(1)]
         if suffixes[-1:] in ([".ts"], [".tsx"]):
             return TestFramework.VITEST
         if suffixes[-1:] in ([".js"], [".jsx"]):

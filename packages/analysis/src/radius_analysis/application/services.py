@@ -1,10 +1,11 @@
 """Analysis application service."""
 
+import posixpath
 from pathlib import Path
 from uuid import UUID
 
 from radius_graph.domain.entities import GraphEdge, GraphSnapshot
-from radius_graph.domain.enums import GraphEdgeType, GraphNodeType
+from radius_graph.domain.enums import GraphNodeType
 from radius_graph.domain.value_objects import GraphNodeId
 from radius_shared.errors import NotFoundError, ValidationError
 
@@ -463,21 +464,23 @@ class AnalysisApplicationService:
         graph_snapshot: GraphSnapshot,
         affected_file_ids: set[GraphNodeId],
     ) -> int:
-        import_ids = {
-            edge.target_id
-            for edge in graph_snapshot.graph.edges
-            if edge.source_id in affected_file_ids
-            and edge.edge_type == GraphEdgeType.IMPORTS
-        }
-        module_ids = {
-            edge.target_id
-            for edge in graph_snapshot.graph.edges
-            if edge.source_id in import_ids
-            and edge.edge_type == GraphEdgeType.DEPENDS_ON
-        }
-        return sum(
-            node.node_type == GraphNodeType.MODULE and node.id in module_ids
-            for node in graph_snapshot.graph.nodes
+        """Count the repository modules (directories) that hold affected files.
+
+        A module here is a package directory: a Python package or a JS/TS
+        folder. Import specifiers (``react``, ``pydantic``, ``node:test``) are
+        dependencies of the affected files, not parts of the change's impact, so
+        they are not counted; counting them made "more than 5 modules affected"
+        fire on almost every analysis.
+        """
+
+        return len(
+            {
+                posixpath.dirname(node.path.replace("\\", "/"))
+                for node in graph_snapshot.graph.nodes
+                if node.node_type == GraphNodeType.FILE
+                and node.path is not None
+                and node.id in affected_file_ids
+            }
         )
 
     @staticmethod

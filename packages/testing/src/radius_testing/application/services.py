@@ -40,6 +40,7 @@ from radius_testing.infrastructure.result_matching import (
     attribute_selected_tests,
     report_cases,
 )
+from radius_testing.infrastructure.test_targets import refine_test_targets
 from radius_testing.interfaces.discovery import TestDiscoverer
 from radius_testing.interfaces.runner import TestCommandPlanner, TestRunner
 from radius_testing.interfaces.selection import TestSelector
@@ -85,6 +86,10 @@ class TestingApplicationService:
             msg = f"Repository path does not exist: {command.repository_path}."
             raise ValidationError(msg)
         discovered = self._discoverer.discover(command.repository_path)
+        if command.file_imports is not None:
+            discovered = refine_test_targets(
+                discovered, command.file_imports, command.repository_files
+            )
         if command.repository_id is not None:
             # Test ids are derived from the path; include the repository so two
             # repositories with the same test path never share a row.

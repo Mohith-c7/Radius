@@ -86,6 +86,7 @@ from radius_worker.orchestrator import (
 )
 from radius_worker.poller import PullRequestPoller
 from radius_worker.queue import InMemoryAnalysisQueue
+from radius_worker.v1_republish import V1CiRepublisher
 from radius_worker.verdict_v2.publish import publish_in_job as publish_v2_in_job
 from radius_worker.verdict_v2.publish import v2_replaces_v1
 from radius_worker.verdict_v2.requests import Recomputer as VerdictV2Recomputer
@@ -254,8 +255,23 @@ class SqlAlchemyWorkerRuntime:
     poller: PullRequestPoller | None = None
     #: C-02: identifies this process as the owner of the jobs it claims.
     worker_id: str = field(default_factory=new_worker_id)
+    #: Republishes the v1 check run and comment after CI uploads results (built
+    #: from settings when unset; a no-op with v2 ``on`` or publishing disabled).
+    v1_republisher: V1CiRepublisher | None = None
 
     def __post_init__(self) -> None:
+        if self.v1_republisher is None:
+            settings, github_client = self.settings, self.github_client
+            self.v1_republisher = V1CiRepublisher(
+                session_factory=self.session_factory,
+                publish=lambda session, analysis_id: _republish_v1_report(
+                    session, analysis_id, settings=settings, github_client=github_client
+                ),
+                verdict_v2_mode=settings.verdict_v2_mode,
+                enabled=bool(
+                    settings.github_publish_results and _github_settings(settings).enabled
+                ),
+            )
         if self.poller is None and self.settings.github_poll_interval_seconds > 0:
             if not self.github_client.settings.enabled:
                 LOGGER.warning(
@@ -566,6 +582,8 @@ class SqlAlchemyWorkerRuntime:
         while not self.stop_event.is_set():
             touch_health_file(self.settings.health_file)
             self._process_verdict_v2_requests()
+            if self.v1_republisher is not None:
+                self.v1_republisher.tick()  # never raises
             if (
                 self.poller is not None
                 and next_poll is not None
@@ -1082,6 +1100,33 @@ def _publish_github_result(
             settings=settings,
             github_client=github_client,
             error=RuntimeError("Radius could not publish its result to GitHub."),
+        )
+
+
+def _republish_v1_report(
+    session: Session,
+    analysis_id,
+    *,
+    settings: WorkerSettings,
+    github_client: GitHubAppClient,
+) -> None:
+    """Publish the stored v1 report again (after CI results); raises on failure.
+
+    Unlike ``_publish_github_result`` a failure never rewrites the check run as
+    "analysis failed": the analysis succeeded, only this update did not.
+    """
+
+    installation_id = _github_installation_id(
+        session=session,
+        analysis_id=analysis_id,
+        settings=settings,
+    )
+    report = _github_report(session, analysis_id, settings)
+    _end_read_transaction(session)  # C-04: no open transaction during the GitHub calls
+    with stage("publish"):
+        GitHubAnalysisPublisher(github_client).publish(
+            installation_id=installation_id,
+            report=report,
         )
 
 

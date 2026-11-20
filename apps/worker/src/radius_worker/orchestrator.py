@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, replace
 from pathlib import Path
 from uuid import UUID
 
@@ -31,7 +32,7 @@ from radius_confidence.domain import (
 )
 from radius_confidence.dto import GenerateConfidenceReportCommand
 from radius_graph.application import GraphApplicationService
-from radius_graph.domain import GraphSnapshot
+from radius_graph.domain import GraphEdgeType, GraphNodeType, GraphSnapshot
 from radius_graph.dto import BuildGraphCommand
 from radius_graph.interfaces.graph_store import GraphStore
 from radius_graph.traversal import file_dependents
@@ -82,6 +83,30 @@ def _read_python_sources(root: Path) -> dict[str, str]:
         except (OSError, UnicodeDecodeError):
             continue
     return sources
+
+
+def _resolved_file_imports(
+    snapshot: GraphSnapshot,
+) -> tuple[Mapping[str, tuple[str, ...]], frozenset[str]]:
+    """Return repository file -> repository files it imports, plus every file path."""
+
+    paths = {
+        node.id: node.path
+        for node in snapshot.graph.nodes
+        if node.node_type == GraphNodeType.FILE and node.path is not None
+    }
+    imports: dict[str, set[str]] = {}
+    for edge in snapshot.graph.edges:
+        if (
+            edge.edge_type == GraphEdgeType.DEPENDS_ON
+            and edge.source_id in paths
+            and edge.target_id in paths
+        ):
+            imports.setdefault(paths[edge.source_id], set()).add(paths[edge.target_id])
+    return (
+        {path: tuple(sorted(targets)) for path, targets in imports.items()},
+        frozenset(paths.values()),
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -195,8 +220,14 @@ class Phase1AnalysisOrchestrator:
         graph_snapshot = self._require_graph_snapshot(command.analysis_id)
         dependents = file_dependents(graph_snapshot.graph, changed_paths)
         with stage("discover_tests"):
+            file_imports, repository_files = _resolved_file_imports(graph_snapshot)
             discovered_tests = self._testing.discover_test_cases(
-                DiscoverTestsCommand(command.repository_path, command.repository_id)
+                DiscoverTestsCommand(
+                    command.repository_path,
+                    command.repository_id,
+                    file_imports=file_imports,
+                    repository_files=repository_files,
+                )
             )
         symbol_evidence: dict[str, tuple[str, ...]] | None = None
         changed_symbols: tuple[str, ...] = ()
@@ -249,6 +280,10 @@ class Phase1AnalysisOrchestrator:
         self._testing.plan_test_run(PlanTestRunCommand(command.analysis_id))
         with stage("run_tests"):
             test_evidence = self._run_or_defer_tests(command, selection.selected_count)
+        if test_evidence.run_outcome == TestRunOutcome.NOT_RUN:
+            # Lets the verdict say how many selected test files await CI results
+            # (or that none were selected) instead of a generic "not executed".
+            test_evidence = replace(test_evidence, selected_test_files=selection.selected_count)
 
         with stage("blast_radius"):
             blast_radius = self._analysis.compute_blast_radius(

@@ -10,6 +10,14 @@ Two separate outputs are produced and must not be conflated:
   NOT a calibrated probability of correctness (no outcome data has been used to
   fit it). It is capped by the verdict so that a PR without verification
   evidence can never be presented as low risk.
+
+Results that have simply not arrived yet are not a risk signal. When every
+executable change is mapped to selected tests and the only thing missing is
+their CI results, the verdict is ``insufficient_evidence`` ("awaiting CI") and
+the score is capped at ``AWAITING_RESULTS_SCORE_CAP`` (medium risk at best), with
+no penalty for the pending run itself. Gaps Radius cannot close by waiting
+(unmapped or unparseable changes, errored runs, unreported selected tests)
+keep the stricter ``INSUFFICIENT_EVIDENCE_SCORE_CAP`` (high risk at best).
 """
 
 from radius_confidence.domain.entities import (
@@ -29,7 +37,9 @@ from radius_confidence.interfaces.scoring import ScoringResult
 
 # Upper bounds applied to the heuristic score by verdict. With the risk
 # thresholds in ConfidenceApplicationService (>=85 low, >=70 medium, >=50 high)
-# an unverified change is at best "high" risk and a failing one "critical".
+# a change waiting only for CI results is at best "medium" risk, any other
+# unverified change at best "high", and a failing one "critical".
+AWAITING_RESULTS_SCORE_CAP = 84.0
 INSUFFICIENT_EVIDENCE_SCORE_CAP = 69.0
 FAILED_SCORE_CAP = 49.0
 
@@ -79,9 +89,20 @@ class DeterministicConfidenceScorer:
         self._append_selected_test_evidence(tests, evidence)
 
         gaps = self._verification_gaps(tests, analysis)
+        awaiting = self._awaiting_results_gap(tests, analysis)
+        # Only an analysis that recorded a non-empty selection can be "just
+        # waiting": without that knowledge a missing run stays a hard gap.
+        awaiting_only = (
+            awaiting is not None
+            and gaps == (awaiting,)
+            and (tests.selected_test_files or 0) > 0
+        )
         if tests.failed > 0:
             status = VerificationStatus.FAILED
             score = min(score, FAILED_SCORE_CAP)
+        elif awaiting_only:
+            status = VerificationStatus.INSUFFICIENT_EVIDENCE
+            score = min(score, AWAITING_RESULTS_SCORE_CAP)
         elif gaps:
             status = VerificationStatus.INSUFFICIENT_EVIDENCE
             score = min(score, INSUFFICIENT_EVIDENCE_SCORE_CAP)
@@ -105,6 +126,7 @@ class DeterministicConfidenceScorer:
             "change_risk": "high" if impact.affected_files > 10 else "low",
             "verification_confidence": self._verification_confidence(tests),
             "verification_gaps": gaps,
+            "awaiting_results": awaiting_only,
         }
         return ScoringResult(final_score, tuple(evidence), metrics)
 
@@ -122,10 +144,11 @@ class DeterministicConfidenceScorer:
             needs_tests = analysis.executable_changes > 0
 
         if tests.run_outcome == TestRunOutcome.NOT_RUN:
-            if needs_tests:
-                gaps.append(
-                    "Selected tests were not executed; upload CI results to verify"
-                )
+            awaiting = DeterministicConfidenceScorer._awaiting_results_gap(tests, analysis)
+            if awaiting is not None:
+                gaps.append(awaiting)
+            elif needs_tests:
+                gaps.append("No tests were selected for the changed code")
         elif tests.run_outcome != TestRunOutcome.COMPLETED:
             detail = f" ({tests.run_detail})" if tests.run_detail else ""
             gaps.append(f"Test execution did not complete: {tests.run_outcome}{detail}")
@@ -138,7 +161,11 @@ class DeterministicConfidenceScorer:
                 f"{tests.flaky} flaky test(s) failed then passed on rerun; they are "
                 "excluded from verification evidence"
             )
-        if needs_tests and tests.selected_test_files == 0:
+        if (
+            needs_tests
+            and tests.selected_test_files == 0
+            and tests.run_outcome != TestRunOutcome.NOT_RUN
+        ):
             gaps.append(
                 "No selected test files are recorded for this analysis, so the "
                 "results cannot be attributed to the changed code"
@@ -151,11 +178,31 @@ class DeterministicConfidenceScorer:
         return tuple(gaps)
 
     @staticmethod
+    def _awaiting_results_gap(
+        tests: TestEvidence,
+        analysis: AnalysisEvidence | None,
+    ) -> str | None:
+        """Return the gap text when selected tests exist but have not run yet."""
+
+        if tests.run_outcome != TestRunOutcome.NOT_RUN:
+            return None
+        if analysis is not None and analysis.executable_changes <= 0:
+            return None
+        if tests.selected_test_files is None:
+            return "Selected tests were not executed; upload CI results to verify"
+        if tests.selected_test_files <= 0:
+            return None
+        return (
+            f"Awaiting CI results for {tests.selected_test_files} selected test "
+            "file(s); upload them to verify"
+        )
+
+    @staticmethod
     def _append_selected_test_evidence(
         tests: TestEvidence,
         evidence: list[ConfidenceEvidence],
     ) -> None:
-        if tests.selected_test_files is not None:
+        if tests.selected_test_files is not None and tests.run_outcome != TestRunOutcome.NOT_RUN:
             evidence.append(
                 ConfidenceEvidence(
                     category=EvidenceCategory.TESTS,
@@ -279,10 +326,20 @@ class DeterministicConfidenceScorer:
         evidence: list[ConfidenceEvidence],
     ) -> float:
         if tests.run_outcome == TestRunOutcome.NOT_RUN:
+            # Pending results are a verification state, not evidence of risk:
+            # the verdict stays insufficient_evidence and the score is capped.
             evidence.append(
-                self._negative("tests", "Selected tests were not executed.", 25)
+                ConfidenceEvidence(
+                    category=EvidenceCategory.TESTS,
+                    label="awaiting_results",
+                    message=(
+                        "Selected tests have not run yet; the verdict waits for CI "
+                        "results instead of treating the change as risky."
+                    ),
+                    impact=EvidenceImpact.NEUTRAL,
+                )
             )
-            return score - 25
+            return score
         if tests.run_outcome != TestRunOutcome.COMPLETED:
             evidence.append(
                 self._negative("tests", "Test execution did not complete.", 30)

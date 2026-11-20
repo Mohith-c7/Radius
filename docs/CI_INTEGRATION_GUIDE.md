@@ -29,7 +29,7 @@ sequenceDiagram
     Rad-->>CI: Verdict (exit code gates the job)
 ```
 
-The Radius Check Run is published when the analysis completes. With `RADIUS_FEATURE_VERDICT_V2` `off` (the default) or `shadow`, it is **not re-published after CI uploads**, so for uploaded evidence the merge gate is the exit code of the CI job below (make that job a required status check). With `on`, an upload enqueues a Verdict v2 republish that updates the same check run; see [Making the Verdict v2 check required](#making-the-verdict-v2-check-required-advisory-first-then-blocking).
+The Radius Check Run is published when the analysis completes. With `RADIUS_FEATURE_VERDICT_V2` `off` (the default) or `shadow`, the worker republishes it (and the PR comment) within about 30 seconds of a CI upload; the exit code of the CI job below is still the immediate merge gate (make that job a required status check). With `on`, an upload enqueues a Verdict v2 republish that updates the same check run; see [Making the Verdict v2 check required](#making-the-verdict-v2-check-required-advisory-first-then-blocking).
 
 ---
 
@@ -57,7 +57,9 @@ Set `require-verified: "true"` on `upload`/`verdict` for a required status check
 **How uploaded results count as evidence**
 
 - `commit_sha` is required (`422` if missing). If it does not match the analysed head commit the upload is rejected with `409`, so results from another commit can never verify a PR.
-- Results only count for selected test files that the report shows were executed. Radius matches each `<testcase>` by its `file` attribute or `classname` (pytest's dotted module such as `tests.test_checkout`, or the file path used by Vitest/jest-junit). Skipped cases do not count.
+- Results only count for selected test files that the report shows were executed. Radius matches each `<testcase>` by its `file` attribute (or the `file` of an enclosing `<testsuite>`) or `classname` (pytest's dotted module such as `tests.test_checkout`, or the file path used by Vitest/jest-junit). Skipped cases do not count.
+  - **pytest:** run it from the repository root (the directory with the pytest config) so `classname` is the full dotted path, e.g. `apps.api.tests.test_analyses`; running from a subdirectory shortens it and the cases no longer match the selected paths.
+  - **node:test** (`node --test --test-reporter=junit`): the reporter writes `classname="test"` and no `file`, so a raw report proves nothing. Run each selected file separately and label its cases, e.g. wrap the output in `<testsuite file="apps/dashboard/tests/api.test.mjs">…</testsuite>` or add that `file` attribute to every `<testcase>`; upload one report per file or merge them.
 - Any selected test file missing from the report keeps the verdict at `insufficient_evidence`. Aggregate-only reports (totals without per-test entries) cannot be attributed and never verify a PR.
 
 ---

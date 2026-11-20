@@ -96,7 +96,8 @@ def test_compute_blast_radius_counts_changed_and_reverse_dependent_nodes() -> No
 
     assert response.affected_files == 3
     assert response.affected_symbols == 1
-    assert response.affected_modules == 0
+    # Modules are the directories holding affected files: all three are in src/.
+    assert response.affected_modules == 1
     assert response.affected_tests == 0
     assert response.dependency_depth == 2
 
@@ -146,3 +147,50 @@ def test_symbol_scope_limits_affected_files_and_symbols() -> None:
 
     assert response.affected_files == 1
     assert response.affected_symbols == 0
+
+
+def test_affected_modules_count_directories_not_imported_packages() -> None:
+    """Production showed 297 "modules" for 152 affected files: every import specifier
+    of every affected file (react, next/link, pydantic, ...) was counted."""
+
+    service = AnalysisApplicationService(InMemoryAnalysisStore())
+    analysis = service.start_analysis(StartAnalysisCommand(uuid4(), uuid4(), "a" * 40))
+    api = GraphNodeId("file:apps/dashboard/lib/api.ts")
+    page = GraphNodeId("file:apps/dashboard/app/profile/page.tsx")
+    test = GraphNodeId("file:apps/dashboard/tests/api.test.mjs")
+    unrelated = GraphNodeId("file:apps/api/src/radius_api/main.py")
+    nodes = [
+        GraphNode(api, GraphNodeType.FILE, "api.ts", "apps/dashboard/lib/api.ts"),
+        GraphNode(page, GraphNodeType.FILE, "page.tsx", "apps/dashboard/app/profile/page.tsx"),
+        GraphNode(test, GraphNodeType.FILE, "api.test.mjs", "apps/dashboard/tests/api.test.mjs"),
+        GraphNode(unrelated, GraphNodeType.FILE, "main.py", "apps/api/src/radius_api/main.py"),
+    ]
+    edges = [
+        GraphEdge(page, api, GraphEdgeType.DEPENDS_ON),
+        GraphEdge(test, api, GraphEdgeType.DEPENDS_ON),
+    ]
+    for owner in (api, page, test):
+        for package in ("react", "next/link", "node:test", "zod", "clsx", "lucide-react"):
+            import_id = GraphNodeId(f"import:{owner.value}:{package}")
+            module_id = GraphNodeId(f"module:{package}")
+            nodes.append(GraphNode(import_id, GraphNodeType.IMPORT, package, owner.value))
+            if all(node.id != module_id for node in nodes):
+                nodes.append(GraphNode(module_id, GraphNodeType.MODULE, package))
+            edges.append(GraphEdge(owner, import_id, GraphEdgeType.IMPORTS))
+            edges.append(GraphEdge(import_id, module_id, GraphEdgeType.DEPENDS_ON))
+    snapshot = GraphSnapshot(
+        repository_id=uuid4(),
+        analysis_id=analysis.id,
+        graph=DependencyGraph(nodes=tuple(nodes), edges=tuple(edges)),
+    )
+
+    response = service.compute_blast_radius(
+        ComputeBlastRadiusCommand(
+            analysis_id=analysis.id,
+            graph_snapshot=snapshot,
+            changed_file_paths=("apps/dashboard/lib/api.ts",),
+        )
+    )
+
+    assert response.affected_files == 3
+    assert response.affected_modules == 3  # lib/, app/profile/, tests/

@@ -169,10 +169,11 @@ ingestion additionally needs the `issues: read` permission (RUNBOOK section 0).
 ## What the first verdict looks like
 
 Test execution inside the worker is off by default (`WORKER_TEST_EXECUTION_MODE=disabled`), so a first
-pull request normally ends `insufficient_evidence` with the gap "Selected tests were not executed; upload
-CI results to verify" (`packages/confidence/.../scoring.py`). To reach `verified`, run the selected tests in
+pull request normally ends `insufficient_evidence` with the gap "Awaiting CI results for N selected test
+file(s); upload them to verify" (`packages/confidence/.../scoring.py`). Pending results are not a risk signal:
+when that is the only gap the risk is at worst `medium`. To reach `verified`, run the selected tests in
 your CI and upload JUnit XML or JSON bound to the head SHA ([CI integration](../CI_INTEGRATION_GUIDE.md)).
-With `RADIUS_FEATURE_VERDICT_V2` `off` (default) or `shadow`, the v1 check run is not re-published after a later upload (README, maturity table); with `on`, an upload enqueues a Verdict v2 republish that updates the same check run and comment ([verdict-v2.md](../verdict-v2.md)).
+With `RADIUS_FEATURE_VERDICT_V2` `off` (default) or `shadow`, the worker republishes the v1 check run and comment within about 30 seconds of an upload (`apps/worker/.../v1_republish.py`); with `on`, an upload enqueues a Verdict v2 republish that updates the same check run and comment ([verdict-v2.md](../verdict-v2.md)).
 
 ## Optional profiles
 

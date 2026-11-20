@@ -74,8 +74,64 @@ def _tree_sitter_parser(grammar: str):
     return tree_sitter.Parser(language)
 
 
+_JSX_CONTAINERS = frozenset({"jsx_element", "jsx_fragment"})
+_MAX_JSX_REPAIR_PASSES = 32
+
+
 def _parse_tree(source: str, suffix: str):
-    return _tree_sitter_parser(_grammar_for(suffix)).parse(source.encode("utf-8"))
+    parser = _tree_sitter_parser(_grammar_for(suffix))
+    data = source.encode("utf-8")
+    tree = parser.parse(data)
+    if _grammar_for(suffix) == "typescript" or not tree.root_node.has_error:
+        return tree
+    return _repair_jsx_ampersands(parser, data, tree)
+
+
+def _repair_jsx_ampersands(parser, data: bytes, tree):
+    """Work around the grammar rejecting a bare ``&`` in JSX text.
+
+    ``<p>Tests & CI</p>`` is valid JSX (TypeScript, Babel and React accept it),
+    but tree-sitter-javascript/-typescript 0.23-0.25 start an HTML character
+    reference at every ``&`` and report an ERROR node when no entity follows.
+    That turned real dashboard components into parse failures (DEC-037 then
+    blocks the verdict). Only ``&`` bytes that start such an ERROR node directly
+    inside a JSX element are replaced by a space (same byte length, so every
+    location is unchanged), and the file is re-parsed. A ``&`` in JSX text never
+    contributes an import, export or symbol, so the extracted facts are exact.
+    Any other syntax error is left in place and still fails the file.
+    """
+
+    buffer = bytearray(data)
+    for _ in range(_MAX_JSX_REPAIR_PASSES):
+        offsets = [
+            node.start_byte
+            for node in _error_nodes(tree.root_node)
+            if node.is_error
+            and node.parent is not None
+            and node.parent.type in _JSX_CONTAINERS
+            and buffer[node.start_byte : node.start_byte + 1] == b"&"
+        ]
+        if not offsets:
+            return tree
+        for offset in offsets:
+            while offset < len(buffer) and buffer[offset] == ord("&"):
+                buffer[offset] = ord(" ")
+                offset += 1
+        tree = parser.parse(bytes(buffer))
+        if not tree.root_node.has_error:
+            return tree
+    return tree
+
+
+def _error_nodes(root):
+    stack = [root]
+    while stack:
+        node = stack.pop()
+        if node.is_error or node.is_missing:
+            yield node
+            continue
+        if node.has_error:
+            stack.extend(node.children)
 
 
 def parse_syntax_tree(source: str, suffix: str):

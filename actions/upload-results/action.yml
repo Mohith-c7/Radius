@@ -54,9 +54,11 @@ inputs:
     required: false
     default: "10"
   wait-seconds:
-    description: How long to wait for Radius to create the analysis for the head commit.
+    description: >-
+      How long to wait for Radius to create and complete the analysis for the head commit
+      (results for an analysis that is still running are refused).
     required: false
-    default: "120"
+    default: "900"
   dashboard-url:
     description: Optional Radius dashboard base URL, used to print a link to the analysis.
     required: false

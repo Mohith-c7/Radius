@@ -391,7 +391,12 @@ def _headers(org: str, key: str, extra: dict | None = None) -> dict:
 def resolve_analysis(
     api, org, key, repository, pr, sha, wait_seconds, report, *, sleep=None, poll=5.0
 ) -> str:  # noqa: ANN001
-    """Find the analysis for repo + PR + head SHA, polling 404 until ``wait_seconds``."""
+    """Find the completed analysis for repo + PR + head SHA.
+
+    Polls until ``wait_seconds`` while Radius has not created the analysis (404)
+    or is still running it: the API refuses results (409) for an analysis that
+    is not completed, so uploading earlier would silently drop the evidence.
+    """
 
     sleep = sleep or _sleep
     query = urllib.parse.urlencode(
@@ -406,6 +411,21 @@ def resolve_analysis(
             analysis_id = str(data.get("id", ""))
             if not _UUID.match(analysis_id):
                 raise UploadFailure("Radius returned an analysis without a valid id.")
+            status = str(data.get("status") or "completed").lower()
+            if status in {"failed", "cancelled"}:
+                raise UploadFailure(
+                    f"Radius analysis {analysis_id} is {status}; results were not uploaded."
+                )
+            if status != "completed":
+                if waited >= wait_seconds:
+                    raise UploadFailure(
+                        f"Radius analysis {analysis_id} is still {status} after "
+                        f"{wait_seconds:g}s; raise wait-seconds."
+                    )
+                report.info(f"Radius analysis is {status}; waiting {poll:g}s.")
+                sleep(poll)
+                waited += poll
+                continue
             return analysis_id
         except ApiError as exc:
             if exc.status == 404 and waited < wait_seconds:
@@ -611,7 +631,7 @@ def run(sleep=None) -> int:  # noqa: ANN001
             repository,
             pr,
             sha,
-            _float("RADIUS_WAIT_SECONDS", 120.0),
+            _float("RADIUS_WAIT_SECONDS", 900.0),
             report,
             sleep=sleep,
         )
