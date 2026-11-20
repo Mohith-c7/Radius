@@ -216,3 +216,57 @@ def test_get_test_run_results_endpoint() -> None:
     assert data["failed"] == 1
     assert data["duration_ms"] == 450
 
+
+
+def _trusted_evidence_client(monkeypatch) -> TestClient:
+    from radius_api.config import get_api_settings
+
+    monkeypatch.setenv("RADIUS_FEATURE_TRUSTED_EVIDENCE", "true")
+    get_api_settings.cache_clear()
+    return TestClient(create_app())
+
+
+_PASSING = """<?xml version="1.0" encoding="utf-8"?>
+<testsuite name="pytest" tests="1" errors="0" failures="0" skipped="0" time="0.1">
+    <testcase classname="tests.test_auth" name="test_login" time="0.05"/>
+</testsuite>
+"""
+
+
+def test_trusted_evidence_on_legacy_upload_is_diagnostic_only(monkeypatch) -> None:
+    from radius_api.config import get_api_settings
+
+    client = _trusted_evidence_client(monkeypatch)
+    try:
+        headers = {"X-Radius-Organization-Id": str(uuid4())}
+        _, analysis_id = _setup_analysis(client, headers)
+        response = client.post(
+            f"/api/v1/analyses/{analysis_id}/tests/results",
+            params={"commit_sha": "f" * 40},
+            headers={**headers, "Content-Type": "application/xml"},
+            content=_PASSING,
+        )
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["verification_status"] == "untrusted"
+        assert data["upload"]["provenance_status"] == "untrusted"
+        # an unattested report never creates or re-scores the v1 confidence report
+        confidence = client.get(f"/api/v1/analyses/{analysis_id}/confidence", headers=headers)
+        assert confidence.status_code == 404
+    finally:
+        get_api_settings.cache_clear()
+
+
+def test_trusted_evidence_off_hides_the_provenance_routes() -> None:
+    client = TestClient(create_app())
+    headers = {"X-Radius-Organization-Id": str(uuid4())}
+    _, analysis_id = _setup_analysis(client, headers)
+    manifest = client.get(f"/api/v1/analyses/{analysis_id}/tests/manifest", headers=headers)
+    assert manifest.status_code == 404
+    upload = client.post(
+        f"/api/v1/analyses/{analysis_id}/tests/verified-results",
+        headers=headers,
+        files={"artifact": ("report.xml", _PASSING.encode(), "application/xml")},
+        data={"report_slot_id": "a" * 24, "pull_request_number": "1"},
+    )
+    assert upload.status_code == 404

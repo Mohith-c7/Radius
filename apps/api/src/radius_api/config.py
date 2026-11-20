@@ -99,6 +99,49 @@ class ApiSettings(DatabaseSettings):
     Off means no v2 code path runs and ``GET /analyses/{id}/verdict-v2`` answers
     404 with ``meta.reason = disabled``. Unrecognised values are treated as off.
     """
+    trusted_evidence_enabled: bool = Field(
+        default=False, alias="RADIUS_FEATURE_TRUSTED_EVIDENCE"
+    )
+    """Trusted CI test evidence (default off). On: the manifest and verified-results
+    routes answer, legacy ``/tests/results`` uploads are stored as diagnostic-only
+    (``untrusted``) and no longer re-score v1 confidence, and Verdict v2 counts only
+    verified-provenance uploads. Off: the new routes answer 404 and legacy uploads
+    behave as before. Set it to the same value on the API and the worker."""
+    attestation_verifier_path: str = Field(
+        default="gh",
+        alias="RADIUS_ATTESTATION_VERIFIER_PATH",
+        description="GitHub CLI executable used for non-interactive attestation verification.",
+    )
+    attestation_trusted_root_path: str = Field(
+        default="",
+        alias="RADIUS_ATTESTATION_TRUSTED_ROOT_PATH",
+        description="Optional path to a pinned Sigstore trusted-root bundle for attestation verification.",
+    )
+    attestation_policy_version: str = Field(
+        default="github-reusable-v1",
+        alias="RADIUS_ATTESTATION_POLICY_VERSION",
+        description="Version label recorded with immutable provenance verification events.",
+    )
+    attestation_reusable_workflow: str = Field(
+        default="",
+        alias="RADIUS_ATTESTATION_REUSABLE_WORKFLOW",
+        description="Approved reusable GitHub Actions workflow identity, including its immutable revision.",
+    )
+    attestation_reusable_workflow_sha: str = Field(
+        default="",
+        alias="RADIUS_ATTESTATION_REUSABLE_WORKFLOW_SHA",
+        description="Full immutable commit SHA approved for the reusable evidence workflow.",
+    )
+    attestation_caller_workflow_path: str = Field(
+        default="",
+        alias="RADIUS_ATTESTATION_CALLER_WORKFLOW_PATH",
+        description="Repository-relative caller workflow path approved to invoke the reusable workflow.",
+    )
+    attestation_caller_workflow_sha: str = Field(
+        default="",
+        alias="RADIUS_ATTESTATION_CALLER_WORKFLOW_SHA",
+        description="Full immutable commit SHA approved for the caller workflow.",
+    )
 
     @field_validator("verdict_v2_mode", mode="before")
     @classmethod

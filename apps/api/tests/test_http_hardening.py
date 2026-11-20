@@ -389,6 +389,23 @@ def test_upload_route_has_its_own_limit_and_accepts_xml(monkeypatch) -> None:
     assert big.status_code == 413
 
 
+def test_verified_upload_route_takes_multipart_under_the_upload_limit(monkeypatch) -> None:
+    client = _client(
+        monkeypatch, RADIUS_MAX_BODY_BYTES="2048", RADIUS_UPLOAD_MAX_BODY_BYTES="8192"
+    )
+    url = f"/api/v1/analyses/{uuid4()}/tests/verified-results"
+    files = {"artifact": ("report.xml", b"<a/>" * 1024, "application/xml")}
+    form = {"report_slot_id": "a" * 24, "pull_request_number": "7"}
+    mid = client.post(url, files=files, data=form, headers=AUTH)
+    assert mid.status_code not in (413, 415)  # over the default cap, under the upload cap
+    big_files = {"artifact": ("report.xml", b"<a/>" * 4096, "application/xml")}
+    assert client.post(url, files=big_files, data=form, headers=AUTH).status_code == 413
+    xml = client.post(
+        url, content=b"<a/>", headers={**AUTH, "Content-Type": "application/xml"}
+    )
+    assert xml.status_code == 415
+
+
 def test_intent_cap_composes_with_global_cap(monkeypatch) -> None:
     from radius_api.routes.intent import MAX_BODY_BYTES
 

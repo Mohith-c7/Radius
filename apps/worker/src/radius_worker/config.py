@@ -515,6 +515,17 @@ class WorkerSettings(DatabaseSettings):
             "for a useful result."
         ),
     )
+    trusted_evidence_enabled: bool = Field(
+        default=False,
+        alias="RADIUS_FEATURE_TRUSTED_EVIDENCE",
+        description=(
+            "Trusted CI test evidence (default OFF). On: Verdict v2 Stage B counts only "
+            "CI uploads with verified GitHub Artifact Attestation provenance; legacy and "
+            "unattested uploads are reported as diagnostic-only and never affect the "
+            "verdict. Off: every upload bound to the head commit counts, as before. Set "
+            "it to the same value on the API and the worker."
+        ),
+    )
 
     verdict_v2_check_conclusions: str = Field(
         default="advisory",

@@ -96,6 +96,10 @@ async def ingest_test_results(
     selected tests, and replaying an identical body is idempotent. Selected
     test files absent from (or only skipped in) the results keep the verdict at
     ``insufficient_evidence``.
+
+    With ``RADIUS_FEATURE_TRUSTED_EVIDENCE`` on, the report is stored as
+    ``untrusted`` and is diagnostic-only: it does not re-score confidence and
+    Verdict v2 does not count it (use ``/tests/verified-results`` instead).
     """
 
     analysis = analysis_service.get_analysis(analysis_id)
@@ -139,6 +143,28 @@ async def ingest_test_results(
         )
         raise ConflictError(msg)
     ingestion = service.ingest_test_report(analysis_id, body, commit_sha)
+    if getattr(request.app.state.settings, "trusted_evidence_enabled", False):
+        # Trusted evidence on: an unattested upload is kept for diagnostics only. It
+        # never re-scores confidence; Verdict v2 reports it as diagnostic-only.
+        _request_verdict_v2_republish(
+            request, verdicts, repository.organization_id, analysis_id
+        )
+        return success_response(replace(ingestion, verification_status="untrusted"))
+    report = rescore_confidence(confidence_service, analysis_service, analysis_id, ingestion)
+    _request_verdict_v2_republish(request, verdicts, repository.organization_id, analysis_id)
+    return success_response(
+        replace(ingestion, verification_status=report.verification_status)
+    )
+
+
+def rescore_confidence(
+    confidence_service: ConfidenceApplicationService,
+    analysis_service: AnalysisApplicationService,
+    analysis_id: UUID,
+    ingestion,
+):
+    """Re-score v1 confidence from the accumulated CI results of an analysis."""
+
     attribution = ingestion.selected_tests
     if attribution is None:
         missing: tuple[str, ...] = ()
@@ -152,7 +178,7 @@ async def ingest_test_results(
         executed = attribution.executed
         failed = attribution.failed
         skipped = attribution.skipped
-    report = confidence_service.recalculate_from_test_results(
+    return confidence_service.recalculate_from_test_results(
         analysis_id,
         ingestion,
         impact=_stored_impact(analysis_service, analysis_id, ingestion.total_tests),
@@ -162,10 +188,6 @@ async def ingest_test_results(
         failed_selected_tests=failed,
         skipped_selected_tests=skipped,
         contradictory_tests=ingestion.contradictory_cases,
-    )
-    _request_verdict_v2_republish(request, verdicts, repository.organization_id, analysis_id)
-    return success_response(
-        replace(ingestion, verification_status=report.verification_status)
     )
 
 

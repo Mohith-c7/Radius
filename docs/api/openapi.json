@@ -728,6 +728,31 @@
         "title": "ApiResponse[list[SourceDetailView]]",
         "type": "object"
       },
+      "Body_ingest_verified_test_report_api_v1_analyses__analysis_id__tests_verified_results_post": {
+        "properties": {
+          "artifact": {
+            "contentMediaType": "application/octet-stream",
+            "title": "Artifact",
+            "type": "string"
+          },
+          "pull_request_number": {
+            "exclusiveMinimum": 0.0,
+            "title": "Pull Request Number",
+            "type": "integer"
+          },
+          "report_slot_id": {
+            "title": "Report Slot Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifact",
+          "report_slot_id",
+          "pull_request_number"
+        ],
+        "title": "Body_ingest_verified_test_report_api_v1_analyses__analysis_id__tests_verified_results_post",
+        "type": "object"
+      },
       "BuildReportView": {
         "description": "Diagnostics of one build.",
         "properties": {
@@ -4811,6 +4836,73 @@
         "x-stability": "beta"
       }
     },
+    "/api/v1/analyses/{analysis_id}/tests/manifest": {
+      "get": {
+        "description": "Return the persisted server-authoritative manifest for a PR analysis.",
+        "operationId": "get_evidence_manifest",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [],
+        "summary": "Get Evidence Manifest",
+        "tags": [
+          "test-evidence"
+        ],
+        "x-stability": "internal"
+      }
+    },
     "/api/v1/analyses/{analysis_id}/tests/recent": {
       "get": {
         "description": "Return recent test executions of one repository in the caller's organization.\n\nAuthenticated and tenant-scoped: an unscoped listing would expose every\norganization's test runs.",
@@ -4935,7 +5027,7 @@
         "x-stability": "stable"
       },
       "post": {
-        "description": "Ingest one CI test report and re-score the analysis.\n\nEvidence binding (any violation leaves the verdict untouched):\n\n* ``commit_sha`` is required (422) and must equal the analysed head (409).\n* The analysis must be completed (pending/running/failed/cancelled \u2192 409)\n  and must be the latest analysis\n  of its pull request; results for a superseded head are stale (409).\n* A malformed or empty report is rejected (422) before anything is stored.\n\nUploads accumulate: every distinct report for the analysis is kept, a\nfailure in any upload is sticky, executed cases are unioned when matching\nselected tests, and replaying an identical body is idempotent. Selected\ntest files absent from (or only skipped in) the results keep the verdict at\n``insufficient_evidence``.",
+        "description": "Ingest one CI test report and re-score the analysis.\n\nEvidence binding (any violation leaves the verdict untouched):\n\n* ``commit_sha`` is required (422) and must equal the analysed head (409).\n* The analysis must be completed (pending/running/failed/cancelled \u2192 409)\n  and must be the latest analysis\n  of its pull request; results for a superseded head are stale (409).\n* A malformed or empty report is rejected (422) before anything is stored.\n\nUploads accumulate: every distinct report for the analysis is kept, a\nfailure in any upload is sticky, executed cases are unioned when matching\nselected tests, and replaying an identical body is idempotent. Selected\ntest files absent from (or only skipped in) the results keep the verdict at\n``insufficient_evidence``.\n\nWith ``RADIUS_FEATURE_TRUSTED_EVIDENCE`` on, the report is stored as\n``untrusted`` and is diagnostic-only: it does not re-score confidence and\nVerdict v2 does not count it (use ``/tests/verified-results`` instead).",
         "operationId": "ingest_test_results",
         "parameters": [
           {
@@ -5134,6 +5226,92 @@
           "tests"
         ],
         "x-stability": "beta"
+      }
+    },
+    "/api/v1/analyses/{analysis_id}/tests/verified-results": {
+      "post": {
+        "description": "Verify and ingest one report slot; all failures remain non-trusted.",
+        "operationId": "ingest_verified_test_report",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_ingest_verified_test_report_api_v1_analyses__analysis_id__tests_verified_results_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "security": [],
+        "summary": "Ingest Verified Test Report",
+        "tags": [
+          "test-evidence"
+        ],
+        "x-stability": "internal"
       }
     },
     "/api/v1/api-keys": {
@@ -7258,6 +7436,11 @@
       "description": "Connected repositories and their pull requests.",
       "name": "repositories",
       "x-stability": "stable"
+    },
+    {
+      "description": "Feature-gated GitHub Actions provenance manifests and trusted test report ingestion.",
+      "name": "test-evidence",
+      "x-stability": "internal"
     },
     {
       "description": "Test selection and CI test-result upload for an analysis.",
