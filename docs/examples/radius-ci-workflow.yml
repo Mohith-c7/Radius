@@ -1,13 +1,14 @@
 # Example GitHub Actions workflow for a repository verified by Radius.
 #
-# Copy to .github/workflows/radius.yml in YOUR repository (it is kept under
+# Copy to .github/workflows/radius-evidence.yml in YOUR repository (it is kept under
 # docs/ here so it does not run in the Radius repository itself).
 #
 # Prerequisites:
 #   * The Radius GitHub App is installed on the repository, so Radius analyses
 #     every pull request head commit.
-#   * Repository/organization variables RADIUS_API_URL and RADIUS_ORG_ID, and
-#     the secret RADIUS_API_KEY.
+#   * Repository/organization variables RADIUS_API_URL and RADIUS_ORGANIZATION_ID,
+#     and the secret RADIUS_CI_UPLOAD_KEY (an API key with the `ci-upload` scope);
+#     these are the names the Radius Settings page shows.
 #
 # Flow: plan (wait for the analysis of the PR head SHA, get the selected test
 # files) -> run only those tests with JUnit output -> upload the report, bound
@@ -59,8 +60,8 @@ jobs:
         with:
           command: plan
           api-url: ${{ vars.RADIUS_API_URL }}
-          organization-id: ${{ vars.RADIUS_ORG_ID }}
-          api-key: ${{ secrets.RADIUS_API_KEY }}
+          organization-id: ${{ vars.RADIUS_ORGANIZATION_ID }}
+          api-key: ${{ secrets.RADIUS_CI_UPLOAD_KEY }}
           wait-seconds: "900"
 
       - name: Run the selected tests
@@ -80,8 +81,8 @@ jobs:
         with:
           command: upload
           api-url: ${{ vars.RADIUS_API_URL }}
-          organization-id: ${{ vars.RADIUS_ORG_ID }}
-          api-key: ${{ secrets.RADIUS_API_KEY }}
+          organization-id: ${{ vars.RADIUS_ORGANIZATION_ID }}
+          api-key: ${{ secrets.RADIUS_CI_UPLOAD_KEY }}
           analysis-id: ${{ steps.plan.outputs.analysis-id }}
           junit-path: junit.xml
           require-verified: "true"
@@ -95,7 +96,7 @@ jobs:
         with:
           command: verdict
           api-url: ${{ vars.RADIUS_API_URL }}
-          organization-id: ${{ vars.RADIUS_ORG_ID }}
-          api-key: ${{ secrets.RADIUS_API_KEY }}
+          organization-id: ${{ vars.RADIUS_ORGANIZATION_ID }}
+          api-key: ${{ secrets.RADIUS_CI_UPLOAD_KEY }}
           analysis-id: ${{ steps.plan.outputs.analysis-id }}
           require-verified: "true"
