@@ -55,7 +55,7 @@ class Env:
         started = self.client.post(
             "/api/v1/analyses",
             headers=self.headers(org),
-            json={"repositoryId": repo.json()["data"]["id"], "pullRequestId": str(uuid4()), "commitSha": "a" * 40},
+            json={"repositoryId": repo.json()["data"]["id"], "commitSha": "a" * 40},
         )
         assert started.status_code == 202, started.text
         return started.json()["data"]["id"]
