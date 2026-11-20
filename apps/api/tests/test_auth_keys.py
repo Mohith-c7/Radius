@@ -242,14 +242,23 @@ def test_principal_actor_labels() -> None:
     assert ApiPrincipal(organization_id=ORG_A, key_prefix="ab12").actor == "key:rdk_ab12"
 
 
-def test_settings_pepper_validation_and_warning(caplog) -> None:
+def test_settings_pepper_validation_and_warning(caplog, monkeypatch) -> None:
     with pytest.raises(PydanticValidationError):
         ApiSettings(RADIUS_API_KEY_PEPPER="short")
     assert ApiSettings(RADIUS_API_KEY_PEPPER=PEPPER).api_key_pepper == PEPPER
-    with caplog.at_level(logging.WARNING):
-        warn_deprecated_api_keys(ApiSettings(api_keys=f"{ORG_A}:{LEGACY_KEY}"))
-        warn_deprecated_api_keys(ApiSettings(api_keys=""))
-    messages = [r.getMessage() for r in caplog.records]
+    # Another suite's logging setup can disable or detach this logger when it runs
+    # first in the same process; capture from the logger itself so order is moot.
+    logger = logging.getLogger("radius_api.main")
+    monkeypatch.setattr(logger, "disabled", False)
+    logger.addHandler(caplog.handler)
+    try:
+        with caplog.at_level(logging.WARNING, logger="radius_api.main"):
+            warn_deprecated_api_keys(ApiSettings(api_keys=f"{ORG_A}:{LEGACY_KEY}"))
+            warn_deprecated_api_keys(ApiSettings(api_keys=""))
+    finally:
+        logger.removeHandler(caplog.handler)
+    # A record may reach caplog twice (direct handler and propagation): count once.
+    messages = [r.getMessage() for r in dict.fromkeys(caplog.records)]
     assert sum("DEPRECATED" in m for m in messages) == 1
     assert LEGACY_KEY not in " ".join(messages)
 
