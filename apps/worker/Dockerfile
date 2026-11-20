@@ -11,10 +11,10 @@
 #            CLI talks to a daemon you provide (mounted socket or DOCKER_HOST);
 #            see docs/security/EXECUTION_ISOLATION.md and CONTAINERS.md.
 
-FROM ghcr.io/astral-sh/uv:0.12.20@sha256:100047e74f30778ab704942321a09750d6158739573ff58bf3924085cc6cd2d8 AS uv
-FROM docker:29-cli@sha256:5e6baf67325a79f64ed3bed6863954d5e05d0f3d4e57cbdb14809346814bbfdb AS docker-cli
+FROM ghcr.io/astral-sh/uv:0.13.9@sha256:d3b601f0c7b118bc1753febf7c41cc80981df678445e0254284eecf84db79a7d AS uv
+FROM docker:29-cli@sha256:34507eb5069d8be82c95dd3b6987d4250fd5fee49b82e2509b7d7a7030740d6d AS docker-cli
 
-FROM python:3.12-slim@sha256:b18b261e1b4974b4f321451ad5251ded85abb22c2b8b262da527dda1d031ab30 AS builder
+FROM python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928 AS builder
 
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     UV_PYTHON_DOWNLOADS=never \
@@ -34,7 +34,7 @@ RUN --mount=from=uv,source=/uv,target=/usr/local/bin/uv \
     for e in $(echo "${RADIUS_EXTRAS}" | tr -d '[]' | tr ',' ' '); do extras="$extras --extra $e"; done; \
     uv sync --frozen --no-dev --no-install-project --python /usr/local/bin/python $extras
 
-FROM python:3.12-slim@sha256:b18b261e1b4974b4f321451ad5251ded85abb22c2b8b262da527dda1d031ab30 AS base
+FROM python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928 AS base
 
 ARG RADIUS_VERSION=0.1.0
 ARG VCS_REF=unknown
