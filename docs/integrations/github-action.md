@@ -76,7 +76,7 @@ Radius attributes each `<testcase>` to a test file through its `file` attribute 
 | `fail-on-upload-error` | `false` | `true` makes upload problems fail the step. |
 | `include-failure-details` | `false` | `true` uploads reports unmodified (see below). |
 | `max-file-size-mb` | `10` | Larger files are skipped with a warning. At most 64 files are uploaded. |
-| `wait-seconds` | `120` | How long to wait for Radius to create the analysis for the commit (polling every 5s on 404). |
+| `wait-seconds` | `900` | How long to wait for Radius to create and complete the analysis for the commit (polling every 5s). Results for a running analysis are refused, so the action waits for `completed` and does not upload to a `failed` one. |
 | `dashboard-url` | empty | If set, the summary and `analysis-url` output link to `<dashboard-url>/analyses/<id>`. |
 
 Outputs: `status` (`uploaded`, `partial`, `failed`, `skipped-fork`, `skipped-no-secret`, `skipped-no-results`), `analysis-id`, `analysis-url`, `uploaded-count`, `skipped-count`, `verification-status`. A summary is also written to the job summary page.

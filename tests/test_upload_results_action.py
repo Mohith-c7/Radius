@@ -221,6 +221,37 @@ def test_lookup_404_polls_then_resolves(fake, env) -> None:
     assert fake.count("GET", LOOKUP) == 2
 
 
+def test_waits_until_the_analysis_is_completed_before_uploading(fake, env) -> None:
+    """The API refuses results (409) while the analysis runs; prod analyses take minutes."""
+
+    fake.on(
+        "GET",
+        LOOKUP,
+        (200, {"data": {"id": ANALYSIS, "status": "pending"}}),
+        (200, {"data": {"id": ANALYSIS, "status": "running"}}),
+        (200, {"data": {"id": ANALYSIS, "status": "completed"}}),
+    )
+    assert upload.run() == 0
+    assert fake.count("GET", LOOKUP) == 3
+    assert fake.count("POST", RESULTS) == 1
+
+
+def test_failed_analysis_is_not_uploaded_to(fake, env, tmp_path) -> None:
+    fake.on("GET", LOOKUP, (200, {"data": {"id": ANALYSIS, "status": "failed"}}))
+    assert upload.run() == 0
+    assert _outputs(tmp_path)["status"] == "failed"
+    assert fake.count("POST", RESULTS) == 0
+
+
+def test_analysis_still_running_after_the_wait_is_reported(fake, env, tmp_path, capsys) -> None:
+    env.setenv("RADIUS_WAIT_SECONDS", "10")
+    fake.on("GET", LOOKUP, (200, {"data": {"id": ANALYSIS, "status": "running"}}))
+    assert upload.run() == 0
+    assert _outputs(tmp_path)["status"] == "failed"
+    assert fake.count("POST", RESULTS) == 0
+    assert "raise wait-seconds" in capsys.readouterr().out
+
+
 def test_lookup_never_found_is_nonfatal(fake, env, tmp_path) -> None:
     env.setenv("RADIUS_WAIT_SECONDS", "10")
     fake.on("GET", LOOKUP, (404, {}))
