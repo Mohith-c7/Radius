@@ -69,6 +69,7 @@ import {
   v1Presentation,
   type V2Input,
 } from "../lib/analysis-header-model";
+import { graphSummary, pickNewestCompletedAnalysis } from "../lib/graph-model";
 import "./analysis-header.css";
 
 type LoadState<T> =
@@ -1329,11 +1330,10 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
       getAnalysis(analysisId),
       listRepositories(),
     ]);
-    const [blast, confidence, tests, graph, testResult] = await Promise.allSettled([
+    const [blast, confidence, tests, testResult] = await Promise.allSettled([
       getBlastRadius(analysisId),
       getConfidence(analysisId),
       getTests(analysisId),
-      getGraph(analysisId),
       getTestRunResult(analysisId),
     ]);
     return {
@@ -1342,10 +1342,12 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
       blast: settledValue(blast),
       confidence: settledValue(confidence),
       tests: settledValue(tests),
-      graph: settledValue(graph),
       testResult: settledValue(testResult),
     };
   }, [analysisId, refreshKey]);
+  // The graph can be large and slow; the page never waits on it.
+  const graphState = useRadiusData(() => getGraph(analysisId), [analysisId, refreshKey]);
+  const graph = graphState.status === "ready" ? graphState.data : null;
 
   async function runAgain() {
     if (rerunning) return;
@@ -1369,7 +1371,7 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
   if (state.status === "loading") return <LoadingState label="Loading analysis" />;
   if (state.status === "error") return <ErrorState message={state.error} />;
 
-  const { analysis, repositories, blast, confidence, tests, graph, testResult } = state.data;
+  const { analysis, repositories, blast, confidence, tests, testResult } = state.data;
   const repo = repositoryName(repositories, analysis.repository_id);
   const header = buildHeaderModel(
     confidence
@@ -1521,13 +1523,13 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
       <VerdictV2Panel analysisId={analysisId} onVerdict={setV2} />
 
       <div id="impact" style={{ marginTop: "24px", display: "grid", gap: "20px" }}>
-        <BlastRadiusVisualizerCard blast={blast} graph={graph} analysisId={analysisId} />
+        <BlastRadiusVisualizerCard blast={blast} graphState={graphState} analysisId={analysisId} />
         {graph && graph.nodes.length > 0 && (
           <InteractiveGraphViewer
             nodes={graph.nodes}
             edges={graph.edges}
-            title={`Interactive CPG Slice & Dependency Visualizer (${graph.node_count} nodes, ${graph.edge_count} edges)`}
-            subtitle="Explore directly modified entrypoints, caller traversal, and targeted tests."
+            title="Interactive CPG Slice & Dependency Visualizer"
+            subtitle={graphSummary(graph)}
             height={520}
           />
         )}
@@ -1646,13 +1648,14 @@ function ConfidenceEvidenceCard({
 
 function BlastRadiusVisualizerCard({
   blast,
-  graph,
+  graphState,
   analysisId,
 }: {
   blast: BlastRadius | null;
-  graph: GraphSnapshot | null;
+  graphState: LoadState<GraphSnapshot>;
   analysisId: string;
 }) {
+  const graph = graphState.status === "ready" ? graphState.data : null;
   return (
     <section className="card detail-card">
       <div className="test-hub-header">
@@ -1691,10 +1694,17 @@ function BlastRadiusVisualizerCard({
         </div>
       </div>
 
+      {graphState.status === "loading" && <p className="muted">Loading dependency graph...</p>}
+      {graphState.status === "error" && (
+        <p className="muted">Dependency graph unavailable: {graphState.error}</p>
+      )}
+      {graph && graph.nodes.length === 0 && (
+        <p className="muted">No graph nodes on the changed files. {graphSummary(graph)}</p>
+      )}
       {graph && graph.nodes.length > 0 && (
         <div className="cpg-slice-card">
           <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "8px", color: "var(--muted)" }}>
-            CPG Dependency Slice Nodes ({graph.node_count} nodes, {graph.edge_count} edges)
+            CPG Dependency Slice Nodes: {graphSummary(graph)}
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
             {graph.nodes.slice(0, 16).map((node) => {
@@ -2086,17 +2096,19 @@ function TestSelectionHub({
 
 export function BlastRadiusData({ analysisId }: { analysisId: string }) {
   const state = useRadiusData(async () => {
-    const [blast, graph, analysis] = await Promise.all([
+    const [blast, analysis] = await Promise.all([
       getBlastRadius(analysisId),
-      getGraph(analysisId).catch(() => null),
       getAnalysis(analysisId).catch(() => null),
     ]);
-    return { blast, graph, analysis };
+    return { blast, analysis };
   }, [analysisId]);
+  // Loaded on its own so a slow or failed graph never blocks the page.
+  const graphState = useRadiusData(() => getGraph(analysisId), [analysisId]);
+  const graph = graphState.status === "ready" ? graphState.data : null;
 
   if (state.status === "loading") return <LoadingState label="Loading blast radius" />;
   if (state.status === "error") return <ErrorState message={state.error} />;
-  const { blast, graph, analysis } = state.data;
+  const { blast, analysis } = state.data;
   const rows = [
     ["Affected files", blast.affected_files],
     ["Affected symbols", blast.affected_symbols],
@@ -2159,12 +2171,20 @@ export function BlastRadiusData({ analysisId }: { analysisId: string }) {
           <InteractiveGraphViewer
             nodes={graph.nodes}
             edges={graph.edges}
-            title={`Interactive CPG Slice & Dependency Visualizer (${graph.node_count} nodes, ${graph.edge_count} edges)`}
-            subtitle="Explore directly modified entrypoints, caller traversal, and targeted tests."
+            title="Interactive CPG Slice & Dependency Visualizer"
+            subtitle={graphSummary(graph)}
             height={580}
           />
         </section>
-      ) : null}
+      ) : (
+        <p className="muted" style={{ marginBottom: "24px" }}>
+          {graphState.status === "loading"
+            ? "Loading dependency graph..."
+            : graphState.status === "error"
+              ? `Dependency graph unavailable: ${graphState.error}`
+              : `No graph nodes on the changed files. ${graph ? graphSummary(graph) : ""}`}
+        </p>
+      )}
 
 
 
@@ -2199,22 +2219,43 @@ export function BlastRadiusData({ analysisId }: { analysisId: string }) {
 
 export function GraphOverviewData() {
   const state = useRadiusData(async () => {
-    const analyses = await listAnalyses();
-    const latest = analyses.find((analysis) => analysis.id);
-    const graph = latest?.id ? await getGraph(latest.id) : null;
-    return { latest, graph };
+    // Only a completed analysis has a graph; a pending one would 404.
+    const latest = pickNewestCompletedAnalysis(await listAnalyses({ status: "completed" }));
+    if (!latest?.id) return { latest, graph: null, graphError: null };
+    try {
+      return { latest, graph: await getGraph(latest.id), graphError: null };
+    } catch (error) {
+      return { latest, graph: null, graphError: errorText(error) };
+    }
   }, []);
   if (state.status === "loading") return <LoadingState label="Loading dependency graph" />;
   if (state.status === "error") return <ErrorState message={state.error} />;
-  if (!state.data.latest || !state.data.graph) {
+  const { latest, graph, graphError } = state.data;
+  if (!latest?.id) {
     return (
       <EmptyState
-        title="No dependency graph available"
-        detail="Run an analysis with worker execution to build graph artifacts."
+        title="No completed analysis yet"
+        detail="The graph appears once an analysis has finished. Run an analysis with worker execution to build graph artifacts."
       />
     );
   }
-  return <GraphCard graph={state.data.graph} />;
+  if (!graph) {
+    return (
+      <EmptyState
+        title="No dependency graph for the latest completed analysis"
+        detail={`Analysis ${latest.id}: ${graphError ?? "the graph was not built."}`}
+      />
+    );
+  }
+  if (graph.nodes.length === 0) {
+    return (
+      <EmptyState
+        title="No graph nodes on the changed files"
+        detail={`Analysis ${latest.id}: ${graphSummary(graph)}`}
+      />
+    );
+  }
+  return <GraphCard graph={graph} />;
 }
 
 function GraphCard({ graph }: { graph: GraphSnapshot }) {
@@ -2223,7 +2264,7 @@ function GraphCard({ graph }: { graph: GraphSnapshot }) {
       nodes={graph.nodes}
       edges={graph.edges}
       title="Dependency Graph & Module Relationships"
-      subtitle={`Snapshot version ${graph.graph_version} / created ${formatDate(graph.created_at)} (${graph.node_count} nodes, ${graph.edge_count} edges)`}
+      subtitle={`Snapshot version ${graph.graph_version} / created ${formatDate(graph.created_at)}. ${graphSummary(graph)}`}
       height={600}
     />
   );

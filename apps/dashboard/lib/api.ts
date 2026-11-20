@@ -6,6 +6,7 @@ import {
   syncPullRequestsRequest,
   type SyncSummary,
 } from "./github-actions.ts";
+import { DASHBOARD_GRAPH_REQUEST, graphPath, type GraphRequest } from "./graph-model.ts";
 
 export type UUID = string;
 
@@ -151,6 +152,11 @@ export type GraphSnapshot = {
   created_at: string;
   nodes: GraphNode[];
   edges: GraphEdge[];
+  /** Slice description; node_count / edge_count above are the full-graph totals. */
+  scope?: "full" | "impact";
+  truncated?: boolean;
+  returned_node_count?: number | null;
+  returned_edge_count?: number | null;
 };
 
 export type ConnectRepositoryPayload = {
@@ -507,7 +513,8 @@ export function uploadTestResults(
   });
 }
 
-export function getGraph(analysisId: UUID) {
-  return radiusFetch<GraphSnapshot>(`/analyses/${analysisId}/graph`);
+/** Bounded graph of an analysis (by default the changed files plus one hop). */
+export function getGraph(analysisId: UUID, request: GraphRequest = DASHBOARD_GRAPH_REQUEST) {
+  return radiusFetch<GraphSnapshot>(graphPath(analysisId, request));
 }
 
