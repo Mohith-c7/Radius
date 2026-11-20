@@ -52,6 +52,9 @@ Pin the action by full commit SHA with a version comment. This repository does n
     JEST_JUNIT_ADD_FILE_ATTRIBUTE: "true"   # lets Radius map cases to test files
 # then: junit-path: reports/junit.xml
 
+# node:test (Node 22): the built-in junit reporter writes classname="test" and no file,
+# so run one file per report and add the path, see scripts/ci/merge_node_junit.py
+
 # vitest
 - run: npx vitest run --reporter=junit --outputFile=reports/junit.xml
 
@@ -115,7 +118,7 @@ Also sent in the request: your organization id and API key (headers), the reposi
 
 See [verdict-v2.md](../verdict-v2.md) for the flag semantics.
 
-This repository runs the action on itself in `.github/workflows/radius-evidence.yml` (a test subset with JUnit output, then the upload; it reads `vars.RADIUS_API_URL`, `vars.RADIUS_ORGANIZATION_ID` and `secrets.RADIUS_CI_UPLOAD_KEY`, and skips the upload when the secret is missing).
+This repository runs the action on itself in `.github/workflows/radius-evidence.yml` (the same Python and dashboard suites as CI, sharded, with JUnit output, then one upload job for all reports; it reads `vars.RADIUS_API_URL`, `vars.RADIUS_ORGANIZATION_ID` and `secrets.RADIUS_CI_UPLOAD_KEY`, and skips the upload when the secret is missing).
 
 ## Troubleshooting
 

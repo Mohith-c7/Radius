@@ -1,9 +1,17 @@
 name: Radius evidence
 
-# Runs a fast subset of the Python tests on the pull request HEAD commit, writes
-# JUnit XML and uploads it to Radius as Verdict v2 execution evidence
-# (docs/integrations/github-action.md). The full suite still runs in CI
-# (ci.yml, job Validate); this job only feeds the verdict and is not a gate.
+# Runs the same test suites as CI (ci.yml Validate: the Python suites of every
+# workspace package plus the root tests, and the dashboard node tests) on the
+# pull request HEAD commit with JUnit output, then uploads every report to Radius
+# as Verdict v2 / test-selection evidence (docs/integrations/github-action.md).
+# This workflow is not a gate; CI stays the required check.
+#
+# Test identities in the reports (what Radius matches against its selection):
+#   pytest (run from the repository root, junit_family=xunit1):
+#     file="apps/api/tests/test_x.py" classname="apps.api.tests.test_x[.TestClass]"
+#     name="test_fn[param]"   -> node id apps/api/tests/test_x.py::TestClass::test_fn
+#   node --test (merged by scripts/ci/merge_node_junit.py):
+#     file=classname="apps/dashboard/tests/x.test.mjs" name="<test title>"
 #
 # Configure in Settings > Secrets and variables > Actions:
 #   vars.RADIUS_API_URL            https://radius.buildbymohith.in (a trailing /api/v1 is removed)
@@ -23,15 +31,48 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  evidence:
-    name: Tests for Radius evidence
+  python:
+    name: Python tests (${{ matrix.shard }})
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Together exactly coverage.yml's set: apps/api/tests apps/worker/tests packages/*/tests tests.
+          # "rest" is every packages/*/tests directory not named by another shard, so a new
+          # package is picked up without editing this list.
+          - shard: api
+            paths: apps/api/tests
+          - shard: worker
+            paths: apps/worker/tests tests
+          - shard: evidence
+            paths: packages/evidence/tests packages/linking/tests packages/confidence/tests
+          - shard: intent
+            paths: packages/intent/tests packages/analysis/tests
+          - shard: rest
+            paths: rest
+
+    # Same services as CI and coverage.yml, so no test has to be excluded.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: radius
+          POSTGRES_USER: radius
+          POSTGRES_PASSWORD: radius
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U radius -d radius"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
     env:
-      RADIUS_ENV: test
-      # Only a boolean leaves the secrets context here; the key itself is passed
-      # to the upload step alone.
-      HAS_UPLOAD_KEY: ${{ secrets.RADIUS_CI_UPLOAD_KEY != '' }}
+      DATABASE_URL: postgresql+psycopg://radius:radius@localhost:5432/radius
+      # RADIUS_ENV stays unset, as in coverage.yml: package tests assert the default.
+      STORAGE_BACKEND: sql
 
     steps:
       - name: Checkout the pull request head
@@ -53,32 +94,120 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
 
-      # Keep every test named in .radius/intent.yml inside these paths.
-      - name: Run tests with JUnit output
+      - name: Build sandbox test image
+        if: ${{ matrix.shard == 'rest' }}
+        # packages/testing/tests/test_sandbox_runner.py runs real containers, as in CI.
         run: |
-          python -m pytest \
-            packages/evidence/tests \
-            packages/confidence/tests \
-            packages/linking/tests \
-            packages/intent/tests \
-            packages/shared/tests/test_verdict_v2_scaffold.py \
-            apps/worker/tests/test_verdict_v2_*.py \
-            apps/api/tests/test_verdict_v2_*.py \
-            tests/test_upload_results_action.py \
-            -p no:cacheprovider \
-            -o junit_family=xunit1 \
-            --junitxml=reports/radius-junit.xml
+          printf 'FROM mirror.gcr.io/library/python:3.12-slim\nRUN pip install --no-cache-dir pytest==9.2.0\n' \
+            | docker build -t radius-sandbox-test:latest -
 
+      - name: Run tests with JUnit output
+        env:
+          TEST_PATHS: ${{ matrix.paths }}
+          SHARD: ${{ matrix.shard }}
+        run: |
+          if [ "$TEST_PATHS" = "rest" ]; then
+            TEST_PATHS=""
+            for dir in packages/*/tests; do
+              case "$dir" in
+                packages/evidence/*|packages/linking/*|packages/confidence/*|packages/intent/*|packages/analysis/*) ;;
+                *) TEST_PATHS="$TEST_PATHS $dir" ;;
+              esac
+            done
+          fi
+          echo "Test paths:$TEST_PATHS"
+          # shellcheck disable=SC2086  # split on purpose: a list of directories
+          python -m pytest $TEST_PATHS -p no:cacheprovider \
+            -o junit_family=xunit1 --junitxml="reports/junit-python-${SHARD}.xml"
+
+      - name: Keep the report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: radius-junit-python-${{ matrix.shard }}
+          path: reports/junit-python-${{ matrix.shard }}.xml
+          if-no-files-found: ignore
+          retention-days: 3
+
+  dashboard:
+    name: Dashboard tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout the pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 9.15.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install Node dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Node's junit reporter names no test file, so each file gets its own report and
+      # scripts/ci/merge_node_junit.py writes the repository-relative path into every case.
+      - name: Run node tests with JUnit output
+        working-directory: apps/dashboard
+        run: |
+          mkdir -p ../../reports/node
+          status=0
+          for file in tests/*.test.mjs; do
+            name="$(basename "$file")"
+            node --experimental-strip-types --test \
+              --test-reporter=spec --test-reporter-destination=stdout \
+              --test-reporter=junit --test-reporter-destination="../../reports/node/${name}.xml" \
+              "$file" || status=1
+          done
+          exit "$status"
+
+      - name: Merge node reports
+        if: ${{ !cancelled() }}
+        run: |
+          python3 scripts/ci/merge_node_junit.py --prefix apps/dashboard/tests \
+            --out reports/junit-dashboard.xml reports/node/*.xml
+
+      - name: Keep the report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: radius-junit-dashboard
+          path: reports/junit-dashboard.xml
+          if-no-files-found: ignore
+          retention-days: 3
+
+  upload:
+    name: Upload results to Radius
+    needs: [python, dashboard]
+    # Failing tests are evidence too, so this also runs after a red test job.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # Only a boolean leaves the secrets context here; the key itself goes to the upload step alone.
+      HAS_UPLOAD_KEY: ${{ secrets.RADIUS_CI_UPLOAD_KEY != '' }}
+    steps:
       - name: Resolve Radius settings
         id: radius
-        if: ${{ !cancelled() && env.HAS_UPLOAD_KEY == 'true' }}
         env:
           API_URL: ${{ vars.RADIUS_API_URL }}
           ORG_ID: ${{ vars.RADIUS_ORGANIZATION_ID }}
         run: |
           api="${API_URL%/}"
           api="${api%/api/v1}"
-          if [ -z "$api" ] || [ -z "$ORG_ID" ]; then
+          if [ "$HAS_UPLOAD_KEY" != "true" ]; then
+            echo "::notice::RADIUS_CI_UPLOAD_KEY is not available (fork, Dependabot or not configured); skipping the Radius upload."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          elif [ -z "$api" ] || [ -z "$ORG_ID" ]; then
             echo "::notice::RADIUS_API_URL or RADIUS_ORGANIZATION_ID is not set; skipping the Radius upload."
             echo "enabled=false" >> "$GITHUB_OUTPUT"
           else
@@ -86,17 +215,26 @@ jobs:
             echo "api-url=$api" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Collect the reports
+        if: ${{ steps.radius.outputs.enabled == 'true' }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: radius-junit-*
+          path: reports
+          merge-multiple: true
+
       - name: Upload results to Radius
-        # Failing tests are evidence too, so this runs after a red test step.
-        if: ${{ !cancelled() && steps.radius.outputs.enabled == 'true' }}
+        if: ${{ steps.radius.outputs.enabled == 'true' }}
         # Pinned by full SHA (develop; no release tag exists yet, PRD-32), so a pull
-        # request cannot change the code that handles the key.
+        # request cannot change the code that handles the key. One request per file
+        # (six files); uploads for the same analysis accumulate on the server.
         uses: Mohith-c7/Radius/actions/upload-results@77766ab61db853276cd639d06435053bd1b1d84f # 0.1.0 (develop)
         with:
           api-url: ${{ steps.radius.outputs.api-url }}
           organization-id: ${{ vars.RADIUS_ORGANIZATION_ID }}
           api-key: ${{ secrets.RADIUS_CI_UPLOAD_KEY }}
-          junit-path: reports/radius-junit.xml
+          junit-path: reports/*.xml
+          # The dashboard is served from the same origin as the API proxy here.
           dashboard-url: ${{ steps.radius.outputs.api-url }}
           # A cold single-container deployment can take a few minutes to create the analysis.
           wait-seconds: "300"
