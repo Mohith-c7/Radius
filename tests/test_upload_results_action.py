@@ -189,7 +189,15 @@ def test_5xx_retries_with_backoff_then_succeeds(fake, env) -> None:
     sleeps: list[float] = []
     fake.on("POST", RESULTS, (503, {}), (502, {}), (200, {"data": {}}))
     assert upload.run(sleep=sleeps.append) == 0
-    assert fake.count("POST", RESULTS) == 3 and sleeps == [2.0, 4.0]
+    assert fake.count("POST", RESULTS) == 3 and sleeps == [5.0, 10.0]
+
+
+def test_retries_outlast_a_two_minute_api_restart(fake, env) -> None:
+    sleeps: list[float] = []
+    fake.on("POST", RESULTS, *([(502, {})] * (upload.MAX_ATTEMPTS - 1)), (200, {"data": {}}))
+    assert upload.run(sleep=sleeps.append) == 0
+    assert fake.count("POST", RESULTS) == upload.MAX_ATTEMPTS
+    assert sum(sleeps) >= 120
 
 
 def test_persistent_5xx_does_not_fail_by_default(fake, env, tmp_path, capsys) -> None:

@@ -1,0 +1,1 @@
+Verdict v2 links a test named in a `tests:` hint to the changed code it calls from just the hinted and changed files, in its own step. A whole-repository linking timeout on a slow host no longer leaves that test with link strength 0 (`gated:test_link_below_min`).
