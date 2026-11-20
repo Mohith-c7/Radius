@@ -1,0 +1,10 @@
+# Verdict v2 policy for the Radius repository (guide: docs/policy.md).
+# Read from the BASE branch only, so a pull request cannot loosen it for itself.
+#
+# Advisory first (docs/CI_INTEGRATION_GUIDE.md, "Making the Verdict v2 check
+# required"): the `Radius confidence` Check Run is never `failure`, whatever the
+# verdict. Thresholds, tamper severities and exclusions stay at the shipped
+# defaults. Switch to `mode: blocking` only in a reviewed change, after the
+# comments have been read for a few weeks.
+version: 1
+mode: advisory

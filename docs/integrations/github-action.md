@@ -66,7 +66,7 @@ Radius attributes each `<testcase>` to a test file through its `file` attribute 
 
 | Input | Default | Meaning |
 | --- | --- | --- |
-| `api-url` | required | Radius API base URL (`https://`; `http://` only for localhost). |
+| `api-url` | required | Radius API origin (`https://`; `http://` only for localhost), for example `https://radius.example.com`. The action appends `/api/v1/...` itself, so do not include `/api/v1`. A dashboard that proxies `/api/v1/*` to the API (`RADIUS_API_PUBLIC_UPSTREAM`) works as the origin. |
 | `organization-id` | required | Radius organization UUID. |
 | `api-key` | empty | Pass from a secret. Empty means "skip" (see forks). |
 | `junit-path` | `junit.xml` | Glob(s), one per line or comma separated. `**` works. Matched relative to the workspace; files outside it are ignored. |
@@ -114,6 +114,8 @@ Also sent in the request: your organization id and API key (headers), the reposi
 4. When satisfied, set `RADIUS_FEATURE_VERDICT_V2=on` so the republish after upload updates the check. Keep `fail-on-upload-error` at `false` until the setup has been stable for a while.
 
 See [verdict-v2.md](../verdict-v2.md) for the flag semantics.
+
+This repository runs the action on itself in `.github/workflows/radius-evidence.yml` (a test subset with JUnit output, then the upload; it reads `vars.RADIUS_API_URL`, `vars.RADIUS_ORGANIZATION_ID` and `secrets.RADIUS_CI_UPLOAD_KEY`, and skips the upload when the secret is missing).
 
 ## Troubleshooting
 

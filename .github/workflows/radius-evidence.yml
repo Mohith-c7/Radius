@@ -1,0 +1,102 @@
+name: Radius evidence
+
+# Runs a fast subset of the Python tests on the pull request HEAD commit, writes
+# JUnit XML and uploads it to Radius as Verdict v2 execution evidence
+# (docs/integrations/github-action.md). The full suite still runs in CI
+# (ci.yml, job Validate); this job only feeds the verdict and is not a gate.
+#
+# Configure in Settings > Secrets and variables > Actions:
+#   vars.RADIUS_API_URL            https://radius.buildbymohith.in (a trailing /api/v1 is removed)
+#   vars.RADIUS_ORGANIZATION_ID    the Radius organization UUID
+#   secrets.RADIUS_CI_UPLOAD_KEY   a Radius API key with the `ci-upload` scope
+# Without the secret (forks, Dependabot, not configured yet) the tests still run
+# and the upload is skipped. Never switch to pull_request_target for secrets.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: radius-evidence-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  evidence:
+    name: Tests for Radius evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      RADIUS_ENV: test
+      # Only a boolean leaves the secrets context here; the key itself is passed
+      # to the upload step alone.
+      HAS_UPLOAD_KEY: ${{ secrets.RADIUS_CI_UPLOAD_KEY != '' }}
+
+    steps:
+      - name: Checkout the pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Radius analyses the head commit; the default merge commit would be rejected (409).
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      # Keep every test named in .radius/intent.yml inside these paths.
+      - name: Run tests with JUnit output
+        run: |
+          python -m pytest \
+            packages/evidence/tests \
+            packages/confidence/tests \
+            packages/linking/tests \
+            packages/intent/tests \
+            packages/shared/tests/test_verdict_v2_scaffold.py \
+            apps/worker/tests/test_verdict_v2_*.py \
+            apps/api/tests/test_verdict_v2_*.py \
+            tests/test_upload_results_action.py \
+            -p no:cacheprovider \
+            -o junit_family=xunit1 \
+            --junitxml=reports/radius-junit.xml
+
+      - name: Resolve Radius settings
+        id: radius
+        if: ${{ !cancelled() && env.HAS_UPLOAD_KEY == 'true' }}
+        env:
+          API_URL: ${{ vars.RADIUS_API_URL }}
+          ORG_ID: ${{ vars.RADIUS_ORGANIZATION_ID }}
+        run: |
+          api="${API_URL%/}"
+          api="${api%/api/v1}"
+          if [ -z "$api" ] || [ -z "$ORG_ID" ]; then
+            echo "::notice::RADIUS_API_URL or RADIUS_ORGANIZATION_ID is not set; skipping the Radius upload."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "api-url=$api" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload results to Radius
+        # Failing tests are evidence too, so this runs after a red test step.
+        if: ${{ !cancelled() && steps.radius.outputs.enabled == 'true' }}
+        # Pinned by full SHA (develop; no release tag exists yet, PRD-32), so a pull
+        # request cannot change the code that handles the key.
+        uses: Mohith-c7/Radius/actions/upload-results@77766ab61db853276cd639d06435053bd1b1d84f # 0.1.0 (develop)
+        with:
+          api-url: ${{ steps.radius.outputs.api-url }}
+          organization-id: ${{ vars.RADIUS_ORGANIZATION_ID }}
+          api-key: ${{ secrets.RADIUS_CI_UPLOAD_KEY }}
+          junit-path: reports/radius-junit.xml
+          dashboard-url: ${{ steps.radius.outputs.api-url }}
+          # A cold single-container deployment can take a few minutes to create the analysis.
+          wait-seconds: "300"
