@@ -22,7 +22,7 @@ How to read it.
   (`RADIUS_LLM_*`) silently fall back to their default on a bad number.
 
 
-Variables documented: **171** (15 secret, 11 feature flags).
+Variables documented: **172** (15 secret, 11 feature flags).
 
 ## Core, API, GitHub and observability
 
@@ -122,6 +122,7 @@ Variables documented: **171** (15 secret, 11 feature flags).
 | `RADIUS_VERDICT_V2_CONFIRM_POLICY` | str | `allow_unverified` | worker | no | - | Who may lift the unconfirmed-intent block and the author-hint cap by confirming a criterion (B-07). The confirmer is the authenticated principal recorded by the API. A confirmer linked to the PR author's GitHub login never counts. allow_unverified (default): a confirmer whose GitHub link is unknown counts but is labelled 'unverified confirmer' in the verdict. require_second_person: only a confirmer verifiably linked to a different GitHub account counts. An unrecognised value stops the worker at start. |
 | `RADIUS_WEBHOOK_MAX_BODY_BYTES` | int | `5242880` | api | no | - | Body cap in bytes for GitHub webhook deliveries. |
 | `RADIUS_WORKER_METRICS_PORT` | int | `0` | api, worker | no | - | Port for the worker's Prometheus endpoint; ``0`` disables it. |
+| `RADIUS_WORKER_NICE` | int | `10` | api | no | - | Single-container hosting only (`python -m radius_api.serve_with_worker`): POSIX nice value (0-19) of the embedded worker so a running analysis does not starve API requests. `0` disables it; ignored on Windows. |
 | `SERVICE_NAME` | str | `radius-api` | api, worker | no | - | Service name used in logs. Defaults differ per service (`radius-api`, `radius-worker`); normally left alone. |
 | `SESSION_COOKIE_DOMAIN` | str \| None | `unset` | api | no | - | Optional ``Domain`` of the session cookie (C-20), for example ``example.com`` when the dashboard (``app.example.com``) and the API (``api.example.com``) are separate hosts. Unset (default) keeps a host-only cookie, which needs one origin or localhost. |
 | `SESSION_COOKIE_SECURE` | bool | `false` | api | no | - | Auth module: set the Secure flag on the session cookie. Set true behind TLS. |

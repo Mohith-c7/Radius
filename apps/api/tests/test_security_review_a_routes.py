@@ -571,7 +571,7 @@ def test_start_analysis_rejects_malformed_commit_shas(sha: str) -> None:
     response = client.post(
         "/api/v1/analyses",
         headers={"X-Radius-Organization-Id": org},
-        json={"repositoryId": repo, "pullRequestId": str(uuid4()), "commitSha": sha},
+        json={"repositoryId": repo, "commitSha": sha},
     )
     assert response.status_code == 422
 

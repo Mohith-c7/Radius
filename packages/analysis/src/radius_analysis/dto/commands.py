@@ -11,7 +11,7 @@ class StartAnalysisCommand:
     """Command to create a new analysis run."""
 
     repository_id: UUID
-    pull_request_id: UUID
+    pull_request_id: UUID | None
     commit_sha: str
 
 

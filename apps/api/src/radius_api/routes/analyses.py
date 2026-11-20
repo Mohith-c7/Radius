@@ -60,13 +60,14 @@ async def start_analysis(
 
     repository = repository_service.get_repository(request.repository_id)
     ensure_same_organization(principal, repository.organization_id)
-    # A-06: the pull request must belong to this repository. A pull request of
-    # another repository (or tenant) is indistinguishable from a missing one.
-    pr_repository_id = repository_service.pull_request_repository_id(
-        request.pull_request_id
-    )
-    if pr_repository_id is not None and pr_repository_id != request.repository_id:
-        raise NotFoundError("Pull request not found.", code="PULL_REQUEST_NOT_FOUND")
+    # Manual analyses without a GitHub PR are explicitly represented with a
+    # null PR id. A supplied id must resolve within this repository.
+    if request.pull_request_id is not None:
+        pr_repository_id = repository_service.pull_request_repository_id(
+            request.pull_request_id
+        )
+        if pr_repository_id != request.repository_id:
+            raise NotFoundError("Pull request not found.", code="PULL_REQUEST_NOT_FOUND")
     body_hash = await request_hash(http_request)
     existing = replay_or_validate(
         idempotency_store,

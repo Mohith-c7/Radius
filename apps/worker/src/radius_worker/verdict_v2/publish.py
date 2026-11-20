@@ -281,6 +281,8 @@ def publish_latest(
     )
     if analysis is None or repository is None or repository.organization_id != organization_id:
         return PublishOutcome("skipped", "analysis_not_found")
+    if analysis.pull_request_id is None:  # manual branch/commit analysis: no PR to publish to
+        return PublishOutcome("skipped", "no_pull_request")
     organization = session.get(db_models.Organization, organization_id)
     if (
         organization is not None

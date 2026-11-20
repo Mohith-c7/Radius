@@ -116,8 +116,11 @@ def _ingest(
     repository = (
         session.get(db_models.Repository, analysis.repository_id) if analysis else None
     )
+    # A manual branch/commit analysis has no pull request, so no PR intent to ingest.
     pull_request = (
-        session.get(db_models.PullRequest, analysis.pull_request_id) if analysis else None
+        session.get(db_models.PullRequest, analysis.pull_request_id)
+        if analysis is not None and analysis.pull_request_id is not None
+        else None
     )
     if analysis is None or repository is None or pull_request is None:
         return None

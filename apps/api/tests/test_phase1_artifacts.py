@@ -67,7 +67,6 @@ def test_phase1_artifact_endpoints_return_graph_tests_and_confidence() -> None:
         headers=headers,
         json={
             "repositoryId": repository_id,
-            "pullRequestId": str(uuid4()),
             "commitSha": "c" * 40,
         },
     )

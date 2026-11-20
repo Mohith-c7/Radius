@@ -47,7 +47,7 @@ class AnalysisResponse:
 
     id: UUID | None
     repository_id: UUID
-    pull_request_id: UUID
+    pull_request_id: UUID | None
     commit_sha: str
     status: str
     started_at: datetime

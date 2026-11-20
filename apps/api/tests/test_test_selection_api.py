@@ -58,7 +58,6 @@ def _setup_analysis(client: TestClient, headers: dict[str, str]) -> tuple[UUID, 
         headers=headers,
         json={
             "repositoryId": str(repo_id),
-            "pullRequestId": str(uuid4()),
             "commitSha": "f" * 40,
         },
     )

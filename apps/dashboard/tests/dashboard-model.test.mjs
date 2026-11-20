@@ -27,11 +27,64 @@ test("analysisLabel shows PR number and truncated title with the short id second
   assert.equal(label.pullRequest, pr);
 });
 
-test("analysisLabel falls back to the short analysis id for unknown or manual PRs", () => {
+test("analysisLabel falls back to the short analysis id for a PR that is not synced", () => {
   const label = m.analysisLabel(analysis("abcdef0123456", "pending", "", "random-uuid"), prs);
   assert.equal(label.title, "Analysis abcdef01");
+  assert.equal(label.secondary, "Pull request not synced");
   assert.equal(label.pullRequest, null);
-  assert.equal(m.analysisLabel({ id: null, pull_request_id: "" }, prs).title, "Analysis -");
+});
+
+test("analysisLabel names a PR-less analysis by its branch/commit", () => {
+  const manual = { id: "abcdef0123456", pull_request_id: null, commit_sha: "90bd4aa7439419186a85" };
+  const label = m.analysisLabel(manual, prs);
+  assert.equal(label.title, "Branch/commit 90bd4aa");
+  assert.equal(label.secondary, "Analysis abcdef01");
+  assert.equal(label.pullRequest, null);
+  assert.equal(m.analysisLabel({ id: null, pull_request_id: null }, prs).title, "Branch/commit");
+});
+
+test("analysisHeading says branch/commit verification when there is no PR", () => {
+  assert.deepEqual(m.analysisHeading({ pull_request_id: null, commit_sha: "90bd4aa7439419" }, "acme/radius"), {
+    title: "Branch/commit verification",
+    description: "acme/radius / Branch/commit 90bd4aa",
+  });
+  assert.deepEqual(m.analysisHeading({ pull_request_id: "pr-uuid-1", commit_sha: "a" }, "acme/radius", pr), {
+    title: "Pull request verification",
+    description: "acme/radius / PR #154 build(deps): Bump the npm group across 1 directory with 3 u…",
+  });
+  assert.equal(
+    m.analysisHeading({ pull_request_id: "12345678-aaaa", commit_sha: "a" }, "acme/radius").description,
+    "acme/radius / PR 12345678",
+  );
+});
+
+test("pullRequestOptionLabel and initialBranch drive the Run Verification form", () => {
+  assert.equal(m.pullRequestOptionLabel(pr, 30), "#154 build(deps): Bump the npm gro…");
+  assert.equal(m.pullRequestOptionLabel({ github_pr_number: 7, title: "Fix login" }), "#7 Fix login");
+  const branches = [
+    { id: "b1", repository_id: "r", name: "feature", latest_commit_sha: "111" },
+    { id: "b2", repository_id: "r", name: "main", latest_commit_sha: "222" },
+  ];
+  assert.equal(m.initialBranch({ default_branch: "main", branches })?.latest_commit_sha, "222");
+  assert.equal(m.initialBranch({ default_branch: "develop", branches })?.name, "feature");
+  assert.equal(m.initialBranch({ default_branch: "main", branches: [] }), null);
+  assert.equal(m.initialBranch({ default_branch: "main" }), null);
+});
+
+test("filterAnalyses filters the analyses list by status and repository", () => {
+  const list = [
+    { id: "1", status: "completed", repository_id: "r1" },
+    { id: "2", status: "FAILED", repository_id: "r1" },
+    { id: "3", status: "pending", repository_id: "r2" },
+  ];
+  const ids = (items) => items.map((a) => a.id);
+  assert.deepEqual(m.ANALYSIS_STATUS_FILTERS, ["all", "pending", "running", "completed", "failed"]);
+  assert.deepEqual(ids(m.filterAnalyses(list, { status: "all", repositoryId: "all" })), ["1", "2", "3"]);
+  assert.deepEqual(ids(m.filterAnalyses(list, {})), ["1", "2", "3"]);
+  assert.deepEqual(ids(m.filterAnalyses(list, { status: "failed" })), ["2"]);
+  assert.deepEqual(ids(m.filterAnalyses(list, { repositoryId: "r1" })), ["1", "2"]);
+  assert.deepEqual(ids(m.filterAnalyses(list, { status: "pending", repositoryId: "r1" })), []);
+  assert.deepEqual(ids(m.filterAnalyses(list, { status: "running" })), []);
 });
 
 test("truncate keeps short text and adds an ellipsis to long text", () => {
@@ -85,4 +138,30 @@ test("describeReadiness reports the real /ready result", () => {
   assert.match(m.describeReadiness({ status: 503 }).text, /not ready \(HTTP 503\)/);
   assert.equal(m.describeReadiness({ status: 401 }).tone, "neutral");
   assert.equal(m.describeReadiness("error").tone, "warning");
+});
+
+test("PR search accepts '#154' as well as '154' for the PR number", () => {
+  for (const query of ["#154", "154", " #154 ", "#15", "develop"]) {
+    assert.ok(m.pullRequestMatches(pr, query, "Mohith-c7/Radius"), query);
+  }
+  assert.equal(m.pullRequestMatches(pr, "#999", "Mohith-c7/Radius"), false);
+  assert.equal(m.pullRequestMatches(pr, pr.id, "x/y"), false, "internal ids are not searchable");
+});
+
+test("recentNotifications lists the five newest finished analyses", () => {
+  const list = [
+    { id: "p", status: "pending", commit_sha: "aaaaaaaaaa", created_at: "2026-11-20T12:00:00Z", completed_at: null },
+    ...[1, 2, 3, 4, 5, 6].map((n) => ({
+      id: `c${n}`,
+      status: n === 6 ? "FAILED" : "completed",
+      commit_sha: `${n}`.repeat(12),
+      created_at: "2026-11-01T00:00:00Z",
+      completed_at: `2026-11-1${n}T00:00:00Z`,
+    })),
+  ];
+  const items = m.recentNotifications(list);
+  assert.deepEqual(items.map((i) => i.id), ["c6", "c5", "c4", "c3", "c2"]);
+  assert.equal(items[0].failed, true);
+  assert.equal(items[0].commit, "66666666");
+  assert.deepEqual(m.recentNotifications([list[0]]), []);
 });

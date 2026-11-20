@@ -1,0 +1,16 @@
+.ti-toolbar{align-items:center;display:flex;flex-wrap:wrap;gap:10px;margin-bottom:22px}
+.ti-toolbar label{color:var(--muted);font-size:12px;font-weight:700}
+.ti-select{background:var(--panel);border:1px solid var(--line);border-radius:8px;color:var(--ink);font:600 13px var(--font-sans);min-width:240px;outline-color:var(--green);padding:9px 11px}
+.ti-grid{display:grid;gap:25px;grid-template-columns:1.2fr 1fr;margin-bottom:25px}
+.ti-grid>.card{min-width:0}
+.ti-test-button{background:none;border:0;color:var(--ink);cursor:pointer;font:inherit;padding:0;text-align:left}
+.ti-test-button:hover strong,.ti-test-button:focus-visible strong{color:var(--green);text-decoration:underline}
+.ti-selected td{background:var(--green-soft)}
+.ti-mono{font-family:var(--font-mono);font-size:12px}
+.ti-empty{display:grid;gap:8px;padding:4px 21px 21px}
+.ti-empty p{color:var(--muted);font-size:12px;line-height:1.6;margin:0}
+.ti-pill{border-radius:20px;display:inline-flex;font-size:11px;font-weight:700;padding:4px 8px}
+.ti-pill.passed{background:var(--green-soft);color:var(--green)}
+.ti-pill.failed{background:var(--amber-soft);color:var(--amber)}
+.ti-pill.skipped,.ti-pill.other{background:var(--canvas);border:1px solid var(--line);color:var(--muted)}
+@media(max-width:950px){.ti-grid{grid-template-columns:1fr}}

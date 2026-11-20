@@ -338,6 +338,20 @@ def test_flag_and_publish_switch_gate_everything(kwargs, reason) -> None:
     assert env.github.writes == 0
 
 
+def test_manual_analysis_without_pull_request_is_skipped_not_crashed() -> None:
+    env = Env()
+    with env.factory() as session:
+        analysis = session.get(Analysis, env.analysis)
+        analysis.pull_request = None
+        session.commit()
+    env.store()
+
+    outcome = env.publish()
+
+    assert (outcome.status, outcome.reason) == ("skipped", "no_pull_request")
+    assert env.github.writes == 0
+
+
 def test_inactive_installation_is_skipped() -> None:
     env = Env()
     env.store()

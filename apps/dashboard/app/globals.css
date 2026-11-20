@@ -604,6 +604,5 @@
 .ai-reasoning-card{background:#FBFDFB;border:1px solid var(--line);border-radius:10px;padding:16px}
 .ai-reasoning-card.pruned{border-left:4px solid #19815C}
 .ai-reasoning-card.retained{border-left:4px solid #2D6FCA}
-
-
-
+/* Text inputs and selects outside .form-grid: theme tokens only, never a hard-coded dark fill. */
+.input{background:var(--panel);border:1px solid var(--line);border-radius:7px;color:var(--ink);font:500 13px var(--font-sans);outline-color:var(--green);padding:8px 10px}.input::placeholder{color:var(--muted)}.input.mono{font-family:var(--font-mono);font-size:12px}

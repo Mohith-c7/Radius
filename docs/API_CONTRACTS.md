@@ -209,12 +209,15 @@ Request
 
 {
     "repositoryId": "...",
+    "commitSha": "...",
     "pullRequestId": "..."
 }
 
+`pullRequestId` is optional. Omit it (or send null) for a manual branch/commit verification: the analysis is stored with `pull_request_id: null`, the worker diffs the commit against the repository default branch, and nothing is published to GitHub (there is no pull request to comment on). A supplied `pullRequestId` must be a synced pull request of the same repository, otherwise the API answers 404 `PULL_REQUEST_NOT_FOUND`.
+
 Response
 
-Analysis object.
+Analysis object (`pull_request_id` is null for a manual branch/commit analysis).
 
 Events
 

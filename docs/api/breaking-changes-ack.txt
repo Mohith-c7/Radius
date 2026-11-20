@@ -1,3 +1,9 @@
 # Acknowledged breaking changes of stable operations (read by scripts/openapi_diff.py).
 # One "METHOD /path" per line. Each entry needs a CHANGELOG entry and the
 # version bump required by docs/api/STABILITY.md. Remove the line after release.
+# Analysis.pull_request_id became nullable (manual branch/commit analyses without a PR).
+GET /api/v1/analyses
+POST /api/v1/analyses
+GET /api/v1/analyses/lookup
+GET /api/v1/analyses/{analysis_id}
+POST /api/v1/analyses/{analysis_id}/rerun

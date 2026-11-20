@@ -10,7 +10,7 @@ export function PageHeading({
 }: {
   eyebrow?: string;
   title: string;
-  description: string;
+  description: React.ReactNode;
   action?: React.ReactNode;
 }) {
   return (

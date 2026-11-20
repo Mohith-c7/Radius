@@ -43,7 +43,7 @@ export type Branch = {
 export type Analysis = {
   id: UUID | null;
   repository_id: UUID;
-  pull_request_id: UUID;
+  pull_request_id: UUID | null;
   commit_sha: string;
   status: string;
   started_at: string;
@@ -218,30 +218,55 @@ export async function radiusFetch<T>(
   path: string,
   init: RequestInit & { idempotencyKey?: string } = {},
 ): Promise<T> {
-  const { idempotencyKey, headers, body, ...requestInit } = init;
-  const requestHeaders = new Headers(headers);
-  requireOrganizationId();
-  if (idempotencyKey) requestHeaders.set("Idempotency-Key", idempotencyKey);
-  if (body && !requestHeaders.has("Content-Type")) {
-    requestHeaders.set("Content-Type", "application/json");
-  }
+  return (await radiusRequest<T>(path, init)).data;
+}
 
-  const response = await fetch(apiUrl(path), {
-    cache: "no-store",
-    ...requestInit,
-    body,
-    headers: requestHeaders,
-  });
-  const envelope = (await response.json()) as ApiEnvelope<T>;
-  if (!response.ok || !envelope.success) {
-    throw new Error(
-      envelope.error?.message || `Radius API request failed (${response.status})`,
-    );
+/**
+ * Parses a response body as JSON without ever throwing: a proxy or server
+ * error page ("Internal Server Error", an HTML 502) yields null instead of a
+ * JSON syntax error, so callers can show a readable message.
+ */
+async function readJsonBody(response: Response): Promise<unknown> {
+  let text: string;
+  try {
+    text = await response.text();
+  } catch {
+    return null;
   }
-  if (envelope.data === null) {
-    throw new Error("Radius API returned an empty data payload.");
+  if (!text.trim()) return null;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
   }
-  return envelope.data;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * A readable message for a failed API response: the envelope message, a
+ * FastAPI validation `detail`, or a generic line with the HTTP status. Never
+ * the raw body and never a JSON parse error.
+ */
+export function apiErrorMessage(status: number, body: unknown): string {
+  if (isRecord(body)) {
+    const error = body.error;
+    if (isRecord(error) && typeof error.message === "string" && error.message.trim()) {
+      return error.message;
+    }
+    const detail = body.detail;
+    if (typeof detail === "string" && detail.trim()) return detail;
+    if (Array.isArray(detail) && detail.length > 0 && isRecord(detail[0])) {
+      const first = detail[0];
+      const field = Array.isArray(first.loc) ? first.loc.filter((part) => part !== "body").join(".") : "";
+      const text = typeof first.msg === "string" ? first.msg : "invalid value";
+      return `Invalid request${field ? ` (${field})` : ""}: ${text}.`;
+    }
+    return `Radius API request failed (HTTP ${status}).`;
+  }
+  return `Radius API error (HTTP ${status}). Try again.`;
 }
 
 /** Error from the Radius API (through the proxy) with the API error code, e.g. INTENT_STALE. */
@@ -297,19 +322,15 @@ export async function radiusRequest<T>(
     body,
     headers: requestHeaders,
   });
-  let envelope: ApiEnvelope<T> | null = null;
-  try {
-    envelope = (await response.json()) as ApiEnvelope<T>;
-  } catch {
-    envelope = null;
-  }
+  const parsed = await readJsonBody(response);
+  const envelope = isRecord(parsed) ? (parsed as ApiEnvelope<T>) : null;
   if (!response.ok || !envelope || !envelope.success) {
     const apiError = envelope?.error;
     throw new RadiusApiError(
-      apiError?.message || `Radius API request failed (${response.status})`,
+      apiErrorMessage(response.status, parsed),
       response.status,
       typeof apiError?.code === "string" ? apiError.code : null,
-      envelope?.meta ?? {},
+      isRecord(envelope?.meta) ? envelope.meta : {},
     );
   }
   if (envelope.data === null) {
@@ -471,19 +492,29 @@ export async function rerunAnalysis(analysisId: UUID) {
   return result.data;
 }
 
-export function startAnalysis(payload: {
+export type StartAnalysisPayload = {
   repositoryId: UUID;
-  pullRequestId?: UUID;
+  /** A synced pull request; omit (or leave empty) for a manual branch/commit analysis. */
+  pullRequestId?: UUID | null;
   commitSha: string;
-}) {
+};
+
+/** Body of POST /analyses. `pull_request_id` is only sent for a real pull request. */
+export function startAnalysisBody(payload: StartAnalysisPayload): Record<string, string> {
+  const body: Record<string, string> = {
+    repository_id: payload.repositoryId,
+    commit_sha: payload.commitSha.trim(),
+  };
+  const pullRequestId = payload.pullRequestId?.trim();
+  if (pullRequestId) body.pull_request_id = pullRequestId;
+  return body;
+}
+
+export function startAnalysis(payload: StartAnalysisPayload) {
   return radiusFetch<Analysis>("/analyses", {
     method: "POST",
     idempotencyKey: crypto.randomUUID(),
-    body: JSON.stringify({
-      repository_id: payload.repositoryId,
-      pull_request_id: payload.pullRequestId ?? crypto.randomUUID(),
-      commit_sha: payload.commitSha,
-    }),
+    body: JSON.stringify(startAnalysisBody(payload)),
   });
 }
 
