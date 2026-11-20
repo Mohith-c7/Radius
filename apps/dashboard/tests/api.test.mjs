@@ -244,3 +244,78 @@ test("testResultsUploadPath encodes the commit and trims it", () => {
     "/analyses/analysis-1/tests/results?commit_sha=abc%26x%3D1",
   );
 });
+
+test("startAnalysis sends no pull_request_id for a manual branch/commit analysis", async () => {
+  let sent = null;
+  globalThis.fetch = async (input, init) => {
+    assert.equal(new URL(String(input)).pathname, "/api/radius/analyses");
+    sent = JSON.parse(String(init?.body));
+    return envelope({ success: true, data: { id: "a-1", pull_request_id: null } }, { status: 202 });
+  };
+
+  const analysis = await api.startAnalysis({ repositoryId: "repo-1", commitSha: " abc1234 " });
+  assert.equal(analysis.id, "a-1");
+  assert.deepEqual(sent, { repository_id: "repo-1", commit_sha: "abc1234" });
+  assert.equal("pull_request_id" in sent, false);
+});
+
+test("startAnalysisBody only sends a real pull request id", () => {
+  assert.deepEqual(api.startAnalysisBody({ repositoryId: "r", commitSha: "abc", pullRequestId: null }), {
+    repository_id: "r",
+    commit_sha: "abc",
+  });
+  assert.deepEqual(api.startAnalysisBody({ repositoryId: "r", commitSha: "abc", pullRequestId: "  " }), {
+    repository_id: "r",
+    commit_sha: "abc",
+  });
+  assert.deepEqual(api.startAnalysisBody({ repositoryId: "r", commitSha: "abc", pullRequestId: "pr-1" }), {
+    repository_id: "r",
+    commit_sha: "abc",
+    pull_request_id: "pr-1",
+  });
+});
+
+function plainText(text, status) {
+  return new Response(text, { status, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+}
+
+test("a plain-text 500 becomes a readable error, never a JSON parse error", async () => {
+  globalThis.fetch = async () => plainText("Internal Server Error", 500);
+  await assert.rejects(
+    () => api.startAnalysis({ repositoryId: "repo-1", commitSha: "abc1234" }),
+    (error) => {
+      assert.equal(error.message, "Radius API error (HTTP 500). Try again.");
+      assert.equal(error.status, 500);
+      assert.doesNotMatch(error.message, /JSON|Unexpected token/);
+      return true;
+    },
+  );
+  globalThis.fetch = async () => plainText("<html>Bad gateway</html>", 502);
+  await assert.rejects(() => api.radiusRequest("/analyses"), /Radius API error \(HTTP 502\)\. Try again\./);
+  globalThis.fetch = async () => plainText("", 503);
+  await assert.rejects(() => api.getAnalysis("a-1"), /Radius API error \(HTTP 503\)\. Try again\./);
+});
+
+test("error messages come from the envelope or a FastAPI validation detail", async () => {
+  globalThis.fetch = async () =>
+    envelope(
+      { success: false, data: null, error: { code: "PULL_REQUEST_NOT_FOUND", message: "Pull request not found." } },
+      { status: 404 },
+    );
+  await assert.rejects(
+    () => api.startAnalysis({ repositoryId: "repo-1", commitSha: "abc1234", pullRequestId: "pr-x" }),
+    (error) => error.message === "Pull request not found." && error.code === "PULL_REQUEST_NOT_FOUND",
+  );
+  assert.equal(
+    api.apiErrorMessage(422, { detail: [{ loc: ["body", "commitSha"], msg: "String should match pattern" }] }),
+    "Invalid request (commitSha): String should match pattern.",
+  );
+  assert.equal(api.apiErrorMessage(400, { detail: "Bad input" }), "Bad input");
+  assert.equal(api.apiErrorMessage(500, { unexpected: true }), "Radius API request failed (HTTP 500).");
+  assert.equal(api.apiErrorMessage(500, null), "Radius API error (HTTP 500). Try again.");
+});
+
+test("a 200 with an unreadable body is an error, not a crash", async () => {
+  globalThis.fetch = async () => plainText("not json", 200);
+  await assert.rejects(() => api.listRepositories(), /Radius API error \(HTTP 200\)\. Try again\./);
+});

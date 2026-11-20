@@ -48,3 +48,32 @@ class SubprocessGitDiffProvider:
             msg = result.stderr.strip() or "Unable to collect git diff."
             raise ValidationError(msg)
         return result.stdout
+
+    def get_parent_ref(self, repository_path: Path, head_ref: str) -> str | None:
+        """Resolve a head and its parent without treating git failures as empty diffs."""
+        if not repository_path.exists() or not repository_path.is_dir():
+            msg = f"Repository path does not exist: {repository_path}."
+            raise ValidationError(msg)
+        result = subprocess.run(
+            ["git", "rev-parse", "--verify", f"{head_ref}^{{commit}}"],
+            cwd=repository_path,
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise ValidationError(result.stderr.strip() or "Unable to resolve head commit.")
+        commit = result.stdout.strip()
+        parent = subprocess.run(
+            ["git", "cat-file", "-p", commit],
+            cwd=repository_path,
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+        if parent.returncode != 0:
+            raise ValidationError(parent.stderr.strip() or "Unable to inspect head commit.")
+        for line in parent.stdout.splitlines():
+            if line.startswith("parent "):
+                return line.removeprefix("parent ").strip()
+        return None

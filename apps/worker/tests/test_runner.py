@@ -182,6 +182,85 @@ def test_publish_github_result_builds_report_from_persisted_confidence() -> None
         assert "81/100" in github_client.comments[0]["body"]
 
 
+def test_manual_analysis_without_pull_request_checks_out_against_default_branch(
+    tmp_path: Path,
+) -> None:
+    with _session_factory()() as session:
+        analysis, repository, _ = _persist_analysis_context(session, manual=True)
+        assert analysis.pull_request_id is None
+        git_client = FakeGitClient()
+
+        command = load_persisted_analysis_command(
+            session=session,
+            analysis_id=analysis.id,
+            repository_cache_dir=tmp_path / "cache",
+            git_client=git_client,
+        )
+
+        assert command.base_ref == f"origin/{repository.default_branch}"
+        assert command.head_ref == analysis.commit_sha
+        assert git_client.checked_out == analysis.commit_sha
+
+
+def test_publish_github_result_skips_a_manual_analysis_without_pull_request() -> None:
+    with _session_factory()() as session:
+        analysis, _, _ = _persist_analysis_context(
+            session, github_installation_id=12345, manual=True
+        )
+        session.add(
+            ConfidenceReport(
+                analysis_id=analysis.id,
+                confidence_score=81,
+                risk_level=db_enums.RiskLevel.LOW,
+                summary="Relevant tests passed.",
+                recommendations=[],
+                generated_at=datetime.now(UTC),
+            )
+        )
+        session.flush()
+        github_client = PublishingGitHubClient()
+
+        worker_runner._publish_github_result(
+            session=session,
+            analysis_id=analysis.id,
+            settings=worker_runner.WorkerSettings(
+                GITHUB_APP_ID="app-id",
+                GITHUB_APP_PRIVATE_KEY="private-key",
+                DASHBOARD_BASE_URL="https://radius.example",
+            ),
+            github_client=github_client,
+        )
+
+        assert github_client.comments == []
+        assert github_client.check_runs == []
+
+
+def test_sqlalchemy_worker_runtime_executes_a_manual_analysis(tmp_path: Path) -> None:
+    source_repo = _create_git_repository(tmp_path / "source")
+    head_sha = _git(("rev-parse", "HEAD"), cwd=source_repo)
+    session_factory = _session_factory()
+    with session_factory() as session:
+        analysis, _, _ = _persist_analysis_context(
+            session, clone_url=str(source_repo), commit_sha=head_sha, manual=True
+        )
+        SqlAlchemyAnalysisJobQueue(session).enqueue(analysis.id)
+        session.commit()
+
+    runtime = SqlAlchemyWorkerRuntime(
+        session_factory=session_factory,
+        repository_cache_dir=tmp_path / "cache",
+        git_client=RealGitClient(),
+        settings=worker_runner.WorkerSettings(GITHUB_PUBLISH_RESULTS=False),
+        github_client=DisabledGitHubClient(),
+    )
+
+    assert runtime.run_once() is True
+    with session_factory() as session:
+        saved = session.get(Analysis, analysis.id)
+        assert saved.status.value == AnalysisStatus.COMPLETED.value
+        assert saved.pull_request_id is None
+
+
 def test_sqlalchemy_worker_runtime_executes_persisted_job(tmp_path: Path) -> None:
     source_repo = _create_git_repository(tmp_path / "source")
     head_sha = _git(("rev-parse", "HEAD"), cwd=source_repo)
@@ -361,6 +440,7 @@ def _persist_analysis_context(
     clone_url: str = "https://github.com/acme/radius.git",
     commit_sha: str = "a" * 40,
     github_installation_id: int | None = None,
+    manual: bool = False,
 ):
     organization = Organization(
         name="Acme",
@@ -388,7 +468,7 @@ def _persist_analysis_context(
     )
     analysis = Analysis(
         repository=repository,
-        pull_request=pull_request,
+        pull_request=None if manual else pull_request,
         commit_sha=commit_sha,
         status=db_enums.AnalysisStatus.PENDING,
         started_at=datetime.now(UTC),

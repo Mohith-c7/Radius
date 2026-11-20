@@ -62,7 +62,6 @@ def _setup(changed_paths: tuple[str, ...] = ("src/b.py",)):
         headers=headers,
         json={
             "repositoryId": repository_id,
-            "pullRequestId": str(uuid4()),
             "commitSha": "d" * 40,
         },
     ).json()["data"]["id"]

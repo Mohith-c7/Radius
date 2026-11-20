@@ -262,7 +262,10 @@ def _contract_schemas() -> dict[str, Any]:
             {
                 "id": _UUID,
                 "repository_id": _UUID,
-                "pull_request_id": _UUID,
+                "pull_request_id": {
+                    **_nullable(_UUID),
+                    "description": "Null for a manual branch/commit analysis without a pull request.",
+                },
                 "commit_sha": _STR,
                 "status": {
                     "type": "string",
@@ -275,7 +278,7 @@ def _contract_schemas() -> dict[str, Any]:
                 "blast_radius": _nullable({"type": "object"}),
             },
             ["id", "repository_id", "pull_request_id", "commit_sha", "status", "created_at"],
-            "One verification run of a pull request head commit.",
+            "One verification run of a pull request head commit, or of a branch/commit.",
             _ANALYSIS_EXAMPLE,
         ),
         "ConfidenceReport": _object(

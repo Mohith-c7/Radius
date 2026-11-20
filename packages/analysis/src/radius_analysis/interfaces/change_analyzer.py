@@ -18,3 +18,6 @@ class GitDiffProvider(Protocol):
 
     def get_diff(self, repository_path: Path, base_ref: str, head_ref: str) -> str:
         """Return raw diff text for a repository ref range."""
+
+    def get_parent_ref(self, repository_path: Path, head_ref: str) -> str | None:
+        """Return the verified parent commit, or None when head is a root commit."""

@@ -204,3 +204,37 @@ def test_test_runs_status_column_is_added_keeps_rows_and_is_idempotent(db) -> No
     assert "status" not in {c["name"] for c in inspect(engine).get_columns("test_runs")}
     command.upgrade(config, "head")
     assert "status" in {c["name"] for c in inspect(engine).get_columns("test_runs")}
+
+
+def test_manual_analysis_migration_allows_null_pull_request_and_guards_downgrade(db) -> None:
+    config, engine = db
+    command.upgrade(config, "20261119_0022")
+    with engine.begin() as conn:
+        _insert(conn, "organizations", id="o1", name="Acme")
+        _insert(
+            conn, "repositories", id="r1", organization_id="o1", github_repository_id=1,
+            provider="github", visibility="private", status="connected",
+        )
+        _insert(conn, "pull_requests", id="p1", repository_id="r1", github_pr_number=1, status="open")
+        _insert(
+            conn, "analyses", id="a1", repository_id="r1", pull_request_id="p1",
+            commit_sha="f" * 40, status="completed",
+            started_at="2026-01-01 00:00:00", created_at="2026-01-01 00:00:00",
+        )
+    command.upgrade(config, "head")
+    pull_request = {c["name"]: c for c in inspect(engine).get_columns("analyses")}["pull_request_id"]
+    assert pull_request["nullable"] is True
+    with engine.begin() as conn:
+        assert conn.execute(text("SELECT pull_request_id FROM analyses")).scalar() == "p1"  # kept
+        _insert(
+            conn, "analyses", id="m1", repository_id="r1", pull_request_id=None,
+            commit_sha="e" * 40, status="pending",
+            started_at="2026-01-02 00:00:00", created_at="2026-01-02 00:00:00",
+        )
+    # Restoring NOT NULL would silently break manual analyses, so it refuses.
+    with pytest.raises(RuntimeError, match="manual analyses"):
+        command.downgrade(config, "20261119_0022")
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM analyses WHERE id = 'm1'"))
+    command.downgrade(config, "20261119_0022")
+    command.upgrade(config, "head")

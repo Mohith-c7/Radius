@@ -132,7 +132,6 @@ def _build(monkeypatch, tmp_path, backend: str, flag: str | None) -> Env:
         headers=env.headers(),
         json={
             "repositoryId": repo.json()["data"]["id"],
-            "pullRequestId": str(uuid4()),
             "commitSha": "a" * 40,
         },
     )

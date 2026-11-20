@@ -118,7 +118,6 @@ class Env:
             headers=self.headers(org),
             json={
                 "repositoryId": repo.json()["data"]["id"],
-                "pullRequestId": str(uuid4()),
                 "commitSha": HEAD,
             },
         )

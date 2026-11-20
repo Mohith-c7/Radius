@@ -224,7 +224,7 @@ def test_real_responses_match_the_documented_shapes(committed, monkeypatch) -> N
     analysis = client.post(
         "/api/v1/analyses",
         headers=headers,
-        json={"repositoryId": repo, "pullRequestId": str(uuid4()), "commitSha": "a" * 40},
+        json={"repositoryId": repo, "commitSha": "a" * 40},
     ).json()["data"]
     schema = committed["components"]["schemas"]["Analysis"]
     assert set(schema["required"]) <= set(analysis)

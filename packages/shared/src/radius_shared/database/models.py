@@ -218,9 +218,10 @@ class Analysis(UuidPrimaryKeyMixin, Base):
         ForeignKey("repositories.id"),
         nullable=False,
     )
-    pull_request_id: Mapped[UUID] = mapped_column(
+    # Null for a manual branch/commit analysis that has no GitHub pull request.
+    pull_request_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("pull_requests.id"),
-        nullable=False,
+        nullable=True,
     )
     commit_sha: Mapped[str] = mapped_column(String(40), nullable=False)
     status: Mapped[AnalysisStatus] = mapped_column(
@@ -242,7 +243,7 @@ class Analysis(UuidPrimaryKeyMixin, Base):
     )
 
     repository: Mapped[Repository] = relationship(back_populates="analyses")
-    pull_request: Mapped[PullRequest] = relationship(back_populates="analyses")
+    pull_request: Mapped[PullRequest | None] = relationship(back_populates="analyses")
     changed_files: Mapped[list["ChangedFile"]] = relationship(back_populates="analysis")
     blast_radius: Mapped["BlastRadius | None"] = relationship(
         back_populates="analysis",

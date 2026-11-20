@@ -845,8 +845,12 @@ def load_persisted_analysis_command(
     if repository is None:
         msg = f"Repository {analysis.repository_id} was not found."
         raise NotFoundError(msg)
-    pull_request = session.get(db_models.PullRequest, analysis.pull_request_id)
-    if pull_request is None:
+    pull_request = (
+        session.get(db_models.PullRequest, analysis.pull_request_id)
+        if analysis.pull_request_id is not None
+        else None
+    )
+    if analysis.pull_request_id is not None and pull_request is None:
         msg = f"Pull request {analysis.pull_request_id} was not found."
         raise NotFoundError(msg)
 
@@ -854,9 +858,12 @@ def load_persisted_analysis_command(
     # Everything below is git work (clone, fetch, checkout): copy what it needs out of the
     # rows and end the read transaction first, so no connection waits on git (C-04).
     clone_url = repository.clone_url
-    repository_id, pr_number = repository.id, pull_request.github_pr_number
+    repository_id = repository.id
+    pr_number = pull_request.github_pr_number if pull_request is not None else None
     commit_sha, analysis_pk = analysis.commit_sha, analysis.id
-    target_branch = pull_request.target_branch
+    target_branch = (
+        pull_request.target_branch if pull_request is not None else repository.default_branch
+    )
     _end_read_transaction(session)
     # The stored URL is untrusted data (A-01/A-02): LocalGitRepositoryClient
     # re-validates it (https, allow-listed host, owner/repo shape) before git runs
@@ -1025,6 +1032,9 @@ def _publish_github_result(
     github_settings = _github_settings(settings)
     if not settings.github_publish_results or not github_settings.enabled:
         return
+    analysis = session.get(db_models.Analysis, analysis_id)
+    if analysis is None or analysis.pull_request_id is None:
+        return
     # VS-08: with the flag ``on`` and a stored v2 verdict that is ok, v2 is
     # published instead of v1; any v2 problem falls through to v1 below.
     if v2_replaces_v1(session, settings, analysis_id) and publish_v2_in_job(
@@ -1149,6 +1159,8 @@ def _publish_github_in_progress(
         )
         if analysis is None or repository is None:
             return
+        if analysis.pull_request_id is None:
+            return
         installation_id = _github_installation_id(
             session=session,
             analysis_id=analysis_id,
@@ -1194,6 +1206,8 @@ def _publish_github_failure(
             else None
         )
         if analysis is None or repository is None:
+            return
+        if analysis.pull_request_id is None:
             return
         publisher = GitHubAnalysisPublisher(github_client)
         if not hasattr(publisher, "publish_failure"):

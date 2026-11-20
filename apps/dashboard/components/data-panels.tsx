@@ -33,6 +33,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   Analysis,
   BlastRadius,
+  Branch,
   ConfidenceReport,
   ConnectRepositoryPayload,
   GraphSnapshot,
@@ -66,14 +67,19 @@ import { errorText, type SyncSummary } from "../lib/github-actions";
 import { initials, profileRows, roleLabel } from "../lib/account-model";
 import { useAuth } from "./auth-provider";
 import {
+  analysisHeading,
   analysisLabel,
   analysisMatches,
+  ANALYSIS_STATUS_FILTERS,
   averageConfidence,
+  filterAnalyses,
   DOCS_BASE,
   completedAnalyses,
   defaultComparePair,
   indexPullRequests,
+  initialBranch,
   pullRequestMatches,
+  pullRequestOptionLabel,
   pullRequestUrl,
   repositoryMatches,
   type PullRequestIndex,
@@ -439,6 +445,9 @@ export function RepositoriesData() {
   );
 }
 
+/** GitHub App install link; the install button is hidden when it is not configured. */
+const GITHUB_APP_INSTALL_URL = process.env.NEXT_PUBLIC_GITHUB_APP_URL?.trim() || null;
+
 export function ConnectRepositoryForm() {
   const [message, setMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -449,7 +458,7 @@ export function ConnectRepositoryForm() {
     setMessage(null);
     const form = new FormData(event.currentTarget);
     const payload: ConnectRepositoryPayload = {
-      organizationId: String(form.get("organizationId")),
+      organizationId: radiusConfig.organizationId,
       repositoryId: Number(form.get("repositoryId")),
       owner: String(form.get("owner")),
       name: String(form.get("name")),
@@ -472,51 +481,44 @@ export function ConnectRepositoryForm() {
       <PageHeading
         eyebrow="Repository management"
         title="Connect a repository"
-        description="Create a backend repository record Radius can synchronize and analyze."
+        description="Connect a GitHub repository so Radius can synchronize and verify it."
       />
-      
-      <div className="card" style={{ marginBottom: "2rem", padding: "2rem", display: "flex", flexDirection: "column", alignItems: "center", border: "1px solid var(--border-color)" }}>
-        <h2 style={{ marginBottom: "0.5rem" }}>Install GitHub App</h2>
-        <p className="muted" style={{ marginBottom: "1.5rem", textAlign: "center", maxWidth: "600px" }}>
-          Install the Radius GitHub App to automatically synchronize repositories and trigger verification pipelines on push.
+
+      <div className="card detail-card" style={{ marginBottom: "20px" }}>
+        <h2>Install the GitHub App</h2>
+        <p className="muted" style={{ marginBottom: "14px" }}>
+          The Radius GitHub App must be installed on a repository before it can be connected and verified on push.
         </p>
-        <a 
-          href={process.env.NEXT_PUBLIC_GITHUB_APP_URL || "https://github.com/apps/radius-verification/installations/new"} 
-          target="_blank" 
-          rel="noreferrer" 
-          className="button primary"
-          style={{ padding: "0.75rem 1.5rem", fontSize: "1rem", display: "flex", alignItems: "center", gap: "0.5rem" }}
-        >
-          <Plus size={18} />
-          Install App
-        </a>
+        {GITHUB_APP_INSTALL_URL ? (
+          <a href={GITHUB_APP_INSTALL_URL} target="_blank" rel="noreferrer" className="button">
+            <Plus size={16} />
+            Install App
+          </a>
+        ) : (
+          <p className="muted">Ask your Radius administrator for the GitHub App install link.</p>
+        )}
       </div>
 
-      <h3 style={{ marginBottom: "1rem", marginTop: "2rem", color: "var(--text-color)", fontSize: "1.1rem", fontWeight: 600 }}>Manual configuration</h3>
-      <p className="muted" style={{ marginBottom: "1.5rem" }}>
-        Manually register a repository for local testing or custom CI/CD integrations.
-      </p>
-      <div className="detail-grid">
-        <form className="card detail-card form-grid" onSubmit={submit}>
-          <label>
-            Organization ID
-            <input name="organizationId" defaultValue={radiusConfig.organizationId} required />
-          </label>
+      <ConnectGitHubRepositoryCard />
+
+      <details className="card detail-card" style={{ marginTop: "20px" }}>
+        <summary style={{ cursor: "pointer", fontWeight: 700 }}>Advanced</summary>
+        <form className="form-grid" onSubmit={submit} style={{ marginTop: "16px" }}>
           <label>
             GitHub repository ID
             <input name="repositoryId" required type="number" min="1" />
           </label>
           <label>
             Owner
-            <input name="owner" placeholder="Mohith-c7" required />
+            <input name="owner" required />
           </label>
           <label>
             Repository name
-            <input name="name" placeholder="Radius" required />
+            <input name="name" required />
           </label>
           <label>
             Default branch
-            <input name="defaultBranch" defaultValue="develop" required />
+            <input name="defaultBranch" defaultValue="main" required />
           </label>
           <label>
             Visibility
@@ -527,12 +529,7 @@ export function ConnectRepositoryForm() {
           </label>
           <label className="full-span">
             Clone URL
-            <input
-              name="cloneUrl"
-              placeholder="https://github.com/Mohith-c7/Radius.git"
-              required
-              type="url"
-            />
+            <input name="cloneUrl" placeholder="https://github.com/owner/name.git" required type="url" />
           </label>
           <div className="form-actions full-span">
             <button className="button" disabled={submitting} type="submit">
@@ -542,14 +539,7 @@ export function ConnectRepositoryForm() {
             {message && <p className="muted">{message}</p>}
           </div>
         </form>
-        <aside className="card detail-card">
-          <h2>Backend endpoint</h2>
-          <p className="muted">
-            This form posts to <code>POST /api/v1/repositories</code> and sends
-            the configured organization header.
-          </p>
-        </aside>
-      </div>
+      </details>
     </>
   );
 }
@@ -625,21 +615,16 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
     }
   }
 
-  async function handleQuickVerify(commitSha: string, pullRequestId?: string) {
+  async function handleQuickVerify(commitSha: string) {
+    // A branch verification has no pull request: the API records a manual
+    // branch/commit analysis (pull_request_id null).
     try {
-      const res = await startAnalysis({
-        repositoryId,
-        commitSha,
-        pullRequestId,
-      });
+      const res = await startAnalysis({ repositoryId, commitSha });
       if (res.id) {
         router.push(`/analyses/${res.id}`);
       }
     } catch (err) {
-      setSyncNotice({
-        type: "error",
-        text: err instanceof Error ? err.message : String(err),
-      });
+      setSyncNotice({ type: "error", text: errorText(err) });
     }
   }
 
@@ -712,7 +697,7 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
           <div>
             <h2 style={{ margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
-              <GitBranch size={18} style={{ color: "var(--accent)" }} />
+              <GitBranch size={18} style={{ color: "var(--green)" }} />
               Branches & Verification Targets
             </h2>
             <p className="muted" style={{ margin: "4px 0 0", fontSize: "13px" }}>
@@ -728,15 +713,9 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
               value={targetBranchInput}
               onChange={(e) => setTargetBranchInput(e.target.value)}
               placeholder="e.g. main, master, develop"
+              aria-label="Target branch"
               className="input"
-              style={{
-                padding: "8px 12px",
-                borderRadius: "6px",
-                border: "1px solid var(--border)",
-                background: "var(--card-bg, #1a221f)",
-                color: "inherit",
-                width: "240px",
-              }}
+              style={{ width: "240px" }}
             />
             <button
               className="button secondary"
@@ -761,8 +740,8 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
                     alignItems: "center",
                     padding: "10px 14px",
                     borderRadius: "6px",
-                    background: isDefault ? "rgba(34, 197, 94, 0.08)" : "var(--card-bg, rgba(255,255,255,0.03))",
-                    border: `1px solid ${isDefault ? "rgba(34, 197, 94, 0.3)" : "var(--border)"}`,
+                    background: isDefault ? "var(--green-soft)" : "var(--canvas)",
+                    border: `1px solid ${isDefault ? "var(--green)" : "var(--line)"}`,
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -825,7 +804,7 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
           <div>
             <h2 style={{ margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
-              <GitPullRequest size={18} style={{ color: "var(--accent)" }} />
+              <GitPullRequest size={18} style={{ color: "var(--green)" }} />
               Pull Requests ({pullRequests.length})
             </h2>
             <p className="muted" style={{ margin: "4px 0 0", fontSize: "13px" }}>
@@ -856,15 +835,15 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
                     alignItems: "center",
                     padding: "12px 16px",
                     borderRadius: "6px",
-                    border: "1px solid var(--border)",
-                    background: "var(--card-bg, rgba(255,255,255,0.02))",
+                    border: "1px solid var(--line)",
+                    background: "var(--canvas)",
                   }}
                 >
                   <div style={{ display: "grid", gap: "4px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                       <Link
                         href={`/pull-requests/${pr.id}`}
-                        style={{ fontWeight: 600, color: "var(--foreground)", textDecoration: "none" }}
+                        style={{ fontWeight: 600, color: "var(--ink)", textDecoration: "none" }}
                       >
                         #{pr.github_pr_number} {pr.title}
                       </Link>
@@ -890,20 +869,6 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
                       >
                         {pr.status}
                       </span>
-                      <span
-                        title={`Radius Internal PR UUID: ${pr.id}`}
-                        style={{
-                          fontSize: "11px",
-                          padding: "2px 6px",
-                          borderRadius: "4px",
-                          background: "rgba(255, 255, 255, 0.06)",
-                          border: "1px solid var(--border)",
-                          fontFamily: "monospace",
-                          color: "var(--muted)",
-                        }}
-                      >
-                        ID: {pr.id ? pr.id.slice(0, 8) : "-"}
-                      </span>
                     </div>
                     <div className="muted" style={{ fontSize: "12px", display: "flex", gap: "16px", flexWrap: "wrap" }}>
                       <span>Author: {pr.author}</span>
@@ -911,9 +876,6 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
                         Route: <code>{pr.source_branch}</code> → <code>{pr.target_branch}</code>
                       </span>
                       <span>Opened: {formatDate(pr.opened_at)}</span>
-                      <span>
-                        Full ID: <code style={{ fontSize: "11px" }}>{pr.id}</code>
-                      </span>
                     </div>
                   </div>
 
@@ -1015,22 +977,76 @@ function TriggerAnalysisModal({
     () => repositories.find((r) => r.id === repositoryId) || repositories[0],
     [repositories, repositoryId],
   );
-  const defaultSha = useMemo(() => {
-    if (!selectedRepo?.branches?.length) return "";
-    const def = selectedRepo.branches.find((b) => b.name === selectedRepo.default_branch);
-    return def?.latest_commit_sha || selectedRepo.branches[0]?.latest_commit_sha || "";
-  }, [selectedRepo]);
-
-  const [commitSha, setCommitSha] = useState(defaultSha);
+  // Branches of the selected repository: from the row passed in (repository
+  // page) or loaded from the API (analyses page, where list rows may omit them).
+  const [loadedBranches, setLoadedBranches] = useState<Record<string, Branch[]>>({});
+  const branches = useMemo(() => {
+    if (selectedRepo?.branches?.length) return selectedRepo.branches;
+    return (selectedRepo?.id ? loadedBranches[selectedRepo.id] : undefined) ?? [];
+  }, [selectedRepo, loadedBranches]);
+  const [branchName, setBranchName] = useState(() =>
+    selectedRepo ? initialBranch(selectedRepo)?.name ?? "" : "",
+  );
+  const [commitSha, setCommitSha] = useState(() =>
+    selectedRepo ? initialBranch(selectedRepo)?.latest_commit_sha ?? "" : "",
+  );
+  // "" means no pull request: a manual branch/commit analysis.
   const [pullRequestId, setPullRequestId] = useState("");
+  const [pullRequests, setPullRequests] = useState<PullRequest[]>([]);
+  const [pullRequestsError, setPullRequestsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const selectedRepoId = selectedRepo?.id ?? null;
+  const needsBranches = !selectedRepo?.branches?.length;
 
   useEffect(() => {
-    if (defaultSha && !commitSha) {
-      setCommitSha(defaultSha);
+    if (!selectedRepoId) return;
+    let active = true;
+    listPullRequests(selectedRepoId)
+      .then((items) => {
+        if (!active) return;
+        setPullRequests(items.filter((pr) => pr.id));
+        setPullRequestsError(null);
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        setPullRequests([]);
+        setPullRequestsError(errorText(err));
+      });
+    if (needsBranches) {
+      getRepository(selectedRepoId)
+        .then((repo) => {
+          if (!active) return;
+          setLoadedBranches((current) => ({ ...current, [selectedRepoId]: repo.branches ?? [] }));
+          const branch = initialBranch(repo);
+          // Fill the branch and commit only if the user has not typed one yet.
+          setBranchName((name) => name || branch?.name || "");
+          setCommitSha((sha) => sha || branch?.latest_commit_sha || "");
+        })
+        .catch(() => {
+          // Branches are a convenience; the commit SHA can still be typed.
+        });
     }
-  }, [defaultSha, commitSha]);
+    return () => {
+      active = false;
+    };
+  }, [selectedRepoId, needsBranches]);
+
+  function selectRepository(id: string) {
+    const repo = repositories.find((r) => r.id === id);
+    const branch = repo ? initialBranch(repo) : null;
+    setRepositoryId(id);
+    setBranchName(branch?.name ?? "");
+    setCommitSha(branch?.latest_commit_sha ?? "");
+    setPullRequestId("");
+    setPullRequests([]);
+  }
+
+  function selectBranch(name: string) {
+    setBranchName(name);
+    const branch = branches.find((b) => b.name === name);
+    if (branch?.latest_commit_sha) setCommitSha(branch.latest_commit_sha);
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -1048,17 +1064,19 @@ function TriggerAnalysisModal({
       const res = await startAnalysis({
         repositoryId,
         commitSha: commitSha.trim(),
-        pullRequestId: pullRequestId.trim() || undefined,
+        pullRequestId: pullRequestId || null,
       });
       if (res.id) {
         onSuccess(res.id);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorText(err));
     } finally {
       setLoading(false);
     }
   }
+
+  const fieldLabel = { fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" } as const;
 
   return (
     <div
@@ -1077,6 +1095,9 @@ function TriggerAnalysisModal({
     >
       <div
         className="card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="trigger-analysis-title"
         style={{
           width: "520px",
           maxWidth: "92vw",
@@ -1084,120 +1105,92 @@ function TriggerAnalysisModal({
           boxShadow: "0 20px 40px rgba(0,0,0,0.3)",
         }}
       >
-        <h2 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+        <h2 id="trigger-analysis-title" style={{ marginTop: 0, display: "flex", alignItems: "center", gap: "8px" }}>
           <Play size={18} style={{ color: "var(--green)" }} />
           Trigger New Analysis
         </h2>
         <p className="muted" style={{ fontSize: "13px", marginBottom: "16px" }}>
-          Run an AST Code Property Graph slice, predictive test selection, and confidence calculation for a commit or PR.
+          Verify a branch or commit. Pick a pull request to attach the run to it, or run it on the branch/commit alone.
         </p>
 
         <form onSubmit={handleSubmit} style={{ display: "grid", gap: "14px" }}>
           <label style={{ display: "block" }}>
-            <span style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
-              Target Repository
-            </span>
+            <span style={fieldLabel}>Target Repository</span>
             <select
               value={repositoryId}
-              onChange={(e) => setRepositoryId(e.target.value)}
+              onChange={(e) => selectRepository(e.target.value)}
               className="input"
-              style={{
-                width: "100%",
-                padding: "8px 10px",
-                borderRadius: "6px",
-                background: "var(--card-bg, #1a221f)",
-                color: "inherit",
-                border: "1px solid var(--border)",
-              }}
+              style={{ width: "100%" }}
             >
               {repositories.map((repo) => (
                 <option key={repo.id} value={repo.id ?? ""}>
-                  {repo.full_name} ({repo.default_branch})
+                  {repo.full_name}
                 </option>
               ))}
             </select>
           </label>
 
-          {selectedRepo?.branches && selectedRepo.branches.length > 0 && (
-            <label style={{ display: "block" }}>
-              <span style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
-                Branch (Auto-fills latest commit)
-              </span>
+          <label style={{ display: "block" }}>
+            <span style={fieldLabel}>Branch</span>
+            {branches.length > 0 ? (
               <select
-                onChange={(e) => {
-                  const b = selectedRepo.branches?.find((branch) => branch.name === e.target.value);
-                  if (b?.latest_commit_sha) setCommitSha(b.latest_commit_sha);
-                }}
-                defaultValue={selectedRepo.default_branch}
+                value={branchName}
+                onChange={(e) => selectBranch(e.target.value)}
                 className="input"
-                style={{
-                  width: "100%",
-                  padding: "8px 10px",
-                  borderRadius: "6px",
-                  background: "var(--card-bg, #1a221f)",
-                  color: "inherit",
-                  border: "1px solid var(--border)",
-                }}
+                style={{ width: "100%" }}
               >
-                {selectedRepo.branches.map((b) => (
+                {branches.map((b) => (
                   <option key={b.name} value={b.name}>
-                    {b.name} {b.name === selectedRepo.default_branch ? "(Default Target)" : ""}{" "}
-                    {b.latest_commit_sha ? `(${shortSha(b.latest_commit_sha)})` : ""}
+                    {b.name}
+                    {b.name === selectedRepo?.default_branch ? " (default)" : ""}
+                    {b.latest_commit_sha ? ` - ${shortSha(b.latest_commit_sha)}` : ""}
                   </option>
                 ))}
               </select>
-            </label>
-          )}
+            ) : (
+              <span className="muted" style={{ fontSize: "12px" }}>
+                No branches indexed yet. Enter a commit SHA below.
+              </span>
+            )}
+          </label>
 
           <label style={{ display: "block" }}>
-            <span style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
-              Commit SHA
-            </span>
+            <span style={fieldLabel}>Commit SHA</span>
             <input
               type="text"
               value={commitSha}
               onChange={(e) => setCommitSha(e.target.value)}
               placeholder="e.g. 90bd4aa7439419186a85446f2aa05c23e3ba7103"
               required
-              className="input"
-              style={{
-                width: "100%",
-                padding: "8px 10px",
-                borderRadius: "6px",
-                background: "var(--card-bg, #1a221f)",
-                color: "inherit",
-                border: "1px solid var(--border)",
-                fontFamily: "monospace",
-                fontSize: "12px",
-              }}
+              className="input mono"
+              style={{ width: "100%" }}
             />
           </label>
 
           <label style={{ display: "block" }}>
-            <span style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
-              Pull Request ID (optional)
-            </span>
-            <input
-              type="text"
+            <span style={fieldLabel}>Pull request (optional)</span>
+            <select
               value={pullRequestId}
               onChange={(e) => setPullRequestId(e.target.value)}
-              placeholder="Auto-generated if left blank"
               className="input"
-              style={{
-                width: "100%",
-                padding: "8px 10px",
-                borderRadius: "6px",
-                background: "var(--card-bg, #1a221f)",
-                color: "inherit",
-                border: "1px solid var(--border)",
-                fontFamily: "monospace",
-                fontSize: "12px",
-              }}
-            />
+              style={{ width: "100%" }}
+            >
+              <option value="">None (branch/commit only)</option>
+              {pullRequests.map((pr) => (
+                <option key={pr.id} value={pr.id}>
+                  {pullRequestOptionLabel(pr)}
+                </option>
+              ))}
+            </select>
+            {pullRequestsError && (
+              <span className="muted" style={{ fontSize: "12px", display: "block", marginTop: "6px" }}>
+                Pull requests could not be loaded: {pullRequestsError}
+              </span>
+            )}
           </label>
 
           {error && (
-            <p style={{ color: "var(--red)", fontSize: "12px", margin: "4px 0" }}>
+            <p role="alert" style={{ color: "#b42318", fontSize: "12px", margin: "4px 0" }}>
               {error}
             </p>
           )}
@@ -1238,6 +1231,8 @@ function TriggerAnalysisModal({
 
 export function AnalysesData() {
   const [showModal, setShowModal] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [repositoryFilter, setRepositoryFilter] = useState("all");
   const router = useRouter();
   const state = useRadiusData(async () => {
     const [analyses, repositories] = await Promise.all([
@@ -1250,9 +1245,47 @@ export function AnalysesData() {
   if (state.status === "loading") return <LoadingState label="Loading analyses" />;
   if (state.status === "error") return <ErrorState message={state.error} />;
 
+  const visibleAnalyses = filterAnalyses(state.data.analyses, {
+    status: statusFilter,
+    repositoryId: repositoryFilter,
+  });
+
   return (
     <>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "16px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "16px" }}>
+        <div className="filters" style={{ marginBottom: 0 }}>
+          <label>
+            <span className="gh-visually-hidden">Status</span>
+            <select
+              aria-label="Filter by status"
+              className="input"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              {ANALYSIS_STATUS_FILTERS.map((value) => (
+                <option key={value} value={value}>
+                  {value === "all" ? "All statuses" : value[0].toUpperCase() + value.slice(1)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="gh-visually-hidden">Repository</span>
+            <select
+              aria-label="Filter by repository"
+              className="input"
+              value={repositoryFilter}
+              onChange={(e) => setRepositoryFilter(e.target.value)}
+            >
+              <option value="all">All repositories</option>
+              {state.data.repositories.map((repo) => (
+                <option key={repo.id} value={repo.id ?? ""}>
+                  {repo.full_name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <button
           className="button"
           onClick={() => setShowModal(true)}
@@ -1269,10 +1302,15 @@ export function AnalysesData() {
           title="No analyses yet"
           detail="Repository webhooks or manual runs will appear here."
         />
+      ) : visibleAnalyses.length === 0 ? (
+        <EmptyState
+          title="No matching analyses"
+          detail="No analysis matches the selected status and repository."
+        />
       ) : (
         <section className="card">
           <AnalysisTable
-            analyses={state.data.analyses}
+            analyses={visibleAnalyses}
             repositories={state.data.repositories}
             pullRequests={state.data.pullRequests}
           />
@@ -1333,7 +1371,7 @@ function AnalysisTable({
                     <Link
                       href={`/pull-requests/${label.pullRequest.id}`}
                       title={`Analysis ${analysis.id}`}
-                      style={{ color: "var(--accent)", textDecoration: "none" }}
+                      style={{ color: "var(--green)", textDecoration: "none" }}
                     >
                       {label.secondary}
                     </Link>
@@ -1419,6 +1457,7 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
 
   const { analysis, repositories, blast, confidence, tests, testResult } = state.data;
   const repo = repositoryName(repositories, analysis.repository_id);
+  const heading = analysisHeading(analysis, repo);
   const header = buildHeaderModel(
     confidence
       ? {
@@ -1437,8 +1476,8 @@ export function AnalysisDetailData({ analysisId }: { analysisId: string }) {
     <>
       <PageHeading
         eyebrow={`Analysis / ${analysis.id}`}
-        title="Pull request verification"
-        description={`${repo} / PR ${analysis.pull_request_id}`}
+        title={heading.title}
+        description={heading.description}
         action={
           <button
             className="button secondary"
@@ -2336,7 +2375,7 @@ export function SearchData({ initialQuery = "" }: { initialQuery?: string }) {
       analyses: analyses.filter((analysis) =>
         analysisMatches(analysis, query, {
           repositoryName: named(analysis.repository_id),
-          pullRequest: pullRequests.get(analysis.pull_request_id),
+          pullRequest: analysis.pull_request_id ? pullRequests.get(analysis.pull_request_id) : null,
         }),
       ),
       pullRequests: query.trim()
@@ -2522,7 +2561,7 @@ export function PullRequestData({ pullRequestId }: { pullRequestId: string }) {
           <div style={{ display: "flex", gap: "20px", alignItems: "center", flexWrap: "wrap", fontSize: "13px" }}>
             <div>
               <span className="muted">Full Radius PR ID: </span>
-              <code style={{ fontSize: "12px", background: "rgba(255,255,255,0.06)", padding: "2px 6px", borderRadius: "4px" }}>{pr.id}</code>
+              <code style={{ fontSize: "12px", background: "var(--canvas)", padding: "2px 6px", borderRadius: "4px" }}>{pr.id}</code>
             </div>
             <div>
               <span className="muted">GitHub Number: </span>
@@ -3125,7 +3164,7 @@ export function PullRequestsOverviewData() {
                         <div style={{ display: "grid", gap: "4px" }}>
                           <Link
                             href={`/pull-requests/${pr.id}`}
-                            style={{ fontWeight: 600, color: "var(--foreground)", textDecoration: "none" }}
+                            style={{ fontWeight: 600, color: "var(--ink)", textDecoration: "none" }}
                           >
                             #{pr.github_pr_number} {pr.title}
                           </Link>
@@ -3136,8 +3175,8 @@ export function PullRequestsOverviewData() {
                                 fontSize: "11px",
                                 padding: "1px 6px",
                                 borderRadius: "4px",
-                                background: "rgba(255, 255, 255, 0.06)",
-                                border: "1px solid var(--border)",
+                                background: "var(--canvas)",
+                                border: "1px solid var(--line)",
                                 fontFamily: "monospace",
                                 color: "var(--muted)",
                               }}
@@ -3164,7 +3203,7 @@ export function PullRequestsOverviewData() {
                       <td>
                         <Link
                           href={`/repositories/${repo.id}`}
-                          style={{ color: "var(--accent)", textDecoration: "none" }}
+                          style={{ color: "var(--green)", textDecoration: "none" }}
                         >
                           {repo.full_name || repo.name}
                         </Link>
