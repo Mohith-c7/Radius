@@ -54,6 +54,24 @@ test("listAnalyses preserves supported filters as query parameters", async () =>
   );
 });
 
+test("countAnalyses asks for one row and reports the pagination total", async () => {
+  globalThis.fetch = async (input) => {
+    const url = new URL(String(input));
+    assert.equal(url.pathname, "/api/radius/analyses");
+    assert.equal(url.searchParams.get("limit"), "1");
+    return new Response(
+      JSON.stringify({
+        success: true,
+        data: [{ id: "a-1" }],
+        meta: { pagination: { limit: 1, offset: 0, total: 37, returned: 1 } },
+      }),
+      { headers: { "Content-Type": "application/json" }, status: 200 },
+    );
+  };
+
+  assert.equal(await api.countAnalyses(), 37);
+});
+
 test("connectRepository posts JSON with an idempotency key", async () => {
   globalThis.fetch = async (input, init) => {
     assert.equal(String(input), "http://dashboard.test/api/radius/repositories");
