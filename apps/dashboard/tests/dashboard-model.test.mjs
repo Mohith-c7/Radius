@@ -78,7 +78,14 @@ test("filterAnalyses filters the analyses list by status and repository", () => 
     { id: "3", status: "pending", repository_id: "r2" },
   ];
   const ids = (items) => items.map((a) => a.id);
-  assert.deepEqual(m.ANALYSIS_STATUS_FILTERS, ["all", "pending", "running", "completed", "failed"]);
+  assert.deepEqual(m.ANALYSIS_STATUS_FILTERS, [
+    "all",
+    "pending",
+    "running",
+    "completed",
+    "failed",
+    "cancelled",
+  ]);
   assert.deepEqual(ids(m.filterAnalyses(list, { status: "all", repositoryId: "all" })), ["1", "2", "3"]);
   assert.deepEqual(ids(m.filterAnalyses(list, {})), ["1", "2", "3"]);
   assert.deepEqual(ids(m.filterAnalyses(list, { status: "failed" })), ["2"]);

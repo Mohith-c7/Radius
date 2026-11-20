@@ -241,9 +241,8 @@ export function DashboardOverviewData() {
 
   const { repositories, analyses, pullRequests, reports } = state.data;
   const average = averageConfidence(reports) ?? 0;
-  const attention = analyses.filter((item) =>
-    ["failed", "cancelled"].includes(item.status.toLowerCase()),
-  ).length;
+  // Cancelled runs (superseded by a newer commit, PR closed) need no action.
+  const attention = analyses.filter((item) => item.status.toLowerCase() === "failed").length;
 
   return (
     <>

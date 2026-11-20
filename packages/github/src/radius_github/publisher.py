@@ -181,6 +181,53 @@ class GitHubAnalysisPublisher:
                 check_run_id=int(check_run["id"]),
             )
 
+    def publish_cancelled(
+        self,
+        *,
+        installation_id: int,
+        owner: str,
+        repository_name: str,
+        head_sha: str,
+        reason: str,
+        dashboard_url: str | None = None,
+    ) -> None:
+        """Complete this commit's in-progress Check Run for a cancelled analysis.
+
+        Used when a newer commit superseded the analysis after it started. Only an
+        existing run is updated (a commit Radius never started on gets no new check),
+        and the conclusion is ``neutral``: a cancelled analysis verified nothing.
+        """
+
+        token = self._client.create_installation_token(installation_id).token
+        check_run = _latest_check_run(
+            self._client.list_check_runs_for_ref(
+                token=token,
+                owner=owner,
+                repo=repository_name,
+                ref=head_sha,
+                check_name=CHECK_RUN_NAME,
+            )
+        )
+        if check_run is None:
+            return
+        self._client.update_check_run(
+            token=token,
+            owner=owner,
+            repo=repository_name,
+            name=CHECK_RUN_NAME,
+            head_sha=head_sha,
+            status="completed",
+            conclusion="neutral",
+            title="Radius: analysis cancelled",
+            summary=(
+                "Radius stopped analysing this commit before producing a result. "
+                "No verification was performed for this commit; do not treat it as verified."
+            ),
+            text=f"Reason: {reason[:1000]}",
+            details_url=dashboard_url,
+            check_run_id=int(check_run["id"]),
+        )
+
     def publish(
         self,
         *,

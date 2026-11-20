@@ -32,6 +32,11 @@ _TERMINAL_ANALYSIS_STATUSES = frozenset(
     }
 )
 
+_UNFINISHED_JOB_STATUSES = (
+    db_enums.AnalysisJobStatus.PENDING,
+    db_enums.AnalysisJobStatus.RUNNING,
+)
+
 EXHAUSTED_ATTEMPTS_ERROR = "Job exceeded maximum retry attempts."
 CANCELLED_PREFIX = "Cancelled: "
 
@@ -190,7 +195,9 @@ class SqlAlchemyAnalysisJobQueue:
         row.locked_at = now
         row.claimed_by = self._worker_id
         row.available_at = None
-        row.last_error = None
+        if not _is_cancel_request(row.last_error):
+            # A pending cancel request survives the claim: the worker skips the job.
+            row.last_error = None
         self._session.flush()
         _log_transition(row, "claimed")
         return self._to_dto(row)
@@ -236,6 +243,59 @@ class SqlAlchemyAnalysisJobQueue:
                 extra={"analysis_id": str(analysis_id), "outcome": "cancelled"},
             )
         return cancelled
+
+    def request_cancel(self, analysis_id: UUID, reason: str) -> str:
+        """Cancel a job, or ask the worker that holds (or will retry) it to stop.
+
+        Returns ``"cancelled"`` when the job had never started and is now finished
+        (as :meth:`cancel_queued`; the caller cancels the analysis), ``"requested"``
+        when a worker holds it or it waits for a retry (``last_error`` becomes
+        ``"Cancelled: <reason>"``; the worker stops at its next checkpoint, cancels
+        the analysis and completes its GitHub check), and ``"none"`` when the job
+        is already finished or does not exist.
+
+        Only the job row is written for a started job: the worker's pipeline
+        transaction holds the analysis row, and the caller must never wait on it.
+        """
+
+        exists = self._session.scalar(
+            select(db_models.AnalysisJob.id).where(
+                db_models.AnalysisJob.analysis_id == analysis_id
+            )
+        )
+        if exists is None:
+            return "none"
+        if self.cancel_queued(analysis_id, reason):
+            return "cancelled"
+        result = self._session.execute(
+            update(db_models.AnalysisJob)
+            .where(
+                db_models.AnalysisJob.analysis_id == analysis_id,
+                db_models.AnalysisJob.status.in_(_UNFINISHED_JOB_STATUSES),
+            )
+            .values(last_error=_safe_error(f"{CANCELLED_PREFIX}{reason}"))
+            .execution_options(synchronize_session="fetch")
+        )
+        self._session.flush()
+        if not result.rowcount:
+            return "none"
+        LOGGER.info(
+            "Analysis job cancel requested",
+            extra={"analysis_id": str(analysis_id), "outcome": "cancel_requested"},
+        )
+        return "requested"
+
+    def cancel_requested(self, analysis_id: UUID) -> str | None:
+        """The reason of a cancel request on an unfinished job, else ``None``."""
+
+        row = self._session.execute(
+            select(db_models.AnalysisJob.status, db_models.AnalysisJob.last_error).where(
+                db_models.AnalysisJob.analysis_id == analysis_id
+            )
+        ).first()
+        if row is None or row.status not in _UNFINISHED_JOB_STATUSES:
+            return None
+        return cancel_request_reason(row.last_error)
 
     def skip_claimed(self, analysis_id: UUID, reason: str) -> bool:
         """Finish a just-claimed job without running it (analysis no longer wanted).
@@ -499,6 +559,11 @@ class SqlAlchemyAnalysisJobQueue:
         for row in rows:
             row.locked_at = None
             row.claimed_by = None
+            if _is_cancel_request(row.last_error):
+                # Cancelled while it ran (e.g. superseded): nothing is left to retry.
+                self._finish_cancel_request(row)
+                _log_transition(row, "cancelled")
+                continue
             row.last_error = _safe_error(error)
             failed = row.attempts >= self._max_attempts
             if failed:
@@ -528,7 +593,10 @@ class SqlAlchemyAnalysisJobQueue:
         for row in rows:
             row.locked_at = None
             row.claimed_by = None
-            if row.attempts >= self._max_attempts:
+            if _is_cancel_request(row.last_error):
+                self._finish_cancel_request(row)
+                outcome = "cancelled"
+            elif row.attempts >= self._max_attempts:
                 row.status = db_enums.AnalysisJobStatus.FAILED
                 row.last_error = EXHAUSTED_ATTEMPTS_ERROR
                 outcome = "stale_failed"
@@ -539,6 +607,15 @@ class SqlAlchemyAnalysisJobQueue:
             _log_transition(row, outcome, logging.WARNING)
         self._session.flush()
         return len(rows)
+
+    def _finish_cancel_request(self, row: db_models.AnalysisJob) -> None:
+        """End a job whose cancellation was requested and whose worker is gone."""
+
+        row.status = db_enums.AnalysisJobStatus.COMPLETED
+        analysis = self._session.get(db_models.Analysis, row.analysis_id)
+        if analysis is not None and analysis.status not in _TERMINAL_ANALYSIS_STATUSES:
+            analysis.status = db_enums.AnalysisStatus.CANCELLED
+            analysis.completed_at = datetime.now(UTC)
 
     def get_by_analysis_id(self, analysis_id: UUID) -> AnalysisJob | None:
         """Return job state for an analysis."""
@@ -574,6 +651,18 @@ class SqlAlchemyAnalysisJobQueue:
             claimed_by=row.claimed_by,
             available_at=row.available_at,
         )
+
+
+def _is_cancel_request(last_error: str | None) -> bool:
+    return bool(last_error) and str(last_error).startswith(CANCELLED_PREFIX)
+
+
+def cancel_request_reason(last_error: str | None) -> str | None:
+    """The reason of a ``"Cancelled: ..."`` job error, else ``None``."""
+
+    if not _is_cancel_request(last_error):
+        return None
+    return str(last_error)[len(CANCELLED_PREFIX) :] or "Cancelled."
 
 
 def _safe_error(error: object) -> str:
