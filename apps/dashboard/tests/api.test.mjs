@@ -178,6 +178,23 @@ test("getTestRunResult fetches CI test run results", async () => {
   assert.equal(result?.total_tests, 10);
 });
 
+test("getTestRunResult maps 404 (no CI upload yet) to null", async () => {
+  globalThis.fetch = async () =>
+    envelope(
+      { success: false, data: null, error: { code: "NOT_FOUND", message: "No test results" } },
+      { status: 404 },
+    );
+  assert.equal(await api.getTestRunResult("analysis-1"), null);
+});
+
+test("getReadiness reports the /ready status through the proxy", async () => {
+  globalThis.fetch = async (input) => {
+    assert.equal(String(input), "http://dashboard.test/api/radius/ready");
+    return envelope({ success: false, data: null }, { status: 503 });
+  };
+  assert.deepEqual(await api.getReadiness(), { status: 503 });
+});
+
 test("uploadTestResults posts JUnit XML report payload", async () => {
   globalThis.fetch = async (input, init) => {
     assert.equal(

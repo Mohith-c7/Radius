@@ -205,6 +205,8 @@ def test_sync_pulls_open_prs_and_skips_drafts_for_analysis(env: Env) -> None:
     assert response.status_code == 200, response.text
     body = response.json()
     assert sorted(pr["github_pr_number"] for pr in body["data"]) == [7, 8]
+    # The dashboard's "Opened" column reads these.
+    assert all(pr["opened_at"] and "merged_at" in pr for pr in body["data"])
     assert body["meta"]["github"] == "synced"
     assert len(body["meta"]["analysisIds"]) == 1, "the draft is stored, not analyzed"
     analyses = env.get(f"/analyses?repositoryId={repository_id}").json()["data"]

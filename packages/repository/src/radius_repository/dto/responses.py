@@ -1,6 +1,7 @@
 """Repository response DTOs."""
 
 from dataclasses import dataclass
+from datetime import datetime
 from uuid import UUID
 
 from radius_repository.domain.entities import Branch, PullRequest, Repository
@@ -105,6 +106,8 @@ class PullRequestResponse:
     target_branch: str
     author: str
     status: str
+    opened_at: datetime
+    merged_at: datetime | None
 
     @classmethod
     def from_entity(cls, pull_request: PullRequest) -> "PullRequestResponse":
@@ -119,4 +122,6 @@ class PullRequestResponse:
             target_branch=pull_request.target_branch.value,
             author=pull_request.author,
             status=pull_request.status.value,
+            opened_at=pull_request.opened_at,
+            merged_at=pull_request.merged_at,
         )
