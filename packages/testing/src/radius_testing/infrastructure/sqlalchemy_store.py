@@ -5,11 +5,12 @@ from typing import Any
 from uuid import UUID
 
 from radius_shared.database import models as db_models
-from sqlalchemy import delete, select
+from sqlalchemy import delete, insert, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from radius_testing.domain.entities import (
+    CaseOutcome,
     ReportedTestCase,
     SelectedTest,
     TestCase,
@@ -312,6 +313,78 @@ class SqlAlchemyTestStore:
         self._session.flush()
 
         return result
+
+    def record_case_executions(
+        self,
+        analysis_id: UUID,
+        cases: tuple[ReportedTestCase, ...],
+        limit: int,
+    ) -> int:
+        """Bulk-insert one history row per reported case (capped per analysis).
+
+        Rows are keyed by the case label (``file::class::name``), which never
+        equals a selected test file's path, so the per-file rows written by
+        :meth:`save_run_result` are untouched. Failed cases are recorded first
+        when the cap is reached.
+        """
+
+        if limit <= 0 or not cases:
+            return 0
+        analysis = self._session.get(db_models.Analysis, analysis_id)
+        if analysis is None:
+            return 0
+        history = db_models.TestExecutionHistory
+        existing = dict(
+            self._session.execute(
+                select(history.test_path, history.status).where(
+                    history.analysis_id == analysis_id
+                )
+            ).all()
+        )
+        failed_paths = {_case_path(case) for case in cases if case.outcome == CaseOutcome.FAILED}
+        newly_failed = sorted(
+            path for path in failed_paths if path in existing and existing[path] != "failed"
+        )
+        if newly_failed:
+            # Failures are sticky: a case first seen passing, then failing, is failed.
+            self._session.execute(
+                update(history)
+                .where(history.analysis_id == analysis_id, history.test_path.in_(newly_failed))
+                .values(status="failed")
+            )
+        budget = limit - len(existing)
+        if budget <= 0:
+            self._session.flush()
+            return 0
+        pull_request = analysis.pull_request
+        now = datetime.now(UTC)
+        seen = set(existing)
+        rows: list[dict[str, Any]] = []
+        ordered = sorted(cases, key=lambda case: case.outcome != CaseOutcome.FAILED)
+        for case in ordered:
+            if len(rows) >= budget:
+                break
+            path = _case_path(case)
+            if not case.key[2] or not path or path in seen:
+                continue
+            seen.add(path)
+            rows.append({
+                "test_name": case.key[2][:255],
+                "test_path": path,
+                "repository_id": analysis.repository_id,
+                "analysis_id": analysis_id,
+                "commit_sha": analysis.commit_sha,
+                "pr_id": pull_request.github_pr_number if pull_request else None,
+                "branch": pull_request.source_branch if pull_request else None,
+                "status": str(case.outcome),
+                "duration_ms": 0,
+                "timestamp": now,
+                "framework": "junit",
+            })
+        if rows:
+            self._session.execute(insert(history), rows)
+        self._session.flush()
+        return len(rows)
 
     def get_run_result(self, analysis_id: UUID) -> TestRunResult | None:
         """Return executed test run result."""
@@ -730,15 +803,14 @@ class SqlAlchemyTestStore:
 
         analysis = self._session.get(db_models.Analysis, analysis_id)
         selection = self.get_selection(analysis_id)
-        if analysis is None or selection is None:
+        if analysis is None or selection is None or not selection.selected_tests:
+            # Nothing selected: the analysis' own rows (every uploaded case).
             return self._session.scalars(
                 select(db_models.TestExecutionHistory).where(
                     db_models.TestExecutionHistory.analysis_id == analysis_id
                 ).order_by(db_models.TestExecutionHistory.timestamp.desc())
             ).all()
         paths = [item.test_case.path.value for item in selection.selected_tests]
-        if not paths:
-            return []
         return self._session.scalars(
             select(db_models.TestExecutionHistory).where(
                 db_models.TestExecutionHistory.repository_id == analysis.repository_id,
@@ -805,6 +877,12 @@ class SqlAlchemyTestStore:
             }
             for row in rows
         ]
+
+
+def _case_path(case: ReportedTestCase) -> str:
+    """History key of one reported case (column is 500 characters)."""
+
+    return case.label[:500]
 
 
 def _norm_path(path: str) -> str:

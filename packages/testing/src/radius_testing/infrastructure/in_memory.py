@@ -5,6 +5,8 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from radius_testing.domain.entities import (
+    CaseOutcome,
+    ReportedTestCase,
     TestCase,
     TestResultUpload,
     TestRunPlan,
@@ -120,6 +122,43 @@ class InMemoryTestStore:
         """Return test execution history for an analysis."""
 
         return self._history.get(analysis_id, [])
+
+    def record_case_executions(
+        self,
+        analysis_id: UUID,
+        cases: tuple[ReportedTestCase, ...],
+        limit: int,
+    ) -> int:
+        """Append one history row per reported case, at most ``limit`` per analysis."""
+
+        rows = self._history.setdefault(analysis_id, [])
+        by_path = {row["test_path"]: row for row in rows}
+        for case in cases:
+            row = by_path.get(case.label[:500])
+            if row is not None and case.outcome == CaseOutcome.FAILED:
+                row["status"] = "failed"
+        added = 0
+        now = datetime.now(UTC).isoformat()
+        for case in sorted(cases, key=lambda item: item.outcome != CaseOutcome.FAILED):
+            path = case.label[:500]
+            if len(rows) >= limit:
+                break
+            if not case.key[2] or path in by_path:
+                continue
+            row = {
+                "test_name": case.key[2][:255],
+                "test_path": path,
+                "status": str(case.outcome),
+                "duration_ms": 0,
+                "timestamp": now,
+                "failure_info": None,
+                "coverage_percent": None,
+                "framework": "junit",
+            }
+            rows.append(row)
+            by_path[path] = row
+            added += 1
+        return added
 
     def list_test_samples(self, repository_id: UUID, limit: int = 5000) -> list[dict]:
         """Return history rows oldest first (the in-memory store is single-tenant)."""

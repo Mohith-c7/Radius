@@ -158,6 +158,12 @@ class ReportedTestCase:
             file = file[2:]
         return (file, (self.classname or "").strip(), (self.name or "").strip())
 
+    @property
+    def label(self) -> str:
+        """Return the readable identity: the non-empty key parts joined by ``::``."""
+
+        return "::".join(part for part in self.key if part)
+
 
 @dataclass(frozen=True, slots=True)
 class TestResultUpload:

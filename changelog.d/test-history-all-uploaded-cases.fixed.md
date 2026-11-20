@@ -1,0 +1,1 @@
+Test insights now show uploaded CI results even when Radius selected no tests: every reported test case is recorded in the execution history (up to `RADIUS_MAX_RECORDED_EXECUTIONS` rows per analysis, default 20000, failures first). Selection attribution and the verdict are unchanged.

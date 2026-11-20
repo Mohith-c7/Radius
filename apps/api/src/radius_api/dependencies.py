@@ -67,6 +67,7 @@ from radius_shared.verdict_v2_repository import (
     SqlVerdictV2Repository,
 )
 from radius_testing.application import TestingApplicationService
+from radius_testing.application.services import DEFAULT_MAX_RECORDED_EXECUTIONS
 from radius_testing.infrastructure import (
     ConventionalTestDiscoverer,
     InMemoryTestStore,
@@ -379,6 +380,15 @@ def get_analysis_service(request: Request):
         _release_request_session(request, failed=failed)
 
 
+def _max_recorded_executions(request: Request) -> int:
+    """Per-analysis cap on history rows recorded from uploaded reports."""
+
+    settings = getattr(request.app.state, "settings", None)
+    return int(
+        getattr(settings, "max_recorded_executions", DEFAULT_MAX_RECORDED_EXECUTIONS)
+    )
+
+
 def get_testing_service(request: Request):
     """Return testing application service."""
 
@@ -394,6 +404,7 @@ def get_testing_service(request: Request):
             selector=PathBasedTestSelector(),
             store=SqlAlchemyTestStore(session),
             planner=StaticTestCommandPlanner(),
+            max_recorded_executions=_max_recorded_executions(request),
         )
     except Exception:
         failed = True

@@ -169,6 +169,11 @@ class ApiSettings(DatabaseSettings):
     upload_max_body_bytes: int = Field(
         default=20 * 1024 * 1024, ge=1024, alias="RADIUS_UPLOAD_MAX_BODY_BYTES"
     )
+    max_recorded_executions: int = Field(
+        default=20_000, ge=0, alias="RADIUS_MAX_RECORDED_EXECUTIONS"
+    )
+    """Per-analysis cap on test-execution history rows recorded from uploaded
+    CI reports (one per reported case). 0 records only the selected test files."""
     trusted_proxies: str = Field(default="", alias="RADIUS_TRUSTED_PROXIES")
     """Comma separated IPs/CIDRs of reverse proxies whose X-Forwarded-For is trusted."""
     rate_limit_enabled: bool = Field(default=True, alias="RADIUS_RATE_LIMIT_ENABLED")
