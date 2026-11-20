@@ -174,3 +174,14 @@ class TestResultUpload:
     result: TestRunResult
     cases: tuple[ReportedTestCase, ...] = ()
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    repository_id: UUID | None = None
+    report_slot_id: str = "legacy"
+    run_id: str | None = None
+    run_attempt: int | None = None
+    manifest_id: UUID | None = None
+    manifest_digest: str | None = None
+    artifact_bytes: bytes | None = None
+    attestation_bundle: bytes | None = None
+    attestation_digest: str | None = None
+    provenance_status: str = "untrusted"
+    provenance_reason_code: str | None = None

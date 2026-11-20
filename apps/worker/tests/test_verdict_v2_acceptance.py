@@ -211,6 +211,7 @@ class World:
     monkeypatch: pytest.MonkeyPatch
     flag: str = "on"
     registry: str = "static"
+    trusted_evidence: bool = False
 
     def __post_init__(self) -> None:
         self.path = DIRS[self.name]
@@ -234,12 +235,14 @@ class World:
         mp.delenv("RADIUS_FEATURE_VERDICT_V2", raising=False)
         if self.flag != "unset":
             mp.setenv("RADIUS_FEATURE_VERDICT_V2", self.flag)
+        mp.setenv("RADIUS_FEATURE_TRUSTED_EVIDENCE", str(self.trusted_evidence).lower())
         get_api_settings.cache_clear()
         self.client = TestClient(create_app())
         self.settings = WorkerSettings(
             GITHUB_APP_ID="app-id",
             GITHUB_APP_PRIVATE_KEY="key",
             RADIUS_FEATURE_VERDICT_V2=self.flag if self.flag != "unset" else "off",
+            RADIUS_FEATURE_TRUSTED_EVIDENCE=self.trusted_evidence,
         )
         self.github = FakeGitHub(self.head)
         self.mode_enum = VerdictV2Mode(self.settings.verdict_v2_mode)
@@ -290,7 +293,8 @@ class World:
             analysis_id=self.analysis,
             command=command or cmd,
             collector=collector or coll,
-            outcomes=outcomes or SqlOutcomeSource(self.factory),
+            outcomes=outcomes
+            or SqlOutcomeSource(self.factory, trusted_only=self.trusted_evidence),
             store=SqlVerdictStore(self.factory, self.mode_enum),
             organization_id=self.org,
             clock=lambda: T0,
@@ -322,7 +326,7 @@ class World:
             session_factory=self.factory,
             settings=self.settings,
             github_client=self.github,
-            recomputer=create_recomputer(self.factory, self.mode_enum),
+            recomputer=create_recomputer(self.factory, self.mode_enum, self.settings),
             now=kw.pop("now", None),
             **kw,
         )
@@ -349,13 +353,17 @@ class World:
 
         store = SqlVerdictStore(self.factory, self.mode_enum)
         stage_a = store.latest_stage_a(self.org, self.analysis)
-        facts = SqlOutcomeSource(self.factory).load(self.analysis, stage_a)
+        facts = SqlOutcomeSource(self.factory, trusted_only=self.trusted_evidence).load(
+            self.analysis, stage_a
+        )
         stage_b = build_stage_b(
             stage_a,
             cases=facts.cases,
             uploads=facts.uploads,
+            diagnostic_uploads=facts.diagnostic_uploads,
             flaky_test_ids=facts.flaky_test_ids,
             flaky_scores=facts.flaky_scores,
+            trusted_evidence=facts.trusted_evidence,
         )
         return ScoringPipeline(
             mode=self.mode_enum.value, revision=revision, clock=lambda: T0
@@ -663,6 +671,76 @@ def test_results_for_another_commit_are_rejected_and_not_counted(tmp_path, monke
     assert w.stage_a_b().status == "ok"
     assert w.upload(commit="c" * 40).status_code == 409
     assert w.outbox() is None
+
+
+def _verify_uploads(w: World) -> None:
+    """Record ``verified_provenance`` for every stored upload, as the verified route does."""
+
+    from radius_testing.infrastructure.sqlalchemy_store import SqlAlchemyTestStore
+
+    with w.factory() as session:
+        store = SqlAlchemyTestStore(session)
+        for item in store.list_result_uploads(w.analysis):
+            store.append_verification_event(
+                item.id, "verified_provenance", None, "test-verifier", "test-policy", {}
+            )
+        session.commit()
+
+
+def _assert_same_as_worker(w: World, served: dict[str, Any]) -> None:
+    worker = w.worker_payload(served["revision"])
+    for key in ("verdict", "reasons", "summary", "criteria", "justification", "test_evidence"):
+        assert served[key] == worker[key], key
+
+
+def test_trusted_evidence_flag_off_keeps_unattested_uploads_counting(tmp_path, monkeypatch) -> None:
+    w = World("01_correct_strong_tests", "gold", tmp_path, monkeypatch)
+    assert w.stage_a_b().status == "ok"
+    upload = w.upload()
+    assert upload.status_code == 200
+    assert upload.json()["data"]["verification_status"] != "untrusted"
+    assert w.consume().results[0].status == "done"
+    served = w.get().json()["data"]
+    assert served["verdict"] == BY_NAME[w.name]["expected_verdict"]
+    assert "test_evidence" not in served
+    assert "diagnostic_uploads" not in w.stored().bundle["stage_b"]
+
+
+def test_trusted_evidence_on_counts_only_verified_provenance(tmp_path, monkeypatch) -> None:
+    w = World("01_correct_strong_tests", "gold", tmp_path, monkeypatch, trusted_evidence=True)
+    assert w.stage_a_b().status == "ok"
+    upload = w.upload()
+    assert upload.status_code == 200, upload.text
+    assert upload.json()["data"]["verification_status"] == "untrusted"
+    assert upload.json()["data"]["upload"]["provenance_status"] == "untrusted"
+    assert w.consume().results[0].status == "done"
+    served = w.get().json()["data"]
+    # an unattested upload is diagnostic only: still awaiting trusted CI results
+    assert served["verdict"] == "insufficient_evidence"
+    assert served["justification"]["decided_by"] == "R2p" and served["pending"] is True
+    assert served["test_evidence"] == {
+        "trusted_uploads": 0,
+        "diagnostic_only_uploads": 1,
+        "trusted_results_received": False,
+    }
+    _assert_same_as_worker(w, served)
+    w.publish_now()
+    assert "0 provenance-verified report(s); 1 diagnostic-only" in w.github.comments[0]["body"]
+
+    _verify_uploads(w)
+    with w.factory() as session:
+        recomputer = create_recomputer(w.factory, w.mode_enum, w.settings)
+        assert recomputer is not None and recomputer.trusted_evidence is True
+        assert recomputer.recompute(session, w.org, w.analysis)
+        session.commit()
+    served = w.get().json()["data"]
+    assert served["verdict"] == BY_NAME[w.name]["expected_verdict"] == "verified"
+    assert served["test_evidence"] == {
+        "trusted_uploads": 1,
+        "diagnostic_only_uploads": 0,
+        "trusted_results_received": True,
+    }
+    _assert_same_as_worker(w, served)
 
 
 # ------------------------------------------------------------------ failure injection

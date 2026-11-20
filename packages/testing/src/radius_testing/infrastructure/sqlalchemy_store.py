@@ -1,6 +1,7 @@
 """SQLAlchemy testing store adapter."""
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from radius_shared.database import models as db_models
@@ -342,14 +343,29 @@ class SqlAlchemyTestStore:
         self,
         analysis_id: UUID,
         body_sha256: str,
+        report_slot_id: str = "legacy",
+        run_id: str | None = None,
+        run_attempt: int | None = None,
     ) -> TestResultUpload | None:
         """Return an earlier upload of the identical report body, if any."""
 
+        criteria = [
+            db_models.TestResultUpload.analysis_id == analysis_id,
+            db_models.TestResultUpload.body_sha256 == body_sha256,
+            db_models.TestResultUpload.report_slot_id == report_slot_id,
+        ]
+        criteria.append(
+            db_models.TestResultUpload.run_id.is_(None)
+            if run_id is None
+            else db_models.TestResultUpload.run_id == run_id
+        )
+        criteria.append(
+            db_models.TestResultUpload.run_attempt.is_(None)
+            if run_attempt is None
+            else db_models.TestResultUpload.run_attempt == run_attempt
+        )
         row = self._session.scalar(
-            select(db_models.TestResultUpload).where(
-                db_models.TestResultUpload.analysis_id == analysis_id,
-                db_models.TestResultUpload.body_sha256 == body_sha256,
-            )
+            select(db_models.TestResultUpload).where(*criteria)
         )
         return self._upload_to_domain(row) if row is not None else None
 
@@ -360,15 +376,58 @@ class SqlAlchemyTestStore:
         replays of the same report collapse into one row.
         """
 
-        existing = self.get_result_upload(upload.analysis_id, upload.body_sha256)
+        existing = self.get_result_upload(
+            upload.analysis_id,
+            upload.body_sha256,
+            upload.report_slot_id,
+            upload.run_id,
+            upload.run_attempt,
+        )
         if existing is not None:
+            if (
+                existing.run_id != upload.run_id
+                or existing.run_attempt != upload.run_attempt
+                or existing.manifest_digest != upload.manifest_digest
+            ):
+                raise ValueError("REPLAY_CONFLICT")
             return existing
+        if upload.run_id is not None:
+            slot_use = self._session.scalar(
+                select(db_models.TestResultUpload).where(
+                    db_models.TestResultUpload.repository_id == upload.repository_id,
+                    db_models.TestResultUpload.run_id == upload.run_id,
+                    db_models.TestResultUpload.run_attempt == upload.run_attempt,
+                    db_models.TestResultUpload.report_slot_id == upload.report_slot_id,
+                )
+            )
+            if slot_use is not None:
+                raise ValueError("REPLAY_CONFLICT")
+        if upload.attestation_digest is not None:
+            reused = self._session.scalar(
+                select(db_models.TestResultUpload).where(
+                    db_models.TestResultUpload.repository_id == upload.repository_id,
+                    db_models.TestResultUpload.attestation_digest == upload.attestation_digest,
+                )
+            )
+            if reused is not None:
+                raise ValueError("REPLAY_CONFLICT")
         result = upload.result
         row = db_models.TestResultUpload(
             id=upload.id,
             analysis_id=upload.analysis_id,
             commit_sha=upload.commit_sha,
             body_sha256=upload.body_sha256,
+            repository_id=upload.repository_id,
+            report_slot_id=upload.report_slot_id,
+            run_id=upload.run_id,
+            run_attempt=upload.run_attempt,
+            manifest_id=upload.manifest_id,
+            manifest_digest=upload.manifest_digest,
+            artifact_bytes=upload.artifact_bytes,
+            attestation_bundle=upload.attestation_bundle,
+            attestation_digest=upload.attestation_digest,
+            provenance_status=upload.provenance_status,
+            provenance_reason_code=upload.provenance_reason_code,
             status=result.status.value,
             total_tests=result.total_tests,
             passed=result.passed,
@@ -393,11 +452,109 @@ class SqlAlchemyTestStore:
                 self._session.add(row)
                 self._session.flush()
         except IntegrityError:
-            existing = self.get_result_upload(upload.analysis_id, upload.body_sha256)
+            existing = self.get_result_upload(
+                upload.analysis_id,
+                upload.body_sha256,
+                upload.report_slot_id,
+                upload.run_id,
+                upload.run_attempt,
+            )
             if existing is None:
-                raise
+                raise ValueError("REPLAY_CONFLICT") from None
+            if (
+                existing.commit_sha != upload.commit_sha
+                or existing.manifest_digest != upload.manifest_digest
+            ):
+                raise ValueError("REPLAY_CONFLICT") from None
             return existing
         return upload
+
+    def get_or_create_evidence_manifest(
+        self,
+        analysis_id: UUID,
+        repository_id: UUID,
+        head_sha: str,
+        manifest: dict,
+        digest_sha256: str,
+    ) -> dict:
+        """Persist one immutable manifest per analysis, serialized by row lock."""
+
+        self._session.execute(
+            select(db_models.Analysis.id)
+            .where(db_models.Analysis.id == analysis_id)
+            .with_for_update()
+        )
+        row = self._session.scalar(
+            select(db_models.TestEvidenceManifest).where(
+                db_models.TestEvidenceManifest.analysis_id == analysis_id
+            )
+        )
+        if row is not None:
+            if row.digest_sha256 != digest_sha256:
+                raise ValueError("MANIFEST_IMMUTABLE")
+        else:
+            row = db_models.TestEvidenceManifest(
+                analysis_id=analysis_id,
+                repository_id=repository_id,
+                head_sha=head_sha.lower(),
+                manifest_version=1,
+                canonical_manifest=manifest,
+                digest_sha256=digest_sha256,
+                created_at=datetime.now(UTC),
+            )
+            self._session.add(row)
+            self._session.flush()
+        return {
+            "id": str(row.id),
+            "analysis_id": str(row.analysis_id),
+            "repository_id": str(row.repository_id),
+            "head_sha": row.head_sha,
+            "manifest": row.canonical_manifest,
+            "digest_sha256": row.digest_sha256,
+        }
+
+    def append_verification_event(
+        self,
+        upload_id: UUID,
+        status: str,
+        reason_code: str | None,
+        verifier_version: str,
+        policy_version: str,
+        details: dict,
+        attestation_digest: str | None = None,
+        attestation_bundle: bytes | None = None,
+    ) -> None:
+        """Append a verification event without mutating earlier event rows."""
+
+        if attestation_digest is not None:
+            previous = self._session.scalar(
+                select(db_models.TestEvidenceVerificationEvent).where(
+                    db_models.TestEvidenceVerificationEvent.upload_id == upload_id,
+                    db_models.TestEvidenceVerificationEvent.attestation_digest
+                    == attestation_digest,
+                    db_models.TestEvidenceVerificationEvent.verifier_version
+                    == verifier_version,
+                    db_models.TestEvidenceVerificationEvent.policy_version
+                    == policy_version,
+                )
+            )
+            if previous is not None:
+                return
+
+        self._session.add(
+            db_models.TestEvidenceVerificationEvent(
+                upload_id=upload_id,
+                status=status,
+                reason_code=reason_code,
+                verifier_version=verifier_version,
+                policy_version=policy_version,
+                attestation_digest=attestation_digest,
+                attestation_bundle=attestation_bundle,
+                details=details,
+                verified_at=datetime.now(UTC),
+            )
+        )
+        self._session.flush()
 
     def lock_result_uploads(self, analysis_id: UUID) -> None:
         """Take a row lock on the analysis for the rest of the transaction.
@@ -420,15 +577,45 @@ class SqlAlchemyTestStore:
             .where(db_models.TestResultUpload.analysis_id == analysis_id)
             .order_by(db_models.TestResultUpload.created_at, db_models.TestResultUpload.id)
         ).all()
-        return tuple(self._upload_to_domain(row) for row in rows)
+        latest_events: dict[UUID, Any] = {}
+        if rows:
+            events = self._session.scalars(
+                select(db_models.TestEvidenceVerificationEvent)
+                .where(
+                    db_models.TestEvidenceVerificationEvent.upload_id.in_(
+                        [row.id for row in rows]
+                    )
+                )
+                .order_by(
+                    db_models.TestEvidenceVerificationEvent.verified_at,
+                    db_models.TestEvidenceVerificationEvent.id,
+                )
+            ).all()
+            latest_events = {event.upload_id: event for event in events}
+        return tuple(
+            self._upload_to_domain(row, latest_events.get(row.id)) for row in rows
+        )
 
     @staticmethod
-    def _upload_to_domain(row: db_models.TestResultUpload) -> TestResultUpload:
+    def _upload_to_domain(row: db_models.TestResultUpload, event=None) -> TestResultUpload:
         return TestResultUpload(
             id=row.id,
             analysis_id=row.analysis_id,
             commit_sha=row.commit_sha,
             body_sha256=row.body_sha256,
+            repository_id=row.repository_id,
+            report_slot_id=row.report_slot_id,
+            run_id=row.run_id,
+            run_attempt=row.run_attempt,
+            manifest_id=row.manifest_id,
+            manifest_digest=row.manifest_digest,
+            artifact_bytes=row.artifact_bytes,
+            attestation_bundle=row.attestation_bundle,
+            attestation_digest=row.attestation_digest,
+            provenance_status=event.status if event is not None else row.provenance_status,
+            provenance_reason_code=(
+                event.reason_code if event is not None else row.provenance_reason_code
+            ),
             result=TestRunResult(
                 id=row.id,
                 analysis_id=row.analysis_id,

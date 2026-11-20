@@ -857,3 +857,14 @@ Existing routes now also require a scope: `read` for GET, `write` for other muta
 | `GET /coverage/symbol?analysis_id=&file_path=&symbol=` | Test case ids that executed one symbol. | 200, 404 when none |
 
 Unknown analyses and analyses of another organization are both 404.
+
+## Trusted CI test evidence (P0.1)
+
+These workflow-only routes are disabled (404) unless `RADIUS_FEATURE_TRUSTED_EVIDENCE=true` and the pinned caller/reusable-workflow policy is configured. They authenticate GitHub Actions OIDC separately from the GitHub App used to validate repository, pull-request, workflow-run, and attestation records. Manual analyses and fork pull requests cannot produce trusted evidence. With the flag on, legacy `/tests/results` uploads are diagnostic-only (`verification_status: "untrusted"`, no v1 re-score); with it off they behave as before. See [security/TRUSTED_TEST_EVIDENCE.md](security/TRUSTED_TEST_EVIDENCE.md) and DEC-041.
+
+| Method and path | Purpose | Success |
+|---|---|---|
+| `GET /analyses/{id}/tests/manifest` | Return Radius's persisted, immutable selected-test manifest, canonical digest, and authorized report slots for the matching PR head. | 200 manifest and `digest_sha256` |
+| `POST /analyses/{id}/tests/verified-results` | Multipart upload (`multipart/form-data`, same body cap as `/tests/results`): JUnit `artifact`, server-authorized `report_slot_id`, and `pull_request_number`. Radius retrieves and cryptographically verifies the matching GitHub Artifact Attestation (predicate type `https://github.com/Mohith-c7/Radius/attestations/test-results/v1`) before granting `verified_provenance`. | 200 ingestion with provenance status |
+
+Exact retries are idempotent by analysis, repository, run/attempt, slot, report digest, manifest and attestation identity. Reuse of a slot with different bytes is rejected. With the flag on, only `verified_provenance` contributes to trusted test-result receipt or scoring; other uploads remain diagnostic. Verdict v2 remains advisory.

@@ -392,6 +392,7 @@ class VerdictV2View:
     suggested_tests: tuple[Mapping[str, Any], ...] = ()
     #: Contract 5: the mutation run of this analysis (empty when the flag was off).
     mutation: dict[str, Any] = field(default_factory=dict)
+    test_evidence: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_payload(cls, payload: Mapping[str, Any]) -> VerdictV2View:
@@ -430,12 +431,15 @@ class VerdictV2View:
             waivers=_dict(payload.get("waivers")),
             suggested_tests=_maps(payload.get("suggested_tests")),
             mutation=_dict(payload.get("mutation")),
+            test_evidence=_dict(payload.get("test_evidence")),
         )
 
     def to_dict(self) -> dict[str, Any]:
         out = self._base_dict()
         if self.mutation:
             out["mutation"] = dict(self.mutation)
+        if self.test_evidence:
+            out["test_evidence"] = dict(self.test_evidence)
         if self.policy:
             out["policy"] = dict(self.policy)
         if self.waivers:

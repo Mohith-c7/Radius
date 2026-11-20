@@ -195,6 +195,11 @@ class StageBInput(Serializable):
     stage_a: StageAInput
     cases: tuple[CaseOutcomeInput, ...] = ()
     uploads: int = 0
+    #: RADIUS_FEATURE_TRUSTED_EVIDENCE: head-bound uploads without verified provenance
+    #: (diagnostic only). Omitted from the encoding while 0/False so every flag-off
+    #: digest stays byte-identical to builds without these fields.
+    diagnostic_uploads: int = field(default=0, metadata={"omit_default": True})
+    trusted_evidence: bool = field(default=False, metadata={"omit_default": True})
     flaky_test_ids: frozenset[str] = frozenset()
     flaky_scores: dict[str, float] = field(default_factory=dict)
     results_received: bool = False  # at least one CI upload for this analysis and head

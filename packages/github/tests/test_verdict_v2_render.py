@@ -148,6 +148,21 @@ def test_worked_example_matches_golden() -> None:
     assert md.render_comment(example_view()) == read_golden("fixture_08_worked_example.md")
 
 
+def test_trusted_and_diagnostic_uploads_are_explained_in_comment_and_check() -> None:
+    payload = make_payload("insufficient_evidence", "R2b", [])
+    payload["test_evidence"] = {
+        "trusted_uploads": 1,
+        "diagnostic_only_uploads": 4,
+        "trusted_results_received": True,
+    }
+    view = view_of(payload)
+    comment = md.render_comment(view)
+    check = md.render_check_run(view)
+    expected = "1 provenance-verified report(s); 4 diagnostic-only or untrusted report(s)."
+    assert expected in comment
+    assert expected in check.text
+
+
 def test_worked_example_key_lines_are_exactly_the_design_text() -> None:
     body = md.render_comment(example_view())
     lines = body.split("\n")

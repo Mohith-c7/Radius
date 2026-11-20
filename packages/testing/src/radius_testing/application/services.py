@@ -45,6 +45,9 @@ from radius_testing.interfaces.discovery import TestDiscoverer
 from radius_testing.interfaces.runner import TestCommandPlanner, TestRunner
 from radius_testing.interfaces.selection import TestSelector
 from radius_testing.interfaces.store import TestStore
+from radius_testing.provenance import build_manifest
+
+MAX_RESULT_UPLOADS_PER_ANALYSIS = 256
 
 
 class TestingApplicationService:
@@ -151,6 +154,22 @@ class TestingApplicationService:
             msg = f"Test selection for analysis {analysis_id} was not found."
             raise NotFoundError(msg)
         return TestSelectionResponse.from_entity(selection)
+
+    def create_evidence_manifest(
+        self, analysis_id: UUID, repository_id: UUID, head_sha: str
+    ) -> dict:
+        """Return the immutable server-generated manifest for this analysis."""
+
+        selection = self._store.get_selection(analysis_id)
+        if selection is None:
+            msg = f"Test selection for analysis {analysis_id} was not found."
+            raise NotFoundError(msg)
+        manifest, digest = build_manifest(
+            analysis_id, repository_id, head_sha, selection
+        )
+        return self._store.get_or_create_evidence_manifest(
+            analysis_id, repository_id, head_sha, manifest, digest
+        )
 
     def execute_test_run(
         self,
@@ -262,6 +281,8 @@ class TestingApplicationService:
         analysis_id: UUID,
         content: str | bytes,
         commit_sha: str,
+        *,
+        upload_metadata: dict | None = None,
     ) -> TestIngestionResponse:
         """Ingest one CI report and attribute the accumulated results.
 
@@ -271,13 +292,14 @@ class TestingApplicationService:
         Malformed reports raise ``ValidationError`` before anything is stored.
         """
 
-        return self._ingest(analysis_id, content, commit_sha)[1]
+        return self._ingest(analysis_id, content, commit_sha, upload_metadata)[1]
 
     def _ingest(
         self,
         analysis_id: UUID,
         content: str | bytes,
         commit_sha: str,
+        upload_metadata: dict | None = None,
     ) -> tuple[TestRunResult, TestIngestionResponse]:
         parsed = self._parser.parse(content, analysis_id)
         # Lock before reading/writing uploads so concurrent shards are
@@ -285,9 +307,30 @@ class TestingApplicationService:
         self._store.lock_result_uploads(analysis_id)
         body = content.encode("utf-8") if isinstance(content, str) else content
         digest = hashlib.sha256(body).hexdigest()
-        upload = self._store.get_result_upload(analysis_id, digest)
+        metadata = upload_metadata or {}
+        slot_id = str(metadata.get("report_slot_id", "legacy"))
+        upload = self._store.get_result_upload(
+            analysis_id,
+            digest,
+            slot_id,
+            metadata.get("run_id"),
+            metadata.get("run_attempt"),
+        )
         duplicate = upload is not None
+        if upload is not None and (
+            upload.commit_sha != commit_sha.strip().lower()
+            or upload.repository_id != metadata.get("repository_id")
+            or upload.manifest_digest != metadata.get("manifest_digest")
+        ):
+            raise ValueError("REPLAY_CONFLICT")
         if upload is None:
+            # Legacy uploads are bounded by the route (409); provenance uploads here.
+            if (
+                upload_metadata
+                and len(self._store.list_result_uploads(analysis_id))
+                >= MAX_RESULT_UPLOADS_PER_ANALYSIS
+            ):
+                raise ValueError("UPLOAD_LIMIT_REACHED")
             candidate = TestResultUpload(
                 id=parsed.id,
                 analysis_id=analysis_id,
@@ -295,6 +338,17 @@ class TestingApplicationService:
                 body_sha256=digest,
                 result=parsed,
                 cases=report_cases(content),
+                repository_id=metadata.get("repository_id"),
+                report_slot_id=slot_id,
+                run_id=metadata.get("run_id"),
+                run_attempt=metadata.get("run_attempt"),
+                manifest_id=metadata.get("manifest_id"),
+                manifest_digest=metadata.get("manifest_digest"),
+                artifact_bytes=(body if metadata.get("manifest_id") is not None else None),
+                attestation_bundle=metadata.get("attestation_bundle"),
+                attestation_digest=metadata.get("attestation_digest"),
+                provenance_status=str(metadata.get("provenance_status", "untrusted")),
+                provenance_reason_code=metadata.get("provenance_reason_code"),
             )
             upload = self._store.save_result_upload(candidate)
             duplicate = upload.id != candidate.id  # lost a concurrent replay race
@@ -335,6 +389,9 @@ class TestingApplicationService:
                 failed=upload.result.failed,
                 skipped=upload.result.skipped,
                 reported_cases=len(upload.cases),
+                report_slot_id=upload.report_slot_id,
+                provenance_status=upload.provenance_status,
+                provenance_reason_code=upload.provenance_reason_code,
             ),
             selected_tests=(
                 SelectedTestAttributionResponse(
@@ -355,6 +412,24 @@ class TestingApplicationService:
             contradictory_cases=contradictory_cases(cases),
         )
         return aggregate, response
+
+    def append_provenance_event(
+        self,
+        upload_id: UUID,
+        status: str,
+        reason_code: str | None,
+        verifier_version: str,
+        policy_version: str,
+        details: dict,
+        attestation_digest: str | None = None,
+        attestation_bundle: bytes | None = None,
+    ) -> None:
+        """Persist an immutable provenance verification event."""
+
+        self._store.append_verification_event(
+            upload_id, status, reason_code, verifier_version, policy_version, details,
+            attestation_digest, attestation_bundle,
+        )
 
 
 def aggregate_uploads(

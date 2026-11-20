@@ -177,6 +177,8 @@ class GitHubAppClient:
     def create_installation_token(
         self,
         installation_id: int,
+        *,
+        permissions: dict[str, str] | None = None,
     ) -> InstallationToken:
         """Create an installation token for clone and publishing operations."""
 
@@ -187,7 +189,7 @@ class GitHubAppClient:
             "POST",
             f"/app/installations/{installation_id}/access_tokens",
             token=self._jwt(),
-            body={},
+            body={"permissions": permissions} if permissions else {},
         )
         if not isinstance(response, dict):
             msg = "GitHub returned an invalid installation token response."
@@ -249,6 +251,60 @@ class GitHubAppClient:
             "GET", f"/repos/{_seg(owner)}/{_seg(repo)}/pulls/{int(number)}", token=token
         )
         return response if isinstance(response, dict) else {}
+
+    def get_workflow_run(
+        self, *, token: str, owner: str, repo: str, run_id: str
+    ) -> dict[str, Any]:
+        """Return an authoritative Actions run record for provenance binding."""
+
+        if not run_id.isdigit():
+            raise ValueError("Invalid workflow run id.")
+        response = self._request(
+            "GET",
+            f"/repos/{_seg(owner)}/{_seg(repo)}/actions/runs/{run_id}",
+            token=token,
+        )
+        return response if isinstance(response, dict) else {}
+
+    def get_attestation_bundles(
+        self, *, token: str, owner: str, repo: str, subject_digest: str
+    ) -> tuple[bytes, ...]:
+        """Retrieve bounded GitHub-hosted bundles for one SHA-256 subject."""
+
+        if not subject_digest.startswith("sha256:"):
+            raise ValueError("Attestation subject must use SHA-256.")
+        response = self._request(
+            "GET",
+            f"/repos/{_seg(owner)}/{_seg(repo)}/attestations/{_seg(subject_digest)}",
+            token=token,
+        )
+        if not isinstance(response, dict):
+            return ()
+        bundles: list[bytes] = []
+        for item in response.get("attestations", ()):
+            if not isinstance(item, dict) or not item.get("bundle_url"):
+                continue
+            if len(bundles) >= 8:
+                break
+            bundles.append(self._download_attestation_bundle(str(item["bundle_url"])))
+        return tuple(bundles)
+
+    def _download_attestation_bundle(self, url: str) -> bytes:
+        """Download a signed bundle without forwarding credentials to its host."""
+
+        parsed = urllib.parse.urlsplit(url)
+        if (
+            parsed.scheme != "https"
+            or not parsed.hostname
+            or not parsed.hostname.endswith(".blob.core.windows.net")
+        ):
+            raise ValueError("GitHub returned an unsupported attestation bundle host.")
+        request = urllib.request.Request(url, headers={"User-Agent": "radius"})
+        with self._opener(request, timeout=self._settings.github_timeout_seconds) as response:
+            payload = response.read(2 * 1024 * 1024 + 1)
+        if len(payload) > 2 * 1024 * 1024:
+            raise ValueError("Attestation bundle exceeds the 2 MiB limit.")
+        return payload
 
     def create_check_run(
         self,

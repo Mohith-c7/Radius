@@ -125,8 +125,12 @@ class OutcomeFacts:
 
     cases: tuple[CaseOutcomeInput, ...] = ()
     uploads: int = 0
+    #: head-bound uploads without verified provenance (only with ``trusted_evidence``)
+    diagnostic_uploads: int = 0
     flaky_test_ids: frozenset[str] = frozenset()
     flaky_scores: dict[str, float] = field(default_factory=dict)
+    #: RADIUS_FEATURE_TRUSTED_EVIDENCE was on: only verified provenance counted
+    trusted_evidence: bool = False
 
 
 class OutcomePort(Protocol):
@@ -150,17 +154,37 @@ def known_test_ids(stage_a: StageAInput) -> set[str]:
 
 
 def outcomes_from_uploads(
-    uploads: Sequence[Any], stage_a: StageAInput
+    uploads: Sequence[Any], stage_a: StageAInput, *, trusted_only: bool = False
 ) -> OutcomeFacts:
     """Merge per-case outcomes of the uploads bound to the head commit.
 
     Uploads for another commit are ignored (SHA binding, design 3.3). Cases are
     merged across uploads with the CI rule failed > passed > skipped.
+
+    ``trusted_only`` (RADIUS_FEATURE_TRUSTED_EVIDENCE, default off): only uploads
+    with ``provenance_status == "verified_provenance"`` count; other head-bound
+    uploads are reported as ``diagnostic_uploads`` and never affect the verdict.
+    Off, every head-bound upload counts, as before the flag existed.
     """
 
     from radius_testing.infrastructure.result_matching import merge_cases
 
-    bound = [u for u in uploads if getattr(u, "commit_sha", "").lower() == stage_a.head_sha]
+    head_bound = [
+        u for u in uploads if getattr(u, "commit_sha", "").lower() == stage_a.head_sha
+    ]
+    # With trusted evidence on, legacy and unattested uploads are diagnostic-only:
+    # a SHA match does not establish provenance, so only a verified attestation may
+    # satisfy the trusted-results rule or contribute test outcomes.
+    bound = (
+        [
+            u
+            for u in head_bound
+            if getattr(u, "provenance_status", "untrusted") == "verified_provenance"
+        ]
+        if trusted_only
+        else head_bound
+    )
+    diagnostic = len(head_bound) - len(bound)
     cases = merge_cases(c for u in bound for c in getattr(u, "cases", ()))
     adapted = adapters.case_inputs(cases)
     identities: list[str] = []
@@ -169,7 +193,9 @@ def outcomes_from_uploads(
     return OutcomeFacts(
         cases=adapted.items,
         uploads=len(bound),
+        diagnostic_uploads=diagnostic,
         flaky_test_ids=adapters.flaky_test_ids(identities, known_test_ids(stage_a)),
+        trusted_evidence=trusted_only,
     )
 
 
@@ -178,13 +204,15 @@ class SqlOutcomeSource:
     """Read stored CI uploads of an analysis (``test_result_uploads``)."""
 
     session_factory: Callable[[], Any]
+    #: RADIUS_FEATURE_TRUSTED_EVIDENCE: count only verified-provenance uploads
+    trusted_only: bool = False
 
     def load(self, analysis_id: UUID, stage_a: StageAInput) -> OutcomeFacts:
         from radius_testing.infrastructure.sqlalchemy_store import SqlAlchemyTestStore
 
         with self.session_factory() as session:
             uploads = SqlAlchemyTestStore(session).list_result_uploads(analysis_id)
-        return outcomes_from_uploads(uploads, stage_a)
+        return outcomes_from_uploads(uploads, stage_a, trusted_only=self.trusted_only)
 
 
 @dataclass(slots=True)

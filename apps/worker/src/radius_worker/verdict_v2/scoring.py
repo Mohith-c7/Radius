@@ -125,15 +125,23 @@ def build_stage_b(
     *,
     cases: tuple[CaseOutcomeInput, ...] = (),
     uploads: int = 0,
+    diagnostic_uploads: int = 0,
     flaky_test_ids: frozenset[str] = frozenset(),
     flaky_scores: Mapping[str, float] | None = None,
+    trusted_evidence: bool = False,
 ) -> StageBInput:
-    """Assemble a :class:`StageBInput`; ``results_received`` follows ``uploads``."""
+    """Assemble a :class:`StageBInput`; ``results_received`` follows ``uploads``.
+
+    ``trusted_evidence`` (RADIUS_FEATURE_TRUSTED_EVIDENCE) records that ``uploads``
+    counts only verified-provenance reports; ``diagnostic_uploads`` is the rest.
+    """
 
     return StageBInput(
         stage_a=stage_a,
         cases=cases,
         uploads=uploads,
+        diagnostic_uploads=diagnostic_uploads,
+        trusted_evidence=trusted_evidence,
         flaky_test_ids=flaky_test_ids,
         flaky_scores=dict(flaky_scores or {}),
         results_received=uploads > 0,
@@ -775,6 +783,22 @@ def build_payload(
     return shared_build_payload(stored, v1=v1, dashboard_url=dashboard_url)
 
 
+def _stage_b_summary(stage_b: StageBInput) -> dict[str, Any]:
+    """The bundle's Stage B block; trusted-evidence keys only when the flag was on."""
+
+    out: dict[str, Any] = {
+        "uploads": stage_b.uploads,
+        "results_received": stage_b.results_received,
+        "ci_failed_cases": stage_b.ci_failed_cases,
+        "cases": [c.to_dict() for c in stage_b.cases],
+        "flaky_test_ids": sorted(stage_b.flaky_test_ids),
+    }
+    if stage_b.trusted_evidence:
+        out["trusted_evidence"] = True
+        out["diagnostic_uploads"] = stage_b.diagnostic_uploads
+    return out
+
+
 def build_bundle(
     result: PipelineResult, stage_b: StageBInput, *, max_bytes: int
 ) -> dict[str, Any]:
@@ -797,13 +821,7 @@ def build_bundle(
         "verdict": v.to_dict(),
         "evidence_items": [i.to_dict() for i in result.items],
         "stage_a": stage_b.stage_a.to_dict(),
-        "stage_b": {
-            "uploads": stage_b.uploads,
-            "results_received": stage_b.results_received,
-            "ci_failed_cases": stage_b.ci_failed_cases,
-            "cases": [c.to_dict() for c in stage_b.cases],
-            "flaky_test_ids": sorted(stage_b.flaky_test_ids),
-        },
+        "stage_b": _stage_b_summary(stage_b),
         "degraded": list(stage_b.stage_a.degraded),
         "reason_code": v.reasons[0].code if v.reasons else None,
         "error_detail": None,
@@ -1016,8 +1034,10 @@ def run_verdict_v2_best_effort(
             stage_a,
             cases=facts.cases,
             uploads=facts.uploads,
+            diagnostic_uploads=facts.diagnostic_uploads,
             flaky_test_ids=facts.flaky_test_ids,
             flaky_scores=facts.flaky_scores,
+            trusted_evidence=facts.trusted_evidence,
         )
         scored = ScoringPipeline(
             config=cfg,
@@ -1114,7 +1134,10 @@ def run_verdict_v2_for_analysis(
             analysis_id=analysis_id,
             command=command,
             collector=VerdictStageACollector(intent, producers=producers, limits=limits),
-            outcomes=SqlOutcomeSource(session_factory),
+            outcomes=SqlOutcomeSource(
+                session_factory,
+                trusted_only=bool(getattr(settings, "trusted_evidence_enabled", False)),
+            ),
             store=store,
             organization_id=org_id,
             clock=clock,
@@ -1231,6 +1254,8 @@ class StageBRecomputer:
     suggester_for: Callable[[UUID], Any] | None = None
     #: ``RADIUS_VERDICT_V2_CONFIRM_POLICY`` (B-07): who may lift the cap by confirming.
     confirm_policy: str = "allow_unverified"
+    #: ``RADIUS_FEATURE_TRUSTED_EVIDENCE``: count only verified-provenance uploads.
+    trusted_evidence: bool = False
 
     def recompute(
         self, session: Any, organization_id: UUID, analysis_id: UUID
@@ -1294,14 +1319,18 @@ class StageBRecomputer:
             confirm_policy=confirm_policy_for(self.confirm_policy),
         )
         facts = outcomes_from_uploads(
-            SqlAlchemyTestStore(session).list_result_uploads(analysis_id), stage_a
+            SqlAlchemyTestStore(session).list_result_uploads(analysis_id),
+            stage_a,
+            trusted_only=self.trusted_evidence,
         )
         stage_b = build_stage_b(
             stage_a,
             cases=facts.cases,
             uploads=facts.uploads,
+            diagnostic_uploads=facts.diagnostic_uploads,
             flaky_test_ids=facts.flaky_test_ids,
             flaky_scores=facts.flaky_scores,
+            trusted_evidence=facts.trusted_evidence,
         )
         bundle = ScoringPipeline(
             config=self.config,
@@ -1337,4 +1366,5 @@ def create_recomputer(
         mode=mode,
         suggester_for=suggester_for,
         confirm_policy=str(getattr(settings, "verdict_v2_confirm_policy", "allow_unverified")),
+        trusted_evidence=bool(getattr(settings, "trusted_evidence_enabled", False)),
     )

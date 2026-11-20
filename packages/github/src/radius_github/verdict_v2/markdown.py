@@ -711,6 +711,24 @@ def _policy_summary(view: VerdictV2View) -> str:
     return f"**Policy:** {label}, from the base branch (`{ref}`), {n} setting(s) applied."
 
 
+def _test_evidence_summary(view: VerdictV2View) -> str:
+    """Explain trusted result receipt separately from diagnostic uploads."""
+
+    data = view.test_evidence
+    if not data:
+        return ""
+    trusted = data.get("trusted_uploads", 0)
+    diagnostic = data.get("diagnostic_only_uploads", 0)
+    if not isinstance(trusted, int) or isinstance(trusted, bool):
+        trusted = 0
+    if not isinstance(diagnostic, int) or isinstance(diagnostic, bool):
+        diagnostic = 0
+    return (
+        f"**Test evidence:** {trusted} provenance-verified report(s); "
+        f"{diagnostic} diagnostic-only or untrusted report(s)."
+    )
+
+
 def _policy_section(view: VerdictV2View) -> str:
     p = view.policy
     if not p:
@@ -928,6 +946,9 @@ def render_comment(view: VerdictV2View) -> str:
     core = [disclaimer(view), heading]
     if _ok(view):
         core.append(_stats_line(view))
+        evidence_line = _test_evidence_summary(view)
+        if evidence_line:
+            core.append(evidence_line)
         policy_line = _policy_summary(view)
         if policy_line:
             core.append(policy_line)
@@ -1077,6 +1098,9 @@ def render_check_run(view: VerdictV2View, *, conclusions: str = "advisory") -> C
     summary_lines = [disclaimer(view)]
     if _ok(view):
         summary_lines.append(_stats_line(view))
+        evidence_line = _test_evidence_summary(view)
+        if evidence_line:
+            summary_lines.append(evidence_line)
         hint_line = _author_hint_line(view)
         if hint_line:
             summary_lines.append(hint_line)

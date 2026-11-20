@@ -60,6 +60,29 @@ test("unknown fields and unknown states are tolerated", () => {
   assert.equal(m.stateMeta("partially_evidenced").label, "Unknown state");
 });
 
+test("trusted and diagnostic report totals parse independently", () => {
+  const raw = clone();
+  raw.test_evidence = {
+    trusted_uploads: 2,
+    diagnostic_only_uploads: 3,
+    trusted_results_received: true,
+  };
+  const value = parse(raw);
+  assert.deepEqual(value.testEvidence, {
+    trusted_uploads: 2,
+    diagnostic_only_uploads: 3,
+    trusted_results_received: true,
+  });
+  raw.test_evidence.trusted_uploads = "untrusted";
+  raw.test_evidence.diagnostic_only_uploads = -1;
+  raw.test_evidence.trusted_results_received = "true";
+  assert.deepEqual(parse(raw).testEvidence, {
+    trusted_uploads: 0,
+    diagnostic_only_uploads: 0,
+    trusted_results_received: false,
+  });
+});
+
 test("malformed payloads are rejected without throwing", () => {
   for (const raw of [null, undefined, 3, "x", [], {}, { criteria: "no" }, { verdict_version: 3, criteria: [] }]) {
     const result = m.parseVerdictV2(raw);

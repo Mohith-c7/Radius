@@ -71,6 +71,17 @@
     "pending": {
       "type": "boolean"
     },
+    "test_evidence": {
+      "type": "object",
+      "description": "Verified provenance uploads affect trusted receipt and scoring; diagnostic-only uploads do not.",
+      "properties": {
+        "trusted_uploads": { "type": "integer", "minimum": 0 },
+        "diagnostic_only_uploads": { "type": "integer", "minimum": 0 },
+        "trusted_results_received": { "type": "boolean" }
+      },
+      "required": ["trusted_uploads", "diagnostic_only_uploads", "trusted_results_received"],
+      "additionalProperties": false
+    },
     "reasons": {
       "type": "array",
       "items": {

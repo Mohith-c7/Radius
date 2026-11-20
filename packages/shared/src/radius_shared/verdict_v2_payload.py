@@ -380,6 +380,21 @@ def build_payload(
     }
     if ok and isinstance(bundle.get("mutation"), Mapping) and bundle["mutation"]:
         payload["mutation"] = dict(bundle["mutation"])
+    stage_b = bundle.get("stage_b")
+    # Only bundles scored with RADIUS_FEATURE_TRUSTED_EVIDENCE on carry the marker, so
+    # flag-off payloads stay byte-identical to builds without trusted evidence.
+    if ok and isinstance(stage_b, Mapping) and stage_b.get("trusted_evidence") is True:
+        trusted_uploads = stage_b.get("uploads", 0)
+        diagnostic_uploads = stage_b.get("diagnostic_uploads", 0)
+        payload["test_evidence"] = {
+            "trusted_uploads": trusted_uploads
+            if isinstance(trusted_uploads, int) and not isinstance(trusted_uploads, bool)
+            else 0,
+            "diagnostic_only_uploads": diagnostic_uploads
+            if isinstance(diagnostic_uploads, int) and not isinstance(diagnostic_uploads, bool)
+            else 0,
+            "trusted_results_received": stage_b.get("results_received") is True,
+        }
     if waived_raw:
         payload["summary"]["tamper_waived"] = len(waived_raw)
     if ok and isinstance(verdict.get("policy"), Mapping) and verdict["policy"]:

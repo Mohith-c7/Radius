@@ -34,6 +34,12 @@ FROM python:3.12-slim@sha256:b18b261e1b4974b4f321451ad5251ded85abb22c2b8b262da52
 
 ARG RADIUS_VERSION=0.1.0
 ARG VCS_REF=unknown
+ARG GH_VERSION=2.103.3
+# One pinned checksum per architecture (from gh_${GH_VERSION}_checksums.txt), so the
+# image builds on amd64 and arm64 hosts (e.g. an Ampere A1 VM). TARGETARCH is set by BuildKit.
+ARG TARGETARCH
+ARG GH_SHA256_AMD64=e3bafef96328d1a67de3a968bdfe1cc2ffd58cf6aba8b5e201356897ed06bb3d
+ARG GH_SHA256_ARM64=cac3ff84b60b68e64cca69f31f303210c26320361cc3286b773655d4226b7b06
 LABEL org.opencontainers.image.title="radius-api" \
       org.opencontainers.image.description="Radius API (FastAPI)" \
       org.opencontainers.image.source="https://github.com/Mohith-c7/Radius" \
@@ -48,9 +54,22 @@ ENV PATH=/opt/venv/bin:$PATH \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app/apps/api/src:/app/apps/worker/src:/app/packages/analysis/src:/app/packages/confidence/src:/app/packages/evidence/src:/app/packages/github/src:/app/packages/graph/src:/app/packages/intent/src:/app/packages/linking/src:/app/packages/parser/src:/app/packages/repository/src:/app/packages/shared/src:/app/packages/testing/src
 
-# git is used by the diff provider. Fixed uid/gid so volume ownership is predictable.
+# git is used by the diff provider; gh verifies GitHub Artifact Attestations
+# non-interactively when trusted evidence is enabled. Fixed uid/gid keeps volume
+# ownership predictable.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git \
+    && apt-get install -y --no-install-recommends ca-certificates curl git \
+    && arch="${TARGETARCH:-$(dpkg --print-architecture)}" \
+    && case "$arch" in \
+         amd64) gh_sha256="${GH_SHA256_AMD64}" ;; \
+         arm64) gh_sha256="${GH_SHA256_ARM64}" ;; \
+         *) echo "unsupported architecture for gh: $arch" >&2; exit 1 ;; \
+       esac \
+    && curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${arch}.deb" \
+        -o /tmp/gh.deb \
+    && echo "${gh_sha256}  /tmp/gh.deb" | sha256sum -c - \
+    && apt-get install -y --no-install-recommends /tmp/gh.deb \
+    && rm -f /tmp/gh.deb \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system --gid 10001 radius \
     && useradd --system --uid 10001 --gid 10001 --home-dir /home/radius --create-home --shell /usr/sbin/nologin radius

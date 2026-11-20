@@ -22,7 +22,7 @@ How to read it.
   (`RADIUS_LLM_*`) silently fall back to their default on a bad number.
 
 
-Variables documented: **166** (15 secret, 10 feature flags).
+Variables documented: **176** (15 secret, 11 feature flags).
 
 ## Core, API, GitHub and observability
 
@@ -61,6 +61,13 @@ Variables documented: **166** (15 secret, 10 feature flags).
 | `RADIUS_ALLOW_UNSAFE_EXECUTION` | bool | `false` | worker | no | - | Required to use unsafe_in_process when RADIUS_ENV is uat or production. The worker refuses to start otherwise. |
 | `RADIUS_API_BIND_ADDRESS` | str | `127.0.0.1` | compose | no | - | Compose: host address the API port 8000 is published on. Loopback by default; set 0.0.0.0 only deliberately (prefer a TLS reverse proxy). |
 | `RADIUS_API_PUBLIC_UPSTREAM` | str | `unset` | dashboard | no | - | Split deployments only (dashboard and API on different sites, e.g. Vercel + Render): API origin the dashboard forwards `/api/v1/*` to, so the session cookie stays first-party. Then point `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_RADIUS_API_BASE_URL` at the dashboard origin. Read at build time. |
+| `RADIUS_ATTESTATION_CALLER_WORKFLOW_PATH` | str | `empty` | api | no | - | Repository-relative caller workflow path approved to invoke the reusable workflow. |
+| `RADIUS_ATTESTATION_CALLER_WORKFLOW_SHA` | str | `empty` | api | no | - | Full immutable commit SHA approved for the caller workflow. |
+| `RADIUS_ATTESTATION_POLICY_VERSION` | str | `github-reusable-v1` | api | no | - | Version label recorded with immutable provenance verification events. |
+| `RADIUS_ATTESTATION_REUSABLE_WORKFLOW` | str | `empty` | api | no | - | Approved reusable GitHub Actions workflow identity, including its immutable revision. |
+| `RADIUS_ATTESTATION_REUSABLE_WORKFLOW_SHA` | str | `empty` | api | no | - | Full immutable commit SHA approved for the reusable evidence workflow. |
+| `RADIUS_ATTESTATION_TRUSTED_ROOT_PATH` | str | `empty` | api | no | - | Optional path to a pinned Sigstore trusted-root bundle for attestation verification. |
+| `RADIUS_ATTESTATION_VERIFIER_PATH` | str | `gh` | api | no | - | GitHub CLI executable used for non-interactive attestation verification. |
 | `RADIUS_CORS_ALLOW_CREDENTIALS` | bool | `true` | api | no | - | Send `Access-Control-Allow-Credentials`. Never combined with `*`. |
 | `RADIUS_DEFAULT_ORGANIZATION_ID` | str \| None | `unset` | api | no | - | Single-tenant deployments: UUID of the one organization every signed-in user belongs to (normally the same value as `GITHUB_DEFAULT_ORGANIZATION_ID` and the dashboard's `NEXT_PUBLIC_RADIUS_ORGANIZATION_ID`). A new user joins it instead of getting a personal workspace. An existing user whose organization is an auto-created personal workspace with no repositories, no GitHub installation and no other member is moved into it at the next sign-in; anyone else is left where they are and the API logs it. The organization must exist (`python -m radius_api.bootstrap`); when it does not, sign-in logs an error and keeps the old behaviour. Unset (default): every new user gets a personal workspace (multi-tenant behaviour). |
 | `RADIUS_EMBEDDED_WORKER_GRACE_SECONDS` | float | `30` | api | no | - | Single-container hosting only (`python -m radius_api.serve_with_worker`): seconds the embedded worker gets to finish its current job after the API stops, before it is killed. |
@@ -176,6 +183,7 @@ Variables documented: **166** (15 secret, 10 feature flags).
 | `RADIUS_FEATURE_SYMBOL_CHANGES` | bool | `false` | worker | no | feature flag, off by default | LK-01: extract the changed symbols (function/method/class, with change kinds) for the diff and log their counts. Nothing is persisted yet (LK-05); failures never affect the analysis. |
 | `RADIUS_FEATURE_SYMBOL_IMPACT` | bool | `false` | worker | no | feature flag, off by default | F-08: narrow test selection and blast radius to tests that can reach the changed Python symbols. Falls back to file-level impact whenever symbol information is missing or low-confidence. |
 | `RADIUS_FEATURE_TAMPER_RULES` | bool | `false` | worker | no | feature flag, off by default | EV-02: run the deterministic tamper rules (weakened or disabled tests, CI/config weakening, hallucinated dependencies) on the diff and log finding counts. Nothing is persisted yet (EV-01/LK-05); failures never affect the analysis. |
+| `RADIUS_FEATURE_TRUSTED_EVIDENCE` | bool | `false` | api, worker | no | feature flag, off by default | Trusted CI test evidence (default off). On: the manifest and verified-results routes answer, legacy ``/tests/results`` uploads are stored as diagnostic-only (``untrusted``) and no longer re-score v1 confidence, and Verdict v2 counts only verified-provenance uploads. Off: the new routes answer 404 and legacy uploads behave as before. Set it to the same value on the API and the worker. |
 | `RADIUS_FEATURE_VERDICT_V2` | VerdictV2Mode | `off` | api, worker | no | alpha flag: off, shadow or on | Verdict v2 alpha flag: off (default), shadow or on (VD-07-lite). Off means no v2 code path runs and ``GET /analyses/{id}/verdict-v2`` answers 404 with ``meta.reason = disabled``. Unrecognised values are treated as off. |
 
 ## LLM and third-party egress
