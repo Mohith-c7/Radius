@@ -39,6 +39,10 @@ from radius_graph.domain.value_objects import GraphNodeId, GraphVersion
 #: Rows per INSERT statement (bounds the parameter list held in memory at once).
 INSERT_CHUNK_ROWS = 2000
 
+#: Older snapshots one save may delete at most (bounds the work of one analysis while a
+#: backlog drains; each snapshot of a real repository is tens of thousands of rows).
+PRUNE_BATCH_SNAPSHOTS = 3
+
 #: Keys per ``IN (...)`` list (below SQLite's historic 999-parameter limit).
 IN_CHUNK_KEYS = 900
 
@@ -91,8 +95,17 @@ def _edge(source_key: str, target_key: str, edge_type: str) -> GraphEdge:
 class SqlAlchemyGraphStore:
     """Persist graph snapshots, nodes, and edges in SQL."""
 
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, *, keep_per_repository: int = 0) -> None:
+        """``keep_per_repository`` > 0 deletes a repository's older snapshots on save.
+
+        A snapshot of a real repository is tens of thousands of rows (tens of MB in
+        Postgres), so keeping one per analysis filled a 500 MB database within days. The
+        newest ``keep_per_repository`` snapshots stay (the graph view of recent
+        analyses, the base of an incremental build); 0 keeps every snapshot.
+        """
+
         self._session = session
+        self._keep_per_repository = max(0, keep_per_repository)
 
     def save_snapshot(self, snapshot: GraphSnapshot) -> GraphSnapshot:
         """Persist graph snapshot metadata and artifact rows."""
@@ -152,7 +165,52 @@ class SqlAlchemyGraphStore:
         )
         for chunk in _chunks(edge_rows):
             self._session.execute(insert(_EDGE_TABLE), chunk)
+        if self._keep_per_repository:
+            self.prune_snapshots(
+                snapshot.repository_id,
+                keep=self._keep_per_repository,
+                current_id=snapshot_id,
+            )
         return snapshot
+
+    def prune_snapshots(
+        self,
+        repository_id: UUID,
+        *,
+        keep: int,
+        current_id: UUID | None = None,
+        limit: int | None = None,
+    ) -> int:
+        """Delete a repository's snapshots older than its newest ``keep``.
+
+        ``current_id`` (the snapshot just saved) is never deleted. At most ``limit``
+        snapshots (default ``PRUNE_BATCH_SNAPSHOTS``) go per call. Returns how many were
+        deleted. An analysis whose snapshot was pruned answers 404 on the graph routes.
+        """
+
+        keep = max(1, keep)
+        batch = PRUNE_BATCH_SNAPSHOTS if limit is None else max(1, limit)
+        snapshot_table = db_models.GraphSnapshot
+        ids = list(
+            self._session.scalars(
+                select(snapshot_table.id)
+                .where(snapshot_table.repository_id == repository_id)
+                .order_by(snapshot_table.created_at.desc(), snapshot_table.id.desc())
+                .offset(keep)
+            )
+        )
+        stale = [snapshot_id for snapshot_id in ids if snapshot_id != current_id][:batch]
+        for snapshot_id in stale:
+            self._session.execute(
+                delete(_EDGE_TABLE).where(_EDGE_TABLE.c.snapshot_id == snapshot_id)
+            )
+            self._session.execute(
+                delete(_NODE_TABLE).where(_NODE_TABLE.c.snapshot_id == snapshot_id)
+            )
+            self._session.execute(delete(snapshot_table).where(snapshot_table.id == snapshot_id))
+        if stale:
+            self._session.flush()
+        return len(stale)
 
     def get_snapshot(self, analysis_id: UUID) -> GraphSnapshot | None:
         """Return the whole graph snapshot by analysis id (the worker's read)."""

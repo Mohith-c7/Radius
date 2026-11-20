@@ -22,7 +22,7 @@ How to read it.
   (`RADIUS_LLM_*`) silently fall back to their default on a bad number.
 
 
-Variables documented: **195** (16 secret, 12 feature flags).
+Variables documented: **196** (16 secret, 12 feature flags).
 
 ## Core, API, GitHub and observability
 
@@ -88,6 +88,7 @@ Variables documented: **195** (16 secret, 12 feature flags).
 | `RADIUS_GIT_LOCK_TIMEOUT_SECONDS` | float | `300.0` | worker | no | - | How long a job waits for the exclusive lock of one repository cache (held while fetching or creating a worktree) before it fails retryably. |
 | `RADIUS_GIT_STALE_LOCK_SECONDS` | float | `900.0` | worker | no | - | A git `index.lock` older than this, found while the worker holds the repository lock, is a leftover of a dead process and is removed. |
 | `RADIUS_GIT_TIMEOUT_SECONDS` | float | `120.0` | worker | no | - | Time limit for every other git command (fetch, worktree, checkout, gc). The process group is killed on expiry and the job is retried. |
+| `RADIUS_GRAPH_SNAPSHOTS_KEPT` | int | `3` | worker | no | - | Dependency graph snapshots kept per repository. Each save deletes the repository's older snapshots (at most 3 per analysis while a backlog drains); an analysis whose snapshot was deleted shows no dependency graph. A real repository's snapshot is tens of MB, so keeping all of them fills a small database. 0 = keep every snapshot. |
 | `RADIUS_HSTS_ENABLED` | bool | `false` | api | no | - | Send Strict-Transport-Security. Enable only when served over TLS. |
 | `RADIUS_HSTS_MAX_AGE` | int | `31536000` | api | no | - | `max-age` in seconds of the Strict-Transport-Security header when HSTS is enabled. |
 | `RADIUS_INTENT_ALLOW_CROSS_REPO` | bool | `false` | worker | no | - | Fetch issues named by closing references in OTHER repositories (owner/repo#n, issue URLs). Off by default: the installation token can read every repository of the installation, so honoring a link written by a PR author would expose that repository's issue text. Skipped links are recorded as absent (cross_repo_disabled). |

@@ -135,3 +135,73 @@ def _create_context(session: Session):
     session.add_all([organization, repository, pull_request, analysis])
     session.flush()
     return repository.id, analysis.id
+
+
+def test_save_prunes_a_repositorys_older_snapshots_beyond_the_kept_count() -> None:
+    from datetime import timedelta
+
+    from radius_shared.database.models import GraphEdge as EdgeRow
+    from radius_shared.database.models import GraphNode as NodeRow
+    from radius_shared.database.models import GraphSnapshot as SnapshotRow
+    from sqlalchemy import func, select
+
+    with _session() as session:
+        repository_id, first_analysis = _create_context(session)
+        repository = session.get(Repository, repository_id)
+        analysis_ids = [first_analysis]
+        for index in range(4):
+            extra = Analysis(
+                repository=repository,
+                pull_request=repository.pull_requests[0],
+                commit_sha=f"{index + 1}" * 40,
+                status=AnalysisStatus.PENDING,
+                started_at=datetime.now(UTC),
+                created_at=datetime.now(UTC),
+            )
+            session.add(extra)
+            session.flush()
+            analysis_ids.append(extra.id)
+        store = SqlAlchemyGraphStore(session, keep_per_repository=2)
+        base = datetime.now(UTC)
+        for offset, analysis_id in enumerate(analysis_ids):
+            store.save_snapshot(
+                GraphSnapshot(
+                    repository_id=repository_id,
+                    analysis_id=analysis_id,
+                    created_at=base + timedelta(minutes=offset),
+                    graph=DependencyGraph(
+                        nodes=(
+                            GraphNode(GraphNodeId("file:a.py"), GraphNodeType.FILE, "a", "a.py"),
+                            GraphNode(GraphNodeId("file:b.py"), GraphNodeType.FILE, "b", "b.py"),
+                        ),
+                        edges=(
+                            GraphEdge(
+                                GraphNodeId("file:a.py"),
+                                GraphNodeId("file:b.py"),
+                                GraphEdgeType.DEPENDS_ON,
+                            ),
+                        ),
+                    ),
+                )
+            )
+
+        kept = set(session.scalars(select(SnapshotRow.analysis_id)))
+        assert kept == set(analysis_ids[-2:])
+        assert store.get_snapshot(analysis_ids[0]) is None
+        assert store.get_snapshot(analysis_ids[-1]).node_count == 2
+        assert session.scalar(select(func.count()).select_from(NodeRow)) == 4
+        assert session.scalar(select(func.count()).select_from(EdgeRow)) == 2
+
+
+def test_default_store_keeps_every_snapshot() -> None:
+    with _session() as session:
+        repository_id, analysis_id = _create_context(session)
+        store = SqlAlchemyGraphStore(session)
+        snapshot = GraphSnapshot(
+            repository_id=repository_id,
+            analysis_id=analysis_id,
+            graph=DependencyGraph(nodes=(), edges=()),
+        )
+        store.save_snapshot(snapshot)
+        assert store.prune_snapshots(repository_id, keep=1, current_id=None) == 0
+        assert store.get_snapshot(analysis_id) is not None

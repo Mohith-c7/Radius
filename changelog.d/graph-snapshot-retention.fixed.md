@@ -1,0 +1,1 @@
+The worker keeps only the newest dependency graph snapshots of each repository (`RADIUS_GRAPH_SNAPSHOTS_KEPT`, default 3) and deletes older ones when it saves a new one. One snapshot per analysis filled a 500 MB database and put it into read-only mode.
