@@ -1037,7 +1037,10 @@ def _create_sql_orchestrator(
     session: Session,
     settings: WorkerSettings | None = None,
 ) -> Phase1AnalysisOrchestrator:
-    graph_store = SqlAlchemyGraphStore(session)
+    graph_store = SqlAlchemyGraphStore(
+        session,
+        keep_per_repository=(settings or WorkerSettings()).graph_snapshots_kept,
+    )
     # Runner selection is security-critical: see radius_worker.execution_mode.
     execution_mode = resolve_test_execution_mode(settings)
     return Phase1AnalysisOrchestrator(

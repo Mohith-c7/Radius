@@ -391,6 +391,19 @@ class WorkerSettings(DatabaseSettings):
         description="Minimum wait after a failed analysis before the poller retries its head.",
     )
 
+    graph_snapshots_kept: int = Field(
+        default=3,
+        ge=0,
+        alias="RADIUS_GRAPH_SNAPSHOTS_KEPT",
+        description=(
+            "Dependency graph snapshots kept per repository. Each save deletes the "
+            "repository's older snapshots (at most 3 per analysis while a backlog "
+            "drains); an analysis whose snapshot was deleted shows no dependency graph. "
+            "A real repository's snapshot is tens of MB, so keeping all of them fills a "
+            "small database. 0 = keep every snapshot."
+        ),
+    )
+
     retention_days: int = Field(
         default=0,
         alias="RADIUS_RETENTION_DAYS",
