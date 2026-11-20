@@ -5,6 +5,8 @@ export const MAX_BODY_BYTES = 5 * 1024 * 1024; // 5 MiB (JUnit XML uploads)
 
 const ID = "[A-Za-z0-9_-]{1,64}";
 const ALLOWED: Array<{ pattern: RegExp; methods: readonly string[] }> = [
+  // Readiness (database + job queue) for the help page status line.
+  { pattern: new RegExp(`^ready$`), methods: ["GET"] },
   { pattern: new RegExp(`^repositories$`), methods: ["GET", "POST"] },
   // Must precede the generic repositories/<id> rule, which would match first.
   { pattern: new RegExp(`^repositories/connect-github$`), methods: ["POST"] },

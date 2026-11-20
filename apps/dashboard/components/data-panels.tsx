@@ -8,6 +8,7 @@ import {
   Check,
   CheckCircle2,
   Copy,
+  ExternalLink,
   FileCode2,
   FolderGit2,
   GitBranch,
@@ -50,6 +51,7 @@ import {
   listPullRequests,
   listRepositories,
   radiusConfig,
+  radiusConfigured,
   rerunAnalysis,
   startAnalysis,
   syncPullRequestsDetailed,
@@ -57,6 +59,19 @@ import {
   uploadTestResults,
 } from "../lib/api";
 import { errorText, type SyncSummary } from "../lib/github-actions";
+import {
+  analysisLabel,
+  analysisMatches,
+  averageConfidence,
+  DOCS_BASE,
+  completedAnalyses,
+  defaultComparePair,
+  indexPullRequests,
+  pullRequestMatches,
+  pullRequestUrl,
+  repositoryMatches,
+  type PullRequestIndex,
+} from "../lib/dashboard-model";
 import { scoreKindLabel } from "../lib/score-kind";
 import { AnalyzePullRequestButton, ConnectGitHubRepositoryCard, SyncSummaryList } from "./github-actions";
 import { ConfidenceRing, OpenLink, PageHeading, Status } from "./ui";
@@ -171,18 +186,31 @@ function settledValue<T>(result: PromiseSettledResult<T>) {
   return result.status === "fulfilled" ? result.value : null;
 }
 
+/** PR id -> PR across all repositories; a repository whose list fails is skipped. */
+async function loadPullRequestIndex(repositories: Repository[]): Promise<PullRequestIndex> {
+  const lists = await Promise.allSettled(
+    repositories.filter((repo) => repo.id).map((repo) => listPullRequests(repo.id as string)),
+  );
+  return indexPullRequests(lists.flatMap((result) => settledValue(result) ?? []));
+}
+
 async function loadOverview() {
   const repositories = await listRepositories();
-  const analyses = await listAnalyses();
+  const [analyses, pullRequests] = await Promise.all([
+    listAnalyses(),
+    loadPullRequestIndex(repositories),
+  ]);
+  // Pending or running analyses have no confidence report yet: average the
+  // newest completed ones so a queue of new runs does not blank the metric.
   const reports = await Promise.allSettled(
-    analyses
+    completedAnalyses(analyses)
       .slice(0, 6)
-      .filter((analysis) => analysis.id)
       .map((analysis) => getConfidence(analysis.id as string)),
   );
   return {
     repositories,
     analyses,
+    pullRequests,
     reports: reports
       .filter((result): result is PromiseFulfilledResult<ConfidenceReport> => {
         return result.status === "fulfilled";
@@ -196,14 +224,8 @@ export function DashboardOverviewData() {
   if (state.status === "loading") return <LoadingState />;
   if (state.status === "error") return <ErrorState message={state.error} />;
 
-  const { repositories, analyses, reports } = state.data;
-  const average =
-    reports.length > 0
-      ? Math.round(
-          reports.reduce((total, report) => total + report.confidence_score, 0) /
-            reports.length,
-        )
-      : 0;
+  const { repositories, analyses, pullRequests, reports } = state.data;
+  const average = averageConfidence(reports) ?? 0;
   const attention = analyses.filter((item) =>
     ["failed", "cancelled"].includes(item.status.toLowerCase()),
   ).length;
@@ -227,7 +249,11 @@ export function DashboardOverviewData() {
         <Metric label="Attention needed" value={attention} />
       </section>
       <div className="content-grid">
-        <RecentAnalysesCard analyses={analyses.slice(0, 5)} repositories={repositories} />
+        <RecentAnalysesCard
+          analyses={analyses.slice(0, 5)}
+          repositories={repositories}
+          pullRequests={pullRequests}
+        />
         <section className="card">
           <div className="card-heading">
             <div>
@@ -257,9 +283,11 @@ export function DashboardOverviewData() {
 function RecentAnalysesCard({
   analyses,
   repositories,
+  pullRequests,
 }: {
   analyses: Analysis[];
   repositories: Repository[];
+  pullRequests: PullRequestIndex;
 }) {
   return (
     <section className="card">
@@ -275,7 +303,7 @@ function RecentAnalysesCard({
           <p className="muted">No analyses have been created yet.</p>
         </div>
       ) : (
-        <AnalysisTable analyses={analyses} repositories={repositories} />
+        <AnalysisTable analyses={analyses} repositories={repositories} pullRequests={pullRequests} />
       )}
     </section>
   );
@@ -928,7 +956,11 @@ export function RepositoryDetailData({ repositoryId }: { repositoryId: string })
       </div>
 
       <div className="detail-grid">
-        <RecentAnalysesCard analyses={analyses} repositories={[repository]} />
+        <RecentAnalysesCard
+          analyses={analyses}
+          repositories={[repository]}
+          pullRequests={indexPullRequests(pullRequests)}
+        />
         <aside className="card detail-card">
           <h2>Repository details</h2>
           <div className="stat-list">
@@ -1205,7 +1237,7 @@ export function AnalysesData() {
       listAnalyses(),
       listRepositories(),
     ]);
-    return { analyses, repositories };
+    return { analyses, repositories, pullRequests: await loadPullRequestIndex(repositories) };
   }, []);
 
   if (state.status === "loading") return <LoadingState label="Loading analyses" />;
@@ -1235,6 +1267,7 @@ export function AnalysesData() {
           <AnalysisTable
             analyses={state.data.analyses}
             repositories={state.data.repositories}
+            pullRequests={state.data.pullRequests}
           />
         </section>
       )}
@@ -1256,9 +1289,11 @@ export function AnalysesData() {
 function AnalysisTable({
   analyses,
   repositories,
+  pullRequests,
 }: {
   analyses: Analysis[];
   repositories: Repository[];
+  pullRequests: PullRequestIndex;
 }) {
   return (
     <div className="table-wrap">
@@ -1274,27 +1309,31 @@ function AnalysisTable({
           </tr>
         </thead>
         <tbody>
-          {analyses.map((analysis) => (
+          {analyses.map((analysis) => {
+            const label = analysisLabel(analysis, pullRequests);
+            return (
             <tr key={analysis.id ?? analysis.commit_sha}>
               <td>
                 <Link
                   href={`/analyses/${analysis.id}`}
+                  title={label.pullRequest?.title ?? analysis.id ?? undefined}
                   style={{ color: "inherit", fontWeight: 700, textDecoration: "none" }}
                 >
-                  {analysis.id}
+                  {label.title}
                 </Link>
-                {analysis.pull_request_id ? (
-                  <div className="subtext">
+                <div className="subtext">
+                  {label.pullRequest ? (
                     <Link
-                      href={`/pull-requests/${analysis.pull_request_id}`}
+                      href={`/pull-requests/${label.pullRequest.id}`}
+                      title={`Analysis ${analysis.id}`}
                       style={{ color: "var(--accent)", textDecoration: "none" }}
                     >
-                      PR ID: {shortSha(analysis.pull_request_id)}...
+                      {label.secondary}
                     </Link>
-                  </div>
-                ) : (
-                  <div className="subtext">No PR attached</div>
-                )}
+                  ) : (
+                    label.secondary
+                  )}
+                </div>
               </td>
               <td>{repositoryName(repositories, analysis.repository_id)}</td>
               <td>
@@ -1306,7 +1345,8 @@ function AnalysisTable({
               <td className="subtext">{formatDate(analysis.started_at)}</td>
               <td className="subtext">{formatDate(analysis.completed_at)}</td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -2230,25 +2270,37 @@ function GraphCard({ graph }: { graph: GraphSnapshot }) {
 }
 
 
-export function SearchData() {
-  const [query, setQuery] = useState("");
+export function SearchData({ initialQuery = "" }: { initialQuery?: string }) {
+  const [query, setQuery] = useState(initialQuery);
+  useEffect(() => setQuery(initialQuery), [initialQuery]);
   const state = useRadiusData(async () => {
     const [analyses, repositories] = await Promise.all([
       listAnalyses(),
       listRepositories(),
     ]);
-    return { analyses, repositories };
+    return { analyses, repositories, pullRequests: await loadPullRequestIndex(repositories) };
   }, []);
 
   const results = useMemo(() => {
-    if (state.status !== "ready") return [];
-    const lower = query.toLowerCase();
-    return state.data.analyses.filter((analysis) => {
-      const repo = repositoryName(state.data.repositories, analysis.repository_id);
-      return [analysis.id, analysis.commit_sha, analysis.status, repo]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(lower));
-    });
+    if (state.status !== "ready") return { analyses: [], pullRequests: [], repositories: [] };
+    const { analyses, repositories, pullRequests } = state.data;
+    const named = (id: string) => repositoryName(repositories, id);
+    return {
+      analyses: analyses.filter((analysis) =>
+        analysisMatches(analysis, query, {
+          repositoryName: named(analysis.repository_id),
+          pullRequest: pullRequests.get(analysis.pull_request_id),
+        }),
+      ),
+      pullRequests: query.trim()
+        ? [...pullRequests.values()].filter((pr) =>
+            pullRequestMatches(pr, query, named(pr.repository_id)),
+          )
+        : [],
+      repositories: query.trim()
+        ? repositories.filter((repository) => repositoryMatches(repository, query))
+        : [],
+    };
   }, [query, state]);
 
   if (state.status === "loading") return <LoadingState label="Loading search index" />;
@@ -2260,15 +2312,47 @@ export function SearchData() {
         <div className="search boxed-search">
           <Search size={18} />
           <input
+            aria-label="Search analyses, pull requests and repositories"
             autoFocus
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search by analysis ID, commit, status, or repository"
+            placeholder="Search by PR number or title, repository, analysis ID, or commit"
             value={query}
           />
         </div>
       </div>
+      {results.repositories.length > 0 && (
+        <section className="card detail-card wide-card">
+          <h2>Repositories</h2>
+          <RepositoryRows repositories={results.repositories} />
+        </section>
+      )}
+      {results.pullRequests.length > 0 && (
+        <section className="card detail-card wide-card">
+          <h2>Pull requests</h2>
+          <ul style={{ listStyle: "none", padding: 0, margin: "10px 0 0", display: "grid", gap: "8px" }}>
+            {results.pullRequests.slice(0, 20).map((pr) => (
+              <li key={pr.id}>
+                <Link href={`/pull-requests/${pr.id}`} className="text-link">
+                  #{pr.github_pr_number} {pr.title}
+                </Link>{" "}
+                <span className="subtext">{repositoryName(state.data.repositories, pr.repository_id)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <section className="card wide-card">
-        <AnalysisTable analyses={results} repositories={state.data.repositories} />
+        {results.analyses.length === 0 ? (
+          <div className="detail-card">
+            <p className="muted">No analyses match this search.</p>
+          </div>
+        ) : (
+          <AnalysisTable
+            analyses={results.analyses}
+            repositories={state.data.repositories}
+            pullRequests={state.data.pullRequests}
+          />
+        )}
       </section>
     </>
   );
@@ -2321,6 +2405,12 @@ export function PullRequestData({ pullRequestId }: { pullRequestId: string }) {
   if (state.status === "error") return <ErrorState message={state.error} />;
 
   const { analyses, repositories, pr } = state.data;
+  const githubUrl = pr
+    ? pullRequestUrl(
+        repositories.find((repo) => repo.id === pr.repository_id)?.full_name,
+        pr.github_pr_number,
+      )
+    : null;
   const pageTitle = pr?.title || (isNumeric ? `PR #${cleanNumber} analyses` : "Pull request analyses");
   const subtitle = pr
     ? `Route: ${pr.source_branch} → ${pr.target_branch} • Author: ${pr.author} • Status: ${pr.status}`
@@ -2353,6 +2443,18 @@ export function PullRequestData({ pullRequestId }: { pullRequestId: string }) {
                 Re-run Verification
               </button>
             )}
+            {githubUrl && (
+              <a
+                href={githubUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="button secondary"
+                style={{ display: "flex", alignItems: "center", gap: "6px" }}
+              >
+                <ExternalLink size={14} />
+                View on GitHub
+              </a>
+            )}
             <Link href="/repositories" className="button secondary">
               <FolderGit2 size={15} />
               All repositories
@@ -2383,6 +2485,10 @@ export function PullRequestData({ pullRequestId }: { pullRequestId: string }) {
               <span className="muted">Branch: </span>
               <code>{pr.source_branch}</code> → <code>{pr.target_branch}</code>
             </div>
+            <div>
+              <span className="muted">Opened: </span>
+              {formatDate(pr.opened_at)}
+            </div>
           </div>
         </div>
       )}
@@ -2397,7 +2503,11 @@ export function PullRequestData({ pullRequestId }: { pullRequestId: string }) {
         />
       ) : (
         <section className="card">
-          <AnalysisTable analyses={analyses} repositories={repositories} />
+          <AnalysisTable
+            analyses={analyses}
+            repositories={repositories}
+            pullRequests={indexPullRequests(pr ? [pr] : [])}
+          />
         </section>
       )}
     </>
@@ -2429,12 +2539,46 @@ export function SettingsData() {
             </div>
           </div>
         </section>
+        {!radiusConfigured && (
+          <section className="card detail-card">
+            <h2>Required environment</h2>
+            <p className="muted">
+              Set <code>NEXT_PUBLIC_RADIUS_API_BASE_URL</code> and{" "}
+              <code>NEXT_PUBLIC_RADIUS_ORGANIZATION_ID</code> before running the
+              dashboard against a real backend.
+            </p>
+          </section>
+        )}
         <section className="card detail-card">
-          <h2>Required environment</h2>
+          <h2>Upload CI test results</h2>
           <p className="muted">
-            Set <code>NEXT_PUBLIC_RADIUS_API_BASE_URL</code> and{" "}
-            <code>NEXT_PUBLIC_RADIUS_ORGANIZATION_ID</code> before running the
-            dashboard against a real backend.
+            Radius selects tests; your CI runs them and uploads the JUnit XML as
+            evidence for the pull request head commit.
+          </p>
+          <ul className="muted" style={{ margin: "10px 0 0", paddingLeft: "18px", display: "grid", gap: "6px" }}>
+            <li>
+              Endpoint: <code>POST /api/v1/analyses/{"{analysis_id}"}/tests/results?commit_sha=&lt;head sha&gt;</code>{" "}
+              with one JUnit XML or JSON report per request. A missing{" "}
+              <code>commit_sha</code> is rejected with 422, a different commit with 409.
+            </li>
+            <li>
+              Use an API key with the <code>ci-upload</code> scope, stored as a CI secret.
+            </li>
+            <li>
+              In GitHub Actions, add the <code>actions/upload-results</code> step from the
+              Radius repository after your tests (inputs <code>api-url</code>,{" "}
+              <code>organization-id</code>, <code>api-key</code>, <code>junit-path</code>). It
+              looks up the analysis from the repository, PR and head SHA and never fails your
+              job by default.
+            </li>
+          </ul>
+          <p style={{ marginTop: "12px", display: "flex", gap: "16px", flexWrap: "wrap" }}>
+            <a className="text-link" href={`${DOCS_BASE}/docs/integrations/github-action.md`} target="_blank" rel="noopener noreferrer">
+              Upload action guide <ExternalLink size={14} />
+            </a>
+            <a className="text-link" href={`${DOCS_BASE}/docs/CI_INTEGRATION_GUIDE.md`} target="_blank" rel="noopener noreferrer">
+              CI integration guide <ExternalLink size={14} />
+            </a>
           </p>
         </section>
       </div>
@@ -2442,37 +2586,96 @@ export function SettingsData() {
   );
 }
 
-export function CompareData() {
-  const state = useRadiusData(async () => {
-    const analyses = (await listAnalyses()).filter((analysis) => analysis.id).slice(0, 2);
-    const artifacts = await Promise.all(
-      analyses.map(async (analysis) => {
-        const [confidence, blast, tests] = await Promise.allSettled([
-          getConfidence(analysis.id as string),
-          getBlastRadius(analysis.id as string),
-          getTests(analysis.id as string),
-        ]);
-        return {
-          analysis,
-          confidence: settledValue(confidence),
-          blast: settledValue(blast),
-          tests: settledValue(tests),
-        };
-      }),
-    );
-    return artifacts;
-  }, []);
+async function loadCompareArtifacts(analysis: Analysis) {
+  const id = analysis.id as string;
+  const [confidence, blast, tests] = await Promise.allSettled([
+    getConfidence(id),
+    getBlastRadius(id),
+    getTests(id),
+  ]);
+  return {
+    analysis,
+    confidence: settledValue(confidence),
+    blast: settledValue(blast),
+    tests: settledValue(tests),
+  };
+}
 
-  if (state.status === "loading") return <LoadingState label="Loading comparison" />;
-  if (state.status === "error") return <ErrorState message={state.error} />;
-  if (state.data.length < 2) {
+export function CompareData() {
+  const options = useRadiusData(async () => {
+    const [analyses, repositories] = await Promise.all([listAnalyses(), listRepositories()]);
+    return {
+      completed: completedAnalyses(analyses),
+      pullRequests: await loadPullRequestIndex(repositories),
+    };
+  }, []);
+  const [picked, setPicked] = useState<[string | null, string | null] | null>(null);
+
+  if (options.status === "loading") return <LoadingState label="Loading comparison" />;
+  if (options.status === "error") return <ErrorState message={options.error} />;
+  const { completed, pullRequests } = options.data;
+  if (completed.length < 2) {
     return (
       <EmptyState
-        title="Need two analyses"
-        detail="Radius can compare verification evidence after at least two analyses exist."
+        title="Need two completed analyses"
+        detail="Radius can compare verification evidence after at least two analyses have completed."
       />
     );
   }
+  const [leftId, rightId] = picked ?? defaultComparePair(completed);
+  const pick = (side: 0 | 1, id: string) =>
+    setPicked(side === 0 ? [id, rightId] : [leftId, id]);
+  const optionLabel = (analysis: Analysis) => {
+    const label = analysisLabel(analysis, pullRequests, 50);
+    return label.pullRequest ? `${label.title} (${label.secondary})` : label.title;
+  };
+
+  return (
+    <>
+      <section className="card detail-card" style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
+        {([0, 1] as const).map((side) => (
+          <label key={side} style={{ display: "grid", gap: "6px", flex: "1 1 280px" }}>
+            <span className="muted">{side === 0 ? "Analysis A" : "Analysis B"}</span>
+            <select
+              className="input"
+              value={(side === 0 ? leftId : rightId) ?? ""}
+              onChange={(event) => pick(side, event.target.value)}
+            >
+              {completed.map((analysis) => (
+                <option key={analysis.id} value={analysis.id as string}>
+                  {optionLabel(analysis)}
+                </option>
+              ))}
+            </select>
+          </label>
+        ))}
+      </section>
+      <CompareTable
+        left={completed.find((analysis) => analysis.id === leftId) ?? null}
+        right={completed.find((analysis) => analysis.id === rightId) ?? null}
+        pullRequests={pullRequests}
+      />
+    </>
+  );
+}
+
+function CompareTable({
+  left: leftAnalysis,
+  right: rightAnalysis,
+  pullRequests,
+}: {
+  left: Analysis | null;
+  right: Analysis | null;
+  pullRequests: PullRequestIndex;
+}) {
+  const state = useRadiusData(async () => {
+    if (!leftAnalysis || !rightAnalysis) return null;
+    return Promise.all([loadCompareArtifacts(leftAnalysis), loadCompareArtifacts(rightAnalysis)]);
+  }, [leftAnalysis?.id, rightAnalysis?.id]);
+
+  if (state.status === "loading") return <LoadingState label="Loading comparison" />;
+  if (state.status === "error") return <ErrorState message={state.error} />;
+  if (!state.data) return null;
 
   const [left, right] = state.data;
   const rows = [
@@ -2510,8 +2713,8 @@ export function CompareData() {
           <thead>
             <tr>
               <th>Verification signal</th>
-              <th>{left.analysis.id}</th>
-              <th>{right.analysis.id}</th>
+              <th title={left.analysis.id ?? undefined}>{analysisLabel(left.analysis, pullRequests, 40).title}</th>
+              <th title={right.analysis.id ?? undefined}>{analysisLabel(right.analysis, pullRequests, 40).title}</th>
             </tr>
           </thead>
           <tbody>
@@ -2566,7 +2769,8 @@ export function PullRequestsOverviewData() {
 
       const settledPRs = await Promise.all(prPromises);
       const allPRs = settledPRs.flat();
-      allPRs.sort((a, b) => new Date(b.pr.opened_at).getTime() - new Date(a.pr.opened_at).getTime());
+      const openedTime = (value?: string | null) => (value ? Date.parse(value) || 0 : 0);
+      allPRs.sort((a, b) => openedTime(b.pr.opened_at) - openedTime(a.pr.opened_at));
       setPullRequests(allPRs);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load pull requests.");
