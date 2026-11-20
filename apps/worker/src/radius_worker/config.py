@@ -550,6 +550,30 @@ class WorkerSettings(DatabaseSettings):
             "unrecognised value stops the worker at start."
         ),
     )
+    verdict_v2_stage_a_timeout_seconds: float = Field(
+        default=300.0,
+        ge=10.0,
+        le=3600.0,
+        alias="RADIUS_VERDICT_V2_STAGE_A_TIMEOUT_SECONDS",
+        description=(
+            "Verdict v2: total time budget of Stage A (fact collection from the checkout) "
+            "for one analysis, mutation evidence excluded. A step that runs past it is cut "
+            "short, logged as 'Verdict v2 producer timed out' and marks the verdict "
+            "truncated. The default suits a slow host (0.1 CPU); a fast host finishes early "
+            "and pays nothing extra."
+        ),
+    )
+    verdict_v2_step_timeout_seconds: float = Field(
+        default=120.0,
+        ge=5.0,
+        le=3600.0,
+        alias="RADIUS_VERDICT_V2_STEP_TIMEOUT_SECONDS",
+        description=(
+            "Verdict v2: time budget of one Stage A step (reading sources, criterion and "
+            "test linking, assertion extraction, relevance), never more than what is left "
+            "of RADIUS_VERDICT_V2_STAGE_A_TIMEOUT_SECONDS."
+        ),
+    )
     intent_extraction_mode: str = Field(
         default="sections",
         alias="RADIUS_INTENT_EXTRACTION_MODE",

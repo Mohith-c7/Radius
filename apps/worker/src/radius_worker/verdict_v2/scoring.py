@@ -1129,6 +1129,7 @@ def run_verdict_v2_for_analysis(
             str(org_id) if org_id else None,
         )
         producers, limits = _mutation_wiring(settings, session_factory, intent, analysis_id, command)
+        limits = collect_limits(settings, limits)
         return run_verdict_v2_best_effort(
             mode=mode,
             analysis_id=analysis_id,
@@ -1149,6 +1150,23 @@ def run_verdict_v2_for_analysis(
             extra={"analysis_id": str(analysis_id), "reason_code": type(exc).__name__},
         )
         return RunReport(STATUS_ERROR, type(exc).__name__)
+
+
+def collect_limits(settings: Any, base: Any | None = None) -> Any:
+    """Stage A budgets from the worker settings (``RADIUS_VERDICT_V2_*_TIMEOUT_SECONDS``)."""
+
+    from dataclasses import replace
+
+    from radius_worker.verdict_v2.collect import CollectLimits
+
+    limits = base or CollectLimits()
+    total = getattr(settings, "verdict_v2_stage_a_timeout_seconds", None)
+    step = getattr(settings, "verdict_v2_step_timeout_seconds", None)
+    return replace(
+        limits,
+        timeout_s=float(total) if isinstance(total, (int, float)) else limits.timeout_s,
+        step_timeout_s=float(step) if isinstance(step, (int, float)) else limits.step_timeout_s,
+    )
 
 
 def _mutation_wiring(
