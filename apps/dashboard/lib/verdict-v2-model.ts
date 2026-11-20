@@ -235,6 +235,24 @@ export type VerdictV2 = {
   mutation: MutationRun | null;
   /** B-20 (optional): analysis degradation markers (blocking ones make "verified" unreachable). */
   degraded?: string[];
+  /** DEC-034 (optional): LLM-proposed snippets. Never run, never evidence. */
+  suggested_tests?: SuggestedTest[];
+  suggestedTestsTruncated?: boolean;
+};
+
+/**
+ * DEC-034: an LLM-proposed test snippet that passed the deterministic gate.
+ * `test_code` is UNTRUSTED and rendered as preformatted text only. `executed`
+ * and `evidence` are forced to false whatever the payload says.
+ */
+export type SuggestedTest = {
+  criterion_id: string;
+  test_code: string;
+  codeTruncated: boolean;
+  model: string;
+  provenance: "llm_proposed";
+  executed: false;
+  evidence: false;
 };
 
 /** Contract 4 wording (alpha). All strings are text only. */
@@ -696,6 +714,36 @@ function parseSummary(raw: unknown, criteria: Criterion[]): Summary {
   };
 }
 
+/** Mirrors radius_shared.verdict_v2_payload (MAX_SUGGESTED_TESTS, MAX_SUGGESTED_CODE). */
+export const MAX_SUGGESTED_TESTS = 5;
+export const MAX_SUGGESTED_CODE_CHARS = 2500;
+export const SUGGESTED_TESTS_TITLE = "Suggested tests (not run, not evidence)";
+export const SUGGESTED_TESTS_NOTE =
+  "LLM-proposed and never executed: not evidence, and the verdict above does not depend on them. Review, adapt and run them yourself before relying on them.";
+
+function parseSuggestedTest(raw: unknown): SuggestedTest | null {
+  if (!isObject(raw)) return null;
+  const code = raw.test_code;
+  const cid = raw.criterion_id;
+  if (typeof code !== "string" || typeof cid !== "string" || code.trim() === "") return null;
+  const points = Array.from(code);
+  return {
+    criterion_id: truncateText(cid, 120),
+    test_code: points.length > MAX_SUGGESTED_CODE_CHARS ? points.slice(0, MAX_SUGGESTED_CODE_CHARS).join("") : code,
+    codeTruncated: points.length > MAX_SUGGESTED_CODE_CHARS,
+    model: short(raw.model, 80),
+    provenance: "llm_proposed",
+    executed: false,
+    evidence: false,
+  };
+}
+
+/** The criterion text a suggestion targets (UNTRUSTED text), else its id. */
+export function suggestedTestTarget(v: Pick<VerdictV2, "criteria">, s: Pick<SuggestedTest, "criterion_id">): string {
+  const criterion = v.criteria.find((c) => c.criterion_id === s.criterion_id);
+  return criterion?.text || s.criterion_id || "(unknown criterion)";
+}
+
 function thresholdNumber(justification: unknown, key: string): number | null {
   if (!isObject(justification) || !isObject(justification.thresholds)) return null;
   return optNum(justification.thresholds[key]);
@@ -719,6 +767,7 @@ export function parseVerdictV2(raw: unknown): ParseResult {
   const error = isObject(raw.error)
     ? { code: str(raw.error.code), fallback: optStr(raw.error.fallback) }
     : null;
+  const rawSuggested = arr(raw.suggested_tests);
   return {
     ok: true,
     value: {
@@ -769,6 +818,8 @@ export function parseVerdictV2(raw: unknown): ParseResult {
       degraded: strs(raw.degraded)
         .slice(0, MAX_LIST)
         .map((d) => truncateText(d, 120)),
+      suggested_tests: boundedList(rawSuggested, parseSuggestedTest, MAX_SUGGESTED_TESTS),
+      suggestedTestsTruncated: rawSuggested.length > MAX_SUGGESTED_TESTS,
     },
   };
 }
@@ -882,6 +933,28 @@ export function verdictMeta(
     default:
       return { label: "No verdict", tone: "neutral", icon: "help" };
   }
+}
+
+/**
+ * The headline verdict text. The API `presentation.verdict_label` is keyed on the
+ * stored verdict only, so for a pending result (R2p, stored as
+ * insufficient_evidence) or an unavailable one it would contradict the pending /
+ * unavailable icon; those states keep the local label, as the PR comment does.
+ */
+export function verdictLabel(
+  v: Pick<VerdictV2, "verdict" | "pending" | "status" | "presentation">,
+): string {
+  const meta = verdictMeta(v.verdict, v.pending, v.status);
+  if (v.status !== "ok" || v.pending) return meta.label;
+  return v.presentation?.verdict_label || meta.label;
+}
+
+/** The API summary sentence; "" for pending or unavailable results (its prefix is the stored verdict). */
+export function presentationSummary(
+  v: Pick<VerdictV2, "pending" | "status" | "presentation">,
+): string {
+  if (v.status !== "ok" || v.pending) return "";
+  return v.presentation?.summary_text ?? "";
 }
 
 export type OutcomeMeta = { label: string; tone: Tone; icon: IconName };

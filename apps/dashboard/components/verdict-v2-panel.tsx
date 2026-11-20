@@ -41,7 +41,12 @@ import {
   legendText,
   policyModeLabel,
   settingLine,
+  presentationSummary,
   stateLabel,
+  SUGGESTED_TESTS_NOTE,
+  SUGGESTED_TESTS_TITLE,
+  suggestedTestTarget,
+  verdictLabel,
   waiverCodeLabel,
   waivedFindings,
   provenanceLabel,
@@ -248,11 +253,11 @@ function VerdictView({ verdict }: { verdict: VerdictV2 }) {
         </p>
         <p className={`vv2-verdict ${meta.tone}`}>
           <VerdictIcon size={20} aria-hidden="true" />
-          <strong>{verdict.presentation?.verdict_label || meta.label}</strong>
+          <strong>{verdictLabel(verdict)}</strong>
         </p>
         <p className="vv2-why">{headline(verdict)}</p>
-        {verdict.presentation?.summary_text ? (
-          <p className="vv2-why">{verdict.presentation.summary_text}</p>
+        {presentationSummary(verdict) ? (
+          <p className="vv2-why">{presentationSummary(verdict)}</p>
         ) : null}
         <ul className="vv2-tags" aria-label="About this verdict">
           {headerTags(verdict).map((tag) => (
@@ -287,6 +292,7 @@ function VerdictView({ verdict }: { verdict: VerdictV2 }) {
             empty="Every behavioural change is covered by a criterion."
           />
           <NextActions verdict={verdict} />
+          <SuggestedTests verdict={verdict} />
           <PolicySection verdict={verdict} />
           <JustificationSection verdict={verdict} />
           {verdict.v1 ? (
@@ -770,6 +776,39 @@ function NextActions({ verdict }: { verdict: VerdictV2 }) {
         ))}
       </ol>
     </section>
+  );
+}
+
+// DEC-034: LLM-proposed snippets, never run and never evidence. Collapsed by
+// default; the code is UNTRUSTED and rendered as a React text node in <pre>.
+function SuggestedTests({ verdict }: { verdict: VerdictV2 }) {
+  const items = verdict.suggested_tests ?? [];
+  if (items.length === 0) return null;
+  return (
+    <details className="vv2-details" data-testid="suggested-tests">
+      <summary>
+        {SUGGESTED_TESTS_TITLE} ({items.length})
+      </summary>
+      <p className="vv2-muted" role="note">{SUGGESTED_TESTS_NOTE}</p>
+      <ul className="vv2-list" aria-label="Suggested tests">
+        {items.map((item, index) => (
+          <li key={`${item.criterion_id}-${index}`}>
+            <p className="vv2-item-head">
+              <Chip tone="neutral" icon="minus">Not executed</Chip>
+              <Chip tone="neutral" icon="minus">Not evidence</Chip>
+              <span className="vv2-small">
+                {provenanceLabel(item.provenance)} for criterion: {suggestedTestTarget(verdict, item)}
+              </span>
+            </p>
+            <pre className="vv2-pre">{item.test_code}</pre>
+            {item.codeTruncated ? <p className="vv2-muted">The snippet was cut.</p> : null}
+          </li>
+        ))}
+      </ul>
+      {verdict.suggestedTestsTruncated ? (
+        <p className="vv2-muted">Only the first suggestions are shown.</p>
+      ) : null}
+    </details>
   );
 }
 
