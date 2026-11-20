@@ -571,3 +571,22 @@ Decision:
 | Run the heavy DB-free steps (parse, discover) before the first pipeline write | Small gain, changes orchestrator ordering that many tests pin; not done. |
 
 Consequences: the dashboard needs no new configuration; an API deployed behind a proxy must not let a browser set `X-Radius-Session`. Users who signed in with GitHub before this release have `provider_login = NULL` (treated as unlinked) until their next GitHub sign-in. A reaper deadline no longer stops a job whose heartbeat is alive but whose pipeline hangs; only the sandbox timeouts bound it. Not verified: PostgreSQL, a real GitHub OAuth sign-in, real SMTP delivery.
+
+## DEC-041: Trusted CI test evidence behind `RADIUS_FEATURE_TRUSTED_EVIDENCE` (default off)
+
+Context: a CI upload is accepted when its `commit_sha` equals the analysed head. That binds results to a revision but not to who ran the tests: anyone with an upload key can post a passing JUnit report. P0.1 adds GitHub Artifact Attestation provenance (server-generated manifest and report slots, GitHub Actions OIDC, backend `gh attestation verify`, append-only verification events, migration `20261115_0024`). Counting only attested reports changes every existing verdict that relied on legacy uploads, and most installations cannot produce attestations yet (private repositories need GitHub Enterprise Cloud).
+
+Decision:
+
+1. One flag, `RADIUS_FEATURE_TRUSTED_EVIDENCE`, default off, read by the API and the worker. Off: the manifest and verified-results routes answer 404, and legacy uploads re-score v1 confidence and count for Verdict v2 exactly as before. On: legacy uploads are stored as `untrusted` and are diagnostic-only (no v1 re-score, not counted by Stage B); only `verified_provenance` uploads count.
+2. Stage B gains `diagnostic_uploads` and `trusted_evidence`. Both are left out of the serialized inputs, and so of the inputs digest, while they hold their defaults (`omit_default`), so a deploy with the flag off re-revisions no stored verdict. The bundle and the payload carry the trusted-evidence fields (`test_evidence`) only when the flag was on.
+3. The attestation predicate type is the stable project URI `https://github.com/Mohith-c7/Radius/attestations/test-results/v1`, signed by the reusable workflow and required by the verifier.
+4. The verified route takes `multipart/form-data` under the upload body cap, as `/tests/results` takes raw reports.
+
+| Option | Trade-off |
+| --- | --- |
+| Count only attested uploads unconditionally | Safest, but turns verdicts of every existing installation into `insufficient_evidence` on deploy and re-revisions all stored verdicts. Rejected. |
+| Separate API and worker flags | More knobs, and a mismatch (API untrusted, worker counting) would be silent. Rejected; both read the same variable. |
+| Keep `diagnostic_uploads` always in the digest | Simpler, but every stored verdict gets a new revision after deploy. Rejected. |
+
+Consequences: operators must set the flag on both services. Turning it on re-revisions a verdict once, because the inputs changed meaning. Not verified: a live GitHub-hosted workflow run producing an attestation, PostgreSQL, private-repository bundles. Open: with the flag on, a verified upload re-scores v1 confidence from the aggregate of all uploads of the analysis, diagnostic ones included.

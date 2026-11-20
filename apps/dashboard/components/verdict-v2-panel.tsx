@@ -266,6 +266,15 @@ function VerdictView({ verdict }: { verdict: VerdictV2 }) {
       {available ? (
         <>
           <SummaryStrip verdict={verdict} />
+          {verdict.testEvidence ? (
+            <p className="vv2-small" role="status" data-testid="test-evidence-summary">
+              {verdict.testEvidence.trusted_uploads} trusted report(s);{" "}
+              {verdict.testEvidence.diagnostic_only_uploads} diagnostic-only/untrusted report(s).
+              {verdict.testEvidence.trusted_results_received
+                ? " Trusted test results were received."
+                : " No trusted test results were received; diagnostic reports do not affect the verdict."}
+            </p>
+          ) : null}
           {mutationRunNote(verdict) ? (
             <p className="vv2-small" role="note" data-testid="mutation-note">
               {mutationRunNote(verdict)}

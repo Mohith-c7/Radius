@@ -42,7 +42,13 @@ def test_example_payload_parses() -> None:
 
 
 def test_view_round_trips_through_its_own_dict() -> None:
-    view = VerdictV2View.from_payload(EXAMPLE)
+    payload = {**EXAMPLE, "test_evidence": {
+        "trusted_uploads": 2,
+        "diagnostic_only_uploads": 3,
+        "trusted_results_received": True,
+    }}
+    view = VerdictV2View.from_payload(payload)
+    assert view.test_evidence["trusted_uploads"] == 2
     assert VerdictV2View.from_payload(view.to_dict()) == view
     assert json.loads(json.dumps(view.to_dict())) == view.to_dict()
 

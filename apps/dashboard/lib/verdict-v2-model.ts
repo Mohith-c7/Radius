@@ -205,6 +205,12 @@ export type V1Block = {
   risk_level: string | null;
 };
 
+export type TestEvidenceSummary = {
+  trusted_uploads: number;
+  diagnostic_only_uploads: number;
+  trusted_results_received: boolean;
+};
+
 export type VerdictV2 = {
   algo_version: string;
   profile: string;
@@ -233,6 +239,7 @@ export type VerdictV2 = {
   policy: PolicyView | null;
   waivers: WaiversView | null;
   mutation: MutationRun | null;
+  testEvidence: TestEvidenceSummary | null;
   /** B-20 (optional): analysis degradation markers (blocking ones make "verified" unreachable). */
   degraded?: string[];
 };
@@ -766,6 +773,16 @@ export function parseVerdictV2(raw: unknown): ParseResult {
       policy: parsePolicy(raw.policy),
       waivers: parseWaivers(raw.waivers),
       mutation: parseMutationRun(raw.mutation),
+      testEvidence: isObject(raw.test_evidence)
+        ? {
+            trusted_uploads: Math.max(0, Math.trunc(num(raw.test_evidence.trusted_uploads))),
+            diagnostic_only_uploads: Math.max(
+              0,
+              Math.trunc(num(raw.test_evidence.diagnostic_only_uploads)),
+            ),
+            trusted_results_received: raw.test_evidence.trusted_results_received === true,
+          }
+        : null,
       degraded: strs(raw.degraded)
         .slice(0, MAX_LIST)
         .map((d) => truncateText(d, 120)),
