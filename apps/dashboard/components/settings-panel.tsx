@@ -1,64 +1,22 @@
 "use client";
 
-import { useState } from "react";
-import { Check, Copy, ExternalLink, KeyRound } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 
 import { radiusConfig } from "../lib/api";
 import { DOCS_BASE } from "../lib/dashboard-model";
 import {
   GITHUB_API_URL_VAR,
   GITHUB_KEY_SECRET,
-  GITHUB_ORG_SECRET,
+  GITHUB_ORG_VAR,
   UPLOAD_KEY_SCOPE,
   ciApiUrl,
   ciUploadEndpoint,
   uploadWorkflowSnippet,
 } from "../lib/settings-model";
-import { useAuth } from "./auth-provider";
+import { ApiKeysSection } from "./api-keys-panel";
+import { CopyButton } from "./copy-id";
 import { PageHeading } from "./ui";
 import "./settings-panel.css";
-
-function CopyButton({ value, label = "Copy" }: { value: string; label?: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button
-      type="button"
-      className="copy-button"
-      disabled={!value}
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(value);
-          setCopied(true);
-          window.setTimeout(() => setCopied(false), 1500);
-        } catch {
-          setCopied(false);
-        }
-      }}
-    >
-      {copied ? <Check size={14} /> : <Copy size={14} />}
-      {copied ? "Copied" : label}
-    </button>
-  );
-}
-
-function ApiKeysSection() {
-  const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
-  return (
-    <section className="card detail-card">
-      <h2><KeyRound size={16} className="inline-icon" />API keys</h2>
-      <p className="muted">
-        API keys let your CI upload test results to Radius. Each key belongs to your organization and has scopes;
-        for CI uploads use a key with only the <code>{UPLOAD_KEY_SCOPE}</code> scope.
-      </p>
-      <div className="settings-note">
-        {isAdmin
-          ? "Creating, rotating and revoking keys from the dashboard is not available yet. Until it is, keys are issued by the Radius operator for your organization."
-          : "Only organization admins can manage API keys. Ask an admin for a key with the ci-upload scope."}
-      </div>
-    </section>
-  );
-}
 
 function CiUploadSection() {
   const apiUrl = ciApiUrl(radiusConfig.apiBaseUrl);
@@ -84,7 +42,7 @@ function CiUploadSection() {
               <div className="settings-kv-value"><strong>{apiUrl || "Not configured"}</strong><CopyButton value={apiUrl} /></div>
             </div>
             <div>
-              <span>Secret {GITHUB_ORG_SECRET}</span>
+              <span>Variable {GITHUB_ORG_VAR}</span>
               <div className="settings-kv-value"><strong>{organizationId || "Not configured"}</strong><CopyButton value={organizationId} /></div>
             </div>
             <div>
