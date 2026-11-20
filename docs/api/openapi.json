@@ -3546,7 +3546,7 @@
     },
     "/api/v1/analyses/{analysis_id}/graph/edges": {
       "get": {
-        "description": "Return graph edges for an analysis.",
+        "description": "Return one page of graph edges for an analysis, in stored order.\n\n``meta.count`` is the number returned and ``meta.pagination`` holds\n``limit``, ``offset``, ``total`` and ``returned``.",
         "operationId": "get_graph_edges",
         "parameters": [
           {
@@ -3557,6 +3557,34 @@
               "format": "uuid",
               "title": "Analysis Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Page size (default 500, max 5000).",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 500,
+              "description": "Page size (default 500, max 5000).",
+              "maximum": 5000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Items to skip.",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Items to skip.",
+              "maximum": 1000000,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
             }
           }
         ],
@@ -3602,7 +3630,7 @@
     },
     "/api/v1/analyses/{analysis_id}/graph/nodes": {
       "get": {
-        "description": "Return graph nodes for an analysis.",
+        "description": "Return one page of graph nodes for an analysis, in stored order.\n\n``meta.count`` is the number returned and ``meta.pagination`` holds\n``limit``, ``offset``, ``total`` and ``returned``.",
         "operationId": "get_graph_nodes",
         "parameters": [
           {
@@ -3613,6 +3641,34 @@
               "format": "uuid",
               "title": "Analysis Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Page size (default 500, max 5000).",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 500,
+              "description": "Page size (default 500, max 5000).",
+              "maximum": 5000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Items to skip.",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Items to skip.",
+              "maximum": 1000000,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
             }
           }
         ],
@@ -6922,7 +6978,7 @@
     },
     "/api/v1/health": {
       "get": {
-        "description": "Return service health metadata.",
+        "description": "Return service health metadata.\n\n``async`` on purpose: it does no I/O (settings are cached), so it answers on the\nevent loop and never queues behind slow synchronous handlers for a worker\nthread. The platform health check has a 5 s timeout.",
         "operationId": "get_health",
         "responses": {
           "200": {
