@@ -1149,6 +1149,10 @@ def _create_sql_orchestrator(
         tamper_rules_enabled=bool(settings and settings.tamper_rules_enabled),
         assertion_extraction_enabled=bool(settings and settings.assertion_extraction_enabled),
         flaky_policy=(settings.flaky_policy if settings else "exclude"),
+        incremental_graph=bool(settings and settings.incremental_graph_enabled),
+        incremental_max_changed_files=(
+            settings.incremental_max_changed_files if settings else 200
+        ),
     )
 
 

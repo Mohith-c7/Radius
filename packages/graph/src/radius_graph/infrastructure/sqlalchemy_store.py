@@ -16,6 +16,7 @@ from collections.abc import Iterable, Iterator
 from itertools import islice
 from uuid import UUID, uuid4
 
+from radius_shared.database import enums as db_enums
 from radius_shared.database import models as db_models
 from sqlalchemy import ColumnElement, Table, delete, func, insert, or_, select
 from sqlalchemy.orm import Session
@@ -153,6 +154,38 @@ class SqlAlchemyGraphStore:
         for chunk in _chunks(edge_rows):
             self._session.execute(insert(_EDGE_TABLE), chunk)
         return snapshot
+
+    def reusable_snapshots(
+        self,
+        repository_id: UUID,
+        graph_version: str,
+        *,
+        limit: int = 500,
+    ) -> dict[str, UUID]:
+        """Commit SHA -> analysis id of a stored snapshot an incremental build may patch.
+
+        Only snapshots of completed analyses of ``repository_id`` built with exactly
+        ``graph_version`` (the build fingerprint) qualify; the newest one per commit
+        wins. Bounded to the ``limit`` most recent analyses.
+        """
+
+        analysis, snapshot = db_models.Analysis, db_models.GraphSnapshot
+        rows = self._session.execute(
+            select(analysis.commit_sha, analysis.id)
+            .join(snapshot, snapshot.analysis_id == analysis.id)
+            .where(
+                analysis.repository_id == repository_id,
+                snapshot.repository_id == repository_id,
+                snapshot.graph_version == graph_version,
+                analysis.status == db_enums.AnalysisStatus.COMPLETED,
+            )
+            .order_by(analysis.created_at.desc())
+            .limit(limit)
+        )
+        found: dict[str, UUID] = {}
+        for commit_sha, analysis_id in rows:
+            found.setdefault(commit_sha.lower(), analysis_id)
+        return found
 
     def get_snapshot(self, analysis_id: UUID) -> GraphSnapshot | None:
         """Return the whole graph snapshot by analysis id (the worker's read)."""
