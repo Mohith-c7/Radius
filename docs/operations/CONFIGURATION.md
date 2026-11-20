@@ -97,7 +97,7 @@ Variables documented: **195** (16 secret, 12 feature flags).
 | `RADIUS_INTENT_MAX_API_CALLS` | int | `15` | worker | no | - | Hard cap on GitHub REST calls per analysis for intent ingestion. |
 | `RADIUS_LOG_LEVEL` | LogLevel | `INFO` | api, worker | no | - | Structured log level: DEBUG, INFO, WARNING, ERROR or CRITICAL. |
 | `RADIUS_MAX_BODY_BYTES` | int | `1048576` | api | no | - | Default request body cap in bytes; over it the API answers 413. |
-| `RADIUS_MAX_RECORDED_EXECUTIONS` | int | `20000` | api | no | - | Per-analysis cap on test-execution history rows recorded from uploaded CI reports (one per reported case). 0 records only the selected test files. |
+| `RADIUS_MAX_RECORDED_EXECUTIONS` | int | `2000` | api | no | - | Per-analysis cap on test-execution history rows recorded from uploaded CI reports (one per reported case). 0 records only the selected test files. |
 | `RADIUS_METRICS_ENABLED` | bool | `false` | api, worker | no | - | Expose Prometheus metrics (`/metrics` on the API, plus the worker port). Off by default. |
 | `RADIUS_METRICS_TOKEN` | str | `empty` | api, worker | no | - | Bearer token required to read the API `/metrics` endpoint. When unset, `/metrics` is served without authentication in development/test and is disabled (404) when `RADIUS_ENV` is uat or production. |
 | `RADIUS_MUTATION_ALLOW_LOCAL` | bool | `unset` | library | no | - | Dev/tests only: allows the mutation prototype's local subprocess runner, which executes code on the host and is unsafe for untrusted repositories. Never set in production. |

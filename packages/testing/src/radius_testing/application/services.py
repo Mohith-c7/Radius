@@ -49,7 +49,7 @@ from radius_testing.interfaces.store import TestStore
 from radius_testing.provenance import build_manifest
 
 MAX_RESULT_UPLOADS_PER_ANALYSIS = 256
-DEFAULT_MAX_RECORDED_EXECUTIONS = 20_000
+DEFAULT_MAX_RECORDED_EXECUTIONS = 2_000
 
 
 class TestingApplicationService:
