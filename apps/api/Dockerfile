@@ -4,12 +4,12 @@
 # Base images are pinned by digest; the tag in each FROM line is what Dependabot
 # (package-ecosystem: docker) reads and bumps together with the digest.
 
-FROM ghcr.io/astral-sh/uv:0.12.20@sha256:100047e74f30778ab704942321a09750d6158739573ff58bf3924085cc6cd2d8 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.9@sha256:d3b601f0c7b118bc1753febf7c41cc80981df678445e0254284eecf84db79a7d AS uv
 
 # ---- builder: install dependencies exactly as locked in uv.lock (uv verifies the
 # hashes recorded there). No compiler is needed: UV_NO_BUILD makes the build fail
 # instead of compiling any package from source.
-FROM python:3.12-slim@sha256:b18b261e1b4974b4f321451ad5251ded85abb22c2b8b262da527dda1d031ab30 AS builder
+FROM python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928 AS builder
 
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     UV_PYTHON_DOWNLOADS=never \
@@ -30,7 +30,7 @@ RUN --mount=from=uv,source=/uv,target=/usr/local/bin/uv \
     uv sync --frozen --no-dev --no-install-project --python /usr/local/bin/python $extras
 
 # ---- runtime
-FROM python:3.12-slim@sha256:b18b261e1b4974b4f321451ad5251ded85abb22c2b8b262da527dda1d031ab30 AS runtime
+FROM python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928 AS runtime
 
 ARG RADIUS_VERSION=0.1.0
 ARG VCS_REF=unknown
